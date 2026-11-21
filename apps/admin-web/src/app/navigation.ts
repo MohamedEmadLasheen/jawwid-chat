@@ -18,7 +18,16 @@ import type { IconName } from '@/shared/components/Icon'
  * answer "forbidden". (Listing is UX, not security: the server decides.)
  */
 
-export type DestinationKey = 'conversations' | 'dashboard' | 'calls' | 'people' | 'sales' | 'scheduling' | 'stories' | 'more'
+export type DestinationKey =
+  | 'conversations'
+  | 'dashboard'
+  | 'people'
+  | 'sales'
+  | 'scheduling'
+  | 'operations'
+  | 'finance'
+  | 'communication'
+  | 'admin'
 
 type OperatorArea = Exclude<NavArea, 'settings'>
 
@@ -53,84 +62,85 @@ export interface Destination {
   groups: NavEntryGroup[]
 }
 
+/**
+ * The nine sections of the Admin Portal, in rail order (owner-approved
+ * architecture). Each page has exactly one home; a destination with no page a
+ * role may open is left out of that role's rail.
+ */
 export const DESTINATIONS: readonly { key: DestinationKey; icon: IconName; label: Bilingual }[] = [
   { key: 'conversations', icon: 'conversations', label: { en: 'Conversations', ar: 'المحادثات' } },
   // PD-44: a manager's Dashboard is one click from anywhere, beside the chats it counts.
   { key: 'dashboard', icon: 'dashboard', label: { en: 'Dashboard', ar: 'لوحة المتابعة' } },
-  // The owner's order: People & Organization is the third icon.
   { key: 'people', icon: 'users', label: { en: 'People & Organization', ar: 'الأشخاص والهيكل التنظيمي' } },
-  // Sales and Scheduling are the two most-used workspaces after People.
-  { key: 'sales', icon: 'tag', label: { en: 'Sales', ar: 'المبيعات' } },
+  { key: 'sales', icon: 'chart', label: { en: 'Sales', ar: 'المبيعات' } },
   { key: 'scheduling', icon: 'calendar', label: { en: 'Scheduling', ar: 'الجدولة' } },
-  { key: 'calls', icon: 'calls', label: { en: 'Calls', ar: 'المكالمات' } },
-  { key: 'stories', icon: 'stories', label: { en: 'Stories', ar: 'الحالات' } },
-  { key: 'more', icon: 'more', label: { en: 'More', ar: 'المزيد' } },
+  { key: 'operations', icon: 'academy', label: { en: 'Operations', ar: 'التشغيل' } },
+  { key: 'finance', icon: 'banknote', label: { en: 'Finance', ar: 'المالية' } },
+  { key: 'communication', icon: 'notifications', label: { en: 'Communication', ar: 'التواصل' } },
+  // Last, at the foot of the rail, apart from the everyday destinations.
+  { key: 'admin', icon: 'settings', label: { en: 'Admin & Settings', ar: 'الإدارة والإعدادات' } },
 ]
 
 /**
  * Where each Admin Portal section lives. A Record, so a section added to the
  * registry does not compile until it has been given a place.
  *
- * The Dashboard is under More: it is no longer the front door (Conversations
- * is), but it stays one click away and its URL keeps working.
+ * The nine sections that have no backend yet (Quality, Academy operations,
+ * Forms, Notifications, WhatsApp, Approvals, Integrations, Audit, Settings) are
+ * marked "in development" wherever they sit, and the ones that are not
+ * communication live under Admin & Settings, off the everyday rail.
  */
 export const SECTION_DESTINATION: Record<AdminSectionKey, DestinationKey> = {
   conversations: 'conversations',
-  calls: 'calls',
+  dashboard: 'dashboard',
+  tasks: 'dashboard',
   users: 'people',
   teams: 'people',
   teachers: 'people',
-  instalments: 'more',
   parents: 'people',
-  payments: 'more',
-  stories: 'stories',
-  dashboard: 'more',
-  notifications: 'more',
-  whatsapp: 'more',
-  quality: 'more',
-  academy: 'more',
-  tasks: 'more',
-  forms: 'more',
-  reports: 'more',
-  approvals: 'more',
-  integrations: 'more',
-  audit: 'more',
-  settings: 'more',
+  instalments: 'finance',
+  payments: 'finance',
+  stories: 'communication',
+  calls: 'communication',
+  notifications: 'communication',
+  whatsapp: 'communication',
+  reports: 'admin',
+  quality: 'admin',
+  academy: 'admin',
+  forms: 'admin',
+  approvals: 'admin',
+  integrations: 'admin',
+  audit: 'admin',
+  settings: 'admin',
 }
 
 /** Operator areas. `settings` has no page, so it has no place (as before). */
 export const AREA_DESTINATION: Record<NavArea, DestinationKey | null> = {
   chat: 'conversations',
-  calls: 'calls',
+  moderation: 'conversations',
+  dashboard: 'dashboard',
+  tasks: 'dashboard',
   organization: 'people',
   teachers: 'people',
-  instalments: 'more',
   parents: 'people',
-  payments: 'more',
-  trials: 'sales',
-  'new-students': 'sales',
-  'teacher-schedules': 'scheduling',
-  'student-schedules': 'scheduling',
   'teacher-profiles': 'people',
   accounts: 'people',
-  stories: 'stories',
-  materials: 'more',
-  schedule: 'scheduling',
-  tasks: 'more',
-  // PD-35 B5: escalation cases, for every operator who may open or own one.
-  cases: 'more',
-  // PD-41: the Certificates page.
-  certificates: 'more',
-  // PD-48: lesson voice-over review.
-  'lesson-audio': 'more',
-  // PD-57: the moderation queue.
-  moderation: 'more',
-  // PD-52: the teacher-records pages, in their own group under People.
   'teacher-attendance': 'people',
   'teacher-grants': 'people',
-  // PD-44: out of More, its own destination (the super admin's stays in the
-  // Admin Portal's More until PD-44 PR-8).
-  dashboard: 'dashboard',
+  trials: 'sales',
+  'new-students': 'sales',
+  schedule: 'scheduling',
+  'teacher-schedules': 'scheduling',
+  'student-schedules': 'scheduling',
+  'needs-action': 'operations',
+  cases: 'operations',
+  certificates: 'operations',
+  'lesson-audio': 'operations',
+  materials: 'operations',
+  instalments: 'finance',
+  payments: 'finance',
+  calls: 'communication',
+  stories: 'communication',
   settings: null,
 }
 
@@ -144,6 +154,7 @@ export const AREA_PATH: Record<OperatorArea, string> = {
   payments: '/payments',
   trials: '/trials',
   'new-students': '/trials/new-students',
+  'needs-action': '/teachers/needs-action',
   'teacher-schedules': '/teachers/schedules',
   'student-schedules': '/schedule/students',
   tasks: '/tasks',
@@ -171,6 +182,7 @@ const AREA_ICON: Record<OperatorArea, IconName> = {
   payments: 'tag',
   trials: 'calendar',
   'new-students': 'users',
+  'needs-action': 'alert',
   'teacher-schedules': 'calendar',
   'student-schedules': 'calendar',
   tasks: 'tasks',
@@ -242,17 +254,24 @@ const ADMIN_AREA_ENTRIES: readonly AdminAreaEntry[] = [
   { area: 'new-students', destination: 'sales' },
   // Teacher Profile V2: the credential review queue.
   { area: 'teacher-profiles', destination: 'people', label: ADMIN_TEACHER_CREDENTIALS_LABEL },
+  // The supervisors' daily queue.
+  { area: 'needs-action', destination: 'operations' },
   // PD-29: the Materials library.
-  { area: 'materials', destination: 'more', label: ADMIN_MATERIALS_LABEL },
+  { area: 'materials', destination: 'operations', label: ADMIN_MATERIALS_LABEL },
   // PD-35 B5: escalation cases.
-  { area: 'cases', destination: 'more', label: ADMIN_CASES_LABEL },
+  { area: 'cases', destination: 'operations', label: ADMIN_CASES_LABEL },
   // PD-41: the Certificates page and its types.
-  { area: 'certificates', destination: 'more' },
+  { area: 'certificates', destination: 'operations' },
   // PD-48: lesson voice-over review.
-  { area: 'lesson-audio', destination: 'more' },
+  { area: 'lesson-audio', destination: 'operations' },
   // PD-57: the moderation queue.
-  { area: 'moderation', destination: 'more' },
+  { area: 'moderation', destination: 'conversations' },
 ]
+
+const ADMIN_SUBGROUPS = {
+  insight: { key: 'insight', label: { en: 'Reports & quality', ar: 'التقارير والجودة' } },
+  system: { key: 'system', label: { en: 'System', ar: 'النظام' } },
+} as const
 
 function adminDestinations(): Map<DestinationKey, NavEntryGroup[]> {
   const out = new Map<DestinationKey, NavEntryGroup[]>()
@@ -262,9 +281,13 @@ function adminDestinations(): Map<DestinationKey, NavEntryGroup[]> {
     for (const section of ADMIN_SECTIONS.filter((s) => s.group === group.key)) {
       const dest = SECTION_DESTINATION[section.key]
       const groups = out.get(dest) ?? []
-      let bucket = groups.find((g) => g.key === group.key)
+      // One heading-less group per destination, except Admin & Settings, whose
+      // reports and quality pages are kept apart from the system's own.
+      const split = dest === 'admin' ? ADMIN_SUBGROUPS[group.key === 'administration' ? 'system' : 'insight'] : null
+      const bucketKey = split?.key ?? dest
+      let bucket = groups.find((g) => g.key === bucketKey)
       if (!bucket) {
-        bucket = { key: group.key, label: group.label, entries: [] }
+        bucket = { key: bucketKey, label: split?.label ?? null, entries: [] }
         groups.push(bucket)
       }
       bucket.entries.push({
@@ -302,7 +325,7 @@ function adminDestinations(): Map<DestinationKey, NavEntryGroup[]> {
     })
   }
   organizePeople(out)
-  // One registry group inside a destination needs no heading.
+  // A destination with one group needs no heading.
   for (const groups of out.values()) {
     if (groups.length === 1) groups[0]!.label = null
   }

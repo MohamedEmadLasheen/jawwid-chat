@@ -8,7 +8,7 @@ import { navAreas, visibleAreas, type NavArea } from '@/core/permissions/capabil
 import { ADMIN_SECTIONS } from '@/features/admin/sections'
 import type { StaffRole } from '@/shared/types/domain'
 import { makeStaff, renderWithProviders } from '@/test/utils'
-import { AREA_PATH, destinationsFor, entriesOf } from './navigation'
+import { AREA_PATH, DESTINATIONS, destinationsFor, entriesOf } from './navigation'
 
 /**
  * Conversation-first navigation (2026-10-13): "/" opens the role's
@@ -73,9 +73,11 @@ afterEach(() => {
 })
 
 describe('The navigation registry', () => {
-  it('gives each of the twenty-one sections exactly one destination, with the Dashboard under More', () => {
+  it('gives each of the twenty-one sections exactly one destination, in the nine sections of the rail', () => {
     const destinations = destinationsFor('super_admin')
-    expect(destinations.map((d) => d.key)).toEqual(['conversations', 'people', 'sales', 'scheduling', 'calls', 'stories', 'more'])
+    expect(destinations.map((d) => d.key)).toEqual([
+      'conversations', 'dashboard', 'people', 'sales', 'scheduling', 'operations', 'finance', 'communication', 'admin',
+    ])
     const keys = destinations.flatMap((d) => entriesOf(d).map((e) => e.key))
     // The twenty-one sections, plus Chat (PD-8: where the super admin replies),
     // Accounts (PD-21: where every staff role administers accounts),
@@ -84,14 +86,18 @@ describe('The navigation registry', () => {
     // PD-16, now Sales), the Teachers' and Student schedules (Scheduling), Teacher credentials review, Escalations (PD-35 B5) and
     // Certificates (PD-41) and Lesson audio (PD-48, under More), and
     // the two teacher-records pages (PD-52, their own group under People).
-    expect(keys).toHaveLength(36)
+    expect(keys).toHaveLength(37)
     expect([...keys].sort()).toEqual(
-      [...ADMIN_SECTIONS.map((s) => s.key), 'chat', 'accounts', 'materials', 'schedule', 'teacher-schedules', 'student-schedules', 'trials', 'new-students', 'teacher-profiles', 'cases', 'certificates', 'lesson-audio', 'moderation', 'teacher-attendance', 'teacher-grants'].sort(),
+      [...ADMIN_SECTIONS.map((s) => s.key), 'needs-action', 'chat', 'accounts', 'materials', 'schedule', 'teacher-schedules', 'student-schedules', 'trials', 'new-students', 'teacher-profiles', 'cases', 'certificates', 'lesson-audio', 'moderation', 'teacher-attendance', 'teacher-grants'].sort(),
     )
     const conversations = destinations.find((d) => d.key === 'conversations')!
-    expect(entriesOf(conversations).map((e) => e.path)).toEqual(['/chat', '/admin/conversations'])
-    const more = destinations.find((d) => d.key === 'more')!
-    expect(entriesOf(more).map((e) => e.key)).toContain('dashboard')
+    expect(entriesOf(conversations).map((e) => e.path)).toEqual(['/chat', '/admin/conversations', '/moderation'])
+    const dashboard = destinations.find((d) => d.key === 'dashboard')!
+    expect(entriesOf(dashboard).map((e) => e.key)).toEqual(['dashboard', 'tasks'])
+    const finance = destinations.find((d) => d.key === 'finance')!
+    expect(entriesOf(finance).map((e) => e.key)).toEqual(['instalments', 'payments'])
+    const admin = destinations.find((d) => d.key === 'admin')!
+    expect(admin.groups.map((g) => g.label?.en)).toEqual(['Reports & quality', 'System'])
   })
 
   it('lists for each role exactly the pages it may open: nothing hidden, nothing extra', () => {
@@ -112,7 +118,7 @@ describe('The navigation registry', () => {
           // PD-38: the Schedule waits for GET /lessons/access to say `calendar`.
           ...(visibleAreas(role).includes('schedule') ? ['schedule'] : []),
           // Scheduling desks: the Teachers department's, on the same word as its area.
-          ...(!lessonManager && visibleAreas(role).includes('teacher-schedules') ? ['teacher-schedules', 'student-schedules'] : []),
+          ...(!lessonManager && visibleAreas(role).includes('teacher-schedules') ? ['teacher-schedules', 'student-schedules', 'needs-action'] : []),
           ...(!billingReader && visibleAreas(role).includes('instalments') ? ['instalments'] : []),
           // PD-17: the Parent Profile follows the money's rule (GET /instalments/access).
           ...(!billingReader && visibleAreas(role).includes('parents') ? ['parents'] : []),
@@ -148,7 +154,7 @@ describe('The navigation registry', () => {
     // (PD-35 B5) and Materials, the library it manages with the Teachers
     // manager (PD-29), and Lesson audio, whose keys it holds (PD-48).
     const listed = destinationsFor('super_admin').flatMap((d) => entriesOf(d).map((e) => e.path))
-    expect(listed.filter((p) => !p.startsWith('/admin/'))).toEqual(['/chat', '/accounts', '/teacher-profiles', '/trials', '/trials/new-students', '/schedule', '/teachers/schedules', '/schedule/students', '/materials', '/cases', '/certificates', '/lesson-audio', '/moderation'])
+    expect(listed.filter((p) => !p.startsWith('/admin/'))).toEqual(['/chat', '/moderation', '/accounts', '/teacher-profiles', '/trials', '/trials/new-students', '/schedule', '/teachers/schedules', '/schedule/students', '/teachers/needs-action', '/materials', '/cases', '/certificates', '/lesson-audio'])
     // PD-38: an operator is offered the Schedule on the server's word only
     // (the department roles -- finance, technical, academic -- never are).
     for (const role of ['manager', 'admin', 'coverage'] as const) {
@@ -180,6 +186,42 @@ describe('People & Organization', () => {
     expect(manager.groups.map((g) => g.key)).toEqual(['accounts', 'teachers', 'families', 'organization'])
     const admin = destinationsFor('admin', {}).find((d) => d.key === 'people')!
     expect(admin.groups.map((g) => g.label)).toEqual([null])
+  })
+})
+
+describe('The nine sections', () => {
+  const pathsIn = (dest: string, role: 'admin' | 'manager' | 'super_admin', access = {}) => {
+    const d = destinationsFor(role, access).find((x) => x.key === dest)
+    return d ? entriesOf(d).map((e) => e.path) : []
+  }
+
+  it('Finance holds Instalments and Payments for whoever reads a family\'s money, and nobody else', () => {
+    expect(pathsIn('finance', 'admin', { billingReader: true })).toEqual(['/instalments', '/payments'])
+    expect(pathsIn('finance', 'admin', {})).toEqual([])
+    expect(pathsIn('finance', 'super_admin')).toEqual(['/admin/instalments', '/admin/payments'])
+    // Parents stay under People, and their profile is where money is recorded.
+    expect(pathsIn('people', 'admin', { billingReader: true })).toContain('/parents')
+  })
+
+  it('Operations holds the supervisors\' queue, escalations, certificates, lesson audio and materials', () => {
+    expect(pathsIn('operations', 'manager', { lessonManager: true, certificates: true, lessonAudio: true, materialsManager: true })).toEqual([
+      '/teachers/needs-action', '/materials', '/cases', '/certificates', '/lesson-audio',
+    ])
+    expect(pathsIn('operations', 'admin', {})).toEqual(['/cases'])
+  })
+
+  it('Communication holds Calls and Stories; the unbuilt communication tools sit beside them for the super admin', () => {
+    expect(pathsIn('communication', 'admin')).toEqual(['/calls', '/stories'])
+    expect(pathsIn('communication', 'super_admin')).toEqual(['/admin/stories', '/admin/notifications', '/admin/calls', '/admin/whatsapp'])
+  })
+
+  it('every role\'s rail is in the owner\'s order, and no destination is empty', () => {
+    const order = DESTINATIONS.map((d) => d.key)
+    for (const role of ['super_admin', 'manager', 'admin', 'coverage', 'finance'] as const) {
+      const keys = destinationsFor(role, { lessonManager: true, sales: true, operations: true, billingReader: true, calendar: true }).map((d) => d.key)
+      expect(keys, role).toEqual(order.filter((k) => keys.includes(k)))
+      for (const d of destinationsFor(role, { lessonManager: true })) expect(entriesOf(d).length, `${role}/${d.key}`).toBeGreaterThan(0)
+    }
   })
 })
 
@@ -324,47 +366,42 @@ describe('The retired Families page', () => {
 describe('The desktop rail', () => {
   beforeEach(() => viewport(1440))
 
-  it('shows the super admin five destinations, Conversations current and More last', async () => {
+  it('shows the super admin nine destinations, Conversations current and Admin & Settings last', async () => {
     vi.stubGlobal('fetch', routeFetch({}))
     renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/' })
     const nav = await screen.findByRole('navigation', { name: 'Admin Portal' })
     const items = [...nav.querySelectorAll('[data-destination]')]
     expect(items.map((el) => el.getAttribute('data-destination'))).toEqual([
-      'conversations', 'people', 'sales', 'scheduling', 'calls', 'stories', 'more',
+      'conversations', 'dashboard', 'people', 'sales', 'scheduling', 'operations', 'finance', 'communication', 'admin',
     ])
     // Conversations is a menu now -- Chat and All conversations -- and it is
     // where the super admin lands.
     await waitFor(() =>
       expect(within(nav).getByRole('button', { name: 'Conversations' })).toHaveAttribute('aria-current', 'true'),
     )
-    // PD-13: Calls is built, so its single icon links straight to the page, unmarked.
-    expect(within(nav).getByRole('link', { name: 'Calls' })).toHaveAttribute('href', '/admin/calls')
+    // Finance holds two pages, so it is a menu; the Dashboard holds the Dashboard and Tasks.
+    expect(within(nav).getByRole('button', { name: 'Finance' })).toHaveAttribute('aria-expanded', 'false')
+    expect(within(nav).getByRole('button', { name: 'Communication' })).toHaveAttribute('aria-expanded', 'false')
     // A placeholder still says so, inside its menu.
     expect(within(nav).queryByRole('link', { name: /In development/ })).not.toBeInTheDocument()
     expect(within(nav).getByRole('button', { name: 'People & Organization' })).toHaveAttribute('aria-expanded', 'false')
-    expect(within(nav).getByRole('button', { name: 'More' })).toHaveAttribute('aria-expanded', 'false')
-    // The Dashboard is not a primary destination; it waits in the closed More menu.
-    expect(within(nav).queryByRole('link', { name: 'Dashboard' })).not.toBeInTheDocument()
+    expect(within(nav).getByRole('button', { name: 'Admin & Settings' })).toHaveAttribute('aria-expanded', 'false')
   })
 
-  it('opens More as a grouped menu; choosing a page goes there and closes it', async () => {
+  it('opens Admin & Settings as a grouped menu; choosing a page goes there and closes it', async () => {
     vi.stubGlobal('fetch', routeFetch({}))
     renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/admin/conversations' })
     const nav = await screen.findByRole('navigation', { name: 'Admin Portal' })
-    const more = within(nav).getByRole('button', { name: 'More' })
+    const more = within(nav).getByRole('button', { name: 'Admin & Settings' })
     await userEvent.click(more)
     expect(more).toHaveAttribute('aria-expanded', 'true')
 
     const menu = document.getElementById(more.getAttribute('aria-controls')!)!
-    // 13 + Payments (PD-27) + Materials (PD-29) + Lesson audio (PD-48), and the
-    // Escalations and Certificates, which left People until Operations exists
-    // (Phase 2); Schedule and Trials moved to Scheduling and Sales (Phase 3).
-    expect(within(menu).getAllByRole('link')).toHaveLength(19)
-    expect(within(menu).getAllByRole('group').map((g) => g.getAttribute('aria-label'))).toEqual([
-      'Overview', 'Communication', 'Operations & performance', 'Administration',
-    ])
-    await userEvent.click(within(menu).getByRole('link', { name: 'Dashboard' }))
-    expect(await screen.findByRole('heading', { level: 1, name: 'Dashboard' })).toBeInTheDocument()
+    // Reports, Quality, Academy operations and Forms; then Approvals, Integrations, Audit log and System settings.
+    expect(within(menu).getAllByRole('link')).toHaveLength(8)
+    expect(within(menu).getAllByRole('group').map((g) => g.getAttribute('aria-label'))).toEqual(['Reports & quality', 'System'])
+    await userEvent.click(within(menu).getByRole('link', { name: /^Quality & supervision/ }))
+    expect(await screen.findByRole('heading', { level: 1, name: /Quality & supervision/ })).toBeInTheDocument()
     expect(more).toHaveAttribute('aria-expanded', 'false')
     expect(more).toHaveAttribute('aria-current', 'true')
   })
@@ -400,7 +437,7 @@ describe('The desktop rail', () => {
     vi.stubGlobal('fetch', routeFetch({}))
     renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/admin/stories' })
     const nav = await screen.findByRole('navigation', { name: 'Admin Portal' })
-    const more = within(nav).getByRole('button', { name: 'More' })
+    const more = within(nav).getByRole('button', { name: 'Admin & Settings' })
     await userEvent.click(more)
     await userEvent.click(screen.getByRole('heading', { level: 1 }))
     expect(more).toHaveAttribute('aria-expanded', 'false')
@@ -410,17 +447,14 @@ describe('The desktop rail', () => {
     const cases: [StaffRole, string[], string[], string[]][] = [
       // role, destinations, direct links, menus
       // Conversations is a direct link to /chat (the legacy Inbox is retired).
-      // PD-13: Calls is its own destination for every operating role.
-      // Teacher Profile V2: the certificate review queue sits under People beside
-      // the other people pages, so for admin and coverage People is a menu.
-      // PD-44: the Dashboard is its own destination for a manager, beside
-      // Conversations. More holds Tasks and Escalations (Phase 2: Escalations left
-      // People until it has its own destination), so it is a menu.
-      ['manager', ['conversations', 'dashboard', 'people', 'calls', 'stories', 'more'], ['Conversations', 'Dashboard', 'Calls', 'Stories'], ['People & Organization', 'More']],
-      ['admin', ['conversations', 'people', 'calls', 'stories', 'more'], ['Conversations', 'Accounts', 'Calls', 'Stories'], ['More']],
-      ['coverage', ['conversations', 'people', 'calls', 'stories', 'more'], ['Conversations', 'Accounts', 'Calls', 'Stories'], ['More']],
-      // PD-21: Accounts is every role's, so a department has two one-page destinations.
-      ['finance', ['people', 'more'], ['Accounts', 'Tasks'], []],
+      // A destination with one page is that page's link; with several it is a menu.
+      // A manager has the Dashboard and Tasks (a menu), People (Organization and
+      // Accounts), Escalations alone under Operations, and Calls with Stories.
+      ['manager', ['conversations', 'dashboard', 'people', 'operations', 'communication'], ['Conversations', 'Escalations'], ['Dashboard', 'People & Organization', 'Communication']],
+      ['admin', ['conversations', 'dashboard', 'people', 'operations', 'communication'], ['Conversations', 'Tasks', 'Accounts', 'Escalations'], ['Communication']],
+      ['coverage', ['conversations', 'dashboard', 'people', 'operations', 'communication'], ['Conversations', 'Tasks', 'Accounts', 'Escalations'], ['Communication']],
+      // PD-21: Accounts is every role's; a department has Tasks and Accounts, one page each.
+      ['finance', ['dashboard', 'people'], ['Tasks', 'Accounts'], []],
     ]
     for (const [role, keys, links, menus] of cases) {
       vi.stubGlobal('fetch', routeFetch({}))
@@ -506,9 +540,10 @@ describe('The drawer, below desktop width', () => {
     expect(within(conversations).getByRole('link', { name: 'كل المحادثات' })).toHaveAttribute('aria-current', 'page')
     expect(within(conversations).getByRole('link', { name: 'الدردشة' })).toHaveAttribute('href', '/chat')
     expect(within(nav).getByRole('group', { name: 'الأشخاص والهيكل التنظيمي' })).toBeInTheDocument()
-    const more = within(nav).getByRole('group', { name: 'المزيد' })
-    expect(within(more).getByRole('link', { name: 'لوحة المتابعة' })).toBeInTheDocument()
-    expect(within(more).getByRole('link', { name: 'المواد التعليمية' })).toHaveAttribute('href', '/materials')
+    const dashboard = within(nav).getByRole('group', { name: 'لوحة المتابعة' })
+    expect(within(dashboard).getByRole('link', { name: 'لوحة المتابعة' })).toBeInTheDocument()
+    const operations = within(nav).getByRole('group', { name: 'التشغيل' })
+    expect(within(operations).getByRole('link', { name: 'المواد التعليمية' })).toHaveAttribute('href', '/materials')
     expect(within(nav).getAllByRole('link', { name: 'التصعيدات' })[0]).toHaveAttribute('href', '/cases')
     const people = within(nav).getByRole('group', { name: 'الأشخاص والهيكل التنظيمي' })
     const sales = within(nav).getByRole('group', { name: 'المبيعات' })
@@ -518,7 +553,7 @@ describe('The drawer, below desktop width', () => {
     // PD-52: its own heading under People.
     expect(within(people).getByRole('link', { name: 'الحضور والتأخير والأعذار والشكاوى' })).toHaveAttribute('href', '/admin/teacher-attendance')
     expect(within(people).getByRole('link', { name: 'المنح والشهادات الطيبة' })).toHaveAttribute('href', '/admin/teacher-grants')
-    expect(within(nav).getAllByRole('link')).toHaveLength(36)
+    expect(within(nav).getAllByRole('link')).toHaveLength(37)
   })
 
   it('opens from the menu button and closes with Escape, giving focus back', async () => {
