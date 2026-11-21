@@ -223,7 +223,7 @@ function RailItem({
   const entryLabel = useEntryLabel()
   const sole = soleEntry(d)
   // More sits at the foot of the rail, apart from the everyday destinations.
-  const itemClass = d.key === 'more' ? 'rail__item rail__item--end' : 'rail__item'
+  const itemClass = d.key === 'admin' ? 'rail__item rail__item--end' : 'rail__item'
 
   if (sole) {
     return (

@@ -147,21 +147,21 @@ describe('Admin Portal registry and navigation', () => {
     // app/Navigation.test.tsx.)
     // PD-41: plus Certificates under People; PD-48: Lesson audio under More;
     // PD-52: the two teacher-records pages, their own group under People.
-    expect(within(nav).getAllByRole('link')).toHaveLength(36)
+    expect(within(nav).getAllByRole('link')).toHaveLength(37)
     // PD-57: plus the moderation queue (Reports) under More.
     const inDevelopment = ADMIN_SECTIONS.filter((s) => s.status === 'in_development').length
     expect(within(nav).getAllByText('In development')).toHaveLength(inDevelopment)
   })
 
-  it('keeps the Dashboard out of the primary destinations, one step away under More', async () => {
+  it('gives the Dashboard its own destination, beside Tasks', async () => {
     vi.stubGlobal('fetch', routeFetch({}))
     renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/admin/dashboard' })
     const nav = await screen.findByRole('navigation')
     // Its URL still opens it, and the navigation still marks where you are.
     expect(await screen.findByRole('heading', { level: 1, name: 'Dashboard' })).toBeInTheDocument()
-    const more = within(nav).getByRole('group', { name: 'More' })
-    expect(within(more).getByRole('link', { name: 'Dashboard' })).toHaveAttribute('aria-current', 'page')
-    expect(within(nav).getAllByRole('link', { name: 'Dashboard' })).toHaveLength(1)
+    const group = within(nav).getByRole('group', { name: 'Dashboard' })
+    expect(within(group).getByRole('link', { name: 'Dashboard' })).toHaveAttribute('aria-current', 'page')
+    expect(within(group).getByRole('link', { name: 'Tasks' })).toBeInTheDocument()
   })
 
   it('an unbuilt section is an explicit placeholder that requests no data', async () => {
