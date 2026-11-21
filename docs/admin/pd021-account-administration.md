@@ -25,7 +25,7 @@ included. Now only the departments that do that work keep it:
 |---|:-:|:-:|:-:|:-:|:-:|
 | super admin | ● | ● | ● (never impersonated) | — | — |
 | Operations department (manager; supervisors and backups) | ● | — | — | — | — |
-| Sales department (manager, members) | reset + sign out | — | — | — | — |
+| Sales department (manager, members) | — (PD-59, owner 2026-11-21; was reset + sign out; see [pd059-sales-accounts-administer.md](pd059-sales-accounts-administer.md)) | — | — | — | — |
 | Teachers department (manager; supervisors) | — | ● | — | — | — |
 | anyone else (no department; finance, technical, academic) | — | — | — | — | — |
 | parent, teacher | — | — | — | — | — |
