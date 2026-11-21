@@ -14,7 +14,6 @@
 
 drop trigger if exists trial_prospect_owner_moves_its_tasks on chat.trial_prospect;
 drop function if exists chat.work_task_from_prospect_owner();
-
 -- Who records a trial's outcome: the prospect's creator while live and still
 -- in Sales, else the live Sales manager, else the live super admin.
 create or replace function chat.work_task_trial_sales_owner(p_lesson uuid)
@@ -39,3 +38,5 @@ as $$
       where l.id = p_lesson
       order by d.id
       limit 1),
+    (select chat.work_task_super_admin(l.organization_id) from chat.lesson l where l.id = p_lesson));
+$$;

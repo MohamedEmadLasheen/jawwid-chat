@@ -639,6 +639,9 @@ export class SalesPipelineService {
       if (this.derive(f, new Date()).stage === 'converted') throw stateError('a converted lead is not reassigned');
       await this.requireEligibleOwner(tx, c, ownerId);
       if (f.ownerStaffId !== ownerId) {
+        // The database moves the lead's open trial follow-up tasks to the new owner in this same transaction
+        // (trigger trial_prospect_owner_moves_its_tasks); it is told who asked, for the task's history and the audit.
+        await tx.$executeRaw`SELECT set_config('chat.sales_lead_actor', ${c.staffId}::text, true)`;
         await tx.trialProspect.update({ where: { id: leadId }, data: { ownerStaffId: ownerId, lastActivityAt: new Date() } });
         await this.audit.audit(tx, {
           actorId: c.staffId, action: 'sales_lead.reassigned', entity: 'trial_prospect', entityId: leadId,

@@ -84,6 +84,7 @@ async function q<T = any>(sql: string, ...args: unknown[]): Promise<T[]> {
 
 const PROSPECT_NAME = 'tt_prospect_secret_name';
 let nth = 0;
+let slot = 0;
 /** A lead (through the API as `by`, owned by `owner`) with a held trial still awaiting its outcome. */
 async function leadWithHeldTrial(by: string, owner: string | null, label: string): Promise<{ lead: string; lesson: string }> {
   nth += 1;
@@ -96,10 +97,11 @@ async function leadWithHeldTrial(by: string, owner: string | null, label: string
 }
 async function heldTrial(prospect: string, by: string): Promise<string> {
   const id = randomUUID();
+  slot += 1; // one teacher: each trial in its own hour, never double-booked
   await rows(
     `insert into chat.lesson (id, organization_id, teacher_id, kind, starts_at, ends_at, outcome, outcome_by_kind, outcome_at, outcome_by, created_by, created_by_kind, prospect_id)
-     values ($1::uuid, $2::uuid, $3::uuid, 'trial', now() - interval '5 hours', now() - interval '4 hours 30 minutes', 'held', 'staff', now() - interval '4 hours', $4::uuid, $4::uuid, 'staff', $5::uuid)`,
-    id, orgId, m.teachers[0].id, who[by].id, prospect);
+     values ($1::uuid, $2::uuid, $3::uuid, 'trial', now() - ($6 || ' hours')::interval, now() - ($6 || ' hours')::interval + interval '30 minutes', 'held', 'staff', now() - ($6 || ' hours')::interval + interval '40 minutes', $4::uuid, $4::uuid, 'staff', $5::uuid)`,
+    id, orgId, m.teachers[0].id, who[by].id, prospect, String(2 + 2 * slot));
   return id;
 }
 const sweep = () => app.get(TaskService).sweep();
@@ -252,7 +254,7 @@ describe('what a reassignment must not touch', () => {
     await sweep();
     const done = (await taskOf(a.lesson)).id;
     const keep = (await taskOf(other.lesson)).id;
-    await rows(`insert into chat.trial_outcome (lesson_id, organization_id, result, recorded_by) values ($1::uuid, $2::uuid, 'no_show', $3::uuid)`, a.lesson, orgId, who.repA.id);
+    await q(`insert into chat.trial_outcome (lesson_id, organization_id, result, reason_code, recorded_by) values ($1::uuid, $2::uuid, 'not_subscribed', 'price', $3::uuid)`, a.lesson, orgId, who.repA.id);
     expect((await taskOf(a.lesson)).state).toBe('completed');
     const before = await events(done);
     expect((await reassign('manager', a.lead, 'repB')).status).toBe(201);
