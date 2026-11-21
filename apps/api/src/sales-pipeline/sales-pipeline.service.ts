@@ -22,6 +22,7 @@ import {
   decideLeadAccess,
   deriveStage,
   followUpDue,
+  isHandedOver,
   isStage,
   matchesFilter,
   planChannelMerge,
@@ -44,6 +45,9 @@ import {
 } from './pipeline-stage';
 
 type Tx = Prisma.TransactionClient;
+
+/** Where a lead stands on the way to its family's record (the "Needs hand-over" list). */
+export type HandOverState = 'awaiting_enrolment' | 'enrolled' | 'enrolled_no_contact' | 'learner_linked';
 
 interface KeyedChannel {
   value: string;
@@ -122,6 +126,8 @@ interface Facts {
   convertedFamilyId: string | null;
   trials: TrialFact[];
   trialLessonIds: string[];
+  /** Operations has enrolled one of the lead's trials (a student_enrolment row). */
+  enrolled: boolean;
 }
 
 /**
@@ -257,7 +263,7 @@ export class SalesPipelineService {
         followUpDue: due,
         followUpNote: p.followUpNote,
         createdAt: p.createdAt.toISOString(),
-        handedOver: p.convertedAt !== null || p.lessons.some((l) => enrolled.has(l.id)),
+        handedOver: isHandedOver(p.convertedAt, p.lessons.some((l) => enrolled.has(l.id))),
         contact: presence.get(p.id) ?? NO_CONTACT,
         owner: p.ownerStaffId ? { id: p.ownerStaffId, name: owners.get(p.ownerStaffId) ?? '' } : null,
       };
@@ -607,6 +613,130 @@ export class SalesPipelineService {
   }
 
   // ------------------------------------------------------------------
+  // Needs hand-over (read-only)
+  // ------------------------------------------------------------------
+
+  /**
+   * PD-59 stabilization, option O4: the leads a subscribed trial made Converted (or Core linked to a learner)
+   * that are not linked to a family yet, for the Sales manager and the super admin ONLY. Read-only: it
+   * writes nothing and changes nothing. Per lead: the state, the age, the owner, whether the lead still
+   * holds its contact copy, whether Operations enrolled it, what Convert would answer now (`blocker`, the
+   * same checks in the same order, none of them run) and, for `channel_missing`, the channel KINDS the
+   * family's record has no room for. Never a value, never a hash: the contact is read only to be keyed in
+   * memory, as Convert keys it.
+   */
+  async reconciliation(actorId: string) {
+    const c = await this.caller(actorId);
+    if (!reachesAll(c)) throw denied();
+    const now = new Date();
+    const prospects = await this.prisma.trialProspect.findMany({
+      where: { organizationId: c.organizationId, convertedAt: null },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      take: PIPELINE_SCAN_LIMIT,
+      select: {
+        id: true, displayName: true, createdAt: true, ownerStaffId: true, learnerId: true,
+        pipelineStage: true, lostReason: true,
+        lessons: {
+          where: { kind: 'trial' },
+          select: { id: true, startsAt: true, outcome: true, trialOutcome: { select: { result: true, reasonCode: true } } },
+        },
+      },
+    });
+    const candidates = prospects.flatMap((p) => {
+      const stage = deriveStage({
+        pipelineStage: asStored(p.pipelineStage), lostReason: p.lostReason, convertedAt: null, now, trials: p.lessons.map(trialFact),
+      }).stage;
+      return stage === 'converted' || p.learnerId !== null ? [{ p, stage }] : [];
+    });
+    const lessonIds = candidates.flatMap(({ p }) => p.lessons.map((l) => l.id));
+    const enrolments = lessonIds.length === 0
+      ? []
+      : await this.prisma.studentEnrolment.findMany({
+          where: { lessonId: { in: lessonIds }, organizationId: c.organizationId },
+          select: { lessonId: true, familyId: true, assignedAt: true },
+        });
+    const enrolmentOf = new Map(enrolments.flatMap((e) => (e.lessonId ? [[e.lessonId, e] as const] : [])));
+    const owners = await this.staffNames(candidates.flatMap(({ p }) => (p.ownerStaffId ? [p.ownerStaffId] : [])));
+    const contacts = new Map(
+      (await this.prisma.salesLeadContact.findMany({ where: { prospectId: { in: candidates.map(({ p }) => p.id) }, organizationId: c.organizationId } }))
+        .map((r) => [r.prospectId, {
+          parentName: r.parentName, phone: r.confinedLeadPhone, whatsapp: r.confinedLeadWhatsapp, email: r.confinedLeadEmail, country: r.countryCode,
+        } as ContactDto] as const),
+    );
+
+    type Prep = { enrolment: { familyId: string; assignedAt: Date } | null; keys: LeadKeys | null; unreadable: boolean };
+    const prep = new Map<string, Prep>();
+    for (const { p, stage } of candidates) {
+      const first = p.lessons.map((l) => enrolmentOf.get(l.id)).find((e) => !!e) ?? null;
+      const contact = contacts.get(p.id) ?? null;
+      let keys: LeadKeys | null = null;
+      let unreadable = false;
+      if (contact) {
+        try { keys = this.keysOf(contact); } catch { unreadable = true; }
+      }
+      // Convert looks for the family of the lead's own trial only when a subscribed trial made it Converted.
+      prep.set(p.id, { enrolment: stage === 'converted' ? first : null, keys, unreadable });
+    }
+    const allHashes = [...new Set([...prep.values()].flatMap((x) => (x.enrolment && x.keys ? x.keys.hashes : [])))];
+    const keyRows = allHashes.length === 0
+      ? []
+      : await this.prisma.familyContactKey.findMany({ where: { organizationId: c.organizationId, keyHash: { in: allHashes } }, select: { keyHash: true, familyId: true } });
+    const slotsOf = new Map<string, { phoneEmpty: boolean; emailEmpty: boolean } | null>();
+    for (const familyId of new Set([...prep.values()].flatMap((x) => (x.enrolment && x.keys ? [x.enrolment.familyId] : [])))) {
+      slotsOf.set(familyId, await this.prisma.$transaction(async (tx) => {
+        const s = await familyChannelSlots(tx, { familyId, organizationId: c.organizationId });
+        return s ? { phoneEmpty: s.phoneEmpty, emailEmpty: s.emailEmpty } : null;
+      }));
+    }
+
+    const rows = candidates.map(({ p, stage }) => {
+      const x = prep.get(p.id)!;
+      const enrolled = p.lessons.some((l) => enrolmentOf.has(l.id));
+      const hasContactCopy = contacts.has(p.id);
+      const learnerLinked = p.learnerId !== null;
+      const state: HandOverState = learnerLinked ? 'learner_linked' : !enrolled ? 'awaiting_enrolment' : hasContactCopy ? 'enrolled' : 'enrolled_no_contact';
+      let blocker: 'no_contact' | 'number_unreadable' | 'awaiting_enrolment' | 'unavailable' | 'channel_missing' | 'ready' | 'not_assessed';
+      let missingKinds: ChannelKind[] = [];
+      if (!hasContactCopy) blocker = 'no_contact';
+      else if (x.unreadable || !x.keys) blocker = 'number_unreadable';
+      else if (stage !== 'converted') blocker = 'not_assessed';
+      else if (!x.enrolment) blocker = 'awaiting_enrolment';
+      else {
+        const familyId = x.enrolment.familyId;
+        const held = keyRows.filter((r) => x.keys!.hashes.includes(r.keyHash));
+        if (held.some((r) => r.familyId !== familyId)) blocker = 'unavailable';
+        else {
+          const plan = planChannelMerge(
+            { phone: x.keys.phone?.hash ?? null, whatsapp: x.keys.whatsapp?.hash ?? null, email: x.keys.email?.hash ?? null },
+            new Set(held.map((r) => r.keyHash)),
+            slotsOf.get(familyId) ?? null,
+          );
+          missingKinds = plan.missing;
+          blocker = plan.missing.length > 0 ? 'channel_missing' : 'ready';
+        }
+      }
+      const since = x.enrolment?.assignedAt ?? [...p.lessons].sort((a, b) => b.startsAt.getTime() - a.startsAt.getTime())[0]?.startsAt ?? p.createdAt;
+      return {
+        id: p.id,
+        displayName: p.displayName,
+        state,
+        blocker,
+        ageDays: Math.max(0, Math.floor((now.getTime() - since.getTime()) / 86_400_000)),
+        waitingSince: since.toISOString(),
+        owner: p.ownerStaffId ? { id: p.ownerStaffId, name: owners.get(p.ownerStaffId) ?? '' } : null,
+        hasContactCopy,
+        enrolled,
+        learnerLinked,
+        missingKinds,
+      };
+    });
+    rows.sort((a, b) => b.ageDays - a.ageDays || a.id.localeCompare(b.id));
+    const counts = { awaiting_enrolment: 0, enrolled: 0, enrolled_no_contact: 0, learner_linked: 0 };
+    for (const r of rows) counts[r.state] += 1;
+    return { leads: rows, total: rows.length, counts, truncated: prospects.length === PIPELINE_SCAN_LIMIT };
+  }
+
+  // ------------------------------------------------------------------
   // Ownership
   // ------------------------------------------------------------------
 
@@ -703,11 +833,12 @@ export class SalesPipelineService {
       },
     });
     if (!p) throw notFound();
+    const enrolled = p.lessons.length > 0 && (await tx.studentEnrolment.count({ where: { lessonId: { in: p.lessons.map((l) => l.id) } } })) > 0;
     return {
       id: p.id, displayName: p.displayName, level: p.level, note: p.note, createdAt: p.createdAt, ownerStaffId: p.ownerStaffId,
       pipelineStage: asStored(p.pipelineStage), lostReason: p.lostReason, lastContactedAt: p.lastContactedAt,
       nextFollowUpOn: day(p.nextFollowUpOn), followUpNote: p.followUpNote, convertedAt: p.convertedAt, convertedFamilyId: p.convertedFamilyId,
-      trials: p.lessons.map(trialFact), trialLessonIds: p.lessons.map((l) => l.id),
+      trials: p.lessons.map(trialFact), trialLessonIds: p.lessons.map((l) => l.id), enrolled,
     };
   }
 
@@ -810,6 +941,7 @@ export class SalesPipelineService {
       createdAt: f.createdAt.toISOString(),
       convertedAt: f.convertedAt?.toISOString() ?? null,
       familyId: f.convertedFamilyId,
+      handedOver: isHandedOver(f.convertedAt, f.enrolled),
       canConvert: canConvert(d.stage, f.convertedAt !== null),
       trial: latest ? { startsAt: latest.startsAt.toISOString(), result: latest.result } : null,
       contact,

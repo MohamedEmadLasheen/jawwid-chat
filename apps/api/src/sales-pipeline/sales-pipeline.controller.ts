@@ -29,6 +29,13 @@ export class SalesPipelineController {
     return this.pipeline.owners(actorId);
   }
 
+  /** Leads a subscribed trial made Converted that are not linked to a family yet (manager and super admin only; read-only; no value). */
+  @Requires('new_students.view')
+  @Get('reconciliation')
+  reconciliation(@ActorId() actorId: string) {
+    return this.pipeline.reconciliation(actorId);
+  }
+
   /** ?stage&q&followUp=due&limit&offset -- leads with their derived stage; no contact value. */
   @Requires('new_students.view')
   @Get('leads')
