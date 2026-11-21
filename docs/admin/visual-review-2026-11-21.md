@@ -102,6 +102,7 @@ under Operations for them; super admin has all nine sections; reps do not get th
 Severity: High = data exposure or wrong access; Medium = misleading or broken behaviour; Low = polish.
 
 ### F7 (evidence, being fixed in another PR)
+- **Status after this review:** fixed in open PR #627 (stacked on #624), which scopes every trial read and write, the New Students page and the trial payment routes to the representative's own prospects. The independent review of that fix left two items for a product decision: trial-group chat cards (every Sales member is seated in a teacher's trial group and sees all reps' trial cards) and the `trial_outcome` task owner. Not re-captured in the browser against #627.
 **Sales reps see each other's trials and the New students record with parent contact.**
 - Repro: sign in as `repb`; open `/trials` and `/trials/new-students`.
 - Observed in the UI: `/trials` lists "Lead A1 Aya" (rep A's lead) next to B's own trial; `/trials/new-students`
