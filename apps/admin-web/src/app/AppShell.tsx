@@ -119,6 +119,7 @@ function DrawerLink({ entry }: { entry: NavEntry }) {
   return (
     <NavLink
       to={entry.path}
+      end={entry.exact}
       className={entry.inDevelopment ? 'nav__item nav__item--pending' : 'nav__item'}
       title={pendingTitle(label, entry, tx(TEXT.inDevelopment))}
     >
@@ -181,6 +182,7 @@ function MenuLink({ entry }: { entry: NavEntry }) {
   return (
     <NavLink
       to={entry.path}
+      end={entry.exact}
       className={entry.inDevelopment ? 'rail__menu-link rail__menu-link--pending' : 'rail__menu-link'}
       title={pendingTitle(label, entry, tx(TEXT.inDevelopment))}
     >

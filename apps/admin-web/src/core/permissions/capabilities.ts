@@ -29,6 +29,9 @@ export type NavArea =
   | 'parents'
   | 'payments'
   | 'trials'
+  | 'new-students'
+  | 'teacher-schedules'
+  | 'student-schedules'
   | 'calls'
   | 'teacher-profiles'
   | 'accounts'
@@ -93,7 +96,7 @@ export function visibleAreas(role: StaffRole): NavArea[] {
     // `schedule` (PD-38) is offered under People beside the Admin Portal's sections.
     // `certificates` (PD-41) is offered under People: the page and its types.
     // `lesson-audio` (PD-48): the voice-over review page, under More.
-    return ['chat', 'tasks', 'dashboard', 'stories', 'teachers', 'instalments', 'parents', 'payments', 'trials', 'calls', 'teacher-profiles', 'accounts', 'materials', 'schedule', 'cases', 'certificates', 'lesson-audio', 'moderation', 'teacher-attendance', 'teacher-grants', 'settings']
+    return ['chat', 'tasks', 'dashboard', 'stories', 'teachers', 'instalments', 'parents', 'payments', 'trials', 'new-students', 'calls', 'teacher-profiles', 'accounts', 'materials', 'schedule', 'teacher-schedules', 'student-schedules', 'cases', 'certificates', 'lesson-audio', 'moderation', 'teacher-attendance', 'teacher-grants', 'settings']
   }
   if (isManager(role)) {
     // PD-8: the department's structure -- children's supervisors and backups.
@@ -107,7 +110,7 @@ export function visibleAreas(role: StaffRole): NavArea[] {
     // PD-38: the scheduling calendar -- offered only when the server confirms it.
     // PD-41: the Certificates page -- offered when GET /certificates/access opens it.
     // PD-48: Lesson audio -- offered when GET /lesson-audio/access opens it (the Teachers manager).
-    return ['chat', 'calls', 'organization', 'teachers', 'schedule', 'instalments', 'parents', 'payments', 'trials', 'tasks', 'dashboard', 'stories', 'teacher-profiles', 'accounts', 'materials', 'cases', 'certificates', 'lesson-audio', 'moderation', 'teacher-attendance', 'teacher-grants', 'settings']
+    return ['chat', 'calls', 'organization', 'teachers', 'schedule', 'teacher-schedules', 'student-schedules', 'instalments', 'parents', 'payments', 'trials', 'new-students', 'tasks', 'dashboard', 'stories', 'teacher-profiles', 'accounts', 'materials', 'cases', 'certificates', 'lesson-audio', 'moderation', 'teacher-attendance', 'teacher-grants', 'settings']
   }
   if (isOperator(role)) {
     // No coverage configuration, no manager dashboard, no config editing.
@@ -126,7 +129,7 @@ export function visibleAreas(role: StaffRole): NavArea[] {
     // the server's word (SERVER_CONFIRMED_AREAS).
     // PD-48: Lesson audio, for a Teachers supervisor (listens) -- on the server's word.
     // PD-52: Attendance & Complaints -- on the server's word (GET /teacher-records/access).
-    return ['chat', 'calls', 'teachers', 'schedule', 'instalments', 'parents', 'payments', 'trials', 'tasks', 'stories', 'teacher-profiles', 'accounts', 'cases', 'certificates', 'lesson-audio', 'teacher-attendance', 'teacher-grants']
+    return ['chat', 'calls', 'teachers', 'schedule', 'teacher-schedules', 'student-schedules', 'instalments', 'parents', 'payments', 'trials', 'new-students', 'tasks', 'stories', 'teacher-profiles', 'accounts', 'cases', 'certificates', 'lesson-audio', 'teacher-attendance', 'teacher-grants']
   }
   if (role === 'specialist') {
     // PD-40/PD-41: the Designer -- the Certificates page, and (PD-47) the
@@ -208,6 +211,11 @@ const SERVER_CONFIRMED_AREAS: Partial<Record<NavArea, (a: DepartmentAccess) => b
   // until PD-52, has the two teacher-records pages instead.
   teachers: (a) => a.lessonManager === true,
   trials: (a) => a.lessonManager === true || a.sales === true || a.operations === true,
+  // New students: the tab's own rule (Sales sets them up, Operations takes them over).
+  'new-students': (a) => a.sales === true || a.operations === true,
+  // Scheduling desks: the Teachers department's (the same gate as its area).
+  'teacher-schedules': (a) => a.lessonManager === true,
+  'student-schedules': (a) => a.lessonManager === true,
   instalments: (a) => a.billingReader === true,
   // PD-17: the Parent Profile follows the same rule as the money on it.
   parents: (a) => a.billingReader === true,

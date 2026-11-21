@@ -18,6 +18,7 @@ import { OrganizationPage } from '@/features/organization/OrganizationPage'
 import { TeacherStatsPage } from '@/features/teachers/TeacherStatsPage'
 import { NeedsActionPage } from '@/features/teachers/NeedsActionPage'
 import { SchedulesPage } from '@/features/teachers/SchedulesPage'
+import { StudentSchedulesPage } from '@/features/teachers/StudentSchedulesPage'
 import { StudentsPage } from '@/features/teachers/StudentsPage'
 import { TeachersAreaTabs } from '@/features/teachers/area'
 import { CasesPage } from '@/features/cases/CasesPage'
@@ -123,6 +124,7 @@ export function AppRoutes() {
         <Route path="/teachers/students" element={<Area area="teachers"><StudentsPage /></Area>} />
         {/* PD-38: the academy's scheduling calendar; the server decides each request (GET /calendar*). */}
         <Route path="/schedule" element={<Area area="schedule"><SchedulePage /></Area>} />
+        <Route path="/schedule/students" element={<Area area="student-schedules"><StudentSchedulesPage /></Area>} />
         {/* PD-10 Teacher Files: a tab of the same area; the server refuses anyone else. */}
         <Route path="/teachers/files" element={<Area area="teachers"><TeacherFilesPage basePath="/teachers/files" /></Area>} />
         <Route path="/teachers/files/:teacherId" element={<Area area="teachers"><TeacherFilePage basePath="/teachers/files" /></Area>} />

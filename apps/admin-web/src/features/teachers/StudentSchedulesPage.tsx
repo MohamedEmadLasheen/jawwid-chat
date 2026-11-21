@@ -1,0 +1,88 @@
+import { useMemo } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { PageHeader } from '@/shared/components/PageHeader'
+import { EmptyState, QueryBoundary } from '@/shared/components/States'
+import { SearchableSelect } from '@/shared/components/SearchableSelect'
+import { O } from './opsCopy'
+import { useRoster } from './opsHooks'
+import { StudentScheduleDesk, useTx } from './StudentScheduleDesk'
+import type { Pair } from './copy'
+import './teachers.css'
+
+const COPY = {
+  title: { en: 'Student schedules', ar: 'جداول الطلاب' },
+  subtitle: {
+    en: 'Find any student and manage their weekly lesson times, one-off lessons, teacher, pause or stop. It is the same desk as Teachers’ schedules, and the same academy calendar shows the result.',
+    ar: 'ابحث عن أي طالب وأدر مواعيد دروسه الأسبوعية ودروسه المنفردة ومعلمه وإيقافه المؤقت أو النهائي. هي نفس شاشة جداول المعلمين، ويعرض تقويم الأكاديمية النتيجة نفسها.',
+  },
+  chooseStudent: { en: 'Student', ar: 'الطالب' },
+  allStudents: { en: 'All students', ar: 'كل الطلاب' },
+  chooseTeacher: { en: 'Teacher', ar: 'المعلم' },
+  allTeachers: { en: 'All teachers', ar: 'كل المعلمين' },
+  noTeacher: { en: 'No teacher yet', ar: 'بلا معلم بعد' },
+} satisfies Record<string, Pair>
+
+const NONE = '__none'
+
+/**
+ * Student scheduling: the student-first way into the same scheduling desk the
+ * Teachers' schedules page uses (StudentScheduleDesk). Nothing here writes or
+ * decides anything of its own -- every change is the shared desk's, checked by
+ * the server against the same roster, availability and calendar.
+ */
+export function StudentSchedulesPage() {
+  const tx = useTx()
+  const roster = useRoster()
+  const [params, setParams] = useSearchParams()
+  const studentId = params.get('student') ?? ''
+  const teacherId = params.get('teacher') ?? ''
+
+  const learners = roster.data?.learners ?? []
+  const teachers = roster.data?.teachers ?? []
+  const shown = useMemo(
+    () =>
+      learners.filter(
+        (l) => (!studentId || l.id === studentId) && (!teacherId || (teacherId === NONE ? l.teacherId === null : l.teacherId === teacherId)),
+      ),
+    [learners, studentId, teacherId],
+  )
+
+  const set = (key: 'student' | 'teacher', value: string) => {
+    const next = new URLSearchParams(params)
+    if (value) next.set(key, value)
+    else next.delete(key)
+    setParams(next)
+  }
+
+  return (
+    <div className="page">
+      <div className="page__inner">
+        <PageHeader title={tx(COPY.title)} subtitle={tx(COPY.subtitle)} />
+        <QueryBoundary isLoading={roster.isLoading} error={roster.error} onRetry={() => void roster.refetch()}>
+          <div className="ts-month">
+            <label>
+              <span className="field__label">{tx(COPY.chooseStudent)}</span>
+              <SearchableSelect className="select" value={studentId} onValueChange={(v) => set('student', v)} aria-label={tx(COPY.chooseStudent)}>
+                <option value="">{tx(COPY.allStudents)}</option>
+                {learners.map((l) => (
+                  <option key={l.id} value={l.id}>{`${l.name} — ${l.family.displayName}`}</option>
+                ))}
+              </SearchableSelect>
+            </label>
+            <label>
+              <span className="field__label">{tx(COPY.chooseTeacher)}</span>
+              <SearchableSelect className="select" value={teacherId} onValueChange={(v) => set('teacher', v)} aria-label={tx(COPY.chooseTeacher)}>
+                <option value="">{tx(COPY.allTeachers)}</option>
+                <option value={NONE}>{tx(COPY.noTeacher)}</option>
+                {teachers.map((t) => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+              </SearchableSelect>
+            </label>
+          </div>
+          {learners.length === 0 ? <EmptyState title={tx(O.noStudents)} /> : <StudentScheduleDesk students={shown} teachers={teachers} />}
+        </QueryBoundary>
+      </div>
+    </div>
+  )
+}

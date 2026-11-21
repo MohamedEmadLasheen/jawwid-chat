@@ -426,19 +426,19 @@ describe('Trial lessons, as Operations (the trial desk)', () => {
 describe('Trials & new students, as the super admin', () => {
   // The server admits the super admin to both pages (GET /lessons/access
   // answers sales and operations; trials.view/manage), and the area is
-  // routable for it -- so the Admin Portal must link it (under More until Sales has its own destination).
+  // routable for it -- so the Admin Portal must link it (Sales' workspace).
   const superAdmin = makeStaff({ id: 'staff_super', name: 'Synthetic owner', role: 'super_admin' })
 
   it('is linked from the Admin Portal, and both tabs open', async () => {
-    const listed = destinationsFor('super_admin', {}).find((d) => d.key === 'more')!
-    expect(entriesOf(listed).map((e) => e.path)).toContain('/trials')
+    const listed = destinationsFor('super_admin', {}).find((d) => d.key === 'sales')!
+    expect(entriesOf(listed).map((e) => e.path)).toEqual(['/trials', '/trials/new-students'])
 
     access({ sales: true, operations: true })
     on('GET', /\/trials\/new-students$/, () => json({ students: [] }))
     renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/admin/conversations' })
     const nav = await screen.findByRole('navigation', { name: 'Admin Portal' })
-    const people = within(nav).getByRole('group', { name: 'More' })
-    const link = within(people).getByRole('link', { name: 'Trials & new students' })
+    const people = within(nav).getByRole('group', { name: 'Sales' })
+    const link = within(people).getByRole('link', { name: 'Trial lessons' })
     expect(link).toHaveAttribute('href', '/trials')
     await userEvent.click(link)
 
