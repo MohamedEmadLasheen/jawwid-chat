@@ -17,7 +17,7 @@ export const messages = {
     'nav.instalments': 'Instalments',
     'nav.parents': 'Parents',
     'nav.payments': 'Payments',
-    'nav.materials': 'Materials',
+    'nav.materials': 'Educational materials',
     'nav.schedule': 'Academy calendar',
     'nav.trials': 'Trial lessons',
     'nav.sales-pipeline': 'Sales pipeline',

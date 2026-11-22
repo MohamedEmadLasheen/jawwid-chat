@@ -8,7 +8,7 @@ import { navAreas, visibleAreas, type NavArea } from '@/core/permissions/capabil
 import { ADMIN_SECTIONS } from '@/features/admin/sections'
 import type { StaffRole } from '@/shared/types/domain'
 import { makeStaff, renderWithProviders } from '@/test/utils'
-import { AREA_PATH, DESTINATIONS, destinationsFor, entriesOf } from './navigation'
+import { AREA_PATH, DESTINATIONS, destinationsFor, entriesOf, soleEntry } from './navigation'
 
 /**
  * Conversation-first navigation (2026-10-13): "/" opens the role's
@@ -76,7 +76,7 @@ describe('The navigation registry', () => {
   it('gives each of the twenty-one sections exactly one destination, in the nine sections of the rail', () => {
     const destinations = destinationsFor('super_admin')
     expect(destinations.map((d) => d.key)).toEqual([
-      'conversations', 'dashboard', 'people', 'sales', 'scheduling', 'operations', 'finance', 'communication', 'admin',
+      'conversations', 'dashboard', 'people', 'sales', 'scheduling', 'operations', 'certificates', 'materials', 'finance', 'communication', 'admin',
     ])
     const keys = destinations.flatMap((d) => entriesOf(d).map((e) => e.key))
     // The twenty-one sections, plus Chat (PD-8: where the super admin replies),
@@ -156,7 +156,7 @@ describe('The navigation registry', () => {
     // (PD-35 B5) and Materials, the library it manages with the Teachers
     // manager (PD-29), and Lesson audio, whose keys it holds (PD-48).
     const listed = destinationsFor('super_admin').flatMap((d) => entriesOf(d).map((e) => e.path))
-    expect(listed.filter((p) => !p.startsWith('/admin/'))).toEqual(['/chat', '/moderation', '/accounts', '/teacher-profiles', '/students', '/sales/pipeline', '/trials', '/trials/new-students', '/schedule', '/teachers/schedules', '/schedule/students', '/teachers/needs-action', '/materials', '/cases', '/certificates', '/lesson-audio'])
+    expect(listed.filter((p) => !p.startsWith('/admin/'))).toEqual(['/chat', '/moderation', '/accounts', '/teacher-profiles', '/students', '/sales/pipeline', '/trials', '/trials/new-students', '/schedule', '/teachers/schedules', '/schedule/students', '/teachers/needs-action', '/cases', '/lesson-audio', '/certificates', '/materials'])
     // PD-38: an operator is offered the Schedule on the server's word only
     // (the department roles -- finance, technical, academic -- never are).
     for (const role of ['manager', 'admin', 'coverage'] as const) {
@@ -192,7 +192,7 @@ describe('People & Organization', () => {
 })
 
 describe('The nine sections', () => {
-  const pathsIn = (dest: string, role: 'admin' | 'manager' | 'super_admin', access = {}) => {
+  const pathsIn = (dest: string, role: 'admin' | 'manager' | 'super_admin' | 'specialist', access = {}) => {
     const d = destinationsFor(role, access).find((x) => x.key === dest)
     return d ? entriesOf(d).map((e) => e.path) : []
   }
@@ -205,12 +205,24 @@ describe('The nine sections', () => {
     expect(pathsIn('people', 'admin', { billingReader: true })).toContain('/parents')
   })
 
-  it('Operations holds the supervisors\' queue, escalations, certificates, lesson audio and materials', () => {
-    expect(pathsIn('operations', 'manager', { lessonManager: true, certificates: true, lessonAudio: true, materialsManager: true })).toEqual([
+  it('Operations holds the supervisors\' queue, escalations and lesson audio; Certificates and Educational materials have destinations of their own', () => {
+    const access = { lessonManager: true, certificates: true, lessonAudio: true, materialsManager: true }
+    expect(pathsIn('operations', 'manager', access)).toEqual([
       // The Teachers department's Trial lessons page is listed here, not under Sales (PD-59 owner decision).
-      '/teachers/needs-action', '/trials', '/materials', '/cases', '/certificates', '/lesson-audio',
+      '/teachers/needs-action', '/trials', '/cases', '/lesson-audio',
     ])
+    expect(pathsIn('certificates', 'manager', access)).toEqual(['/certificates'])
+    expect(pathsIn('materials', 'manager', access)).toEqual(['/materials'])
     expect(pathsIn('operations', 'admin', {})).toEqual(['/cases'])
+    // The Marketing designer's whole workspace is one rail item, and nothing else is listed for them but their tasks.
+    const designer = destinationsFor('specialist', { certificates: true })
+    expect(designer.map((d) => d.key)).toEqual(['dashboard', 'certificates'])
+    expect(soleEntry(designer.find((d) => d.key === 'certificates')!)?.path).toBe('/certificates')
+    // Nobody is offered either page without the server's word.
+    for (const role of ['manager', 'admin', 'coverage', 'specialist'] as const) {
+      expect(destinationsFor(role, {}).map((d) => d.key), role).not.toContain('certificates')
+      expect(destinationsFor(role, {}).map((d) => d.key), role).not.toContain('materials')
+    }
   })
 
   it('Communication holds Calls and Stories; the unbuilt communication tools sit beside them for the super admin', () => {
@@ -420,7 +432,7 @@ describe('The desktop rail', () => {
     const nav = await screen.findByRole('navigation', { name: 'Admin Portal' })
     const items = [...nav.querySelectorAll('[data-destination]')]
     expect(items.map((el) => el.getAttribute('data-destination'))).toEqual([
-      'conversations', 'dashboard', 'people', 'sales', 'scheduling', 'operations', 'finance', 'communication', 'admin',
+      'conversations', 'dashboard', 'people', 'sales', 'scheduling', 'operations', 'certificates', 'materials', 'finance', 'communication', 'admin',
     ])
     // Conversations is a menu now -- Chat and All conversations -- and it is
     // where the super admin lands.
@@ -591,8 +603,9 @@ describe('The drawer, below desktop width', () => {
     expect(within(nav).getByRole('group', { name: 'الأشخاص والهيكل التنظيمي' })).toBeInTheDocument()
     const dashboard = within(nav).getByRole('group', { name: 'لوحة المتابعة' })
     expect(within(dashboard).getByRole('link', { name: 'لوحة المتابعة' })).toBeInTheDocument()
-    const operations = within(nav).getByRole('group', { name: 'التشغيل' })
-    expect(within(operations).getByRole('link', { name: 'المواد التعليمية' })).toHaveAttribute('href', '/materials')
+    // A destination with one page is that page: a direct link, not a menu.
+    expect(within(nav).getByRole('link', { name: 'المواد التعليمية' })).toHaveAttribute('href', '/materials')
+    expect(within(nav).getByRole('link', { name: 'الشهادات' })).toHaveAttribute('href', '/certificates')
     expect(within(nav).getAllByRole('link', { name: 'التصعيدات' })[0]).toHaveAttribute('href', '/cases')
     const people = within(nav).getByRole('group', { name: 'الأشخاص والهيكل التنظيمي' })
     const sales = within(nav).getByRole('group', { name: 'المبيعات' })

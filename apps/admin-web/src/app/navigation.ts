@@ -26,6 +26,8 @@ export type DestinationKey =
   | 'sales'
   | 'scheduling'
   | 'operations'
+  | 'certificates'
+  | 'materials'
   | 'finance'
   | 'communication'
   | 'admin'
@@ -76,6 +78,10 @@ export const DESTINATIONS: readonly { key: DestinationKey; icon: IconName; label
   { key: 'sales', icon: 'chart', label: { en: 'Sales', ar: 'المبيعات' } },
   { key: 'scheduling', icon: 'calendar', label: { en: 'Scheduling', ar: 'الجدولة' } },
   { key: 'operations', icon: 'academy', label: { en: 'Operations', ar: 'التشغيل' } },
+  // Their own icons: the Marketing designer's whole workspace is Certificates, and the
+  // educational materials are used by Teachers and Operations alike, so neither sits inside one department's menu.
+  { key: 'certificates', icon: 'star', label: { en: 'Certificates', ar: 'الشهادات' } },
+  { key: 'materials', icon: 'book', label: { en: 'Educational materials', ar: 'المواد التعليمية' } },
   { key: 'finance', icon: 'banknote', label: { en: 'Finance', ar: 'المالية' } },
   { key: 'communication', icon: 'notifications', label: { en: 'Communication', ar: 'التواصل' } },
   // Last, at the foot of the rail, apart from the everyday destinations.
@@ -137,9 +143,9 @@ export const AREA_DESTINATION: Record<NavArea, DestinationKey | null> = {
   'student-schedules': 'scheduling',
   'needs-action': 'operations',
   cases: 'operations',
-  certificates: 'operations',
+  certificates: 'certificates',
   'lesson-audio': 'operations',
-  materials: 'operations',
+  materials: 'materials',
   instalments: 'finance',
   payments: 'finance',
   calls: 'communication',
@@ -210,8 +216,8 @@ const AREA_ICON: Record<OperatorArea, IconName> = {
 /** The super admin's name for /chat, distinct from the read-only section's. */
 export const ADMIN_CHAT_LABEL: Bilingual = { en: 'Chat', ar: 'الدردشة' }
 
-/** PD-29: the Materials library, under More. */
-export const ADMIN_MATERIALS_LABEL: Bilingual = { en: 'Materials', ar: 'المواد التعليمية' }
+/** PD-29: the educational materials library, a destination of its own. */
+export const ADMIN_MATERIALS_LABEL: Bilingual = { en: 'Educational materials', ar: 'المواد التعليمية' }
 
 /** PD-38: the academy's calendar, first page of Scheduling. */
 export const ADMIN_SCHEDULE_LABEL: Bilingual = { en: 'Academy calendar', ar: 'تقويم الأكاديمية' }
@@ -268,11 +274,11 @@ const ADMIN_AREA_ENTRIES: readonly AdminAreaEntry[] = [
   // The supervisors' daily queue.
   { area: 'needs-action', destination: 'operations' },
   // PD-29: the Materials library.
-  { area: 'materials', destination: 'operations', label: ADMIN_MATERIALS_LABEL },
+  { area: 'materials', destination: 'materials', label: ADMIN_MATERIALS_LABEL },
   // PD-35 B5: escalation cases.
   { area: 'cases', destination: 'operations', label: ADMIN_CASES_LABEL },
   // PD-41: the Certificates page and its types.
-  { area: 'certificates', destination: 'operations' },
+  { area: 'certificates', destination: 'certificates' },
   // PD-48: lesson voice-over review.
   { area: 'lesson-audio', destination: 'operations' },
   // PD-57: the moderation queue.
