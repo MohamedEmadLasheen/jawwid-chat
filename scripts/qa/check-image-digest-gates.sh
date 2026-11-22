@@ -15,6 +15,11 @@
 #      migrations, and again after the release
 #   6  deploy-staging records the digest of its OWN push as the artifact the
 #      other two download
+#   8  deploy-staging `build_only`: a boolean input, default false, that skips the
+#      whole `deploy` job (so its Environment, secrets, backup and migrations never
+#      start), keeps the image build and the digest record, never pushes the moving
+#      `staging` tags or builds the staging Admin Web, and refuses `image_tag`;
+#      the normal path keeps `deploy` needing `build`
 #   7  review-cohort never prints a review login (LR-46 P3-9): the login
 #      domain is in no env: block or ${{ }} expression (inputs.*,
 #      github.event.inputs.*, toJSON(inputs) ...), each job's first step reads
@@ -233,6 +238,51 @@ def check(t):
         P.append("deploy-staging: the digest is not uploaded as the api-image-digest artifact")
     if "if-no-files-found: error" not in b:
         P.append("deploy-staging: a missing digest record would not fail the build")
+
+    # 8 ----------------------------------------------------------------------
+    st = t["deploy-staging"]
+    if not re.search(r"(?m)^      build_only:\n(?:        .*\n)*?        type: boolean\n        default: false$", st) \
+            or not re.search(r"(?m)^      build_only:\n(?:        .*\n)*?        required: false$", st):
+        P.append("deploy-staging: build_only is not an optional boolean input defaulting to false")
+    sj = jobs(st)
+    sb, sd = sj.get("build", ""), sj.get("deploy", "")
+    if not re.search(r"(?m)^    needs: \[build\]$", sd):
+        P.append("deploy-staging: the deploy job does not need the build job (the normal path)")
+    if not re.search(r"(?m)^    if: \$\{\{ !inputs\.build_only \}\}$", sd):
+        P.append("deploy-staging: the deploy job is not skipped entirely when build_only is true")
+    if not re.search(r"(?m)^    environment:\n      name: staging$", sd):
+        P.append("deploy-staging: the deploy job no longer runs in the staging Environment (the normal path)")
+    # nothing that deploys or touches a database or Environment can be in the build job
+    if re.search(r"(?m)^    environment:", sb):
+        P.append("deploy-staging: the build job runs in an Environment (build_only would reach its secrets)")
+    for m in re.findall(r"secrets\.([A-Za-z0-9_]+)", sb):
+        if m != "GITHUB_TOKEN":
+            P.append(f"deploy-staging: the build job reads secrets.{m}")
+    for word in ("DATABASE_URL", "doctl", "do-release", "apply.sh", "psql", "pg_dump", "migrat"):
+        if word in sb:
+            P.append(f"deploy-staging: the build job mentions {word} (a build-only run must not deploy or touch a database)")
+    bs = dict(steps(sb))
+    bnames = [n for n, _ in steps(sb)]
+    def bstep(prefix):
+        return next((body for n, body in steps(sb) if n.startswith(prefix)), "")
+    api, rec = bstep("Build and push API image"), bstep("Record the API image digest")
+    for label, body in (("the API image build", api), ("the digest record", rec)):
+        if not re.search(r"(?m)^        if: inputs\.image_tag == ''$", body):
+            P.append(f"deploy-staging: {label} must run exactly when no image_tag is given, build_only or not")
+        if re.search(r"(?m)^        if:.*build_only", body):
+            P.append(f"deploy-staging: {label} must not depend on build_only")
+    if 'BUILD_ONLY: ${{ inputs.build_only }}' not in api:
+        P.append("deploy-staging: the API build step does not receive build_only through env")
+    if not re.search(r'if \[ "\$BUILD_ONLY" != "true" \]; then\n\s*docker push "\$IMAGE:staging"\n\s*fi', api):
+        P.append("deploy-staging: a build-only run would move the staging tag (docker push $IMAGE:staging is not guarded)")
+    if len(re.findall(r'docker push "\$IMAGE:staging"', api)) != 1:
+        P.append("deploy-staging: the API image pushes the staging tag in more than one place")
+    for prefix in ("Install Flutter", "Build and push Admin Web image"):
+        if not re.search(r"(?m)^        if: inputs\.image_tag == '' && !inputs\.build_only$", bstep(prefix)):
+            P.append(f"deploy-staging: '{prefix}' is not skipped in a build-only run")
+    ident = bstep("Resolve release identity")
+    if 'BUILD_ONLY: ${{ inputs.build_only }}' not in ident or '[ "$BUILD_ONLY" = "true" ] && [ -n "$INPUT_TAG" ]' not in ident:
+        P.append("deploy-staging: build_only combined with image_tag is not refused")
     return P
 
 
@@ -277,6 +327,18 @@ MUTATIONS = [
     ("review-cohort", 'echo "::add-mask::$d"', 'echo "checking $d"; echo "::add-mask::$d"'),
     ("review-cohort", '[ -z "$EMAIL_DOMAIN" ] || echo "::add-mask::$EMAIL_DOMAIN"',
      'printf \'%s\\n\' "$EMAIL_DOMAIN"; [ -z "$EMAIL_DOMAIN" ] || echo "::add-mask::$EMAIL_DOMAIN"'),
+    # 8: build_only
+    ("deploy-staging", "    if: ${{ !inputs.build_only }}\n", ""),
+    ("deploy-staging", "    if: ${{ !inputs.build_only }}\n", "    if: ${{ inputs.build_only }}\n"),
+    ("deploy-staging", "        type: boolean\n        default: false\n      first_deploy", "        type: boolean\n        default: true\n      first_deploy"),
+    ("deploy-staging", '''          if [ "$BUILD_ONLY" != "true" ]; then\n            docker push "$IMAGE:staging"\n          fi\n''', '''          docker push "$IMAGE:staging"\n'''),
+    ("deploy-staging", "      - name: Build and push Admin Web image\n        if: inputs.image_tag == '' && !inputs.build_only", "      - name: Build and push Admin Web image\n        if: inputs.image_tag == ''"),
+    ("deploy-staging", "      - name: Install Flutter for the teacher web portal (PD-28)\n        if: inputs.image_tag == '' && !inputs.build_only", "      - name: Install Flutter for the teacher web portal (PD-28)\n        if: inputs.image_tag == ''"),
+    ("deploy-staging", "        if: inputs.image_tag == ''\n        uses: actions/upload-artifact", "        if: inputs.image_tag == '' && !inputs.build_only\n        uses: actions/upload-artifact"),
+    ("deploy-staging", "    needs: [build]\n    # build_only", "    needs: []\n    # build_only"),
+    ("deploy-staging", "    steps:\n      - uses: actions/checkout@v4\n\n      - id: meta", "    environment: staging\n    steps:\n      - uses: actions/checkout@v4\n\n      - id: meta"),
+    ("deploy-staging", '[ "$BUILD_ONLY" = "true" ] && [ -n "$INPUT_TAG" ]', '[ "$BUILD_ONLY" = "x" ] && [ -n "$INPUT_TAG" ]'),
+    ("deploy-staging", "      - name: Log in to the registry\n", "      - name: Log in to the registry\n        env:\n          X: ${{ secrets.DATABASE_URL }}\n"),
     # a domain with a line break is no longer refused before the mask
     ("review-cohort", 'case "$d" in', 'case "x" in'),
     ("review-cohort", 'case "$EMAIL_DOMAIN$CONFIRM_EMAIL_DOMAIN" in', 'case "$EMAIL_DOMAIN" in'),

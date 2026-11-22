@@ -23,6 +23,18 @@
 # Kept separate from ci.yml on purpose: pull_request workflows can be triggered
 # by anyone who can open a pull request, and must never have access to a
 # deployment credential. Nothing in this file runs on a pull request.
+#
+# BUILD ONLY (`build_only: true`). Builds the API image for the commit and records
+# its digest, and does nothing else: the `deploy` job is skipped entirely (its
+# `staging` Environment, secrets, database backup and migrations never run), the
+# moving `staging` tags are not pushed (a later staging deploy reads them), and the
+# staging Admin Web image is not built (staging URLs are compiled into it and it is
+# never promoted). The production workflow accepts api:<sha> only if a run of THIS
+# file recorded its digest: workflow_dispatch, head_branch main, head_sha == <sha>,
+# artifact api-image-digest. It does not look at the run's conclusion or at the
+# deploy job, so a build-only run from main's head is a valid record. It is for the
+# time when no staging environment exists to deploy to. Cannot be combined with
+# `image_tag` (reusing an image records nothing).
 name: Deploy staging
 
 on:
@@ -32,6 +44,11 @@ on:
         description: 'Existing image tag (a commit SHA) to deploy (blank = build from this commit). Use this to roll back.'
         required: false
         type: string
+      build_only:
+        description: 'Build the API image and record its digest, and nothing else: no deploy, no database, no Environment, no moving staging tags. For a commit that production needs recorded while there is no staging to deploy to.'
+        required: false
+        type: boolean
+        default: false
       first_deploy:
         description: 'Create the App Platform app (once, before DIGITALOCEAN_APP_ID exists). Refused if the app id is already set.'
         required: false
@@ -68,7 +85,11 @@ jobs:
         # inside the script, so it cannot inject shell.
         env:
           INPUT_TAG: ${{ inputs.image_tag }}
+          BUILD_ONLY: ${{ inputs.build_only }}
         run: |
+          if [ "$BUILD_ONLY" = "true" ] && [ -n "$INPUT_TAG" ]; then
+            echo "::error::build_only builds a new image; it cannot be combined with image_tag (reusing an image records no digest)"; exit 1
+          fi
           if [ -n "$INPUT_TAG" ]; then
             [[ "$INPUT_TAG" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::image_tag must be a full lowercase 40-character commit SHA"; exit 1; }
             echo "tag=$INPUT_TAG" >> "$GITHUB_OUTPUT"
@@ -90,6 +111,8 @@ jobs:
 
       - name: Build and push API image
         if: inputs.image_tag == ''
+        env:
+          BUILD_ONLY: ${{ inputs.build_only }}
         run: |
           set -euo pipefail
           IMAGE="${REGISTRY}/${GITHUB_REPOSITORY,,}/api"
@@ -109,7 +132,10 @@ jobs:
           digest="$(printf '%s\n' "$pushed" | sed -n 's/.*digest: \(sha256:[0-9a-f]\{64\}\) size:.*/\1/p' | tail -n 1)"
           [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] \
             || { echo "::error::could not read the pushed digest of $IMAGE:${GITHUB_SHA} from docker push"; exit 1; }
-          docker push "$IMAGE:staging"
+          # The moving tag is what a staging deploy reads: a build-only run leaves it alone.
+          if [ "$BUILD_ONLY" != "true" ]; then
+            docker push "$IMAGE:staging"
+          fi
           mkdir -p "$RUNNER_TEMP/api-image-digest"
           printf '%s %s\n' "$GITHUB_SHA" "$digest" > "$RUNNER_TEMP/api-image-digest/api-image-digest"
           echo "API image $IMAGE@$digest (commit $GITHUB_SHA)"
@@ -130,7 +156,7 @@ jobs:
           retention-days: 90
 
       - name: Install Flutter for the teacher web portal (PD-28)
-        if: inputs.image_tag == ''
+        if: inputs.image_tag == '' && !inputs.build_only
         # Pinned to the version pubspec.yaml is developed against, from
         # Flutter's own repository; no third-party action.
         run: |
@@ -138,7 +164,7 @@ jobs:
           "$RUNNER_TEMP/flutter/bin/flutter" --version
 
       - name: Build and push Admin Web image
-        if: inputs.image_tag == ''
+        if: inputs.image_tag == '' && !inputs.build_only
         env:
           API_BASE_URL: ${{ vars.STAGING_API_BASE_URL }}
           REALTIME_URL: ${{ vars.STAGING_REALTIME_URL }}
@@ -183,6 +209,9 @@ jobs:
     name: Deploy to staging
     runs-on: ubuntu-latest
     needs: [build]
+    # build_only: the whole job is skipped, so the Environment, its secrets and
+    # every step below (backup, migrations, release) never start.
+    if: ${{ !inputs.build_only }}
     # The GitHub Environment holds the staging secrets and any protection rules.
     # Secrets are scoped to it, so no other workflow or job can read them.
     environment:

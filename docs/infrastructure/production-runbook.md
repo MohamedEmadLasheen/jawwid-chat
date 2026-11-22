@@ -43,6 +43,16 @@ staging.
 Any step failing stops the deployment. The configuration check runs **before**
 anything changes, so a missing secret costs a failed run rather than an outage.
 
+**Recording the image when there is no staging to deploy to.** Production only
+accepts `api:<sha>` if a **Deploy staging** run at that commit, dispatched from
+`main`, recorded its digest. Dispatch it with `build_only` = true: it builds the
+API image, pushes `api:<sha>` and records the digest, and nothing else. The
+`deploy` job is skipped entirely (no `staging` Environment, no secrets, no
+backup, no migration, no release), the moving `staging` tags are not pushed, and
+the staging Admin Web image is not built. It cannot be combined with `image_tag`.
+Production's check does not look at the run's conclusion or at the deploy job. The
+workflow guard (`scripts/qa/check-image-digest-gates.sh`, rule 8) holds both paths.
+
 ### 1a. Switches that wait for a deployed worker (PD-37)
 
 **`realtime.receipts_announce` stays OFF until the outbox WORKER runs PD-37.**
