@@ -366,6 +366,84 @@ describe('PD-40: the Staff accounts page', () => {
     preview = { gained: [], lost: [], pagesGained: [], pagesLost: [] }
   })
 
+  describe('restrictions (M3): offered only where the environment enforces them', () => {
+    const ACCESS = {
+      staffId: 'st-1', tier: 'specialist', departmentKind: null, placement: null,
+      pages: [{ page: 'materials', keys: [
+        { key: 'materials.author', action: 'author', label: { en: 'Write educational materials (drafts)', ar: 'كتابة المواد' }, risk: 'none', denied: false, deniable: true, sources: [{ type: 'tier_default' }] },
+        { key: 'materials.view', action: 'view', label: { en: 'Use materials', ar: 'استخدام المواد' }, risk: 'none', denied: false, deniable: false, sources: [{ type: 'tier_default' }] },
+      ] }],
+    }
+    const open = async (access: unknown = ACCESS) => {
+      on('GET', /\/admin\/staff-accounts\/st-1$/, () => json(staffAccount({ status: 'active', setupPending: false })))
+      on('GET', /\/admin\/staff-accounts\/st-1\/access$/, () => json(access))
+      renderWithProviders(<AppRoutes />, { staff: manager, route: '/accounts/staff' })
+      await userEvent.click(await screen.findByRole('button', { name: 'Specialist One' }))
+      return screen.findByRole('dialog', { name: 'Specialist One' })
+    }
+
+    it('production state: nothing is offered and nothing is asked of the server but the read', async () => {
+      on('GET', /\/admin\/staff-accounts\/st-1\/denies$/, () => json({ enforced: false, denies: [] }))
+      const detail = await open()
+      await within(detail).findByText('Write educational materials (drafts)')
+      expect(within(detail).queryByRole('button', { name: /Restrict/ })).not.toBeInTheDocument()
+      expect(within(detail).queryByText('Restrictions')).not.toBeInTheDocument()
+      expect(calls('POST', /\/denies/)).toHaveLength(0)
+    })
+
+    it('when enforced: only a restrictable key offers Restrict; the dialog asks for a reason and an end date and sends exactly that', async () => {
+      on('GET', /\/admin\/staff-accounts\/st-1\/denies$/, () => json({ enforced: true, denies: [] }))
+      on('POST', /\/admin\/staff-accounts\/st-1\/denies$/, () => json({ id: 'd-1' }, 201))
+      const detail = await open()
+      const restrict = await within(detail).findByRole('button', { name: 'Restrict materials.author for Specialist One' })
+      expect(within(detail).queryByRole('button', { name: 'Restrict materials.view for Specialist One' })).not.toBeInTheDocument()
+      await userEvent.click(restrict)
+      const dialog = await screen.findByRole('dialog', { name: 'Restrict materials.author for Specialist One' })
+      // A manager is never offered "permanent".
+      expect(within(dialog).queryByLabelText(/Permanent/)).not.toBeInTheDocument()
+      await userEvent.type(within(dialog).getByRole('textbox'), 'repeated late drafts')
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Restrict' }))
+      await waitFor(() => expect(calls('POST', /\/denies$/)).toHaveLength(1))
+      const body = bodyOf(calls('POST', /\/denies$/)[0])
+      expect(body).toMatchObject({ permissionKey: 'materials.author', reason: 'repeated late drafts' })
+      expect(typeof body.expiresAt).toBe('string')
+      expect(body.permanent).toBeUndefined()
+    })
+
+    it('shows a restricted key struck out with who restricted it and until when, and lifts it with a reason', async () => {
+      on('GET', /\/admin\/staff-accounts\/st-1\/denies$/, () => json({ enforced: true, denies: [{
+        id: 'd-9', permissionKey: 'materials.author', reason: 'repeated late drafts', by: { id: 'm-1', name: 'Manager One', role: 'manager' }, createdAt: '2026-11-22T10:00:00Z',
+        expiresAt: '2026-12-01T10:00:00Z', permanent: false, reviewBy: null, active: true, liftedBy: null }] }))
+      on('POST', /\/admin\/staff-accounts\/st-1\/denies\/d-9\/lift$/, () => json({ lifted: true }))
+      const detail = await open({ ...ACCESS, pages: [{ page: 'materials', keys: [{ ...ACCESS.pages[0]!.keys[0]!, denied: true }] }] })
+      expect(await within(detail).findByText('Restricted')).toBeInTheDocument()
+      expect(within(detail).queryByRole('button', { name: 'Restrict materials.author for Specialist One' })).not.toBeInTheDocument()
+      expect(await within(detail).findByText(/repeated late drafts · by Manager One/)).toBeInTheDocument()
+      await userEvent.click(within(detail).getByRole('button', { name: 'Lift the restriction on materials.author' }))
+      const dialog = await screen.findByRole('dialog', { name: 'Lift the restriction on materials.author' })
+      await userEvent.type(within(dialog).getByRole('textbox'), 'resolved')
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Lift' }))
+      await waitFor(() => expect(bodyOf(calls('POST', /\/lift$/)[0])).toEqual({ reason: 'resolved' }))
+    })
+
+    it('a super admin may make a restriction permanent, with a review date', async () => {
+      on('GET', /\/admin\/staff-accounts\/st-1\/denies$/, () => json({ enforced: true, denies: [] }))
+      on('POST', /\/admin\/staff-accounts\/st-1\/denies$/, () => json({ id: 'd-2' }, 201))
+      on('GET', /\/admin\/staff-accounts\/st-1$/, () => json(staffAccount({ status: 'active', setupPending: false })))
+      on('GET', /\/admin\/staff-accounts\/st-1\/access$/, () => json(ACCESS))
+      renderWithProviders(<AppRoutes />, { staff: makeStaff({ id: 'sa-1', role: 'super_admin' }), route: '/accounts/staff' })
+      await userEvent.click(await screen.findByRole('button', { name: 'Specialist One' }))
+      const detail = await screen.findByRole('dialog', { name: 'Specialist One' })
+      await userEvent.click(await within(detail).findByRole('button', { name: 'Restrict materials.author for Specialist One' }))
+      const dialog = await screen.findByRole('dialog', { name: 'Restrict materials.author for Specialist One' })
+      await userEvent.click(within(dialog).getByLabelText(/Permanent/))
+      expect(within(dialog).getByLabelText('Review date')).toBeInTheDocument()
+      await userEvent.type(within(dialog).getByRole('textbox'), 'policy')
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Restrict' }))
+      await waitFor(() => expect(bodyOf(calls('POST', /\/denies$/)[0])).toMatchObject({ permissionKey: 'materials.author', permanent: true, reviewBy: expect.any(String) }))
+    })
+  })
+
   it('revokes a role with a reason', async () => {
     const held = staffAccount({ status: 'active', setupPending: false, roles: [{ id: 'r-1', key: 'designer', nameEn: 'Designer', nameAr: 'مصمم' }] })
     on('GET', /\/admin\/staff-accounts\/st-1$/, () => json(held))

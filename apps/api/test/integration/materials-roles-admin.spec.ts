@@ -248,7 +248,7 @@ describe('3. access management M1: the effective-access view (read-only) and its
     expect(staff.length).toBeGreaterThan(10);
     for (const s of staff) {
       const [sources, profile] = await Promise.all([
-        g.prisma.$queryRaw<Array<{ k: string }>>`SELECT DISTINCT permission_key AS k FROM chat.staff_access_sources(${s.id}::uuid) ORDER BY 1`,
+        g.prisma.$queryRaw<Array<{ k: string }>>`SELECT DISTINCT permission_key AS k FROM chat.staff_access_sources(${s.id}::uuid) WHERE NOT denied ORDER BY 1`,
         g.prisma.$queryRaw<Array<{ k: string }>>`SELECT unnest(permissions) AS k FROM chat.staff_access_profile(${s.id}::uuid) ORDER BY 1`,
       ]);
       expect({ id: s.id, keys: sources.map((r) => r.k) }).toEqual({ id: s.id, keys: profile.map((r) => r.k) });

@@ -16,6 +16,8 @@ export interface SourceRow {
   granted_by_name: string | null;
   granted_at: Date | string | null;
   reason: string | null;
+  /** M3: an active deny now removes this key (it is listed for provenance, not held). */
+  denied?: boolean;
 }
 
 export interface KeySource {
@@ -34,6 +36,10 @@ export interface HeldKey {
   action: string;
   label: { en: string; ar: string };
   risk: string;
+  /** M3: an active restriction removes it from this account. */
+  denied: boolean;
+  /** M3: whether an administrator may restrict this key at all (its enforcement is verified end to end). */
+  deniable: boolean;
   sources: KeySource[];
 }
 
@@ -71,8 +77,11 @@ export function reportOf(rows: readonly SourceRow[]): HeldPage[] {
       action: def?.action ?? r.permission_key,
       label: def?.label ?? { en: r.permission_key, ar: r.permission_key },
       risk: def?.risk ?? 'none',
+      denied: false,
+      deniable: def?.deniable ?? false,
       sources: [],
     };
+    if (r.denied) held.denied = true;
     held.sources.push(sourceOf(r));
     byKey.set(r.permission_key, held);
   }
@@ -109,9 +118,11 @@ const pageOf = (key: string): string => CATALOGUE.get(key)?.page ?? key.split('.
  */
 export function previewOf(rows: readonly SourceRow[], change: AccessChange): AccessPreview {
   const removed = new Set(change.remove);
-  const before = new Set(rows.map((r) => r.permission_key));
-  const after = new Set(rows.filter((r) => r.source !== 'role' || !removed.has(r.role_id ?? '')).map((r) => r.permission_key));
-  for (const a of change.add) for (const k of a.keys) after.add(k);
+  // A key an active deny removes is not held: granting it again through a role does not hold it either.
+  const denied = new Set(rows.filter((r) => r.denied).map((r) => r.permission_key));
+  const before = new Set(rows.filter((r) => !r.denied).map((r) => r.permission_key));
+  const after = new Set(rows.filter((r) => !r.denied && (r.source !== 'role' || !removed.has(r.role_id ?? ''))).map((r) => r.permission_key));
+  for (const a of change.add) for (const k of a.keys) if (!denied.has(k)) after.add(k);
   const gained = [...after].filter((k) => !before.has(k)).sort();
   const lost = [...before].filter((k) => !after.has(k)).sort();
   const pages = (keys: Iterable<string>) => new Set([...keys].map(pageOf));

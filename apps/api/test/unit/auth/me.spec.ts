@@ -56,7 +56,7 @@ describe('GET /me', () => {
   const access = {
     profileOf: async (actor: Actor): Promise<AccessProfile> =>
       actor.kind === 'staff'
-        ? { tier: 'manager', departmentKind: 'operations', placement: 'manager', permissions: new Set(['org.view', 'chat.use']) }
+        ? { tier: 'manager', departmentKind: 'operations', placement: 'manager', permissions: new Set(['org.view', 'chat.use']), denied: new Set<string>() }
         : NO_ACCESS,
   } as unknown as PermissionService;
   const controller = new MeController(access, fakeLegal(REQUIRED));

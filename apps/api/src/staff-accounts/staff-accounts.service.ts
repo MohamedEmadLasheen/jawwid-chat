@@ -16,6 +16,37 @@ import {
 } from '../platform/staff-account-policy';
 import { accessRoleConflict } from './access-role-conflict';
 import { previewOf, reportOf, type HeldPage, type AccessPreview, type SourceRow } from './access-report';
+import { denyRefusal } from './deny-errors';
+
+export interface DenyDto {
+  id: string;
+  permissionKey: string;
+  reason: string;
+  by: { id: string; name: string | null; role: 'super_admin' | 'manager' };
+  createdAt: string;
+  expiresAt: string | null;
+  permanent: boolean;
+  reviewBy: string | null;
+  /** In force now: not lifted and not expired. */
+  active: boolean;
+  liftedBy: { id: string; name: string | null; reason: string; at: string } | null;
+}
+
+interface DenyRow {
+  id: string; key: string; reason: string; created_by: string; created_by_name: string | null; created_by_role: 'super_admin' | 'manager';
+  created_at: Date; expires_at: Date | null; permanent: boolean; review_by: Date | null; revoked_at: Date | null; revoked_by: string | null;
+  revoked_by_name: string | null; revoke_reason: string | null; active: boolean;
+}
+
+function denyDto(r: DenyRow): DenyDto {
+  return {
+    id: r.id, permissionKey: r.key, reason: r.reason,
+    by: { id: r.created_by, name: r.created_by_name, role: r.created_by_role },
+    createdAt: r.created_at.toISOString(), expiresAt: r.expires_at?.toISOString() ?? null, permanent: r.permanent, reviewBy: r.review_by?.toISOString() ?? null,
+    active: r.active,
+    liftedBy: r.revoked_at && r.revoked_by ? { id: r.revoked_by, name: r.revoked_by_name, reason: r.revoke_reason ?? '', at: r.revoked_at.toISOString() } : null,
+  };
+}
 
 export interface StaffAccountRoleDto {
   id: string;
@@ -193,9 +224,69 @@ export class StaffAccountsService {
     return previewOf(await this.sources(row.staff_id), { add, remove });
   }
 
+  /**
+   * Access management M3: the restrictions (denies) on an account, newest first, with whether each applies now. Visible to whoever may see the
+   * account. `enforced` says whether this database enforces denies at all (production: not yet).
+   */
+  async deniesOf(actor: Actor, staffId: string): Promise<{ enforced: boolean; denies: DenyDto[] }> {
+    const { row } = await this.reach(actor, staffId);
+    const [on, rows] = await Promise.all([
+      this.prisma.$queryRaw<Array<{ on: boolean }>>`SELECT chat.deny_enforcement_on() AS on`,
+      this.prisma.$queryRaw<DenyRow[]>`
+        SELECT d.id::text AS id, d.permission_key AS key, d.reason, d.created_by::text AS created_by, cb.name AS created_by_name, d.created_by_role,
+               d.created_at, d.expires_at, d.permanent, d.review_by, d.revoked_at, d.revoked_by::text AS revoked_by, rb.name AS revoked_by_name, d.revoke_reason,
+               (d.revoked_at IS NULL AND (d.permanent OR d.expires_at > now())) AS active
+          FROM chat.staff_permission_deny d
+          JOIN chat.staff cb ON cb.id = d.created_by
+          LEFT JOIN chat.staff rb ON rb.id = d.revoked_by
+         WHERE d.staff_id = ${row.staff_id}::uuid
+         ORDER BY d.created_at DESC LIMIT 200`,
+    ]);
+    return { enforced: on[0]?.on === true, denies: rows.map(denyDto) };
+  }
+
+  /** Body: `{ permissionKey, reason, expiresAt?, permanent?, reviewBy? }`. The database decides who may restrict what (Decision 3). */
+  async deny(actor: Actor, staffId: string, body: Record<string, unknown>): Promise<{ id: string }> {
+    const { row } = await this.reach(actor, staffId);
+    const key = text('permissionKey', body.permissionKey, 120);
+    const reason = text('reason', body.reason, 500);
+    const date = (name: string, v: unknown): Date | null => {
+      if (v === undefined || v === null || v === '') return null;
+      const d = typeof v === 'string' ? new Date(v) : null;
+      if (!d || Number.isNaN(d.getTime())) throw invalid(`${name}: an ISO date`);
+      return d;
+    };
+    const expiresAt = date('expiresAt', body.expiresAt);
+    const reviewBy = date('reviewBy', body.reviewBy);
+    const permanent = body.permanent === true;
+    try {
+      const r = await this.prisma.$queryRaw<Array<{ id: string }>>`
+        SELECT chat.deny_permission(${row.staff_id}::uuid, ${key}::text, ${reason}::text, ${expiresAt}::timestamptz, ${permanent}::boolean, ${reviewBy}::timestamptz, ${actor.actorId}::uuid)::text AS id`;
+      return { id: r[0]!.id };
+    } catch (e) {
+      throw denyRefusal(e);
+    }
+  }
+
+  /** Body: `{ reason }`. */
+  async liftDeny(actor: Actor, staffId: string, denyId: string, body: Record<string, unknown>): Promise<{ lifted: true }> {
+    const { row } = await this.reach(actor, staffId);
+    const id = uuid('denyId', denyId);
+    const reason = text('reason', body.reason, 500);
+    // The restriction must be on THIS account: the path names both, and neither may point at the other's.
+    const own = await this.prisma.$queryRaw<Array<{ n: number }>>`SELECT count(*)::int AS n FROM chat.staff_permission_deny WHERE id = ${id}::uuid AND staff_id = ${row.staff_id}::uuid`;
+    if (own[0]?.n !== 1) throw notFound();
+    try {
+      await this.prisma.$queryRaw`SELECT chat.revoke_permission_deny(${id}::uuid, ${reason}::text, ${actor.actorId}::uuid)`;
+    } catch (e) {
+      throw denyRefusal(e);
+    }
+    return { lifted: true };
+  }
+
   private async sources(staffId: string): Promise<SourceRow[]> {
     return this.prisma.$queryRaw<SourceRow[]>`
-      SELECT permission_key, source, role_id::text AS role_id, role_key, name_en, name_ar, granted_by::text AS granted_by, granted_by_name, granted_at, reason
+      SELECT permission_key, source, role_id::text AS role_id, role_key, name_en, name_ar, granted_by::text AS granted_by, granted_by_name, granted_at, reason, denied
         FROM chat.staff_access_sources(${staffId}::uuid)`;
   }
 

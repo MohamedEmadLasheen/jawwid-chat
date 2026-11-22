@@ -46,9 +46,15 @@ export interface PermissionDefinition {
   inRoles: boolean;
   /** The decision that introduced the surface. */
   introducedBy: string;
+  /**
+   * Access management M3: may an administrator DENY this key to one person? Only keys whose enforcement is verified end to end
+   * (route guard, service, every SQL rule, and no other path that reveals the same data). Everything else is refused when a deny is
+   * attempted, so there is never a deny that some path ignores. See deny-coverage.json and its spec.
+   */
+  deniable: boolean;
 }
 
-type Entry = Omit<PermissionDefinition, 'key' | 'page' | 'action' | 'delegable' | 'inRoles'> & { delegable?: boolean; inRoles?: boolean };
+type Entry = Omit<PermissionDefinition, 'key' | 'page' | 'action' | 'delegable' | 'inRoles' | 'deniable'> & { delegable?: boolean; inRoles?: boolean; deniable?: boolean };
 
 const ENTRIES = {
   // Chats and calls (PD-8 scope decides WHICH conversations).
@@ -114,8 +120,8 @@ const ENTRIES = {
   'materials.view': { label: { en: 'Use materials', ar: 'استخدام المواد' }, risk: 'none', introducedBy: 'PD-29' },
   'materials.manage': { label: { en: 'Manage the materials library', ar: 'إدارة مكتبة المواد' }, risk: 'none', introducedBy: 'PD-29' },
   // Owner, 2026-11-22: writing, approving and managing the library are three different jobs.
-  'materials.author': { label: { en: 'Write educational materials (drafts)', ar: 'كتابة المواد التعليمية (مسودات)' }, risk: 'none', introducedBy: 'MAT-1', delegable: true },
-  'materials.review': { label: { en: 'Approve educational materials', ar: 'اعتماد المواد التعليمية' }, risk: 'none', introducedBy: 'MAT-1', delegable: true },
+  'materials.author': { label: { en: 'Write educational materials (drafts)', ar: 'كتابة المواد التعليمية (مسودات)' }, risk: 'none', introducedBy: 'MAT-1', delegable: true, deniable: true },
+  'materials.review': { label: { en: 'Approve educational materials', ar: 'اعتماد المواد التعليمية' }, risk: 'none', introducedBy: 'MAT-1', delegable: true, deniable: true },
 
   'cases.view': { label: { en: 'View supervision cases', ar: 'عرض حالات الإشراف' }, risk: 'pii', introducedBy: 'PD-35' },
   'cases.manage': { label: { en: 'Open and work supervision cases', ar: 'فتح حالات الإشراف ومتابعتها' }, risk: 'pii', introducedBy: 'PD-35' },
@@ -123,7 +129,7 @@ const ENTRIES = {
   // Names agreed with PD-41, which owns the certificates workflow and adds the
   // rest of its keys (request.student, request.teacher, story, oversee).
   'certificates.view': { label: { en: 'View certificate requests', ar: 'عرض طلبات الشهادات' }, risk: 'pii', introducedBy: 'PD-12', delegable: true },
-  'certificates.design': { label: { en: 'Design and upload certificates', ar: 'تصميم الشهادات ورفعها' }, risk: 'pii', introducedBy: 'PD-12', delegable: true },
+  'certificates.design': { label: { en: 'Design and upload certificates', ar: 'تصميم الشهادات ورفعها' }, risk: 'pii', introducedBy: 'PD-12', delegable: true, deniable: true },
   'certificates.deliver': { label: { en: 'Send certificates to the family', ar: 'إرسال الشهادات إلى الأسرة' }, risk: 'family_contact', introducedBy: 'PD-12' },
   // PD-41 (owner 2026-10-28): the rest of the Certificates page's keys.
   'certificates.request.student': { label: { en: 'Request student certificates', ar: 'طلب شهادات الطلاب' }, risk: 'pii', introducedBy: 'PD-41' },
@@ -176,8 +182,8 @@ const ENTRIES = {
   // PD-48: the lessons' computer-voice clips. Listening is harmless; approving
   // is a deliberate grant ("qualified" is a judgement about a person), so the
   // Teachers manager holds both and delegates review through the template.
-  'lesson_audio.view': { label: { en: 'Listen to lesson voice-over clips', ar: 'الاستماع إلى تسجيلات نطق الدروس' }, risk: 'none', introducedBy: 'PD-48', delegable: true },
-  'lesson_audio.review': { label: { en: 'Approve or reject lesson voice-over clips', ar: 'اعتماد تسجيلات نطق الدروس أو رفضها' }, risk: 'none', introducedBy: 'PD-48', delegable: true },
+  'lesson_audio.view': { label: { en: 'Listen to lesson voice-over clips', ar: 'الاستماع إلى تسجيلات نطق الدروس' }, risk: 'none', introducedBy: 'PD-48', delegable: true, deniable: true },
+  'lesson_audio.review': { label: { en: 'Approve or reject lesson voice-over clips', ar: 'اعتماد تسجيلات نطق الدروس أو رفضها' }, risk: 'none', introducedBy: 'PD-48', delegable: true, deniable: true },
 
   // PD-49: the review of children's Quran content and of game mechanics, step
   // by step (plan §F.2). The Teachers department checks and signs; the scholar's
@@ -223,6 +229,7 @@ export const PERMISSIONS: readonly PermissionDefinition[] = Object.freeze(
       delegable: entry.delegable ?? false,
       inRoles: entry.inRoles ?? true,
       introducedBy: entry.introducedBy,
+      deniable: entry.deniable ?? false,
     });
   }),
 );

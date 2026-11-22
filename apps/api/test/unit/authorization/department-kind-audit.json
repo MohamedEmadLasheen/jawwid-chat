@@ -54,7 +54,7 @@
   "price_decided_deduction": "not_affected",
   "sales_department_role": "core_only",
   "staff_access_profile": "safe_by_empty_bundle",
-  "staff_access_sources": "safe_by_empty_bundle",
+  "staff_access_sources_raw": "safe_by_empty_bundle",
   "staff_acts_for": "fixed_m2",
   "staff_department_id": "id_scoped",
   "staff_department_kind": "by_design",

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { accountKeys } from '@/features/accounts/api'
-import { staffAccountKeys, staffAccountsApi, type AccessRoleEdit, type NewAccessRole, type NewStaffAccount } from './api'
+import { staffAccountKeys, staffAccountsApi, type AccessRoleEdit, type NewAccessRole, type NewDeny, type NewStaffAccount } from './api'
 
 export function useStaffAccounts(enabled = true) {
   return useQuery({ queryKey: staffAccountKeys.list, queryFn: staffAccountsApi.list, enabled })
@@ -15,6 +15,18 @@ export function useAccessView(staffId: string) {
 }
 
 /** What granting this role would change, shown before the administrator confirms. Informational only. */
+export function useDenies(staffId: string) {
+  return useQuery({ queryKey: [...staffAccountKeys.one(staffId), 'denies'], queryFn: () => staffAccountsApi.denies(staffId), staleTime: 10_000 })
+}
+
+export function useDeny() {
+  return useInvalidating((v: { staffId: string; body: NewDeny }) => staffAccountsApi.deny(v.staffId, v.body), true)
+}
+
+export function useLiftDeny() {
+  return useInvalidating((v: { staffId: string; denyId: string; reason: string }) => staffAccountsApi.lift(v.staffId, v.denyId, v.reason), true)
+}
+
 export function useAccessPreview(staffId: string, roleId: string | null) {
   return useQuery({
     queryKey: [...staffAccountKeys.one(staffId), 'access-preview', roleId],

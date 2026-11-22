@@ -11,6 +11,11 @@ export interface AccessProfile {
   departmentKind: string | null;
   placement: 'manager' | 'member' | null;
   permissions: ReadonlySet<string>;
+  /**
+   * Access management M3: keys an active deny removes (already NOT in `permissions`). Empty unless deny enforcement is on in this
+   * database. The guard refuses a route one of whose keys is denied in every mode, including legacy-tier shadow mode.
+   */
+  denied: ReadonlySet<string>;
 }
 
 export const NO_ACCESS: AccessProfile = Object.freeze({
@@ -18,6 +23,7 @@ export const NO_ACCESS: AccessProfile = Object.freeze({
   departmentKind: null,
   placement: null,
   permissions: new Set<string>(),
+  denied: new Set<string>(),
 });
 
 /** The tiers whose accounts existed before PD-40: their bundles can be shadowed. */
@@ -36,8 +42,8 @@ export class PermissionService {
   async profileOf(actor: Actor): Promise<AccessProfile> {
     if (actor.kind !== ActorKind.STAFF || !actor.isActive || !actor.organizationId) return NO_ACCESS;
     const rows = await this.prisma.$queryRaw<
-      Array<{ tier: string | null; department_kind: string | null; placement: 'manager' | 'member' | null; permissions: string[] | null }>
-    >`SELECT tier, department_kind, placement, permissions FROM chat.staff_access_profile(${actor.actorId}::uuid)`;
+      Array<{ tier: string | null; department_kind: string | null; placement: 'manager' | 'member' | null; permissions: string[] | null; denied: string[] | null }>
+    >`SELECT tier, department_kind, placement, permissions, chat.staff_denied_keys(${actor.actorId}::uuid) AS denied FROM chat.staff_access_profile(${actor.actorId}::uuid)`;
     const row = rows[0];
     if (!row || row.tier === null) return NO_ACCESS;
     return {
@@ -45,6 +51,7 @@ export class PermissionService {
       departmentKind: row.department_kind,
       placement: row.placement,
       permissions: new Set(row.permissions ?? []),
+      denied: new Set(row.denied ?? []),
     };
   }
 
