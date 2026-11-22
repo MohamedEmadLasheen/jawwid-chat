@@ -14,7 +14,7 @@ import { accountKeys, accountsApi } from '@/features/accounts/api'
 import { AccountActionButtons, AccountActionDialogs, type AccountPending } from '@/features/accounts/AccountsPage'
 import { roleFitsTier, staffAccountKeys, type AccessRole, type StaffAccount, type StaffAccountRole, type StaffFirstLogin } from './api'
 import { SA, STATUS, TIER, localized, useCopy } from './copy'
-import { useAccessRoles, useGrantRole, useRevokeRole, useSetupCode, useStaffAccount, useStaffAccounts } from './hooks'
+import { useAccessPreview, useAccessRoles, useAccessView, useGrantRole, useRevokeRole, useSetupCode, useStaffAccount, useStaffAccounts } from './hooks'
 import { AccountsTabs } from './AccountsTabs'
 import { NewStaffAccountDialog } from './NewStaffAccountDialog'
 import { StaffCodeSheet } from './StaffCodeSheet'
@@ -351,6 +351,8 @@ function StaffAccountSheet({
           ))}
       </section>
 
+      <AccessPanel staffId={account.staffId} previewRoleId={chosen?.id ?? null} />
+
       <section className="sa-section" aria-labelledby={`${pickerId}-account`}>
         <h3 id={`${pickerId}-account`} className="sa-section__title">
           {tx(SA.detailActions)}
@@ -427,5 +429,67 @@ function SetupCodeDialog({
       onConfirm={(reason) => issue.mutate({ staffId: account.staffId, reason }, { onSuccess: (r) => onIssued(r.firstLogin) })}
       onClose={onClose}
     />
+  )
+}
+
+
+/**
+ * Access management M1: the effective access of one account, read-only: each page, the actions held in it (the module's
+ * own permission keys, labelled from the catalogue) and where each one came from. When an administrator picks a role to
+ * grant, what it would add is shown before they confirm. The server decides every grant again.
+ */
+function AccessPanel({ staffId, previewRoleId }: { staffId: string; previewRoleId: string | null }) {
+  const tx = useCopy()
+  const { locale, date } = useI18n()
+  const id = useId()
+  const view = useAccessView(staffId)
+  const preview = useAccessPreview(staffId, previewRoleId)
+  const label = (l: { en: string; ar: string }) => (locale === 'ar' ? l.ar : l.en)
+  const sourceText = (s: import('./api').KeySource): string => {
+    if (s.type === 'super_admin') return tx(SA.srcSuperAdmin)
+    if (s.type === 'tier_default') return tx(SA.srcTierDefault)
+    const role = locale === 'ar' ? s.nameAr ?? s.roleKey ?? '' : s.nameEn ?? s.roleKey ?? ''
+    const base = tx(SA.srcRole, { role })
+    return s.grantedBy && s.grantedAt ? `${base} · ${tx(SA.srcGranted, { by: s.grantedBy.name ?? '—', at: date(s.grantedAt) })}` : base
+  }
+  return (
+    <section className="sa-section" aria-labelledby={`${id}-access`}>
+      <h3 id={`${id}-access`} className="sa-section__title">
+        {tx(SA.accessTitle)}
+      </h3>
+      <p className="field__hint">{tx(SA.accessHint)}</p>
+      {previewRoleId && preview.data && (
+        <div className="banner banner--info" role="status">
+          <strong>{tx(SA.grantPreviewTitle)}</strong>{' '}
+          {preview.data.gained.length === 0
+            ? tx(SA.grantPreviewNothing)
+            : [
+                tx(SA.previewGain, { items: preview.data.gained.join(', ') }),
+                preview.data.pagesGained.length ? tx(SA.previewPages, { items: preview.data.pagesGained.join(', ') }) : '',
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+        </div>
+      )}
+      {view.isLoading ? null : view.error || !view.data ? null : view.data.pages.length === 0 ? (
+        <p className="field__hint">{tx(SA.accessNone)}</p>
+      ) : (
+        <ul className="sa-held" aria-label={tx(SA.accessTitle)}>
+          {view.data.pages.map((p) => (
+            <li key={p.page}>
+              <strong dir="ltr">{p.page}</strong>
+              <ul>
+                {p.keys.map((k) => (
+                  <li key={k.key}>
+                    <span dir="auto">{label(k.label)}</span> <code dir="ltr">{k.key}</code>
+                    <span className="field__hint"> — {k.sources.map(sourceText).join(' · ')}</span>
+                  </li>
+                ))}
+              </ul>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   )
 }

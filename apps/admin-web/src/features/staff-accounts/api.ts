@@ -119,7 +119,45 @@ export const staffAccountKeys = {
 const path = (staffId: string) => `/admin/staff-accounts/${encodeURIComponent(staffId)}`
 const rolePath = (roleId: string) => `/admin/access-roles/${encodeURIComponent(roleId)}`
 
+/** Access management M1: what an account holds and where each key comes from (read-only). */
+export interface KeySource {
+  type: 'super_admin' | 'tier_default' | 'role'
+  roleId?: string
+  roleKey?: string
+  nameEn?: string
+  nameAr?: string
+  grantedBy?: { id: string; name: string | null }
+  grantedAt?: string
+  reason?: string
+}
+export interface HeldKey {
+  key: string
+  action: string
+  label: { en: string; ar: string }
+  risk: PermissionRisk
+  sources: KeySource[]
+}
+export interface HeldPage {
+  page: string
+  keys: HeldKey[]
+}
+export interface AccessView {
+  staffId: string
+  tier: string | null
+  departmentKind: string | null
+  placement: string | null
+  pages: HeldPage[]
+}
+export interface AccessPreview {
+  gained: string[]
+  lost: string[]
+  pagesGained: string[]
+  pagesLost: string[]
+}
+
 export const staffAccountsApi = {
+  access: (staffId: string) => api.get<AccessView>(`${path(staffId)}/access`),
+  previewAccess: (staffId: string, body: { addRoleIds?: string[]; removeRoleIds?: string[] }) => api.post<AccessPreview>(`${path(staffId)}/access/preview`, body),
   list: () => api.get<{ accounts: StaffAccount[] }>('/admin/staff-accounts'),
   get: (staffId: string) => api.get<StaffAccount>(path(staffId)),
   create: (body: NewStaffAccount) => api.post<CreatedStaffAccount>('/admin/staff-accounts', body),

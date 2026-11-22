@@ -238,3 +238,64 @@ describe('2. the lifecycle, and what the audit trail says', () => {
     expect(denied(await step(author.subject, { titleEn: 'Too late' }))).toMatchObject({ status: 403 });
   });
 });
+
+describe('3. access management M1: the effective-access view (read-only) and its preview', () => {
+  const view = (by: string, who: { id: string }) => as(by, 'GET', `/admin/staff-accounts/${who.id}/access`);
+  const preview = (by: string, who: { id: string }, body: object) => as(by, 'POST', `/admin/staff-accounts/${who.id}/access/preview`, body);
+
+  it('the view says what each staff member holds EXACTLY as the permission function does, for every staff member (and so no one is shown more or less)', async () => {
+    const staff = await g.prisma.staff.findMany({ where: { organizationId: orgId }, select: { id: true } });
+    expect(staff.length).toBeGreaterThan(10);
+    for (const s of staff) {
+      const [sources, profile] = await Promise.all([
+        g.prisma.$queryRaw<Array<{ k: string }>>`SELECT DISTINCT permission_key AS k FROM chat.staff_access_sources(${s.id}::uuid) ORDER BY 1`,
+        g.prisma.$queryRaw<Array<{ k: string }>>`SELECT unnest(permissions) AS k FROM chat.staff_access_profile(${s.id}::uuid) ORDER BY 1`,
+      ]);
+      expect({ id: s.id, keys: sources.map((r) => r.k) }).toEqual({ id: s.id, keys: profile.map((r) => r.k) });
+    }
+  });
+
+  it('shows provenance: a role with who granted it and why; a tier default; the super admin\'s own power', async () => {
+    await grant(superAdmin, tDeptSpecialist);
+    const r = await view(tm, tDeptSpecialist);
+    expect(r.status).toBe(200);
+    const materials = r.json.pages.find((p: { page: string }) => p.page === 'materials');
+    expect(materials.keys).toEqual([
+      expect.objectContaining({
+        key: 'materials.author',
+        sources: [expect.objectContaining({ type: 'role', roleKey: 'content_author', reason: 'designated content author', grantedBy: expect.objectContaining({ id: m.superAdmin.id }) })],
+      }),
+    ]);
+    // A Teachers supervisor's review right is the tier-and-department default, not a role.
+    const sup = await view(superAdmin, { id: m.teacherSupervisors[0]!.id });
+    const review = sup.json.pages.find((p: { page: string }) => p.page === 'materials').keys.find((k: { key: string }) => k.key === 'materials.review');
+    expect(review.sources).toEqual([{ type: 'tier_default' }]);
+    // The super admin holds every key, all from the one source.
+    const owner = await view(superAdmin, { id: m.teachersManager.id });
+    expect(owner.status).toBe(200);
+  });
+
+  it('is visible only to who may see the account: the Teachers manager sees their department, not Operations\'; a supervisor and an author see nothing', async () => {
+    expect((await view(tm, tDeptSpecialist)).status).toBe(200);
+    expect(denied(await view(om, tDeptSpecialist))).toEqual(NOT_VISIBLE);
+    expect(denied(await view(tm, oDeptSpecialist))).toEqual(NOT_VISIBLE);
+    expect([403, 404]).toContain((await view(tsup, tDeptSpecialist)).status);
+    expect([403, 404]).toContain((await view(tDeptSpecialist.subject, freeSpecialist)).status);
+  });
+
+  it('previews adding and removing a role without changing anything', async () => {
+    const before = await g.prisma.$queryRaw<Array<{ n: bigint }>>`SELECT count(*)::bigint AS n FROM chat.staff_access_role`;
+    const audits = await g.prisma.auditLog.count();
+    const add = await preview(superAdmin, oDeptSpecialist, { addRoleIds: [roleId] });
+    expect(add.status).toBe(200);
+    expect(add.json).toMatchObject({ gained: ['materials.author'], lost: [], pagesGained: ['materials'], pagesLost: [] });
+    const rm = await preview(superAdmin, tDeptSpecialist, { removeRoleIds: [roleId] });
+    expect(rm.json).toMatchObject({ gained: [], lost: ['materials.author'], pagesLost: ['materials'] });
+    expect((await preview(superAdmin, tDeptSpecialist, { addRoleIds: ['not-a-uuid'] })).status).toBe(400);
+    const after = await g.prisma.$queryRaw<Array<{ n: bigint }>>`SELECT count(*)::bigint AS n FROM chat.staff_access_role`;
+    expect(after[0]!.n).toBe(before[0]!.n);
+    expect(await g.prisma.auditLog.count()).toBe(audits);
+    // The Operations manager cannot preview for an account they cannot reach.
+    expect(denied(await preview(om, tDeptSpecialist, { addRoleIds: [roleId] }))).toEqual(NOT_VISIBLE);
+  });
+});

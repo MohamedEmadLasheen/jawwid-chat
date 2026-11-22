@@ -10,7 +10,7 @@ Regenerate with `PD040_WRITE_ROUTE_TABLE=1 npx jest pd040-route-permissions` in 
 
 Only staff callers are checked. The service behind each route still decides department, scope and state.
 
-612 routes.
+614 routes.
 
 | Method | Route | Staff need | Handler |
 |---|---|---|---|
@@ -43,6 +43,8 @@ Only staff callers are checked. The service behind each route still decides depa
 | GET | `/api/v1/admin/staff-accounts` | staff_accounts.view | `staff-accounts/staff-accounts.controller.ts#StaffAccountsController.list` |
 | POST | `/api/v1/admin/staff-accounts` | staff_accounts.create | `staff-accounts/staff-accounts.controller.ts#StaffAccountsController.create` |
 | GET | `/api/v1/admin/staff-accounts/:staffId` | staff_accounts.view | `staff-accounts/staff-accounts.controller.ts#StaffAccountsController.get` |
+| GET | `/api/v1/admin/staff-accounts/:staffId/access` | staff_accounts.view | `staff-accounts/staff-accounts.controller.ts#StaffAccountsController.access` |
+| POST | `/api/v1/admin/staff-accounts/:staffId/access/preview` | staff_accounts.manage | `staff-accounts/staff-accounts.controller.ts#StaffAccountsController.previewAccess` |
 | POST | `/api/v1/admin/staff-accounts/:staffId/roles` | staff_accounts.manage | `staff-accounts/staff-accounts.controller.ts#StaffAccountsController.grant` |
 | POST | `/api/v1/admin/staff-accounts/:staffId/roles/:roleId/revoke` | staff_accounts.manage | `staff-accounts/staff-accounts.controller.ts#StaffAccountsController.revoke` |
 | POST | `/api/v1/admin/staff-accounts/:staffId/setup-code` | staff_accounts.manage | `staff-accounts/staff-accounts.controller.ts#StaffAccountsController.setupCode` |

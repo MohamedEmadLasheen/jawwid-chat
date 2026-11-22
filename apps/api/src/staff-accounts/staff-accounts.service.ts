@@ -15,6 +15,7 @@ import {
   type StaffAccountTarget,
 } from '../platform/staff-account-policy';
 import { accessRoleConflict } from './access-role-conflict';
+import { previewOf, reportOf, type HeldPage, type AccessPreview, type SourceRow } from './access-report';
 
 export interface StaffAccountRoleDto {
   id: string;
@@ -153,6 +154,49 @@ export class StaffAccountsService {
   async get(actor: Actor, staffId: string): Promise<StaffAccountDto> {
     const { row } = await this.reach(actor, staffId);
     return this.toDto(row, await this.rolesOf(row.staff_id));
+  }
+
+  /**
+   * Access management M1: what this account holds and where each key comes from. Read-only, and visible to exactly
+   * the people who may see the account (reach). The rows come from chat.staff_access_sources, which follows
+   * chat.staff_access_profile's rules; the totals are not recomputed here.
+   */
+  async accessOf(actor: Actor, staffId: string): Promise<{ staffId: string; tier: string | null; departmentKind: string | null; placement: string | null; pages: HeldPage[] }> {
+    const { row } = await this.reach(actor, staffId);
+    const target = { ...actor, actorId: row.staff_id, organizationId: row.organization_id } as Actor;
+    const [profile, rows] = await Promise.all([this.access.profileOf(target), this.sources(row.staff_id)]);
+    return { staffId: row.staff_id, tier: profile.tier, departmentKind: profile.departmentKind, placement: profile.placement, pages: reportOf(rows) };
+  }
+
+  /**
+   * What granting and/or revoking roles would change, before anyone saves. Informational: the grant itself is decided
+   * again by the database (H3, H5). Only roles of the account's own organization count.
+   */
+  async previewAccess(actor: Actor, staffId: string, body: Record<string, unknown>): Promise<AccessPreview> {
+    const { row } = await this.reach(actor, staffId);
+    const ids = (v: unknown, what: string): string[] => {
+      if (v === undefined) return [];
+      if (!Array.isArray(v) || v.length > 20 || v.some((x) => typeof x !== 'string' || !isUuid(x))) throw invalid(`${what}: up to 20 role ids`);
+      return v as string[];
+    };
+    const addIds = ids(body.addRoleIds, 'addRoleIds');
+    const remove = ids(body.removeRoleIds, 'removeRoleIds');
+    const added = addIds.length
+      ? await this.prisma.$queryRaw<Array<{ role_id: string; key: string }>>`
+          SELECT r.id::text AS role_id, arp.permission_key AS key
+            FROM chat.access_role r
+            JOIN chat.access_role_permission arp ON arp.role_id = r.id
+            JOIN chat.permission p ON p.key = arp.permission_key AND p.in_roles
+           WHERE r.organization_id = ${row.organization_id}::uuid AND r.id = ANY(${addIds}::uuid[])`
+      : [];
+    const add = addIds.map((roleId) => ({ roleId, keys: added.filter((a) => a.role_id === roleId).map((a) => a.key) }));
+    return previewOf(await this.sources(row.staff_id), { add, remove });
+  }
+
+  private async sources(staffId: string): Promise<SourceRow[]> {
+    return this.prisma.$queryRaw<SourceRow[]>`
+      SELECT permission_key, source, role_id::text AS role_id, role_key, name_en, name_ar, granted_by::text AS granted_by, granted_by_name, granted_at, reason
+        FROM chat.staff_access_sources(${staffId}::uuid)`;
   }
 
   /** Body: `{ name, email, tier, departmentId?, roleIds?, reason }`. Returns the code ONCE. */

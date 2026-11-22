@@ -10,6 +10,20 @@ export function useStaffAccount(staffId: string) {
   return useQuery({ queryKey: staffAccountKeys.one(staffId), queryFn: () => staffAccountsApi.get(staffId) })
 }
 
+export function useAccessView(staffId: string) {
+  return useQuery({ queryKey: [...staffAccountKeys.one(staffId), 'access'], queryFn: () => staffAccountsApi.access(staffId) })
+}
+
+/** What granting this role would change, shown before the administrator confirms. Informational only. */
+export function useAccessPreview(staffId: string, roleId: string | null) {
+  return useQuery({
+    queryKey: [...staffAccountKeys.one(staffId), 'access-preview', roleId],
+    queryFn: () => staffAccountsApi.previewAccess(staffId, { addRoleIds: [roleId as string] }),
+    enabled: roleId !== null,
+    staleTime: 10_000,
+  })
+}
+
 export function useAccessRoles(enabled = true) {
   return useQuery({ queryKey: staffAccountKeys.roles, queryFn: staffAccountsApi.roles, staleTime: 30_000, enabled })
 }

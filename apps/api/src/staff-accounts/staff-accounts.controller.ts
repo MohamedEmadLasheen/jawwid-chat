@@ -27,6 +27,21 @@ export class StaffAccountsController {
     return this.accounts.list(actor);
   }
 
+  /** M1: what the account holds and where each key comes from. */
+  @Requires('staff_accounts.view')
+  @Get(':staffId/access')
+  access(@CurrentActor() actor: Actor, @Param('staffId') staffId: string) {
+    return this.accounts.accessOf(actor, staffId);
+  }
+
+  /** M1: what adding and removing roles would change, before saving. Body: `{ addRoleIds?, removeRoleIds? }`. Read-only. */
+  @Requires('staff_accounts.manage')
+  @Post(':staffId/access/preview')
+  @HttpCode(200)
+  previewAccess(@CurrentActor() actor: Actor, @Param('staffId') staffId: string, @Body() body: Record<string, unknown>) {
+    return this.accounts.previewAccess(actor, staffId, body ?? {});
+  }
+
   @Requires('staff_accounts.view')
   @Get(':staffId')
   get(@CurrentActor() actor: Actor, @Param('staffId') staffId: string) {

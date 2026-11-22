@@ -323,6 +323,49 @@ describe('PD-40: the Staff accounts page', () => {
     expect(bodyOf(calls('POST', /\/roles$/)[0])).toEqual({ roleId: 'r-1', reason: 'designs the certificates' })
   })
 
+  it('shows what the account can open, page by page, with where each permission came from (M1, read-only)', async () => {
+    on('GET', /\/admin\/staff-accounts\/st-1$/, () => json(staffAccount({ status: 'active', setupPending: false })))
+    on('GET', /\/admin\/staff-accounts\/st-1\/access$/, () =>
+      json({
+        staffId: 'st-1', tier: 'specialist', departmentKind: null, placement: null,
+        pages: [
+          { page: 'certificates', keys: [{ key: 'certificates.design', action: 'design', label: { en: 'Design and upload certificates', ar: 'تصميم الشهادات ورفعها' }, risk: 'pii', sources: [
+            { type: 'role', roleKey: 'designer', nameEn: 'Certificate designer', nameAr: 'مصمم الشهادات', grantedBy: { id: 'sa', name: 'The Owner' }, grantedAt: '2026-11-01T10:00:00Z', reason: 'designs' },
+          ] }] },
+          { page: 'materials', keys: [{ key: 'materials.review', action: 'review', label: { en: 'Approve educational materials', ar: 'اعتماد المواد التعليمية' }, risk: 'none', sources: [{ type: 'tier_default' }] }] },
+        ],
+      }),
+    )
+    renderWithProviders(<AppRoutes />, { staff: manager, route: '/accounts/staff' })
+    await userEvent.click(await screen.findByRole('button', { name: 'Specialist One' }))
+    const detail = await screen.findByRole('dialog', { name: 'Specialist One' })
+    const list = await within(detail).findByRole('list', { name: 'What this account can open' })
+    expect(within(list).getByText('Design and upload certificates')).toBeInTheDocument()
+    expect(within(list).getByText(/Role: Certificate designer · granted by The Owner on/)).toBeInTheDocument()
+    expect(within(list).getByText(/Default for its tier and department/)).toBeInTheDocument()
+    // Read-only: reading it writes nothing.
+    expect(calls('POST', /\/access/)).toHaveLength(0)
+  })
+
+  it('previews what a role would add before it is granted, and says so when it adds nothing', async () => {
+    on('GET', /\/admin\/staff-accounts\/st-1$/, () => json(staffAccount({ status: 'active', setupPending: false })))
+    on('GET', /\/admin\/staff-accounts\/st-1\/access$/, () => json({ staffId: 'st-1', tier: 'specialist', departmentKind: null, placement: null, pages: [] }))
+    let preview = { gained: ['certificates.design', 'certificates.view'], lost: [], pagesGained: ['certificates'], pagesLost: [] }
+    on('POST', /\/admin\/staff-accounts\/st-1\/access\/preview$/, () => json(preview))
+    renderWithProviders(<AppRoutes />, { staff: manager, route: '/accounts/staff' })
+    await userEvent.click(await screen.findByRole('button', { name: 'Specialist One' }))
+    const detail = await screen.findByRole('dialog', { name: 'Specialist One' })
+    const picker = await within(detail).findByLabelText('Add a role')
+    await waitFor(async () => expect((await optionsOf(userEvent, picker)).map((o) => o.label)).toEqual(['Choose a role', 'Designer']))
+    await chooseOption(userEvent, picker, 'r-1')
+    expect(await within(detail).findByText(/Gains: certificates.design, certificates.view/)).toBeInTheDocument()
+    expect(within(detail).getByText(/New pages: certificates/)).toBeInTheDocument()
+    expect(bodyOf(calls('POST', /\/access\/preview$/)[0])).toEqual({ addRoleIds: ['r-1'] })
+    // Nothing was granted by previewing.
+    expect(calls('POST', /\/roles$/)).toHaveLength(0)
+    preview = { gained: [], lost: [], pagesGained: [], pagesLost: [] }
+  })
+
   it('revokes a role with a reason', async () => {
     const held = staffAccount({ status: 'active', setupPending: false, roles: [{ id: 'r-1', key: 'designer', nameEn: 'Designer', nameAr: 'مصمم' }] })
     on('GET', /\/admin\/staff-accounts\/st-1$/, () => json(held))
