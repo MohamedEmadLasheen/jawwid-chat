@@ -101,23 +101,26 @@ describe('navigation lists what a role may open', () => {
       )
       expect(navAreas(role, { lessonManager: true })).toEqual(withoutPipeline(role).filter((a) => a !== 'new-students' && a !== 'materials' && a !== 'schedule' && !money(a) && !certs(a)))
       expect(navAreas(role, { lessonManager: true, billingReader: true })).toEqual(withoutPipeline(role).filter((a) => a !== 'new-students' && a !== 'materials' && a !== 'schedule' && !certs(a)))
-      expect(navAreas(role, { lessonManager: true, billingReader: true, materialsManager: true })).toEqual(withoutPipeline(role).filter((a) => a !== 'new-students' && a !== 'schedule' && !certs(a)))
+      expect(navAreas(role, { lessonManager: true, billingReader: true, materialsWorkspace: true })).toEqual(withoutPipeline(role).filter((a) => a !== 'new-students' && a !== 'schedule' && !certs(a)))
       // PD-38: the Schedule on GET /lessons/access's `calendar`.
-      expect(navAreas(role, { lessonManager: true, billingReader: true, materialsManager: true, calendar: true })).toEqual(withoutPipeline(role).filter((a) => a !== 'new-students' && !certs(a)))
-      expect(navAreas(role, { lessonManager: true, billingReader: true, materialsManager: true, calendar: true, operations: true, certificates: true })).toEqual(withoutPipeline(role).filter((a) => a !== 'lesson-audio' && a !== 'teacher-attendance' && a !== 'teacher-grants' && a !== 'moderation'))
-      expect(navAreas(role, { lessonManager: true, billingReader: true, materialsManager: true, calendar: true, operations: true, certificates: true, lessonAudio: true })).toEqual(withoutPipeline(role).filter((a) => a !== 'teacher-attendance' && a !== 'teacher-grants' && a !== 'moderation'))
-      expect(navAreas(role, { lessonManager: true, billingReader: true, materialsManager: true, calendar: true, operations: true, certificates: true, lessonAudio: true, teacherAttendance: true })).toEqual(withoutPipeline(role).filter((a) => a !== 'teacher-grants' && a !== 'moderation'))
-      expect(navAreas(role, { lessonManager: true, billingReader: true, materialsManager: true, calendar: true, operations: true, certificates: true, lessonAudio: true, teacherAttendance: true, teacherGrants: true })).toEqual(withoutPipeline(role).filter((a) => a !== 'moderation'))
-      expect(navAreas(role, { lessonManager: true, billingReader: true, materialsManager: true, calendar: true, operations: true, certificates: true, lessonAudio: true, teacherAttendance: true, teacherGrants: true, moderation: true, sales: true })).toEqual(visibleAreas(role))
+      expect(navAreas(role, { lessonManager: true, billingReader: true, materialsWorkspace: true, calendar: true })).toEqual(withoutPipeline(role).filter((a) => a !== 'new-students' && !certs(a)))
+      expect(navAreas(role, { lessonManager: true, billingReader: true, materialsWorkspace: true, calendar: true, operations: true, certificates: true })).toEqual(withoutPipeline(role).filter((a) => a !== 'lesson-audio' && a !== 'teacher-attendance' && a !== 'teacher-grants' && a !== 'moderation'))
+      expect(navAreas(role, { lessonManager: true, billingReader: true, materialsWorkspace: true, calendar: true, operations: true, certificates: true, lessonAudio: true })).toEqual(withoutPipeline(role).filter((a) => a !== 'teacher-attendance' && a !== 'teacher-grants' && a !== 'moderation'))
+      expect(navAreas(role, { lessonManager: true, billingReader: true, materialsWorkspace: true, calendar: true, operations: true, certificates: true, lessonAudio: true, teacherAttendance: true })).toEqual(withoutPipeline(role).filter((a) => a !== 'teacher-grants' && a !== 'moderation'))
+      expect(navAreas(role, { lessonManager: true, billingReader: true, materialsWorkspace: true, calendar: true, operations: true, certificates: true, lessonAudio: true, teacherAttendance: true, teacherGrants: true })).toEqual(withoutPipeline(role).filter((a) => a !== 'moderation'))
+      expect(navAreas(role, { lessonManager: true, billingReader: true, materialsWorkspace: true, calendar: true, operations: true, certificates: true, lessonAudio: true, teacherAttendance: true, teacherGrants: true, moderation: true, sales: true })).toEqual(visibleAreas(role))
     }
   })
 
-  it('PD-29: Materials is offered to the super admin and a manager the server confirms -- never to an operator or a department', () => {
+  it('Educational materials: offered to whoever the server says has one of the library\'s jobs (manage, author, review) -- never to a department account, never on the role alone', () => {
     expect(visibleAreas('super_admin')).toContain('materials')
-    expect(navAreas('manager', { materialsManager: true })).toContain('materials')
-    expect(navAreas('manager')).not.toContain('materials')
-    for (const role of ['admin', 'coverage', 'finance', 'technical', 'academic'] as const) {
-      expect(navAreas(role, { materialsManager: true })).not.toContain('materials')
+    // Managers, Teachers supervisors (admin/coverage) and a designated Content author (a specialist): on the server's word only.
+    for (const role of ['manager', 'admin', 'coverage', 'specialist'] as const) {
+      expect(navAreas(role, { materialsWorkspace: true }), role).toContain('materials')
+      expect(navAreas(role), role).not.toContain('materials')
+    }
+    for (const role of ['finance', 'technical', 'academic'] as const) {
+      expect(navAreas(role, { materialsWorkspace: true }), role).not.toContain('materials')
     }
   })
 
@@ -172,6 +175,7 @@ describe('permission keys → pages', () => {
   it("gives a specialist PD-41's Certificates area, their Tasks and PD-48's Lesson audio -- never Accounts, so no staff-account tabs", () => {
     // PD-47 plan §3.12: Tasks is in every staff role's navigation -- a Designer
     // may be given a task too. PD-48: Lesson audio, on the server's word. Still never Accounts.
-    expect(visibleAreas('specialist')).toEqual(['certificates', 'tasks', 'lesson-audio'])
+    // Educational materials: a designated Content author is a specialist, on the server's word.
+    expect(visibleAreas('specialist')).toEqual(['certificates', 'tasks', 'lesson-audio', 'materials'])
   })
 })

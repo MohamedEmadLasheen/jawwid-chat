@@ -14,7 +14,8 @@ import { accountKeys, accountsApi } from '@/features/accounts/api'
 import { AccountActionButtons, AccountActionDialogs, type AccountPending } from '@/features/accounts/AccountsPage'
 import { roleFitsTier, staffAccountKeys, type AccessRole, type StaffAccount, type StaffAccountRole, type StaffFirstLogin } from './api'
 import { SA, STATUS, TIER, localized, useCopy } from './copy'
-import { useAccessRoles, useGrantRole, useRevokeRole, useSetupCode, useStaffAccount, useStaffAccounts } from './hooks'
+import type { Deny, HeldKey } from './api'
+import { useAccessPreview, useAccessRoles, useAccessView, useDeny, useDenies, useGrantRole, useLiftDeny, useRevokeRole, useSetupCode, useStaffAccount, useStaffAccounts } from './hooks'
 import { AccountsTabs } from './AccountsTabs'
 import { NewStaffAccountDialog } from './NewStaffAccountDialog'
 import { StaffCodeSheet } from './StaffCodeSheet'
@@ -351,6 +352,8 @@ function StaffAccountSheet({
           ))}
       </section>
 
+      <AccessPanel staffId={account.staffId} accountName={account.name} previewRoleId={chosen?.id ?? null} canManage={canManage} />
+
       <section className="sa-section" aria-labelledby={`${pickerId}-account`}>
         <h3 id={`${pickerId}-account`} className="sa-section__title">
           {tx(SA.detailActions)}
@@ -425,6 +428,185 @@ function SetupCodeDialog({
       error={localized(issue.error)}
       extra={<p>{tx(SA.setupExplain)}</p>}
       onConfirm={(reason) => issue.mutate({ staffId: account.staffId, reason }, { onSuccess: (r) => onIssued(r.firstLogin) })}
+      onClose={onClose}
+    />
+  )
+}
+
+
+/**
+ * Access management M1: the effective access of one account, read-only: each page, the actions held in it (the module's
+ * own permission keys, labelled from the catalogue) and where each one came from. When an administrator picks a role to
+ * grant, what it would add is shown before they confirm. The server decides every grant again.
+ */
+function AccessPanel({ staffId, accountName, previewRoleId, canManage }: { staffId: string; accountName: string; previewRoleId: string | null; canManage: boolean }) {
+  const tx = useCopy()
+  const { locale, date } = useI18n()
+  const id = useId()
+  const view = useAccessView(staffId)
+  const preview = useAccessPreview(staffId, previewRoleId)
+  const denies = useDenies(staffId)
+  const { staff } = useSession()
+  // Restrictions are offered only where the database enforces them (production: not yet), so a restriction is never recorded and then ignored.
+  const enforced = denies.data?.enforced === true
+  const [restricting, setRestricting] = useState<HeldKey | null>(null)
+  const [lifting, setLifting] = useState<Deny | null>(null)
+  const label = (l: { en: string; ar: string }) => (locale === 'ar' ? l.ar : l.en)
+  const sourceText = (s: import('./api').KeySource): string => {
+    if (s.type === 'super_admin') return tx(SA.srcSuperAdmin)
+    if (s.type === 'tier_default') return tx(SA.srcTierDefault)
+    const role = locale === 'ar' ? s.nameAr ?? s.roleKey ?? '' : s.nameEn ?? s.roleKey ?? ''
+    const base = tx(SA.srcRole, { role })
+    return s.grantedBy && s.grantedAt ? `${base} · ${tx(SA.srcGranted, { by: s.grantedBy.name ?? '—', at: date(s.grantedAt) })}` : base
+  }
+  return (
+    <section className="sa-section" aria-labelledby={`${id}-access`}>
+      <h3 id={`${id}-access`} className="sa-section__title">
+        {tx(SA.accessTitle)}
+      </h3>
+      <p className="field__hint">{tx(SA.accessHint)}</p>
+      {previewRoleId && preview.data && (
+        <div className="banner banner--info" role="status">
+          <strong>{tx(SA.grantPreviewTitle)}</strong>{' '}
+          {preview.data.gained.length === 0
+            ? tx(SA.grantPreviewNothing)
+            : [
+                tx(SA.previewGain, { items: preview.data.gained.join(', ') }),
+                preview.data.pagesGained.length ? tx(SA.previewPages, { items: preview.data.pagesGained.join(', ') }) : '',
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+        </div>
+      )}
+      {view.isLoading ? null : view.error || !view.data ? null : view.data.pages.length === 0 ? (
+        <p className="field__hint">{tx(SA.accessNone)}</p>
+      ) : (
+        <ul className="sa-held" aria-label={tx(SA.accessTitle)}>
+          {view.data.pages.map((p) => (
+            <li key={p.page}>
+              <strong dir="ltr">{p.page}</strong>
+              <ul>
+                {p.keys.map((k) => (
+                  <li key={k.key}>
+                    <span dir="auto" style={k.denied ? { textDecoration: 'line-through' } : undefined}>{label(k.label)}</span> <code dir="ltr">{k.key}</code>
+                    {k.denied && (
+                      <>
+                        {' '}
+                        <Badge tone="warn">{tx(SA.restricted)}</Badge>
+                      </>
+                    )}
+                    <span className="field__hint"> — {k.sources.map(sourceText).join(' · ')}</span>
+                    {enforced && canManage && k.deniable && !k.denied && (
+                      <>
+                        {' '}
+                        <button type="button" className="btn btn--sm" aria-label={tx(SA.restrictTitle, { key: k.key, name: accountName })} onClick={() => setRestricting(k)}>
+                          {tx(SA.restrict)}
+                        </button>
+                      </>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </li>
+          ))}
+        </ul>
+      )}
+      {enforced && denies.data && (
+        <>
+          <h4 className="sa-section__title">{tx(SA.restrictionsTitle)}</h4>
+          {denies.data.denies.length === 0 ? (
+            <p className="field__hint">{tx(SA.restrictionsNone)}</p>
+          ) : (
+            <ul className="sa-held" aria-label={tx(SA.restrictionsTitle)}>
+              {denies.data.denies.map((d) => (
+                <li key={d.id}>
+                  <code dir="ltr">{d.permissionKey}</code>{' '}
+                  <Badge tone={d.active ? 'warn' : 'neutral'}>{tx(d.liftedBy ? SA.restrictionLifted : d.active ? SA.restrictionActive : SA.restrictionExpired)}</Badge>
+                  <span className="field__hint">
+                    {' '}
+                    — {d.reason} · {tx(SA.restrictionBy, { by: d.by.name ?? '—' })} ·{' '}
+                    {d.permanent ? tx(SA.restrictionPermanentText, { date: date(d.reviewBy ?? d.createdAt) }) : tx(SA.restrictionUntilText, { date: date(d.expiresAt ?? d.createdAt) })}
+                  </span>
+                  {canManage && d.active && (
+                    <>
+                      {' '}
+                      <button type="button" className="btn btn--sm" aria-label={tx(SA.liftTitle, { key: d.permissionKey })} onClick={() => setLifting(d)}>
+                        {tx(SA.lift)}
+                      </button>
+                    </>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+      {restricting && <RestrictDialog staffId={staffId} accountName={accountName} held={restricting} superAdmin={!!staff && isSuperAdmin(staff.role)} onClose={() => setRestricting(null)} />}
+      {lifting && <LiftDialog staffId={staffId} deny={lifting} onClose={() => setLifting(null)} />}
+    </section>
+  )
+}
+
+/** Restrict one permission: a reason, and when it ends (a super admin may instead make it permanent, with a review date). The server decides who may. */
+function RestrictDialog({ staffId, accountName, held, superAdmin, onClose }: { staffId: string; accountName: string; held: HeldKey; superAdmin: boolean; onClose: () => void }) {
+  const tx = useCopy()
+  const mutation = useDeny()
+  const inDays = (n: number) => new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10)
+  const [until, setUntil] = useState(inDays(14))
+  const [permanent, setPermanent] = useState(false)
+  const [review, setReview] = useState(inDays(90))
+  const dayEnd = (d: string) => new Date(`${d}T23:59:59`).toISOString()
+  return (
+    <ReasonDialog
+      title={tx(SA.restrictTitle, { key: held.key, name: accountName })}
+      label={tx(SA.reason)}
+      confirmLabel={tx(SA.restrict)}
+      isPending={mutation.isPending}
+      error={localized(mutation.error)}
+      extra={
+        <>
+          <p>{tx(SA.restrictExplain)}</p>
+          {!permanent && (
+            <label className="field">
+              <span className="field__label">{tx(SA.restrictUntil)}</span>
+              <input className="input" type="date" value={until} onChange={(e) => setUntil(e.target.value)} />
+            </label>
+          )}
+          {superAdmin && (
+            <label className="field">
+              <input type="checkbox" checked={permanent} onChange={(e) => setPermanent(e.target.checked)} /> {tx(SA.restrictPermanent)}
+            </label>
+          )}
+          {permanent && (
+            <label className="field">
+              <span className="field__label">{tx(SA.restrictReview)}</span>
+              <input className="input" type="date" value={review} onChange={(e) => setReview(e.target.value)} />
+            </label>
+          )}
+        </>
+      }
+      onConfirm={(reason) =>
+        mutation.mutate(
+          { staffId, body: { permissionKey: held.key, reason, ...(permanent ? { permanent: true, reviewBy: dayEnd(review) } : { expiresAt: dayEnd(until) }) } },
+          { onSuccess: onClose },
+        )
+      }
+      onClose={onClose}
+    />
+  )
+}
+
+function LiftDialog({ staffId, deny, onClose }: { staffId: string; deny: Deny; onClose: () => void }) {
+  const tx = useCopy()
+  const mutation = useLiftDeny()
+  return (
+    <ReasonDialog
+      title={tx(SA.liftTitle, { key: deny.permissionKey })}
+      label={tx(SA.reason)}
+      confirmLabel={tx(SA.lift)}
+      isPending={mutation.isPending}
+      error={localized(mutation.error)}
+      onConfirm={(reason) => mutation.mutate({ staffId, denyId: deny.id, reason }, { onSuccess: onClose })}
       onClose={onClose}
     />
   )

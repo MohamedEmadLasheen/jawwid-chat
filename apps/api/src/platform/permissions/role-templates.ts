@@ -65,4 +65,15 @@ export const ACCESS_ROLE_TEMPLATES: readonly AccessRoleTemplate[] = [
     migration: '20261029235000_chat_pd049_lesson_content_review.sql',
     grantedBy: 'super_admin',
   },
+  {
+    // Owner, 2026-11-22: the people designated to write educational materials. They write drafts and hand
+    // them to a reviewer; they never approve, retire or manage the library, and no other key comes with it.
+    key: 'content_author',
+    nameEn: 'Content author',
+    nameAr: 'كاتب المحتوى التعليمي',
+    description: 'Writes educational materials as drafts and submits them for review. Never publishes or manages the library.',
+    maxTier: 'specialist',
+    permissions: ['materials.author'],
+    migration: '20261122100000_chat_materials_author_review.sql',
+  },
 ];

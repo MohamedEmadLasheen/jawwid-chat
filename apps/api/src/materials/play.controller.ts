@@ -109,7 +109,7 @@ export class MaterialsPlayController {
     if (!actor || actor.organizationId !== item.organizationId || (actor.kind === ActorKind.CONTACT && !actor.familyId)) {
       return refuse(res, 403, 'not available');
     }
-    if (item.status !== 'published' && !(await this.admin.mayManage(actor))) return refuse(res, 404, 'not found');
+    if (!(await this.admin.mayPreview(actor, item))) return refuse(res, 404, 'not found');
 
     const entry = await this.prisma.materialPackageEntry.findUnique({ where: { objectKey_path: { objectKey: item.objectKey, path } } });
     const type = contentTypeOf(path);

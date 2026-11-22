@@ -18,7 +18,11 @@ export type Kind = (typeof KINDS)[number];
 /** Kinds an uploaded single file may be. */
 export const FILE_KINDS: readonly Kind[] = ['audio', 'video', 'pdf', 'image'];
 
-export const ITEM_STATUSES = ['draft', 'published', 'retired'] as const;
+/**
+ * draft: an author's work in progress; in_review: handed to a reviewer; published: approved, the only state a
+ * family, a teacher or a report ever sees; retired: withdrawn.
+ */
+export const ITEM_STATUSES = ['draft', 'in_review', 'published', 'retired'] as const;
 export type ItemStatus = (typeof ITEM_STATUSES)[number];
 
 /** Age bands, in years. An item lists the bands it suits; none listed = every age. */

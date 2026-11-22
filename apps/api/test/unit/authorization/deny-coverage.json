@@ -1,0 +1,83 @@
+{
+  "_": "Access management M3: why each deniable key is safe to deny. The enforcement paths are: PermissionGuard on every route that names the key (refuses a deny in every mode), PermissionService/staff_access_profile for services, chat.staff_has_permission for every SQL rule and trigger. NO realtime event, notification, search or export is addressed by these keys; the files below are every place the key appears. A new file that names a deniable key fails chat/deny-coverage.spec.ts until it is classified here, so a deny can never be silently ignored by a new path.",
+  "otherPaths": {
+    "realtime": "none: no realtime event or subscription is authorised by these keys",
+    "notifications": "none: no notification is addressed to holders of these keys (task assignees are chosen by SQL staff_has_permission, which honours a deny; a task already assigned stays visible to its assignee until reassigned)",
+    "search": "none",
+    "reportsAndExports": "none"
+  },
+  "keys": {
+    "materials.author": {
+      "files": {
+        "apps/api/src/materials/materials.controller.ts": "route",
+        "apps/api/src/platform/materials-policy.ts": "definition",
+        "apps/api/src/platform/permissions/catalogue.ts": "definition",
+        "apps/api/src/platform/permissions/legacy-bundles.ts": "definition",
+        "apps/api/src/platform/permissions/role-templates.ts": "definition",
+        "supabase/migrations/20261122100000_chat_materials_author_review.sql": "migration",
+        "supabase/migrations/20261125100000_chat_deny_enforcement.sql": "declares the deniable list (marks the key deniable); not an access path"
+      }
+    },
+    "materials.review": {
+      "files": {
+        "apps/api/src/materials/materials.controller.ts": "route",
+        "apps/api/src/platform/materials-policy.ts": "definition",
+        "apps/api/src/platform/permissions/catalogue.ts": "definition",
+        "apps/api/src/platform/permissions/legacy-bundles.ts": "definition",
+        "supabase/migrations/20261122100000_chat_materials_author_review.sql": "migration",
+        "supabase/migrations/20261125100000_chat_deny_enforcement.sql": "declares the deniable list (marks the key deniable); not an access path"
+      }
+    },
+    "lesson_audio.view": {
+      "files": {
+        "apps/admin-web/src/app/AppRoutes.tsx": "web-route-ux",
+        "apps/api/src/lesson-audio/lesson-audio.controller.ts": "route",
+        "apps/api/src/platform/lesson-audio-policy.ts": "definition",
+        "apps/api/src/platform/permissions/catalogue.ts": "definition",
+        "apps/api/src/platform/permissions/legacy-bundles.ts": "definition",
+        "apps/api/src/platform/permissions/role-templates.ts": "definition",
+        "supabase/migrations/20261029230000_chat_pd048_lesson_audio.sql": "migration",
+        "supabase/migrations/20261029235000_chat_pd049_lesson_content_review.sql": "migration",
+        "supabase/migrations/20261122100000_chat_materials_author_review.sql": "migration",
+        "supabase/migrations/20261125100000_chat_deny_enforcement.sql": "declares the deniable list (marks the key deniable); not an access path"
+      }
+    },
+    "lesson_audio.review": {
+      "files": {
+        "apps/admin-web/src/app/AppRoutes.tsx": "web-route-ux",
+        "apps/api/src/lesson-audio/lesson-audio.controller.ts": "route",
+        "apps/api/src/platform/lesson-audio-policy.ts": "definition",
+        "apps/api/src/platform/permissions/catalogue.ts": "definition",
+        "apps/api/src/platform/permissions/legacy-bundles.ts": "definition",
+        "apps/api/src/platform/permissions/role-templates.ts": "definition",
+        "supabase/migrations/20261029230000_chat_pd048_lesson_audio.sql": "migration",
+        "supabase/migrations/20261029235000_chat_pd049_lesson_content_review.sql": "migration",
+        "supabase/migrations/20261122100000_chat_materials_author_review.sql": "migration",
+        "supabase/migrations/20261125100000_chat_deny_enforcement.sql": "declares the deniable list (marks the key deniable); not an access path"
+      }
+    },
+    "certificates.design": {
+      "files": {
+        "apps/admin-web/src/app/AppRoutes.tsx": "web-route-ux",
+        "apps/api/src/certificates/certificates.controller.ts": "route",
+        "apps/api/src/platform/pd041-policy.ts": "definition",
+        "apps/api/src/platform/permissions/catalogue.ts": "definition",
+        "apps/api/src/platform/permissions/legacy-bundles.ts": "definition",
+        "apps/api/src/platform/permissions/role-templates.ts": "definition",
+        "apps/api/src/tasks/task.service.ts": "sql-via-staff_has_permission",
+        "supabase/migrations/20261027190000_chat_pd040_access_roles.sql": "migration",
+        "supabase/migrations/20261029100000_chat_pd040_staff_accounts.sql": "migration",
+        "supabase/migrations/20261029110000_chat_pd041_certificates.sql": "migration",
+        "supabase/migrations/20261029190000_chat_pd040_designer_template.sql": "migration",
+        "supabase/migrations/20261029220000_chat_pd040_template_followups.sql": "migration",
+        "supabase/migrations/20261029230000_chat_pd048_lesson_audio.sql": "migration",
+        "supabase/migrations/20261029235000_chat_pd049_lesson_content_review.sql": "migration",
+        "supabase/migrations/20261029235900_chat_pd047_phase_b_handovers.sql": "migration",
+        "supabase/migrations/20261030000000_chat_pd047_phase_b_decisions.sql": "migration",
+        "supabase/migrations/20261030010000_chat_pd041_overseer_approval.sql": "migration",
+        "supabase/migrations/20261122100000_chat_materials_author_review.sql": "migration",
+        "supabase/migrations/20261125100000_chat_deny_enforcement.sql": "declares the deniable list (marks the key deniable); not an access path"
+      }
+    }
+  }
+}

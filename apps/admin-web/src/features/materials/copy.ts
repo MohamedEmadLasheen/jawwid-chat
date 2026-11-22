@@ -68,6 +68,11 @@ export const M = {
   fullScreen: { en: 'Full screen', ar: 'ملء الشاشة' },
   publish: { en: 'Publish', ar: 'نشر' },
   retire: { en: 'Retire', ar: 'إيقاف' },
+  submitForReview: { en: 'Submit for review', ar: 'إرسال للمراجعة' },
+  approve: { en: 'Approve', ar: 'اعتماد' },
+  returnToDraft: { en: 'Return to author', ar: 'إعادة إلى الكاتب' },
+  accessLoading: { en: 'Loading…', ar: 'جارٍ التحميل…' },
+  yours: { en: 'Yours', ar: 'من كتابتك' },
   restoreDraft: { en: 'Back to draft', ar: 'إرجاع إلى مسودة' },
   save: { en: 'Save', ar: 'حفظ' },
   saving: { en: 'Saving…', ar: 'جارٍ الحفظ…' },
@@ -156,6 +161,7 @@ export const KIND_LABEL: Record<Kind, Pair> = {
 
 export const STATUS_LABEL: Record<ItemStatus, Pair> = {
   draft: { en: 'Draft', ar: 'مسودة' },
+  in_review: { en: 'In review', ar: 'قيد المراجعة' },
   published: { en: 'Published', ar: 'منشورة' },
   retired: { en: 'Retired', ar: 'موقوفة' },
 }

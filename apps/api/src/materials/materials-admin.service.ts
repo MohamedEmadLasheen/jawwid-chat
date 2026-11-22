@@ -9,6 +9,7 @@ import type { Actor } from '../platform/types';
 import type { ObjectStorage } from '../communication/attachments/object-storage';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
 import { ActorKind } from '../communication/contracts/vocab';
+import { mayMoveMaterial, type MaterialsAccess, type MaterialStatus } from '../platform/materials-policy';
 import { surahOf } from './quran-surahs';
 import {
   canonicalRow,
@@ -23,6 +24,7 @@ import { sortMaterials } from './ordering';
 import {
   bytesMatchMime,
   FILE_RULES,
+  ITEM_STATUSES,
   kindOfMime,
   PACKAGE_MAX_BYTES,
   type Kind,
@@ -101,8 +103,21 @@ export class MaterialsAdminService {
     return rows[0]?.ok === true;
   }
 
+  /** What this account may do in the library: manage, write drafts, approve; any of them opens the workspace. */
+  async accessOf(actor: Actor): Promise<MaterialsAccess> {
+    if (actor.kind !== ActorKind.STAFF || !actor.isActive || !actor.organizationId) return { open: false, manage: false, author: false, review: false };
+    const rows = await this.prisma.$queryRaw<Array<{ manage: boolean; author: boolean; review: boolean }>>`
+      SELECT chat.can_manage_materials(${actor.actorId}::uuid, ${actor.organizationId}::uuid) AS manage,
+             chat.can_author_materials(${actor.actorId}::uuid, ${actor.organizationId}::uuid) AS author,
+             chat.can_review_materials(${actor.actorId}::uuid, ${actor.organizationId}::uuid) AS review`;
+    const r = rows[0] ?? { manage: false, author: false, review: false };
+    return { open: r.manage || r.author || r.review, manage: r.manage, author: r.author, review: r.review };
+  }
+
+  /** Navigation UX only (every route decides again): which of the library's jobs this account has. */
   async access(actorId: string) {
-    return { canManage: await this.mayManage(await this.conversations.requireActor(actorId)) };
+    const a = await this.accessOf(await this.conversations.requireActor(actorId));
+    return { canManage: a.manage, canAuthor: a.author, canReview: a.review, canOpen: a.open };
   }
 
   async requireManager(actorId: string): Promise<Actor & { organizationId: string }> {
@@ -113,31 +128,80 @@ export class MaterialsAdminService {
     return actor as Actor & { organizationId: string };
   }
 
+  /** Anyone with one of the library's three jobs: the workspace's routes; the item's state decides the rest. */
+  async requireWorkspace(actorId: string): Promise<{ actor: Actor & { organizationId: string }; access: MaterialsAccess }> {
+    const actor = await this.conversations.requireActor(actorId);
+    const access = await this.accessOf(actor);
+    if (!access.open) {
+      throw new CommError(CommErrorCode.MATERIAL_DENIED, 'the library is for its managers, its authors and its reviewers');
+    }
+    return { actor: actor as Actor & { organizationId: string }, access };
+  }
+
+  /** May this account open the item before it is published (to write it, to review it)? */
+  async mayPreview(actor: Actor, item: Pick<MaterialItem, 'status' | 'createdBy'>): Promise<boolean> {
+    if (item.status === 'published') return true;
+    const a = await this.accessOf(actor);
+    return a.manage || (a.review && item.status === 'in_review') || (a.author && item.createdBy === actor.actorId);
+  }
+
+  /** Does the item show in this account's workspace? A manager sees every item; others only what their job touches. */
+  private visible(access: MaterialsAccess, actorId: string, item: Pick<MaterialItem, 'status' | 'createdBy'>): boolean {
+    return access.manage || item.status === 'published' || (access.author && item.createdBy === actorId) || (access.review && item.status === 'in_review');
+  }
+
   // ------------------------------------------------------------------
   // Items
   // ------------------------------------------------------------------
 
   async list(actorId: string, query: Record<string, unknown>) {
-    const actor = await this.requireManager(actorId);
+    const { actor, access } = await this.requireWorkspace(actorId);
     const where: Prisma.MaterialItemWhereInput = { organizationId: actor.organizationId };
+    const and: Prisma.MaterialItemWhereInput[] = [];
+    if (!access.manage) {
+      // An author sees their own items and the published library; a reviewer the queue and the published library.
+      and.push({ OR: [{ status: 'published' }, ...(access.author ? [{ createdBy: actor.actorId }] : []), ...(access.review ? [{ status: 'in_review' }] : [])] });
+    }
     if (typeof query.subject === 'string' && query.subject) where.subject = query.subject;
     if (typeof query.status === 'string' && query.status) where.status = query.status;
     if (typeof query.ageGroup === 'string' && query.ageGroup) where.OR = [{ ageGroups: { has: query.ageGroup } }, { ageGroups: { isEmpty: true } }];
     if (typeof query.q === 'string' && query.q.trim()) {
       const q = query.q.trim();
-      where.AND = [{ OR: [
+      and.push({ OR: [
         { titleAr: { contains: q, mode: 'insensitive' } },
         { titleEn: { contains: q, mode: 'insensitive' } },
         { externalRef: { contains: q, mode: 'insensitive' } },
-      ] }];
+      ] });
     }
+    if (and.length) where.AND = and;
     const items = await this.prisma.materialItem.findMany({ where, take: 2000 });
-    return { items: sortMaterials(items).map(adminDto) };
+    return { items: sortMaterials(items).map((i) => this.view(i, access, actor.actorId)) };
   }
 
   async get(actorId: string, itemId: string) {
-    const actor = await this.requireManager(actorId);
-    return adminDto(await this.item(actor.organizationId, itemId));
+    const { actor, access } = await this.requireWorkspace(actorId);
+    const item = await this.item(actor.organizationId, itemId);
+    // What is not this account's to see is not found, as everywhere else.
+    if (!this.visible(access, actor.actorId, item)) throw new CommError(CommErrorCode.MATERIAL_NOT_FOUND, 'item not found', 404);
+    return this.view(item, access, actor.actorId);
+  }
+
+  /** An item with what this account may do to it, so a page offers only what the server will do. */
+  private view(i: MaterialItem, access: MaterialsAccess, actorId: string) {
+    const move = { createdBy: i.createdBy, updatedBy: i.updatedBy };
+    const may = (to: MaterialStatus) => mayMoveMaterial(access, actorId, move, i.status as MaterialStatus, to);
+    return {
+      ...adminDto(i),
+      mine: i.createdBy === actorId,
+      can: {
+        edit: access.manage || (access.author && i.createdBy === actorId && i.status === 'draft'),
+        submit: i.status === 'draft' && !access.manage && may('in_review'),
+        approve: i.status === 'in_review' && may('published'),
+        return: i.status === 'in_review' && may('draft'),
+        publish: access.manage && i.status !== 'published',
+        retire: access.manage && i.status !== 'retired',
+      },
+    };
   }
 
   /**
@@ -146,8 +210,11 @@ export class MaterialsAdminService {
    * returned is what a form or an import names afterwards.
    */
   async uploads(actorId: string, body: Record<string, unknown>) {
-    const actor = await this.requireManager(actorId);
+    const { actor, access } = await this.requireWorkspace(actorId);
     const purpose = body.purpose === 'recitation' ? 'recitation' : 'item';
+    // An author's files are for items; recitations are the library managers'.
+    if (purpose === 'recitation' && !access.manage) throw new CommError(CommErrorCode.MATERIAL_DENIED, 'recitations are managed by the super admin or the Teachers manager');
+    if (!access.manage && !access.author) throw new CommError(CommErrorCode.MATERIAL_DENIED, 'only an author or a manager uploads files for the library');
     const files = body.files;
     if (!Array.isArray(files) || files.length === 0 || files.length > MAX_UPLOADS_PER_CALL) {
       throw invalid(`files: 1 to ${MAX_UPLOADS_PER_CALL} of {name, mimeType, byteSize}`);
@@ -193,9 +260,15 @@ export class MaterialsAdminService {
   }
 
   async create(actorId: string, body: Record<string, unknown>) {
-    const actor = await this.requireManager(actorId);
+    const { actor, access } = await this.requireWorkspace(actorId);
     const { fields, errors } = parseItemRow(body);
     if (errors.length) throw invalid(errors.join('; '));
+    if (!access.manage) {
+      // An author starts a draft; what is published is a reviewer's decision.
+      if (!access.author) throw new CommError(CommErrorCode.MATERIAL_DENIED, 'only an author or a manager adds an item');
+      if (fields.status && fields.status !== 'draft') throw new CommError(CommErrorCode.MATERIAL_DENIED, 'an author saves a draft; a reviewer publishes it');
+      fields.status = 'draft';
+    }
     const source = await this.sourceFor(actor, fields, body.uploadToken);
     if (!source) throw invalid('path, url or uploadToken: an item plays a lesson of the lessons site, a link, an uploaded file or an uploaded package');
     const created = await this.write(() =>
@@ -208,13 +281,15 @@ export class MaterialsAdminService {
         return item;
       }),
     );
-    return { ...adminDto(created), ...(source.source === 'package' ? { skipped: source.skipped } : {}) };
+    return { ...this.view(created, access, actor.actorId), ...(source.source === 'package' ? { skipped: source.skipped } : {}) };
   }
 
   /** Change an item. Every field present is written; a field left out stays. `url` or `uploadToken` replaces the source. */
   async update(actorId: string, itemId: string, body: Record<string, unknown>) {
-    const actor = await this.requireManager(actorId);
+    const { actor, access } = await this.requireWorkspace(actorId);
     const current = await this.item(actor.organizationId, itemId);
+    if (!this.visible(access, actor.actorId, current)) throw new CommError(CommErrorCode.MATERIAL_NOT_FOUND, 'item not found', 404);
+    if (!access.manage) this.checkMove(access, actor.actorId, current, body);
     // Canonical column names on both sides, so a changed field always wins.
     const merged: Record<string, unknown> = { ...canonicalRow(rowOf(current)), ...canonicalRow(body) };
     // A new source replaces the old one entirely.
@@ -242,7 +317,7 @@ export class MaterialsAdminService {
         return row;
       }),
     );
-    return { ...adminDto(updated), ...(source?.source === 'package' ? { skipped: source.skipped } : {}) };
+    return { ...this.view(updated, access, actor.actorId), ...(source?.source === 'package' ? { skipped: source.skipped } : {}) };
   }
 
   // ------------------------------------------------------------------
@@ -572,6 +647,31 @@ export class MaterialsAdminService {
       })),
       skipDuplicates: true,
     });
+  }
+
+  /**
+   * A non-manager's change to an item, decided before any write (the database trigger decides again):
+   * an author edits their own draft and may hand it to review; a reviewer approves or returns an item
+   * in review and changes nothing else; nothing else is theirs.
+   */
+  private checkMove(access: MaterialsAccess, actorId: string, current: MaterialItem, body: Record<string, unknown>) {
+    const denied = (why: string) => new CommError(CommErrorCode.MATERIAL_DENIED, why);
+    const to = (typeof body.status === 'string' && body.status ? body.status : current.status) as MaterialStatus;
+    if (!(ITEM_STATUSES as readonly string[]).includes(to)) throw invalid(`status: one of ${ITEM_STATUSES.join(', ')}`);
+    const from = current.status as MaterialStatus;
+    const editsContent = Object.keys(body).some((k) => k !== 'status');
+    const move = { createdBy: current.createdBy, updatedBy: current.updatedBy };
+    if (to === from) {
+      // No status change: only an author's own draft may be edited.
+      if (!(access.author && from === 'draft' && current.createdBy === actorId)) throw denied('an author edits their own drafts; the library\'s managers change anything else');
+      return;
+    }
+    if (!mayMoveMaterial(access, actorId, move, from, to)) {
+      if (from === 'in_review' && (to === 'published' || to === 'draft') && access.review) throw denied('an item is approved by a reviewer other than the one who wrote it');
+      throw denied(`an item in ${from} cannot be moved to ${to} by this account`);
+    }
+    // A reviewer decides on what the author wrote; they do not rewrite it.
+    if (from === 'in_review' && editsContent) throw denied('a reviewer approves or returns an item; the author changes what it says');
   }
 
   /** `defaultOrder`: a new item's place when the row names none (an import's row number). */

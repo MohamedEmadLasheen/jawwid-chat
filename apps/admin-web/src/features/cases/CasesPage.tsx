@@ -8,6 +8,7 @@ import { QueryBoundary } from '@/shared/components/States'
 import { describeError } from '@/features/teacher-files/copy'
 import { casesApi, type CaseDetail, type CaseStatus, type CaseSummary, type CaseTab } from './api'
 import { C, EVENT_LABEL, STATUS_LABEL, SUBJECT_LABEL, TAB_LABEL, TARGET_LABEL, useCopy } from './copy'
+import { TasksAreaTabs } from '@/features/tasks/TasksAreaTabs'
 import { SearchableSelect } from '@/shared/components/SearchableSelect'
 import '../teachers/teachers.css'
 import './cases.css'
@@ -30,7 +31,7 @@ const STATUS_TONE: Record<CaseStatus, 'warn' | 'info' | 'ok' | 'neutral'> = {
  * PD-35 B5: the escalation-case queue. Mine (I own it), Opened by me, and My
  * department (cases sent to the department I manage). The server decides which
  * cases each tab holds and whether the caller may act (`canAct`); this page only
- * shows it. Rendered in the Teachers area (`header`) and on /cases.
+ * shows it. Reached from the Tasks page's Escalations tab (/cases); `header` replaces the tab strip where another page hosts it.
  */
 export function CasesPage({ header }: { header?: React.ReactNode }) {
   const tx = useCopy()
@@ -50,7 +51,7 @@ export function CasesPage({ header }: { header?: React.ReactNode }) {
 
   return (
     <div className="page cases">
-      {header}
+      {header ?? <TasksAreaTabs />}
       <header className="page__header">
         <h1 className="page__title">{tx(C.title)}</h1>
         <p className="page__subtitle">{tx(C.subtitle)}</p>

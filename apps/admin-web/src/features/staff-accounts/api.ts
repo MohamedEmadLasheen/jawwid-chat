@@ -119,7 +119,79 @@ export const staffAccountKeys = {
 const path = (staffId: string) => `/admin/staff-accounts/${encodeURIComponent(staffId)}`
 const rolePath = (roleId: string) => `/admin/access-roles/${encodeURIComponent(roleId)}`
 
+/** Access management M1: what an account holds and where each key comes from (read-only). */
+export interface KeySource {
+  type: 'super_admin' | 'tier_default' | 'role'
+  roleId?: string
+  roleKey?: string
+  nameEn?: string
+  nameAr?: string
+  grantedBy?: { id: string; name: string | null }
+  grantedAt?: string
+  reason?: string
+}
+export interface HeldKey {
+  key: string
+  action: string
+  label: { en: string; ar: string }
+  risk: PermissionRisk
+  /** M3: an active restriction removes it from this account. */
+  denied: boolean
+  /** M3: whether this key can be restricted at all (its enforcement is verified end to end). */
+  deniable: boolean
+  sources: KeySource[]
+}
+export interface HeldPage {
+  page: string
+  keys: HeldKey[]
+}
+export interface AccessView {
+  staffId: string
+  tier: string | null
+  departmentKind: string | null
+  placement: string | null
+  pages: HeldPage[]
+}
+export interface AccessPreview {
+  gained: string[]
+  lost: string[]
+  pagesGained: string[]
+  pagesLost: string[]
+}
+
+/** Access management M3: a recorded restriction (deny) on one permission. */
+export interface Deny {
+  id: string
+  permissionKey: string
+  reason: string
+  by: { id: string; name: string | null; role: 'super_admin' | 'manager' }
+  createdAt: string
+  expiresAt: string | null
+  permanent: boolean
+  reviewBy: string | null
+  /** In force now: not lifted and not expired. */
+  active: boolean
+  liftedBy: { id: string; name: string | null; reason: string; at: string } | null
+}
+export interface DenyList {
+  /** Whether this environment enforces restrictions at all. When false nothing can be recorded and the controls are not offered. */
+  enforced: boolean
+  denies: Deny[]
+}
+export interface NewDeny {
+  permissionKey: string
+  reason: string
+  expiresAt?: string
+  permanent?: boolean
+  reviewBy?: string
+}
+
 export const staffAccountsApi = {
+  denies: (staffId: string) => api.get<DenyList>(`${path(staffId)}/denies`),
+  deny: (staffId: string, body: NewDeny) => api.post<{ id: string }>(`${path(staffId)}/denies`, body),
+  lift: (staffId: string, denyId: string, reason: string) => api.post<{ lifted: true }>(`${path(staffId)}/denies/${encodeURIComponent(denyId)}/lift`, { reason }),
+  access: (staffId: string) => api.get<AccessView>(`${path(staffId)}/access`),
+  previewAccess: (staffId: string, body: { addRoleIds?: string[]; removeRoleIds?: string[] }) => api.post<AccessPreview>(`${path(staffId)}/access/preview`, body),
   list: () => api.get<{ accounts: StaffAccount[] }>('/admin/staff-accounts'),
   get: (staffId: string) => api.get<StaffAccount>(path(staffId)),
   create: (body: NewStaffAccount) => api.post<CreatedStaffAccount>('/admin/staff-accounts', body),

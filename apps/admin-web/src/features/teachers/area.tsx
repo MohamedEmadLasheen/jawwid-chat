@@ -41,8 +41,6 @@ export const TEACHERS_TABS: TeachersTab[] = [
   { key: 'files', segment: 'files', label: { en: 'Teacher files', ar: 'ملفات المعلمين' } },
   // PD-26: leave, apologies and absences, lateness, rewards and complaints (was Leave requests + Discipline).
   { key: 'supervision', segment: 'supervision', label: { en: 'Supervision', ar: 'الإشراف' } },
-  // PD-35 B5: escalation cases (the same page as /cases).
-  { key: 'cases', segment: 'cases', label: { en: 'Escalations', ar: 'التصعيدات' } },
   // PD-39: the teachers' boards, read only, for whoever may read them.
   { key: 'boards', segment: 'boards', label: { en: 'Boards', ar: 'السبورات' }, anyOf: BOARD_KEYS },
 ]

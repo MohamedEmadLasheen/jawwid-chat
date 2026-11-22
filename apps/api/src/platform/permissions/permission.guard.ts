@@ -83,6 +83,13 @@ export class PermissionGuard implements CanActivate {
     const allowed = access.kind === 'requires' && access.anyOf.some((key) => profile.permissions.has(key));
     if (allowed) return true;
 
+    // Access management M3: a DENY is not shadowed. If an active deny is what stands between this account and the route (a key the
+    // route accepts is denied), refuse in every mode and for every tier. Empty unless deny enforcement is on in the database, so
+    // today's production behaviour is unchanged.
+    if (access.kind === 'requires' && access.anyOf.some((key) => profile.denied.has(key))) {
+      this.log.warn(`DENIED_BY_RESTRICTION ${route} role=${actor.staffRole}`);
+      throw new CommError(CommErrorCode.PERMISSION_DENIED, `this account is restricted from ${route}`);
+    }
     const tier = profile.tier ?? 'none';
     if (PERMISSION_GUARD_MODE === 'shadow' && LEGACY_TIERS.has(tier)) {
       const needs = describeRouteAccess(access);

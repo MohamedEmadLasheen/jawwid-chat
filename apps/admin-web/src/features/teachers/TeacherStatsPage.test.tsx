@@ -203,7 +203,7 @@ describe('the Teachers area', () => {
     const tabs = await screen.findByRole('navigation', { name: 'Teachers' })
     expect(within(tabs).getAllByRole('link').map((l) => l.textContent)).toEqual([
       // PD-41: Certificates moved to its own page (/certificates).
-      'Statistics', 'Needs action', 'Schedules', 'Students', 'Teacher files', 'Supervision', 'Escalations',
+      'Statistics', 'Needs action', 'Schedules', 'Students', 'Teacher files', 'Supervision',
     ])
     expect(within(tabs).getByRole('link', { name: 'Statistics' })).toHaveAttribute('aria-current', 'page')
     expect(within(tabs).getByRole('link', { name: 'Teacher files' })).toHaveAttribute('href', '/teachers/files')

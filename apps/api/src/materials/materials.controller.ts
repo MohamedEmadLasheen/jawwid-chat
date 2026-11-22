@@ -20,7 +20,8 @@ export class MaterialsController {
     private readonly reader: MaterialsReaderService,
   ) {}
 
-  // --- Managing the library (super admin, Teachers manager) ---
+  // --- The library workspace: managed by the super admin and the Teachers manager; drafts written by authors;
+  //     items in review approved by reviewers. The key only opens the route: the service decides by the item's state. ---
 
   /** Whether to offer the Materials page (navigation UX; every route decides again). */
   @SelfService()
@@ -29,31 +30,31 @@ export class MaterialsController {
     return this.admin.access(actorId);
   }
 
-  @Requires('materials.manage')
+  @Requires('materials.manage', 'materials.author', 'materials.review')
   @Get('materials/admin/items')
   list(@ActorId() actorId: string, @Query() query: Record<string, unknown>) {
     return this.admin.list(actorId, query ?? {});
   }
 
-  @Requires('materials.manage')
+  @Requires('materials.manage', 'materials.author', 'materials.review')
   @Post('materials/admin/items')
   create(@ActorId() actorId: string, @Body() body: Record<string, unknown>) {
     return this.admin.create(actorId, body ?? {});
   }
 
-  @Requires('materials.manage')
+  @Requires('materials.manage', 'materials.author', 'materials.review')
   @Get('materials/admin/items/:id')
   get(@ActorId() actorId: string, @Param('id') id: string) {
     return this.admin.get(actorId, id);
   }
 
-  @Requires('materials.manage')
+  @Requires('materials.manage', 'materials.author', 'materials.review')
   @Post('materials/admin/items/:id')
   update(@ActorId() actorId: string, @Param('id') id: string, @Body() body: Record<string, unknown>) {
     return this.admin.update(actorId, id, body ?? {});
   }
 
-  @Requires('materials.manage')
+  @Requires('materials.manage', 'materials.author', 'materials.review')
   @Post('materials/admin/uploads')
   uploads(@ActorId() actorId: string, @Body() body: Record<string, unknown>) {
     return this.admin.uploads(actorId, body ?? {});
@@ -115,7 +116,7 @@ export class MaterialsController {
   }
 
   /** The access decision: a signed URL to play one item. */
-  @Requires('materials.view')
+  @Requires('materials.view', 'materials.author', 'materials.review')
   @Post('materials/items/:id/open')
   open(@ActorId() actorId: string, @Param('id') id: string, @Body() body: Record<string, unknown>) {
     return this.reader.open(actorId, id, body ?? {});

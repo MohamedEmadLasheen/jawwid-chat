@@ -20,7 +20,6 @@ import { NeedsActionPage } from '@/features/teachers/NeedsActionPage'
 import { SchedulesPage } from '@/features/teachers/SchedulesPage'
 import { StudentSchedulesPage } from '@/features/teachers/StudentSchedulesPage'
 import { StudentsPage } from '@/features/teachers/StudentsPage'
-import { TeachersAreaTabs } from '@/features/teachers/area'
 import { CasesPage } from '@/features/cases/CasesPage'
 import { TrialsPage } from '@/features/trials/TrialsPage'
 import { NewStudentsPage } from '@/features/trials/NewStudentsPage'
@@ -141,8 +140,8 @@ export function AppRoutes() {
         <Route path="/teachers/certificates" element={<Navigate to="/certificates?category=student" replace />} />
         {/* PD-26's page: since PD-52 only where its old links land (the two teacher-records pages). */}
         <Route path="/teachers/supervision" element={<Area area="teachers"><TeacherSupervisionPage basePath="/teachers" /></Area>} />
-        {/* PD-35 B5: escalation cases -- a Teachers tab, and /cases for everyone else who opens or owns one. */}
-        <Route path="/teachers/cases" element={<Area area="teachers"><CasesPage header={<TeachersAreaTabs />} /></Area>} />
+        {/* PD-35 B5: escalation cases. They live on the Tasks page's Escalations tab (/cases); the old Teachers tab's link still lands there. */}
+        <Route path="/teachers/cases" element={<Navigate to="/cases" replace />} />
         {/* PD-39: the teachers' boards, read only; the server decides each teacher. */}
         <Route path="/teachers/boards" element={<Area area="teachers"><RequirePermission any={BOARD_KEYS}><TeacherBoardsPage basePath="/teachers" /></RequirePermission></Area>} />
         <Route path="/teachers/boards/:boardId" element={<Area area="teachers"><RequirePermission any={BOARD_KEYS}><BoardViewerPage basePath="/teachers" /></RequirePermission></Area>} />

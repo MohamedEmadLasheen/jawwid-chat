@@ -56,9 +56,9 @@ function useDestinations(): Destination[] {
   const operations = access.data?.operations === true
   const calendar = access.data?.calendar === true
   const supervisionPage = access.data?.supervisionPage === true
-  // PD-29: only a manager can be the Teachers manager (the super admin's entry is a section).
-  const materials = useMaterialsAccess(staff?.role === 'manager')
-  const materialsManager = materials.data?.canManage === true
+  // Educational materials: the library's managers, its authors and its reviewers (the super admin's entry is a section).
+  const materialsAccess = useMaterialsAccess(operator)
+  const materialsWorkspace = materialsAccess.data?.canOpen === true
   // PD-41: the Certificates page, for whoever holds a certificates key (the Designer included).
   const certificateAccess = useCertificateAccess(operator)
   const certificates = certificateAccess.data?.canOpen === true
@@ -74,9 +74,9 @@ function useDestinations(): Destination[] {
   return useMemo(
     () =>
       staff
-        ? destinationsFor(staff.role, { moderation, lessonManager, sales, operations, billingReader, materialsManager, calendar, supervisionPage, certificates, lessonAudio, teacherAttendance, teacherGrants })
+        ? destinationsFor(staff.role, { moderation, lessonManager, sales, operations, billingReader, materialsWorkspace, calendar, supervisionPage, certificates, lessonAudio, teacherAttendance, teacherGrants })
         : [],
-    [staff, moderation, lessonManager, sales, operations, billingReader, materialsManager, calendar, supervisionPage, certificates, lessonAudio, teacherAttendance, teacherGrants],
+    [staff, moderation, lessonManager, sales, operations, billingReader, materialsWorkspace, calendar, supervisionPage, certificates, lessonAudio, teacherAttendance, teacherGrants],
   )
 }
 

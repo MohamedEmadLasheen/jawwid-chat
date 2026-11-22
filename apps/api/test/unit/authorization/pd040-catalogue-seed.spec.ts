@@ -254,6 +254,19 @@ const LATER: readonly Later[] = [
       (['moderation.act', 'moderation.view'] as const).map((key) => ['manager', kind, key] as const),
     ),
   },
+  {
+    // Owner 2026-11-22: educational materials -- writing, approving and managing are separate jobs. The Teachers
+    // manager designates authors (so holds the key to grant it); the Teachers supervisors approve.
+    migration: '20261122100000_chat_materials_author_review.sql',
+    tag: 'matroles',
+    permissions: ['materials.author', 'materials.review'],
+    delegable: ['materials.author', 'materials.review'],
+    bundles: [
+      ['manager', 'teachers', 'materials.author'],
+      ['manager', 'teachers', 'materials.review'],
+      ['supervisor', 'teachers', 'materials.review'],
+    ],
+  },
 ];
 
 const laterKey = new Set(LATER.flatMap((l) => l.permissions));

@@ -73,6 +73,7 @@ function departments(rows: Array<{ kind: string; position: string }>, granted: s
         departmentKind: placement.kind,
         placement: placement.position,
         permissions: new Set([...permissionsOf(actor, placement), ...granted]),
+        denied: new Set<string>(),
       };
     },
   } as unknown as PermissionService;

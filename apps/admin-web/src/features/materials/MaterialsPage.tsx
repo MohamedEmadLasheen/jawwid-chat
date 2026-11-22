@@ -25,6 +25,7 @@ import {
   type ItemStatus,
   type Kind,
   type MaterialItem,
+  type MaterialsAccess,
   type OpenResult,
   type RecitationSource,
   type Strand,
@@ -41,14 +42,14 @@ import {
   itemTitle,
   useCopy,
 } from './copy'
-import { useItems, useRecitationMutations, useRecitations, useSaveItem, useSurahs } from './hooks'
+import { useItems, useMaterialsAccess, useRecitationMutations, useRecitations, useSaveItem, useSurahs } from './hooks'
 import { useLessonAudio } from './lessonAudio'
 import { SearchableSelect } from '@/shared/components/SearchableSelect'
 import './materials.css'
 
 type Tab = 'library' | 'import' | 'recitations'
 const TABS: readonly Tab[] = ['library', 'import', 'recitations']
-const STATUS_TONE: Record<ItemStatus, Tone> = { draft: 'outline', published: 'ok', retired: 'warn' }
+const STATUS_TONE: Record<ItemStatus, Tone> = { draft: 'outline', in_review: 'info', published: 'ok', retired: 'warn' }
 
 /**
  * PD-29: the Materials page -- the super admin's and the Teachers manager's.
@@ -59,26 +60,43 @@ const STATUS_TONE: Record<ItemStatus, Tone> = { draft: 'outline', published: 'ok
  */
 export function MaterialsPage({ eyebrow }: { eyebrow?: string }) {
   const tx = useCopy()
+  const { locale } = useI18n()
   const [params, setParams] = useSearchParams()
+  const access = useMaterialsAccess()
   const asked = params.get('tab') as Tab | null
-  const tab: Tab = asked && TABS.includes(asked) ? asked : 'library'
+  // Import and recitations are the library managers'; an author or a reviewer has the library alone.
+  const manage = access.data?.canManage === true
+  const tabs: readonly Tab[] = manage ? TABS : ['library']
+  const tab: Tab = asked && tabs.includes(asked) ? asked : 'library'
   const label: Record<Tab, string> = { library: tx(M.tabLibrary), import: tx(M.tabImport), recitations: tx(M.tabRecitations) }
   return (
     <div className="page">
       <div className="page__inner">
         <PageHeader eyebrow={eyebrow} title={tx(M.title)} subtitle={tx(M.subtitle)} />
-        <div className="mt-tabs">
-          <FilterChips<Tab>
-            variant="tabs"
-            label={tx(M.tabs)}
-            value={tab}
-            onChange={(next) => setParams(next === 'library' ? {} : { tab: next }, { replace: true })}
-            options={TABS.map((t) => ({ value: t, label: label[t] }))}
-          />
-        </div>
-        {tab === 'library' && <LibraryTab />}
-        {tab === 'import' && <ImportTab />}
-        {tab === 'recitations' && <RecitationsTab />}
+        {access.error ? (
+          <EmptyState icon="alert" title={describeError(access.error, locale)} />
+        ) : !access.data ? (
+          <QueryBoundary isLoading error={null} onRetry={() => void access.refetch()}>
+            <></>
+          </QueryBoundary>
+        ) : (
+          <>
+            {tabs.length > 1 && (
+              <div className="mt-tabs">
+                <FilterChips<Tab>
+                  variant="tabs"
+                  label={tx(M.tabs)}
+                  value={tab}
+                  onChange={(next) => setParams(next === 'library' ? {} : { tab: next }, { replace: true })}
+                  options={tabs.map((t) => ({ value: t, label: label[t] }))}
+                />
+              </div>
+            )}
+            {tab === 'library' && <LibraryTab access={access.data} />}
+            {tab === 'import' && <ImportTab />}
+            {tab === 'recitations' && <RecitationsTab />}
+          </>
+        )}
       </div>
     </div>
   )
@@ -131,12 +149,13 @@ function SurahSelect({ id, value, onChange, allowNone = true }: { id?: string; v
 // Library
 // ---------------------------------------------------------------------------
 
-function LibraryTab() {
+function LibraryTab({ access }: { access: MaterialsAccess }) {
   const tx = useCopy()
   const { locale } = useI18n()
   // One subject at a time, Quran first (PD-29 amendment: no subject "All").
   const [subject, setSubject] = useState<Subject>(SUBJECTS[0]!)
-  const [status, setStatus] = useState<ItemStatus | ''>('')
+  // A reviewer who only reviews opens on the queue waiting for them.
+  const [status, setStatus] = useState<ItemStatus | ''>(access.canReview && !access.canManage && !access.canAuthor ? 'in_review' : '')
   const [ageGroup, setAgeGroup] = useState<AgeGroup | ''>('')
   const [q, setQ] = useState('')
   const query = useMemo(() => ({ subject, status, ageGroup, q }), [subject, status, ageGroup, q])
@@ -155,15 +174,17 @@ function LibraryTab() {
           onChange={setSubject}
           options={SUBJECTS.map((s) => ({ value: s, label: tx(SUBJECT_LABEL[s]) }))}
         />
-        <button type="button" className="btn btn--primary" onClick={() => setEditing('new')}>
-          {tx(M.add)}
-        </button>
+        {(access.canManage || access.canAuthor) && (
+          <button type="button" className="btn btn--primary" onClick={() => setEditing('new')}>
+            {tx(M.add)}
+          </button>
+        )}
       </div>
       <div className="mt-filters">
         <input className="input" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={tx(M.search)} aria-label={tx(M.search)} />
         <SearchableSelect className="select" value={status} onValueChange={(v) => setStatus(v as ItemStatus | '')} aria-label={tx(M.status)}>
           <option value="">{tx(M.status)}: {tx(M.all)}</option>
-          {(['draft', 'published', 'retired'] as const).map((s) => (
+          {(['draft', 'in_review', 'published', 'retired'] as const).map((s) => (
             <option key={s} value={s}>
               {tx(STATUS_LABEL[s])}
             </option>
@@ -243,15 +264,32 @@ function ItemRow({ item, busy, onEdit, onPreview, onStatus }: {
         <button type="button" className="btn btn--sm btn--ghost" onClick={onPreview}>
           {tx(M.preview)}
         </button>
-        <button type="button" className="btn btn--sm" onClick={onEdit}>
-          {tx(M.edit)}
-        </button>
-        {item.status !== 'published' && (
+        {item.can?.edit && (
+          <button type="button" className="btn btn--sm" onClick={onEdit}>
+            {tx(M.edit)}
+          </button>
+        )}
+        {item.can?.submit && (
+          <button type="button" className="btn btn--sm btn--primary" disabled={busy} onClick={() => onStatus('in_review')}>
+            {tx(M.submitForReview)}
+          </button>
+        )}
+        {item.can?.approve && (
+          <button type="button" className="btn btn--sm btn--primary" disabled={busy} onClick={() => onStatus('published')}>
+            {tx(M.approve)}
+          </button>
+        )}
+        {item.can?.return && (
+          <button type="button" className="btn btn--sm" disabled={busy} onClick={() => onStatus('draft')}>
+            {tx(M.returnToDraft)}
+          </button>
+        )}
+        {item.can?.publish && !item.can.approve && (
           <button type="button" className="btn btn--sm btn--primary" disabled={busy} onClick={() => onStatus('published')}>
             {tx(M.publish)}
           </button>
         )}
-        {item.status === 'published' && (
+        {item.can?.retire && (
           <button type="button" className="btn btn--sm" disabled={busy} onClick={() => onStatus('retired')}>
             {tx(M.retire)}
           </button>

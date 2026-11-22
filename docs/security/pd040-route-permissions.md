@@ -10,7 +10,7 @@ Regenerate with `PD040_WRITE_ROUTE_TABLE=1 npx jest pd040-route-permissions` in 
 
 Only staff callers are checked. The service behind each route still decides department, scope and state.
 
-612 routes.
+617 routes.
 
 | Method | Route | Staff need | Handler |
 |---|---|---|---|
@@ -43,6 +43,11 @@ Only staff callers are checked. The service behind each route still decides depa
 | GET | `/api/v1/admin/staff-accounts` | staff_accounts.view | `staff-accounts/staff-accounts.controller.ts#StaffAccountsController.list` |
 | POST | `/api/v1/admin/staff-accounts` | staff_accounts.create | `staff-accounts/staff-accounts.controller.ts#StaffAccountsController.create` |
 | GET | `/api/v1/admin/staff-accounts/:staffId` | staff_accounts.view | `staff-accounts/staff-accounts.controller.ts#StaffAccountsController.get` |
+| GET | `/api/v1/admin/staff-accounts/:staffId/access` | staff_accounts.view | `staff-accounts/staff-accounts.controller.ts#StaffAccountsController.access` |
+| POST | `/api/v1/admin/staff-accounts/:staffId/access/preview` | staff_accounts.manage | `staff-accounts/staff-accounts.controller.ts#StaffAccountsController.previewAccess` |
+| GET | `/api/v1/admin/staff-accounts/:staffId/denies` | staff_accounts.view | `staff-accounts/staff-accounts.controller.ts#StaffAccountsController.denies` |
+| POST | `/api/v1/admin/staff-accounts/:staffId/denies` | staff_accounts.manage | `staff-accounts/staff-accounts.controller.ts#StaffAccountsController.deny` |
+| POST | `/api/v1/admin/staff-accounts/:staffId/denies/:denyId/lift` | staff_accounts.manage | `staff-accounts/staff-accounts.controller.ts#StaffAccountsController.liftDeny` |
 | POST | `/api/v1/admin/staff-accounts/:staffId/roles` | staff_accounts.manage | `staff-accounts/staff-accounts.controller.ts#StaffAccountsController.grant` |
 | POST | `/api/v1/admin/staff-accounts/:staffId/roles/:roleId/revoke` | staff_accounts.manage | `staff-accounts/staff-accounts.controller.ts#StaffAccountsController.revoke` |
 | POST | `/api/v1/admin/staff-accounts/:staffId/setup-code` | staff_accounts.manage | `staff-accounts/staff-accounts.controller.ts#StaffAccountsController.setupCode` |
@@ -287,17 +292,17 @@ Only staff callers are checked. The service behind each route still decides depa
 | GET | `/api/v1/materials/admin/access` | self-service | `materials/materials.controller.ts#MaterialsController.access` |
 | POST | `/api/v1/materials/admin/import` | materials.manage | `materials/materials.controller.ts#MaterialsController.import` |
 | GET | `/api/v1/materials/admin/import/template.csv` | materials.manage | `materials/materials.controller.ts#MaterialsController.template` |
-| GET | `/api/v1/materials/admin/items` | materials.manage | `materials/materials.controller.ts#MaterialsController.list` |
-| POST | `/api/v1/materials/admin/items` | materials.manage | `materials/materials.controller.ts#MaterialsController.create` |
-| GET | `/api/v1/materials/admin/items/:id` | materials.manage | `materials/materials.controller.ts#MaterialsController.get` |
-| POST | `/api/v1/materials/admin/items/:id` | materials.manage | `materials/materials.controller.ts#MaterialsController.update` |
+| GET | `/api/v1/materials/admin/items` | materials.manage | materials.author | materials.review | `materials/materials.controller.ts#MaterialsController.list` |
+| POST | `/api/v1/materials/admin/items` | materials.manage | materials.author | materials.review | `materials/materials.controller.ts#MaterialsController.create` |
+| GET | `/api/v1/materials/admin/items/:id` | materials.manage | materials.author | materials.review | `materials/materials.controller.ts#MaterialsController.get` |
+| POST | `/api/v1/materials/admin/items/:id` | materials.manage | materials.author | materials.review | `materials/materials.controller.ts#MaterialsController.update` |
 | GET | `/api/v1/materials/admin/recitations` | materials.manage | `materials/materials.controller.ts#MaterialsController.recitations` |
 | POST | `/api/v1/materials/admin/recitations/sources` | materials.manage | `materials/materials.controller.ts#MaterialsController.createSource` |
 | POST | `/api/v1/materials/admin/recitations/sources/:id` | materials.manage | `materials/materials.controller.ts#MaterialsController.updateSource` |
 | POST | `/api/v1/materials/admin/recitations/sources/:id/surahs/:surah` | materials.manage | `materials/materials.controller.ts#MaterialsController.setTrack` |
-| POST | `/api/v1/materials/admin/uploads` | materials.manage | `materials/materials.controller.ts#MaterialsController.uploads` |
+| POST | `/api/v1/materials/admin/uploads` | materials.manage | materials.author | materials.review | `materials/materials.controller.ts#MaterialsController.uploads` |
 | GET | `/api/v1/materials/items` | materials.view | `materials/materials.controller.ts#MaterialsController.picker` |
-| POST | `/api/v1/materials/items/:id/open` | materials.view | `materials/materials.controller.ts#MaterialsController.open` |
+| POST | `/api/v1/materials/items/:id/open` | materials.view | materials.author | materials.review | `materials/materials.controller.ts#MaterialsController.open` |
 | GET | `/api/v1/materials/play/:itemId/:token/*path` | public | `materials/play.controller.ts#MaterialsPlayController.file` |
 | GET | `/api/v1/materials/quran/surahs` | self-service | `materials/materials.controller.ts#MaterialsController.surahs` |
 | POST | `/api/v1/materials/recitations/:surah/open` | materials.view | `materials/materials.controller.ts#MaterialsController.openRecitation` |
