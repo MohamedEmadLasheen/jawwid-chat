@@ -44,8 +44,15 @@ function item(over: Partial<MaterialItem> = {}): MaterialItem {
     id: 'm-1', externalRef: 'naba-game', titleAr: 'لعبة سورة النبأ', titleEn: 'An-Naba game', subject: 'quran', strand: 'memorization',
     kind: 'activity_package', source: 'package', sitePath: null, url: null, mimeType: 'application/zip', byteSize: 1200, packageEntry: 'index.html',
     ageGroups: ['4-6', '7-9'], surah: 78, description: null, status: 'published', sortOrder: 1, createdAt: '2026-10-24T10:00:00Z', updatedAt: '2026-10-24T10:00:00Z',
+    // What the server answers a library manager: every action on every item, publish on what is not published.
+    mine: false, can: managerCan(over.status ?? 'published'),
     ...over,
   }
+}
+
+/** The server's per-item answer for a library manager (the Teachers manager, the super admin). */
+function managerCan(status: MaterialItem['status']): NonNullable<MaterialItem['can']> {
+  return { edit: true, submit: false, approve: status === 'in_review', return: status === 'in_review', publish: status !== 'published', retire: status !== 'retired' }
 }
 
 const LIBRARY: MaterialItem[] = [
@@ -81,7 +88,7 @@ beforeEach(() => {
   tokenStore.set({ accessToken: 'access-1', refreshToken: 'refresh-1' })
   on('GET', /\/lessons\/access$/, () => json({ lessonManager: true, sales: false, operations: false }))
   on('GET', /\/instalments\/access$/, () => json({ billingReader: false }))
-  on('GET', /\/materials\/admin\/access$/, () => json({ canManage: true }))
+  on('GET', /\/materials\/admin\/access$/, () => json({ canManage: true, canAuthor: true, canReview: true, canOpen: true }))
   on('GET', /\/materials\/quran\/surahs$/, () => json({ surahs: SURAHS }))
   on('GET', /\/materials\/admin\/items(\?.*)?$/, (url) => {
     const subject = new URL(url, 'https://api.example.test').searchParams.get('subject')
@@ -472,5 +479,64 @@ describe('Student Profile', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'Child Alpha' })).toBeInTheDocument()
     expect(screen.queryByRole('region', { name: 'Memorization map' })).not.toBeInTheDocument()
     expect(calls('GET', /\/materials\/progress/)).toHaveLength(0)
+  })
+})
+
+describe('Materials > the library\'s three jobs (owner decision, 2026-11-22)', () => {
+  const author = makeStaff({ id: 'au-1', name: 'Content Author', role: 'specialist' })
+  const supervisor = makeStaff({ id: 'ts-1', name: 'Teachers Supervisor', role: 'admin' })
+  const asAuthor = { canManage: false, canAuthor: true, canReview: false, canOpen: true }
+  const asReviewer = { canManage: false, canAuthor: false, canReview: true, canOpen: true }
+  const authorCan = (status: MaterialItem['status']) => ({ edit: status === 'draft', submit: status === 'draft', approve: false, return: false, publish: false, retire: false })
+  const reviewerCan = (status: MaterialItem['status']) => ({ edit: false, submit: false, approve: status === 'in_review', return: status === 'in_review', publish: false, retire: false })
+
+  it('an author can add and edit drafts and submit them for review -- there is no publish, no retire, no import and no recitations', async () => {
+    on('GET', /\/materials\/admin\/access$/, () => json(asAuthor))
+    on('GET', /\/materials\/admin\/items(\?.*)?$/, () => json({ items: [item({ id: 'd-1', titleEn: 'My draft', status: 'draft', mine: true, can: authorCan('draft') })] }))
+    renderWithProviders(<AppRoutes />, { staff: author, route: '/materials' })
+    const row = await screen.findByRole('listitem', { name: 'My draft' })
+    expect(screen.getByRole('button', { name: 'Add item' })).toBeInTheDocument()
+    expect(within(row).getByRole('button', { name: 'Edit' })).toBeInTheDocument()
+    expect(within(row).queryByRole('button', { name: 'Publish' })).not.toBeInTheDocument()
+    expect(within(row).queryByRole('button', { name: 'Retire' })).not.toBeInTheDocument()
+    // Import and recitations are the library managers': the author is not even shown the tabs.
+    expect(screen.queryByRole('button', { name: 'Import' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Recitations/ })).not.toBeInTheDocument()
+    on('POST', /\/materials\/admin\/items\/d-1$/, () => json(item({ id: 'd-1', status: 'in_review', mine: true, can: authorCan('in_review') })))
+    await userEvent.click(within(row).getByRole('button', { name: 'Submit for review' }))
+    await waitFor(() => expect(bodyOf(calls('POST', /\/items\/d-1$/)[0])).toEqual({ status: 'in_review' }))
+  })
+
+  it('a reviewer opens on the queue awaiting them and can approve or return an item -- never add or edit one', async () => {
+    on('GET', /\/materials\/admin\/access$/, () => json(asReviewer))
+    on('GET', /\/materials\/admin\/items(\?.*)?$/, () => json({ items: [item({ id: 'r-1', titleEn: 'Waiting', status: 'in_review', can: reviewerCan('in_review') })] }))
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/materials' })
+    const row = await screen.findByRole('listitem', { name: 'Waiting' })
+    expect(within(row).getByText('In review')).toBeInTheDocument()
+    expect(String(calls('GET', /\/materials\/admin\/items/)[0]?.[0])).toContain('status=in_review')
+    expect(screen.queryByRole('button', { name: 'Add item' })).not.toBeInTheDocument()
+    expect(within(row).queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument()
+    expect(within(row).getByRole('button', { name: 'Return to author' })).toBeInTheDocument()
+    on('POST', /\/materials\/admin\/items\/r-1$/, () => json(item({ id: 'r-1', status: 'published', can: reviewerCan('published') })))
+    await userEvent.click(within(row).getByRole('button', { name: 'Approve' }))
+    await waitFor(() => expect(bodyOf(calls('POST', /\/items\/r-1$/)[0])).toEqual({ status: 'published' }))
+  })
+
+  it('the library\'s manager keeps every action, and the Import and Recitations tabs', async () => {
+    renderWithProviders(<AppRoutes />, { staff: teachersManager, route: '/materials' })
+    const list = await screen.findByRole('list', { name: 'Library' })
+    const [row] = within(list).getAllByRole('listitem')
+    expect(within(row!).getByRole('button', { name: 'Edit' })).toBeInTheDocument()
+    expect(within(row!).getByRole('button', { name: 'Retire' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Import' })).toBeInTheDocument()
+  })
+
+  it('offers an action only when the server said it may be done (an item without that answer has none)', async () => {
+    on('GET', /\/materials\/admin\/access$/, () => json(asAuthor))
+    on('GET', /\/materials\/admin\/items(\?.*)?$/, () => json({ items: [{ ...item({ id: 'p-1', titleEn: 'Published', status: 'published' }), can: undefined }] }))
+    renderWithProviders(<AppRoutes />, { staff: author, route: '/materials' })
+    const row = await screen.findByRole('listitem', { name: 'Published' })
+    for (const name of ['Edit', 'Publish', 'Retire', 'Approve', 'Submit for review']) expect(within(row).queryByRole('button', { name })).not.toBeInTheDocument()
+    expect(within(row).getByRole('button', { name: 'Preview' })).toBeInTheDocument()
   })
 })

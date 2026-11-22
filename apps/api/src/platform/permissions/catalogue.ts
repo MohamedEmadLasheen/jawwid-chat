@@ -113,6 +113,9 @@ const ENTRIES = {
 
   'materials.view': { label: { en: 'Use materials', ar: 'استخدام المواد' }, risk: 'none', introducedBy: 'PD-29' },
   'materials.manage': { label: { en: 'Manage the materials library', ar: 'إدارة مكتبة المواد' }, risk: 'none', introducedBy: 'PD-29' },
+  // Owner, 2026-11-22: writing, approving and managing the library are three different jobs.
+  'materials.author': { label: { en: 'Write educational materials (drafts)', ar: 'كتابة المواد التعليمية (مسودات)' }, risk: 'none', introducedBy: 'MAT-1', delegable: true },
+  'materials.review': { label: { en: 'Approve educational materials', ar: 'اعتماد المواد التعليمية' }, risk: 'none', introducedBy: 'MAT-1', delegable: true },
 
   'cases.view': { label: { en: 'View supervision cases', ar: 'عرض حالات الإشراف' }, risk: 'pii', introducedBy: 'PD-35' },
   'cases.manage': { label: { en: 'Open and work supervision cases', ar: 'فتح حالات الإشراف ومتابعتها' }, risk: 'pii', introducedBy: 'PD-35' },

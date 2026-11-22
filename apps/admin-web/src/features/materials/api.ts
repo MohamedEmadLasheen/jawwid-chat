@@ -12,7 +12,8 @@ import { signedPutHeaders } from '@/features/chat/chatApi'
 export type Subject = 'quran' | 'arabic' | 'islamic_studies'
 export type Strand = 'memorization' | 'recitation' | 'word_meanings' | 'tafsir'
 export type Kind = 'activity_package' | 'activity_link' | 'audio' | 'video' | 'pdf' | 'image'
-export type ItemStatus = 'draft' | 'published' | 'retired'
+/** draft: being written; in_review: handed to a reviewer; published: approved (the only state anyone outside the workspace sees); retired. */
+export type ItemStatus = 'draft' | 'in_review' | 'published' | 'retired'
 export type AgeGroup = '4-6' | '7-9' | '10-12' | '13-17' | '18+'
 
 export const SUBJECTS: readonly Subject[] = ['quran', 'arabic', 'islamic_studies']
@@ -45,6 +46,19 @@ export interface MaterialItem {
   updatedAt: string
   /** On a package just added: files the package held that are never served. */
   skipped?: string[]
+  /** The viewer wrote it. */
+  mine?: boolean
+  /** What the server will let this viewer do to it right now. */
+  can?: { edit: boolean; submit: boolean; approve: boolean; return: boolean; publish: boolean; retire: boolean }
+}
+
+/** The library's three jobs, as the server answers them (navigation UX only: every route decides again). */
+export interface MaterialsAccess {
+  canManage: boolean
+  canAuthor: boolean
+  canReview: boolean
+  /** Any of the three: the workspace is offered. */
+  canOpen: boolean
 }
 
 export interface ItemInput {
@@ -158,7 +172,7 @@ function clean(q: ItemQuery): Record<string, string> | undefined {
 }
 
 export const materialsApi = {
-  access: () => api.get<{ canManage: boolean }>('/materials/admin/access'),
+  access: () => api.get<MaterialsAccess>('/materials/admin/access'),
   surahs: () => api.get<{ surahs: Surah[] }>('/materials/quran/surahs'),
   items: (q: ItemQuery) => api.get<{ items: MaterialItem[] }>('/materials/admin/items', clean(q)),
   create: (body: ItemInput) => api.post<MaterialItem>('/materials/admin/items', body),

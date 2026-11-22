@@ -287,17 +287,17 @@ Only staff callers are checked. The service behind each route still decides depa
 | GET | `/api/v1/materials/admin/access` | self-service | `materials/materials.controller.ts#MaterialsController.access` |
 | POST | `/api/v1/materials/admin/import` | materials.manage | `materials/materials.controller.ts#MaterialsController.import` |
 | GET | `/api/v1/materials/admin/import/template.csv` | materials.manage | `materials/materials.controller.ts#MaterialsController.template` |
-| GET | `/api/v1/materials/admin/items` | materials.manage | `materials/materials.controller.ts#MaterialsController.list` |
-| POST | `/api/v1/materials/admin/items` | materials.manage | `materials/materials.controller.ts#MaterialsController.create` |
-| GET | `/api/v1/materials/admin/items/:id` | materials.manage | `materials/materials.controller.ts#MaterialsController.get` |
-| POST | `/api/v1/materials/admin/items/:id` | materials.manage | `materials/materials.controller.ts#MaterialsController.update` |
+| GET | `/api/v1/materials/admin/items` | materials.manage | materials.author | materials.review | `materials/materials.controller.ts#MaterialsController.list` |
+| POST | `/api/v1/materials/admin/items` | materials.manage | materials.author | materials.review | `materials/materials.controller.ts#MaterialsController.create` |
+| GET | `/api/v1/materials/admin/items/:id` | materials.manage | materials.author | materials.review | `materials/materials.controller.ts#MaterialsController.get` |
+| POST | `/api/v1/materials/admin/items/:id` | materials.manage | materials.author | materials.review | `materials/materials.controller.ts#MaterialsController.update` |
 | GET | `/api/v1/materials/admin/recitations` | materials.manage | `materials/materials.controller.ts#MaterialsController.recitations` |
 | POST | `/api/v1/materials/admin/recitations/sources` | materials.manage | `materials/materials.controller.ts#MaterialsController.createSource` |
 | POST | `/api/v1/materials/admin/recitations/sources/:id` | materials.manage | `materials/materials.controller.ts#MaterialsController.updateSource` |
 | POST | `/api/v1/materials/admin/recitations/sources/:id/surahs/:surah` | materials.manage | `materials/materials.controller.ts#MaterialsController.setTrack` |
-| POST | `/api/v1/materials/admin/uploads` | materials.manage | `materials/materials.controller.ts#MaterialsController.uploads` |
+| POST | `/api/v1/materials/admin/uploads` | materials.manage | materials.author | materials.review | `materials/materials.controller.ts#MaterialsController.uploads` |
 | GET | `/api/v1/materials/items` | materials.view | `materials/materials.controller.ts#MaterialsController.picker` |
-| POST | `/api/v1/materials/items/:id/open` | materials.view | `materials/materials.controller.ts#MaterialsController.open` |
+| POST | `/api/v1/materials/items/:id/open` | materials.view | materials.author | materials.review | `materials/materials.controller.ts#MaterialsController.open` |
 | GET | `/api/v1/materials/play/:itemId/:token/*path` | public | `materials/play.controller.ts#MaterialsPlayController.file` |
 | GET | `/api/v1/materials/quran/surahs` | self-service | `materials/materials.controller.ts#MaterialsController.surahs` |
 | POST | `/api/v1/materials/recitations/:surah/open` | materials.view | `materials/materials.controller.ts#MaterialsController.openRecitation` |

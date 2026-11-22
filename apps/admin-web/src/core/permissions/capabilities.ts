@@ -132,13 +132,14 @@ export function visibleAreas(role: StaffRole): NavArea[] {
     // the server's word (SERVER_CONFIRMED_AREAS).
     // PD-48: Lesson audio, for a Teachers supervisor (listens) -- on the server's word.
     // PD-52: Attendance & Complaints -- on the server's word (GET /teacher-records/access).
-    return ['chat', 'calls', 'teachers', 'schedule', 'teacher-schedules', 'student-schedules', 'students', 'needs-action', 'instalments', 'parents', 'payments', 'sales-pipeline', 'trials', 'new-students', 'tasks', 'stories', 'teacher-profiles', 'accounts', 'cases', 'certificates', 'lesson-audio', 'teacher-attendance', 'teacher-grants']
+    return ['chat', 'calls', 'teachers', 'schedule', 'teacher-schedules', 'student-schedules', 'students', 'needs-action', 'instalments', 'parents', 'payments', 'sales-pipeline', 'trials', 'new-students', 'tasks', 'stories', 'teacher-profiles', 'accounts', 'materials', 'cases', 'certificates', 'lesson-audio', 'teacher-attendance', 'teacher-grants']
   }
   if (role === 'specialist') {
     // PD-40/PD-41: the Designer -- the Certificates page, and (PD-47) the
     // tasks given to them, as every staff member has; PD-48: the Pronunciation
     // reviewer -- the Lesson audio page, on the server's word.
-    return ['certificates', 'tasks', 'lesson-audio']
+    // Educational materials: a designated Content author is a specialist, on the server's word.
+    return ['certificates', 'tasks', 'lesson-audio', 'materials']
   }
   if (isDepartment(role)) {
     // Departments get tasks — they may not open family records — and, PD-21
@@ -182,8 +183,8 @@ export interface DepartmentAccess {
   operations?: boolean
   /** PD-12 S3: GET /instalments/access -- Operations reads instalments (and, PD-17, Parent Profiles). */
   billingReader?: boolean
-  /** PD-29: GET /materials/admin/access -- the super admin or the Teachers manager manages the library. */
-  materialsManager?: boolean
+  /** GET /materials/admin/access -- the library's managers, authors and reviewers (any one opens the workspace). */
+  materialsWorkspace?: boolean
   /** PD-38: GET /lessons/access -- the Teachers department, Operations and the super admin open the schedule. */
   calendar?: boolean
   /**
@@ -229,8 +230,8 @@ const SERVER_CONFIRMED_AREAS: Partial<Record<NavArea, (a: DepartmentAccess) => b
   parents: (a) => a.billingReader === true,
   // PD-27: receipts and settings, read by whoever reads a family's money (each action is the server's).
   payments: (a) => a.billingReader === true,
-  // PD-29: the library is the Teachers manager's (and the super admin's).
-  materials: (a) => a.materialsManager === true,
+  // The library workspace: its managers, its authors (designated Content authors) and its reviewers (Teachers supervisors).
+  materials: (a) => a.materialsWorkspace === true,
   // PD-38: the scheduling calendar.
   schedule: (a) => a.calendar === true,
   // PD-41: the Certificates page, for whoever holds a certificates key.

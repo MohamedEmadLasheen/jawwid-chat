@@ -165,6 +165,8 @@ const TEACHERS_MEMBER = k(
   'trials.view',
   'trials.manage',
   'materials.view',
+  // Owner 2026-11-22: the Teachers supervisors review and approve educational materials. They do not write them.
+  'materials.review',
   'cases.view',
   'cases.manage',
   'feedback.view',
@@ -233,6 +235,9 @@ const BUNDLES: Readonly<Record<string, readonly PermissionKey[]>> = {
     'teacher_files.finance',
     'teachers.offboard',
     'materials.manage',
+    // Owner 2026-11-22: the manager designates Content authors, so holds the key to grant (PD-40 H5); the library itself is
+    // the manager's by materials.manage (chat.can_manage_materials).
+    'materials.author',
     'lessons.courses',
     // PD-41: the department's certificate requests, whoever filed them.
     'certificates.oversee',

@@ -244,7 +244,7 @@ export class MaterialsReaderService {
     if (!isUuid(itemId) || !actor.isActive || !actor.organizationId) throw notFound();
     const item = await this.prisma.materialItem.findFirst({ where: { id: itemId, organizationId: actor.organizationId } });
     if (!item) throw notFound();
-    if (item.status !== 'published' && !(await this.admin.mayManage(actor))) throw notFound();
+    if (!(await this.admin.mayPreview(actor, item))) throw notFound();
     if (actor.kind === ActorKind.CONTACT && !actor.familyId) throw notFound();
     // PD-29 amendment: opened FOR a child -- the viewer must be able to read
     // that child's page (the same rule as the library); recorded once it opens.

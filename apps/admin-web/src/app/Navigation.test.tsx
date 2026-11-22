@@ -165,8 +165,12 @@ describe('The navigation registry', () => {
       expect(destinationsFor(role, {}).flatMap((d) => entriesOf(d).map((e) => e.path)), role).not.toContain('/schedule')
     }
     // The Teachers manager is offered Materials on the server's word only.
-    expect(destinationsFor('manager', { materialsManager: true }).flatMap((d) => entriesOf(d).map((e) => e.path))).toContain('/materials')
-    expect(destinationsFor('admin', { materialsManager: true }).flatMap((d) => entriesOf(d).map((e) => e.path))).not.toContain('/materials')
+    expect(destinationsFor('manager', { materialsWorkspace: true }).flatMap((d) => entriesOf(d).map((e) => e.path))).toContain('/materials')
+    // ...a Teachers supervisor (admin) and a designated Content author (specialist) on the same word -- never without it.
+    for (const role of ['admin', 'coverage', 'specialist'] as const) {
+      expect(destinationsFor(role, { materialsWorkspace: true }).flatMap((d) => entriesOf(d).map((e) => e.path)), role).toContain('/materials')
+      expect(destinationsFor(role, {}).flatMap((d) => entriesOf(d).map((e) => e.path)), role).not.toContain('/materials')
+    }
   })
 })
 
@@ -207,7 +211,7 @@ describe('The nine sections', () => {
   })
 
   it('Operations holds the supervisors\' queue, escalations and lesson audio; Certificates and Educational materials have destinations of their own', () => {
-    const access = { lessonManager: true, certificates: true, lessonAudio: true, materialsManager: true }
+    const access = { lessonManager: true, certificates: true, lessonAudio: true, materialsWorkspace: true }
     expect(pathsIn('operations', 'manager', access)).toEqual([
       // The Teachers department's Trial lessons page is listed here, not under Sales (PD-59 owner decision).
       '/teachers/needs-action', '/trials', '/lesson-audio',
@@ -244,7 +248,7 @@ describe('The nine sections', () => {
 })
 
 describe('No URL was lost in the redesign', () => {
-  const ALL = { lessonManager: true, sales: true, operations: true, billingReader: true, calendar: true, materialsManager: true, certificates: true, lessonAudio: true, teacherAttendance: true, teacherGrants: true, moderation: true }
+  const ALL = { lessonManager: true, sales: true, operations: true, billingReader: true, calendar: true, materialsWorkspace: true, certificates: true, lessonAudio: true, teacherAttendance: true, teacherGrants: true, moderation: true }
 
   /** Every path this suite can render must stay where it points: not sent home, not Forbidden. */
   async function staysPut(role: StaffRole, path: string) {

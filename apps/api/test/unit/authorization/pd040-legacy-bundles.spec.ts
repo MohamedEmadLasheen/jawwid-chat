@@ -25,6 +25,7 @@ import { accountAdminActs } from '@platform/account-admin-policy';
 import { decideTeacherOnboarding } from '@platform/teacher-onboarding-policy';
 import { CERTIFICATE_KEYS, legacyCertificateKeys } from '@platform/pd041-policy';
 import { LESSON_AUDIO_KEYS, legacyLessonAudioKeys } from '@platform/lesson-audio-policy';
+import { MATERIAL_ROLE_KEYS, legacyMaterialsKeys } from '@platform/materials-policy';
 import { LESSON_CONTENT_BUNDLED_KEYS, legacyLessonContentKeys } from '@platform/lesson-content-policy';
 import { StaffProfilePermission, profilePermissionsFor } from '@platform/staff-profile-policy';
 import { PERMISSIONS, PERMISSION_KEYS } from '@platform/permissions/catalogue';
@@ -113,6 +114,8 @@ function rules(): Record<string, Rule> {
     ),
     // PD-48: lesson voice-over, from the Teachers placement.
     ...Object.fromEntries(LESSON_AUDIO_KEYS.map((key) => [key, (a: Account) => legacyLessonAudioKeys(a.actor, role(a, 'teachers')).has(key)])),
+    // Educational materials (owner 2026-11-22): authoring and review, from the Teachers placement.
+    ...Object.fromEntries(MATERIAL_ROLE_KEYS.map((key) => [key, (a: Account) => legacyMaterialsKeys(a.actor, role(a, 'teachers')).has(key)])),
     // PD-49: children's Quran content review, from the Teachers placement. The
     // scholar's key is the super admin's alone by bundle (the role grants it).
     ...Object.fromEntries(
@@ -208,6 +211,8 @@ describe('PD-40: legacy bundles agree with the service rules', () => {
       'lesson_content.check',
       'lesson_content.review_teacher',
       'lesson_content.view',
+      'materials.author',
+      'materials.review',
       'subscriptions.view',
     ]);
     // ...and never the scholar's step: the super admin alone grants it (owner, 2026-10-29).
