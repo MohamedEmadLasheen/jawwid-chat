@@ -252,7 +252,7 @@ its payments paragraph to be aligned with the OA-12 decision; see "Still open").
 below only describes what the review accounts hold.
 
 > Sign in with the parent or the teacher account from the credentials field. Sign-in is email and password; no
-> verification code is needed. The parent account has one child with weekly lessons, a family group chat with the
+> verification code is needed. The first time a parent account signs in, a screen titled "Before you continue" asks the parent to agree to the Terms of Use (version 1.0): tap Open, then Agree, once (PD-58). The parent account has one child with weekly lessons, a family group chat with the
 > child's supervisor and teacher, and a direct chat with the supervisor. The teacher account is that child's teacher.
 > The two accounts can message each other in the family group. To test account deletion, please use the third
 > account (parent2), which exists for that purpose; deleting it does not affect the other two. All people and data

@@ -77,6 +77,8 @@ Jawwid is the communication app of a Quran academy. Parents use it to follow the
 
 SIGN-IN: email and password on the first screen. No WhatsApp or SMS code is needed for these accounts (a code is used only when a real parent first creates a password). The app follows the phone's language, Arabic or English; Settings > Language changes it. All people and data in these accounts are fictional and belong to a review-only organization: nothing you do reaches real families or staff.
 
+TERMS OF USE: the first time a parent account signs in, a screen titled "Before you continue" asks the parent to agree to the Terms of Use (version 1.0). Tap Open to read it, then Agree. This is needed once per parent account; the app then works as described below.
+
 ACCOUNTS
 1. Parent (Sign-In Information above): one child with weekly live lessons, a family group chat with the child's supervisor and teacher, and a direct chat with the supervisor.
 2. Teacher: teacher@{{REVIEW_DOMAIN}} / {{REVIEW_TEACHER_PASSWORD}}. The same child's teacher, in the same family group.
@@ -92,7 +94,7 @@ STAFF: the academy's supervisors, managers and administrators work in a separate
 ```
 <!-- APPLE-NOTES-END -->
 
-**Length:** 2982 bytes without the payments paragraph. 3541 bytes with the longest option (C). See §2.2.
+**Length:** 3248 bytes without the payments paragraph. 3808 bytes with the longest option (C). See §2.2.
 
 ### 2.1 The payments paragraph (owner decision OA-12, 2026-11-10)
 
@@ -155,17 +157,17 @@ Notes for the owner:
 
 | Text | Bytes (= characters; the text is ASCII) |
 |---|---|
-| The Notes block without the payments paragraph | 2982 |
-| With Option A (card): the block, a blank line and the paragraph | 3480 |
-| With Option C | 3541 |
-| With Option B | 3396 |
+| The Notes block without the payments paragraph | 3248 |
+| With Option A (card): the block, a blank line and the paragraph | 3747 |
+| With Option C | 3808 |
+| With Option B | 3663 |
 | Apple's limit | 4000 bytes |
-| Play "Any other information" text (§3) without the payments sentence | 1091 (about 1330 with it) |
+| Play "Any other information" text (§3) without the payments sentence | about 1260 (about 1500 with it) |
 
 Counted with `sed -n <lines> review-notes.md | wc -c`. Each count includes the line breaks. Only the
 paste blocks were checked for non-ASCII characters (none). Apple's limit was read from the App Store
 Connect help page on 2026-11-09, and only as a summary ("up to 4000 bytes"). Keep at least 500 bytes spare,
-as the counts above do with Options A and B (520 with Option A; Option C leaves 459). Do not shorten the deletion paragraph to save space: it must
+as the counts above do with Options A and B (Option A now leaves 253 and Option C 192, after the Terms of Use paragraph added 2026-11-23; if a console asks for more room, shorten the STAFF paragraph first). Do not shorten the deletion paragraph to save space: it must
 not say less is kept than the privacy policy does.
 
 Each count includes the placeholders as they are written here. The real domain and passwords change the
@@ -190,6 +192,7 @@ the Parent account entry".
 
 ```text
 Sign in with the email and password above on the first screen; no WhatsApp or SMS code is needed. Jawwid is a Quran academy's app for parents and teachers; academy staff use a separate web portal, except the sales team and the senior administrator, who see only Chats, Calls, Payments and Settings (no review account for that role). All data is fictional, in a review-only organization.
+Terms of Use: the first time a parent account signs in, a screen "Before you continue" asks the parent to agree to the Terms of Use (version 1.0): tap Open, then Agree, once.
 Parent: one child with weekly live lessons, a family group chat with the supervisor and teacher, and a direct chat with the supervisor. Teacher: that child's teacher, in the same family group.
 Calls are voice only and not recorded. To test one, sign in as the parent and the teacher on two devices, open the family group chat and tap the phone icon; the other device rings. The supervisor has no login, so a call in the direct chat is not answered.
 Account deletion: use the Deletion test account. Settings > Delete account > password > Delete my account > confirm. It is immediate; we re-create the account after review. The same is available on the web at {{ACCOUNT_DELETION_URL}}.
