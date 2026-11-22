@@ -28,6 +28,7 @@ import { C, DEPARTMENT_LABEL, EVENT_LABEL, LEVEL_LABEL, SOURCE_LABEL, STATE_LABE
 import { sourceLink, stateOf, STATE_TONE, titleOf } from './format'
 import { FinanceTag, PriorityChip } from './PriorityChip'
 import { SearchableSelect } from '@/shared/components/SearchableSelect'
+import { TasksAreaTabs } from './TasksAreaTabs'
 import './tasks.css'
 
 type Tab = TaskView | 'closed'
@@ -145,6 +146,7 @@ export function TasksPage({ eyebrow }: { eyebrow?: string }) {
 
   return (
     <div className="page tasks">
+      <TasksAreaTabs />
       <PageHeader
         eyebrow={eyebrow}
         title={tx(C.title)}

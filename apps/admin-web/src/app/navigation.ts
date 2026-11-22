@@ -142,7 +142,8 @@ export const AREA_DESTINATION: Record<NavArea, DestinationKey | null> = {
   'teacher-schedules': 'scheduling',
   'student-schedules': 'scheduling',
   'needs-action': 'operations',
-  cases: 'operations',
+  // Escalations are the Escalations tab of Tasks (PAGE_OF): a page, but no entry of its own in the rail.
+  cases: null,
   certificates: 'certificates',
   'lesson-audio': 'operations',
   materials: 'materials',
@@ -229,9 +230,6 @@ export const ADMIN_TRIALS_LABEL: Bilingual = { en: 'Trial lessons', ar: 'الح�
  *  whose Arabic is Teacher files' own name. */
 export const ADMIN_TEACHER_CREDENTIALS_LABEL: Bilingual = { en: 'Teacher credentials review', ar: 'مراجعة مؤهلات المعلمين' }
 
-/** PD-35 B5: escalation cases, under People. */
-export const ADMIN_CASES_LABEL: Bilingual = { en: 'Escalations', ar: 'التصعيدات' }
-
 /** PD-21: account administration, beside the read-only Users section. */
 export const ADMIN_ACCOUNTS_LABEL: Bilingual = { en: 'Accounts', ar: 'الحسابات' }
 
@@ -275,8 +273,6 @@ const ADMIN_AREA_ENTRIES: readonly AdminAreaEntry[] = [
   { area: 'needs-action', destination: 'operations' },
   // PD-29: the Materials library.
   { area: 'materials', destination: 'materials', label: ADMIN_MATERIALS_LABEL },
-  // PD-35 B5: escalation cases.
-  { area: 'cases', destination: 'operations', label: ADMIN_CASES_LABEL },
   // PD-41: the Certificates page and its types.
   { area: 'certificates', destination: 'certificates' },
   // PD-48: lesson voice-over review.
@@ -429,8 +425,13 @@ export function soleEntry(destination: Destination): NavEntry | null {
   return entries.length === 1 ? entries[0]! : null
 }
 
+/** Pages reached from another page's tab strip rather than from the rail: the rail item they belong to. */
+const PAGE_OF: Readonly<Record<string, string>> = { '/cases': '/tasks' }
+
 /** Which destination the current page belongs to, if any. */
 export function destinationForPath(destinations: Destination[], pathname: string): DestinationKey | null {
+  const host = Object.entries(PAGE_OF).find(([p]) => pathname === p || pathname.startsWith(`${p}/`))
+  if (host) pathname = host[1]
   for (const d of destinations) {
     if (entriesOf(d).some((e) => pathname === e.path || pathname.startsWith(`${e.path}/`))) return d.key
   }

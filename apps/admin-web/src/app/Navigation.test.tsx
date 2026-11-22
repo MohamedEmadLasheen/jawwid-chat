@@ -86,9 +86,9 @@ describe('The navigation registry', () => {
     // PD-16, now Sales), the Teachers' and Student schedules (Scheduling), Teacher credentials review, Escalations (PD-35 B5) and
     // Certificates (PD-41) and Lesson audio (PD-48, under More), and
     // the two teacher-records pages (PD-52, their own group under People).
-    expect(keys).toHaveLength(39)
+    expect(keys).toHaveLength(38)
     expect([...keys].sort()).toEqual(
-      [...ADMIN_SECTIONS.map((s) => s.key), 'needs-action', 'chat', 'accounts', 'materials', 'schedule', 'teacher-schedules', 'student-schedules', 'students', 'sales-pipeline', 'trials', 'new-students', 'teacher-profiles', 'cases', 'certificates', 'lesson-audio', 'moderation', 'teacher-attendance', 'teacher-grants'].sort(),
+      [...ADMIN_SECTIONS.map((s) => s.key), 'needs-action', 'chat', 'accounts', 'materials', 'schedule', 'teacher-schedules', 'student-schedules', 'students', 'sales-pipeline', 'trials', 'new-students', 'teacher-profiles', 'certificates', 'lesson-audio', 'moderation', 'teacher-attendance', 'teacher-grants'].sort(),
     )
     const conversations = destinations.find((d) => d.key === 'conversations')!
     expect(entriesOf(conversations).map((e) => e.path)).toEqual(['/chat', '/admin/conversations', '/moderation'])
@@ -108,8 +108,9 @@ describe('The navigation registry', () => {
         // statistics is offered only when the server confirms the Teachers
         // department (GET /lessons/access), which the role alone cannot tell --
         // and Instalments likewise waits for Operations (GET /instalments/access).
+        // Escalations (`cases`) is a tab of Tasks, not an entry of the rail.
         const allowed = navAreas(role, { lessonManager, billingReader })
-          .filter((a): a is Exclude<NavArea, 'settings'> => a !== 'settings')
+          .filter((a): a is Exclude<NavArea, 'settings' | 'cases'> => a !== 'settings' && a !== 'cases')
           .map((a) => AREA_PATH[a])
         expect([...listed].sort(), role).toEqual([...allowed].sort())
         expect(listed, role).not.toContain('/inbox')
@@ -156,7 +157,7 @@ describe('The navigation registry', () => {
     // (PD-35 B5) and Materials, the library it manages with the Teachers
     // manager (PD-29), and Lesson audio, whose keys it holds (PD-48).
     const listed = destinationsFor('super_admin').flatMap((d) => entriesOf(d).map((e) => e.path))
-    expect(listed.filter((p) => !p.startsWith('/admin/'))).toEqual(['/chat', '/moderation', '/accounts', '/teacher-profiles', '/students', '/sales/pipeline', '/trials', '/trials/new-students', '/schedule', '/teachers/schedules', '/schedule/students', '/teachers/needs-action', '/cases', '/lesson-audio', '/certificates', '/materials'])
+    expect(listed.filter((p) => !p.startsWith('/admin/'))).toEqual(['/chat', '/moderation', '/accounts', '/teacher-profiles', '/students', '/sales/pipeline', '/trials', '/trials/new-students', '/schedule', '/teachers/schedules', '/schedule/students', '/teachers/needs-action', '/lesson-audio', '/certificates', '/materials'])
     // PD-38: an operator is offered the Schedule on the server's word only
     // (the department roles -- finance, technical, academic -- never are).
     for (const role of ['manager', 'admin', 'coverage'] as const) {
@@ -209,11 +210,13 @@ describe('The nine sections', () => {
     const access = { lessonManager: true, certificates: true, lessonAudio: true, materialsManager: true }
     expect(pathsIn('operations', 'manager', access)).toEqual([
       // The Teachers department's Trial lessons page is listed here, not under Sales (PD-59 owner decision).
-      '/teachers/needs-action', '/trials', '/cases', '/lesson-audio',
+      '/teachers/needs-action', '/trials', '/lesson-audio',
     ])
     expect(pathsIn('certificates', 'manager', access)).toEqual(['/certificates'])
     expect(pathsIn('materials', 'manager', access)).toEqual(['/materials'])
-    expect(pathsIn('operations', 'admin', {})).toEqual(['/cases'])
+    expect(pathsIn('operations', 'admin', {})).toEqual([])
+    // Escalations is a tab of Tasks: reached from there, never listed in the rail.
+    for (const role of ['admin', 'manager', 'super_admin'] as const) expect(destinationsFor(role, access).flatMap((d) => entriesOf(d).map((e) => e.key)), role).not.toContain('cases')
     // The Marketing designer's whole workspace is one rail item, and nothing else is listed for them but their tasks.
     const designer = destinationsFor('specialist', { certificates: true })
     expect(designer.map((d) => d.key)).toEqual(['dashboard', 'certificates'])
@@ -273,11 +276,16 @@ describe('No URL was lost in the redesign', () => {
   it('every URL that existed before the redesign still opens for the roles that had it', async () => {
     const legacy = [
       '/trials', '/trials/new-students', '/sales/pipeline', '/schedule', '/teachers', '/teachers/needs-action', '/teachers/schedules',
-      '/teachers/students', '/teachers/files', '/teachers/cases', '/cases', '/certificates',
+      '/teachers/students', '/teachers/files', '/cases', '/certificates',
       '/lesson-audio', '/moderation', '/instalments', '/parents', '/payments', '/materials', '/tasks', '/dashboard',
       '/stories', '/accounts', '/organization', '/calls', '/chat', '/teacher-profiles', '/teacher-attendance', '/teacher-grants',
     ]
     for (const path of legacy) await staysPut('manager', path)
+    // The Teachers area's old Escalations tab now lives on Tasks: its link lands on /cases.
+    vi.stubGlobal('fetch', routeFetch({}))
+    const redirected = renderWithProviders(<><AppRoutes /><Where /></>, { staff: makeStaff({ id: 'staff_manager', role: 'manager', permissions: ['cases.manage'] }), route: '/teachers/cases' })
+    await waitFor(() => expect(screen.getByTestId('where').textContent).toBe('/cases'))
+    redirected.unmount()
     // The older Supervision and Leave links keep redirecting to Attendance & complaints (PD-52).
     // They are covered by the PD-52 tests.
     const admin = ['/admin/conversations', '/admin/dashboard', '/admin/tasks', '/admin/reports', '/admin/teachers', '/admin/instalments', '/admin/payments', '/admin/parents', '/admin/users', '/admin/teams', '/admin/calls', '/admin/stories', '/admin/whatsapp', '/admin/audit', '/admin/settings', '/admin/teacher-attendance', '/admin/teacher-grants']
@@ -510,10 +518,10 @@ describe('The desktop rail', () => {
       // Conversations is a direct link to /chat (the legacy Inbox is retired).
       // A destination with one page is that page's link; with several it is a menu.
       // A manager has the Dashboard and Tasks (a menu), People (Organization and
-      // Accounts), Escalations alone under Operations, and Calls with Stories.
-      ['manager', ['conversations', 'dashboard', 'people', 'operations', 'communication'], ['Conversations', 'Escalations'], ['Dashboard', 'People & Organization', 'Communication']],
-      ['admin', ['conversations', 'dashboard', 'people', 'operations', 'communication'], ['Conversations', 'Tasks', 'Accounts', 'Escalations'], ['Communication']],
-      ['coverage', ['conversations', 'dashboard', 'people', 'operations', 'communication'], ['Conversations', 'Tasks', 'Accounts', 'Escalations'], ['Communication']],
+      // Accounts), and Calls with Stories; Escalations is a tab of Tasks.
+      ['manager', ['conversations', 'dashboard', 'people', 'communication'], ['Conversations'], ['Dashboard', 'People & Organization', 'Communication']],
+      ['admin', ['conversations', 'dashboard', 'people', 'communication'], ['Conversations', 'Tasks', 'Accounts'], ['Communication']],
+      ['coverage', ['conversations', 'dashboard', 'people', 'communication'], ['Conversations', 'Tasks', 'Accounts'], ['Communication']],
       // PD-21: Accounts is every role's; a department has Tasks and Accounts, one page each.
       ['finance', ['dashboard', 'people'], ['Tasks', 'Accounts'], []],
     ]
@@ -606,7 +614,7 @@ describe('The drawer, below desktop width', () => {
     // A destination with one page is that page: a direct link, not a menu.
     expect(within(nav).getByRole('link', { name: 'المواد التعليمية' })).toHaveAttribute('href', '/materials')
     expect(within(nav).getByRole('link', { name: 'الشهادات' })).toHaveAttribute('href', '/certificates')
-    expect(within(nav).getAllByRole('link', { name: 'التصعيدات' })[0]).toHaveAttribute('href', '/cases')
+    expect(within(nav).queryByRole('link', { name: 'التصعيدات' })).not.toBeInTheDocument()
     const people = within(nav).getByRole('group', { name: 'الأشخاص والهيكل التنظيمي' })
     const sales = within(nav).getByRole('group', { name: 'المبيعات' })
     expect(within(sales).getByRole('link', { name: 'الحصص التجريبية' })).toHaveAttribute('href', '/trials')
@@ -615,7 +623,7 @@ describe('The drawer, below desktop width', () => {
     // PD-52: its own heading under People.
     expect(within(people).getByRole('link', { name: 'الحضور والتأخير والأعذار والشكاوى' })).toHaveAttribute('href', '/admin/teacher-attendance')
     expect(within(people).getByRole('link', { name: 'المنح والشهادات الطيبة' })).toHaveAttribute('href', '/admin/teacher-grants')
-    expect(within(nav).getAllByRole('link')).toHaveLength(39)
+    expect(within(nav).getAllByRole('link')).toHaveLength(38)
   })
 
   it('opens from the menu button and closes with Escape, giving focus back', async () => {
