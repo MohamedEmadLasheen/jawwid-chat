@@ -1,0 +1,70 @@
+# One-off: record the Terms of Use version 1.0 (family) in the PRODUCTION database and name it as the
+# version in force (PD-58). Needed because the API refuses to start in production without
+# legal.current.terms_family (docs/infrastructure/production-runbook.md, step 1).
+#
+# Owner approval: 2026-11-23 (version 1.0, effective 2026-11-17, requires_reacceptance = true).
+# Runs exactly one committed SQL file and nothing else: scripts/infra/sql/publish-terms-family-1.0.sql.
+# Protection is the `production` GitHub Environment (required reviewer, main only). The database URL
+# is read only from that Environment's secret and is never printed. Idempotent: a second run changes
+# nothing. Remove this file once the release is done.
+name: Production terms configuration (one-off)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type PUBLISH-TERMS-1.0 to confirm'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-terms-config
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Record Terms of Use 1.0 in production
+    runs-on: ubuntu-latest
+    environment: production
+    if: github.ref == 'refs/heads/main'
+    timeout-minutes: 10
+    env:
+      CONFIRM: ${{ inputs.confirm }}
+    steps:
+      - name: Confirmation
+        run: |
+          [ "$CONFIRM" = "PUBLISH-TERMS-1.0" ] || { echo "::error::Confirmation text did not match. Nothing was changed."; exit 1; }
+
+      - uses: actions/checkout@v4
+
+      - name: The database is the migrated Jawwid Chat database
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          set +x
+          [ -n "$DATABASE_URL" ] || { echo "::error::DATABASE_URL is not set in the production Environment"; exit 1; }
+          # Read-only: refuses a database that is not Jawwid Chat's, or whose migrations are not applied.
+          PGOPTIONS='-c default_transaction_read_only=on' psql -X -v ON_ERROR_STOP=1 -At "$DATABASE_URL" -c "
+            select case when to_regprocedure('chat.publish_legal_version(text,text,text,text,text,text,boolean,timestamptz,uuid)') is not null
+                         and exists (select 1 from chat.schema_migrations where version like '20261117110000%')
+                        then 'ok' else 'NOT READY' end" | grep -qx ok \
+            || { echo "::error::the database does not have chat.publish_legal_version / the PD-58 publish-order migration"; exit 1; }
+          echo "database check: ok"
+
+      - name: Record the version and name it as in force
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          set +x
+          psql -X -v ON_ERROR_STOP=1 -q "$DATABASE_URL" -f scripts/infra/sql/publish-terms-family-1.0.sql >/dev/null
+          echo "recorded"
+
+      - name: The production readiness check passes
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          set +x
+          python3 -I scripts/infra/production-setup.py legal
