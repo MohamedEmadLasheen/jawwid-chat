@@ -252,24 +252,27 @@ deploy continues to the migrations.
    Spaces key is not prefix-scoped, and the app's key is held by every API
    instance, so a compromise of it could delete every backup. The script has no
    fallback to `STORAGE_*`.
-2. **A read-only database role**, used only by this job (run once as the admin
-   user, with a generated password kept in the password manager):
+2. **A read-only database role**, used only by this job. Run
+   `scripts/infra/create-jawwid-backup-role.sql` once as the migration owner
+   (Supabase: `postgres`; if yours differs, change the two `ALTER DEFAULT
+   PRIVILEGES FOR ROLE` lines). Generate the password yourself, keep it in the
+   password manager, and pass it by file, never on a command line or in chat:
 
-   ```sql
-   CREATE ROLE jawwid_backup LOGIN PASSWORD '<generated>' BYPASSRLS;
-   GRANT USAGE ON SCHEMA chat TO jawwid_backup;
-   GRANT SELECT ON ALL TABLES IN SCHEMA chat TO jawwid_backup;
-   GRANT SELECT ON ALL SEQUENCES IN SCHEMA chat TO jawwid_backup;
-   ALTER DEFAULT PRIVILEGES FOR ROLE <migration owner> IN SCHEMA chat
-     GRANT SELECT ON TABLES TO jawwid_backup;
-   ALTER DEFAULT PRIVILEGES FOR ROLE <migration owner> IN SCHEMA chat
-     GRANT SELECT ON SEQUENCES TO jawwid_backup;
+   ```
+   psql -v ON_ERROR_STOP=1 -v pw="$(cat ./password-file)" -f scripts/infra/create-jawwid-backup-role.sql "$ADMIN_DATABASE_URL"
    ```
 
-   `BYPASSRLS` is needed because `pg_dump` refuses tables whose row-level
-   security would hide rows; it is **read**: the role can change nothing. (The
-   migration already depends on BYPASSRLS being grantable on this provider,
-   `scripts/db/preflight-role-capability.sh`.)
+   The role is LOGIN, `BYPASSRLS` (needed because `pg_dump` refuses tables whose
+   row-level security would hide rows), with `default_transaction_read_only = on`,
+   no superuser, no create rights, no replication, `statement_timeout = 0` and a
+   connection limit of 2. Its only privileges are USAGE on `chat` and SELECT on
+   its tables and sequences, now and for tables the owner creates later. It can
+   change nothing. (The migration already depends on BYPASSRLS being grantable
+   on this provider, `scripts/db/preflight-role-capability.sh`.) Verified on a
+   disposable Postgres 17: an encrypted dump taken as this role restores with
+   identical row counts and passing integrity suites. The restore script creates
+   the role NOLOGIN in the target, because the role's grants are part of every
+   later archive.
 3. **The GitHub Environment `backup`**: no required reviewers (otherwise every
    Sunday waits for one), deployment branches limited to `main`, and only:
 

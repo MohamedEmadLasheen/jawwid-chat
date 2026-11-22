@@ -542,6 +542,19 @@ jobs:
           psql -v ON_ERROR_STOP=1 -q "$DATABASE_URL" -c \
             "insert into chat.config (key, value, description) values ('ci.g41.marker', to_jsonb('$marker'::text), 'G-41 synthetic row')"
 
+          # 0. The read-only backup role (backup-recovery.md 3b) exists in the source before the dump,
+          #    as it does in production once the scheduled backups are set up. Its SELECT grants are
+          #    then ACL entries in the archive, and a restore into a bare cluster must still work.
+          psql -v ON_ERROR_STOP=1 -q "$DATABASE_URL" -c "
+            do \$\$ begin
+              if not exists (select 1 from pg_roles where rolname = 'jawwid_backup') then
+                create role jawwid_backup nologin bypassrls;
+              end if;
+            end \$\$;
+            grant usage on schema chat to jawwid_backup;
+            grant select on all tables in schema chat to jawwid_backup;
+            grant select on all sequences in schema chat to jawwid_backup;"
+
           # 1. No key outside local/test/ci: refused before pg_dump, nothing written.
           if APP_ENV=production scripts/infra/backup-db.sh --out "$work/refused" --schema chat; then
             echo "::error::G-41 FAIL — an unencrypted production backup was written"; exit 1
