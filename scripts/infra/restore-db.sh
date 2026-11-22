@@ -272,6 +272,13 @@ if [ "$NO_PRIVILEGES" -eq 0 ]; then
       if not exists (select 1 from pg_roles where rolname = 'chat_service') then
         create role chat_service login inherit bypassrls;
       end if;
+      -- The read-only role the scheduled backups connect as (backup-recovery.md 3b). Once it
+      -- exists in the source, its SELECT grants are ACL entries in every later dump, and a target
+      -- that lacks the role fails the whole restore. Created NOLOGIN here: a restored copy is not
+      -- meant to be dumped by it, and no password is set.
+      if not exists (select 1 from pg_roles where rolname = 'jawwid_backup') then
+        create role jawwid_backup nologin noinherit;
+      end if;
     end
     \$\$;
 
