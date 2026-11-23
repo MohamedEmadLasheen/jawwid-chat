@@ -1,0 +1,36 @@
+Jawwid Chat handoff, part 2 of 10
+
+### 1.3 Main flows (by role)
+*Parent (mobile app)* [R: product boundary, PRD, review notes]
+- Sign in with email and password (accounts are created by the academy; a parent signs up only with a one-time code from the supervisor, PD-16). Self-recovery of forgotten password/e-mail (PD-25).
+- Chats tab: the persistent "Jawwid" conversation with their supervisor, plus the family/student group with the teacher. Messages publish immediately (PD-14); text, media, voice notes, replies, reactions, receipts.
+- Calls: voice calls in chats they may write in (PD-19); rings through CallKit/ConnectionService.
+- Schedule of their children; "Packages" (subscriptions) and amount due, with payment by card (Stripe Checkout), bank-transfer receipt upload, payment links; Settings (language Arabic/English, time zone, delete account, app lock).
+- Must accept the current *Terms of Use* (version 1.0) once at next request (PD-58). No grandfathering.
+
+*Teacher (app and web portal)*: lessons and schedule, student groups, lesson reports, whiteboards, materials, calls, own records. Never a direct chat or call with a parent (BR-1/PD-7). [R]
+
+*Supervisor/staff (Admin Web)*: Chat console, Dashboard, Tasks (incl. Escalations tab), People & Organization (accounts, staff profiles, teachers, families, students), Sales, Scheduling calendar, Operations (needs-action, Materials, Certificates, Lesson audio), Finance (instalments, payments), Communication (stories, calls), Admin & Settings. Source of truth for the navigation: `apps/admin-web/src/app/navigation.ts`, described in `docs/admin/navigation-architecture.md`. [V]
+
+### 1.4 Business rules (the constitution)
+From PRD v0.1 §4, as amended by later PDs. [R]
+- *BR-1 / PD-7*: no direct Teacher-Parent chat or call, ever; only inside the official Student Group with a supervisor present. Enforced in the API and in database triggers.
+- *BR-2*: nobody sees another user's phone number.
+- *BR-3*: who may talk to whom follows relationships (family, enrolment, ownership).
+- *BR-4 / PD-8 / PD-24*: every family has one current supervisor; scope follows departments and per-child supervision; a supervisor can be changed in place keeping history.
+- *BR-5*: history belongs to Jawwid; nothing is deleted when staff leave.
+- *PD-14 / BR-6*: no message is held for approval; managers moderate after sending; every edit keeps the old wording.
+- *BR-8*: no end-to-end encryption; encrypted in transit and at rest, audited.
+- *Trials, scheduling, sessions*: PD-9 (Chat owns lessons per cut-over teacher), PD-11 (tickets: apologies, make-ups, suspensions, transfers, trials), PD-15 (student journey), PD-31 (direct scheduling with time chips; "this lesson only" or "every week"), PD-22 (each account has its own time zone; Admin Web shows Cairo time with the family's local time beside it). Sales pipeline PD-59 stages: New Lead, Contacted, Trial Booked, Trial Completed, Converted, Lost.
+- *Payments and subscriptions*: PD-17 (family money recorded in Chat), PD-27 (payment links, Stripe card, bank-transfer receipts, cash, invoices, instalment reminders), PD-30 (a subscription includes N lessons; two grace lessons; then the child's group locks for parent and teacher if used up or an instalment is overdue; three roles grant exceptions). PD-18: teacher payroll in Chat, super admin only. PD-12: certificates, discipline, leave.
+- *Progress tracking and curriculum*: lessons engine (`apps/lessons`, PD-29), materials (PD-51 bilingual), lesson audio (PD-48), children's Quran experience (PD-49), whiteboards and rewards (PD-39/54/55), monthly statistics.
+- *Account lifecycle*: PD-21 (admin password reset by one-time code, inactive accounts, impersonation), PD-23 (session lifetimes per role), PD-56 (account deletion with 7-year financial retention), PD-57 (Report and Block), PD-58 (Terms acceptance per account kind).
+
+Full list: `docs/product/JAWUID-CHAT-PRODUCT-BOUNDARY.md` §4 (PD-1 to PD-31) and `docs/product/pd-registry/PD-*.md` (PD-1 to PD-60; 50 files). [V]
+
+---
+
+## 2. Architecture
+
+### 2.1 Repositories and folders [V]
+Main repository: `/Users/mohamedlasheen/dev/jawwid-chat` (GitHub `MohamedEmadLasheen/jawwid-chat`, default branch `main`, about 2,739 commits on `origin/main`, 638 PRs numbered so far).

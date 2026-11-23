@@ -1,0 +1,66 @@
+Jawwid Chat handoff, part 1 of 10
+
+# Jawwid Chat: handoff document
+
+Written 2026-11-23 by the engineering-lead Claude session, for a planner/coordinator who has *no access to this Mac or the repo*.
+Everything here comes from the repository, GitHub, DigitalOcean (read-only `doctl`) and live HTTP checks run in this session, unless marked otherwise.
+*No secret, password, key, token or student personal data is in this document.* Secrets are referred to by name only (section 3.4).
+
+*Evidence tags used throughout*
+
+| Tag | Meaning |
+|---|---|
+| *[V]* | Verified in this session: I read the file, ran the command, or fetched the URL. |
+| *[R]* | Taken from a repo document or a saved note that I read but did not re-check against the live system. May be stale. |
+| *[I]* | My inference. Treat as a hypothesis. |
+| *[U]* | Unverified and cannot be verified from here (store consoles, owner-only systems). Needs the owner. |
+
+## Index
+
+1. Product overview
+2. Architecture
+3. Environments and deployment
+4. Mobile app status (Android, iOS)
+5. What is done
+6. What is in progress
+7. What is not started: backlog, bugs, debt, risks
+8. Decisions and conventions
+9. Operations
+10. Recommended next steps and open questions
+11. How to work with me
+Appendix A: glossary. Appendix B: key file map. Appendix C: today's release, step by step.
+
+---
+
+## 0. Where things stand right now (read this first)
+
+- *The Admin Web release is live in production.* [V] Run 45134892140 of "Deploy production" succeeded end to end (preflight, Admin Web image, backup, migrations no-op, Quran loader, release, smoke test, record). The owner approved it personally in GitHub.
+  - Deployed commit: `733e197e3230cf96067d109b79ca9d76b921682e`. DigitalOcean active deployment `bdcba5b3-d12a-434e-a963-384d2f224b31`, phase ACTIVE. API and worker images carry tag `733e197e3230`; Admin Web image `production-7`.
+  - https://admin.chat.jawwid.com/ serves the new bundle `index-GUm5G1-v.js`, which contains the new Certificates and Escalations pages. [V]
+  - Terms of Use 1.0 was recorded in production through a one-off approved workflow (run 45081665887, succeeded, readiness check passed). The live legal pages `/legal/ar/terms/1.0/` and `/legal/en/terms/1.0/` hash to exactly the recorded SHA-256 values. [V]
+- *Still true and deliberate:* the access switch `chat.access_switch 'deny_enforcement'` is OFF and `PERMISSION_GUARD_MODE` is `shadow`. [R, set by the release design; I did not query the production database. I only know the release did not change either.]
+- *Not yet verified after the release:* the teacher web portal login with a real account; the API `/health/ready` body (the path I tried, `/api/health/ready`, returned 404, so the readiness route sits elsewhere; the worker log shows commit `733e197e…` running); a real parent sign-in showing the Terms screen once.
+- *Open pull request needing the owner:* #638 (review-notes wording about the parent accepting Terms 1.0 once). Docs only.
+
+---
+
+## 1. Product overview
+
+### 1.1 What Jawwid is
+Jawwid is an online Quran and Arabic academy, mainly for children, run by an operations team. Families are served by assigned supervisors; teachers deliver classes online. [R: PRD v0.1 §2]
+*Jawwid Chat* is the product in this repo. It is a *communication and academy-operations platform*: parents, teachers, supervisors and managers communicate safely around families and learners, and the platform enforces ownership, permissions, moderation, privacy and audit. It is not a generic CRM and not WhatsApp. [R: `docs/product/JAWUID-CHAT-PRODUCT-BOUNDARY.md`]
+
+It has since grown well beyond the original PRD (lessons, scheduling, payments, subscriptions, payroll, certificates, materials, a sales pipeline). The authority order is: product boundary doc, then PRD v0.2, then PRD v0.1, then everything else; the PD registry holds every later owner decision. [R]
+
+### 1.2 Who uses it (roles)
+| Role | Who | Where they work |
+|---|---|---|
+| Parent | One account per family; children are learner records, not app users. App is for adults 18+ only (owner decision 2026-11-18). [R] | Mobile app (iOS, Android) |
+| Student/learner | A profile under a parent. No login. | none |
+| Teacher | Delivers lessons. | Mobile app, and the same app as a *teacher web portal* at https://admin.chat.jawwid.com/teacher/ (PD-28) [R] |
+| Supervisor (`admin`) | Owns a portfolio of families (onboarding, scheduling, teacher coordination, payments, complaints). | Admin Web; mobile for some |
+| Manager | Department manager (Operations, Teachers, Sales, and configurable departments in progress). | Admin Web |
+| Sales staff | Sales department. PD-20 lets them in the mobile app with Chats, Calls, Payments, Settings only. | Admin Web + mobile (limited) |
+| Super admin | Owner/technical admin; everything incl. payroll and staff accounts. | Admin Web |
+
+In the data, access is by *role + permission keys + department kind*, with a server-side `AuthorizationService` and PostgreSQL row-level security as defence in depth. [R: `docs/architecture/AUTHORIZATION-MODEL.md`] The latest work (access management M1-M3) adds effective-access visibility and an optional deny list (section 6).

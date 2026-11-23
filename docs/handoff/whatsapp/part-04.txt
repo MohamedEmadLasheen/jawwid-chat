@@ -1,0 +1,39 @@
+Jawwid Chat handoff, part 4 of 10
+
+### 2.5 Data model [R/V]
+About 220 tables in schema `chat`. Core objects: organization, department (+ member/account), staff, family, contact, learner (child), teacher, conversation (+ member), message (+ revision, receipt, reaction), attachment, call, scheduled_call, lesson, task, case/escalation tables, subscription, payment, instalment plan, invoice, certificate, material_item, lesson audio, story, whiteboard, notification/outbox_event, audit_log, event_log, config, legal_version + acceptance, access role/grant tables, access_switch, staff_permission_deny. Schema orientation docs: `docs/recovery/PHASE-0-DATABASE-RECONCILIATION.md`, `docs/architecture/organization-model.md`, `docs/db/`. Every root entity carries `organization_id` (future multi-tenant).
+
+### 2.6 APIs [R]
+One versioned REST API under `/api/v1` plus Socket.IO. Contract: `docs/contracts/API-CONTRACT.md`, `docs/communication/*`. Per-feature controllers sit beside the modules listed in 2.1. A Stripe webhook is at `api.chat.jawwid.com/api/v1/stripe/webhook`.
+
+### 2.7 Third-party services (names only)
+DigitalOcean App Platform (API, worker, Admin Web, Valkey) and Spaces; Supabase (hosts only the PostgreSQL database, free tier, Frankfurt, per ADR-014); GitHub + GitHub Actions; Cloudflare (DNS/proxy in front of the domains); Stripe; Sentry; LiveKit; Firebase Cloud Messaging; Apple Push Notification service; SMTP provider; WhatsApp Business Cloud API (recovery codes); App Store Connect; Google Play Console; Docker/Colima locally.
+
+### 2.8 Push and media
+Push via FCM and APNs (dispatcher in `apps/api/src/communication/notifications`; VoIP push for iOS calls only if `APNS_VOIP_ENABLED=true`, default off). Media uses signed upload/download URLs; the bucket keeps 30-day object versions after deletion (affects the privacy notice).
+
+---
+
+## 3. Environments and deployment
+
+### 3.1 Local setup [R: `docs/infrastructure/local-development.md`]
+1. `cp .env.example .env; scripts/infra/check-env.sh local --file .env`
+2. `scripts/infra/dev.sh up` starts Postgres (:5433), Redis (:6380), MinIO (:9000/:9001). Needs Docker Compose v2 plugin. Docker runs through *Colima* on this Mac (running now [V]).
+3. Apply migrations with `scripts/db/apply.sh`; Quran snapshot with `python3 -I scripts/lessons/build-quran-snapshot.py` (needed in a fresh worktree or four lessons test files fail).
+4. API tests: `npx jest --maxWorkers=2` (unit), `npm run test:int -- --runInBand` (integration; needs its own Postgres and Redis and a `psql` 17 client). Admin Web/lessons: `npx vitest run --pool=forks ...`. Flutter lives at `~/development/flutter/bin` (not on PATH): `flutter test --concurrency=2`. Guards: `bash scripts/qa/guards.sh <name>`. Check `uptime`; wait if 1-minute load is above 60 (shared Mac).
+5. Containers `jc-preview-pg` (postgres:17) and `jc-preview-redis` are running [V]. They are not part of this repo's compose file; I believe they belong to another preview stack [I]. Do not stop them. Never touch `~/jawwid-systest*`.
+
+### 3.2 Environments [V/R]
+| Env | Details |
+|---|---|
+| Local | compose stack above |
+| Staging | `deploy-staging.yml`, DigitalOcean; also has a `build_only` mode (PR #635) that only builds and records the API image digest. [V] |
+| Production | DigitalOcean app `jawwid-chat-production` (id `30b7bae3-f7bb-4c34-b066-92e13f1b8853`), services api, worker, admin-web, redis. Domains `api.chat.jawwid.com`, `admin.chat.jawwid.com`. Database: dedicated Supabase Free project (ADR-014) with *no provider backups or PITR*, session pooler. [R, from ADR-014 and my earlier session. Older notes in my memory say DigitalOcean Managed PostgreSQL; ADR-014 is newer. Confirm with the owner.] |
+
+### 3.3 Build and release flow [V]
+- *CI* (`ci.yml`): jobs guards, api, admin-web, lessons, migrations, integration, e2e, images, dependencies, mobile, android, android-ring. A 23-guard script (`scripts/qa/guards.sh`) enforces, among others, migration slot claims, PD registry, image-digest rules, pinned actions.
+- *Deploy path*: merge to `main` (protected; Code Owner review) → run "Deploy staging" (records the API image digest for the commit; `build_only` skips the staging deploy) → run "Deploy production" with `image_tag` = full 40-char SHA and `confirm=DEPLOY`.
+  - Production job order: preflight (digest must match a recorded staging run on `main`) → build Admin Web image → credentials check → resolve app spec → storage versioning check → DB role capability preflight → encrypted `pg_dump` uploaded as an artifact → `scripts/db/apply.sh` migrations → Quran loader → release via doctl → smoke test → record.
+  - The GitHub Environment `production` requires the owner as reviewer, `prevent_self_review: true`, admins cannot bypass, branch policy `main` only. *A run dispatched by the owner's own login cannot be approved by them.* So runs are dispatched from the `jawwid-bot` GitHub account and the owner approves personally. Do not weaken this.
+- *PD-58 Terms gate*: the API refuses to start in production unless `chat.config` has `legal.current.terms_family` naming a published version. The first production deploy (#17) failed for exactly this reason and auto-rolled back; the fix was the one-off workflow `production-terms-config.yml`. Runbook: `docs/infrastructure/production-runbook.md`.
+- *Mobile*: `release-store-builds.yml` (inputs `ref`, `platform`, `build_name`, `build_number`, `android_delivery`) in the GitHub Environment `store-release`; `scripts/mobile/build-store.sh`. Debug symbols go to Sentry before store upload.

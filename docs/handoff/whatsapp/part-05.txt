@@ -1,0 +1,38 @@
+Jawwid Chat handoff, part 5 of 10
+
+### 3.4 Configuration names (values are never in the repo)
+API/worker: `APP_ENV`, `NODE_ENV`, `PORT`, `DATABASE_URL`, `DATABASE_POOL_MAX`, `DATABASE_WORKER_POOL_MAX`, `DATABASE_STATEMENT_TIMEOUT_MS`, `REDIS_URL`, `QUEUE_PREFIX`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `JWT_ACCESS_TTL`, `JWT_REFRESH_TTL`, `RESET_CODE_HASH_SECRET`, `STORAGE_ENDPOINT`, `STORAGE_BUCKET`, `STORAGE_ACCESS_KEY`, `STORAGE_SECRET_KEY`, `STORAGE_REGION`, `STORAGE_SIGNING_SECRET`, `STORAGE_PUBLIC_BASE_URL`, `MEDIA_PUBLIC_BASE_URL`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `PAYMENT_LINK_BASE_URL`, `SUBSCRIPTION_LOCK_ENFORCED`, `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `FCM_PROJECT_ID`, `FCM_SERVICE_ACCOUNT_JSON`, `APNS_TEAM_ID`, `APNS_KEY_ID`, `APNS_PRIVATE_KEY`, `APNS_BUNDLE_ID`, `APNS_PRODUCTION`, `APNS_VOIP_ENABLED`, `SMTP_URL`, `RECOVERY_MAIL_FROM`, `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_RECOVERY_TEMPLATE`, `CORE_BASE_URL`, `CORE_API_KEY`, `CORE_WEBHOOK_SECRET`, `SENTRY_DSN`, `TEACHER_PAYOUT_KEYS`, `LESSON_APPROVALS_SIGNING_KEY`, `MATERIALS_SITE_BASE_URL`, `MATERIALS_FRAME_ORIGINS`, `CORS_ALLOWED_ORIGINS`, `TRUSTED_PROXY_HOPS`, `PERMISSION_GUARD_MODE`, `SALES_FAMILY_SCOPE`, `TEACHER_SUPERVISOR_STRICT_SCOPE`, outbox tuning (`OUTBOX_POLL_MS`, `OUTBOX_BATCH_SIZE`, `OUTBOX_IDLE_BACKOFF_MS`), `LOG_LEVEL`. [V: names from `infra/env` templates; `PERMISSION_GUARD_MODE` from release work]
+Where they live: GitHub Environments `production`, `staging`, `store-release`, `backup`; DigitalOcean app spec/secrets; the owner's Mac helper scripts under `~/.jawwid` (e.g. create-super-admin, set-production-database-url). The `backup` Environment has *zero* secrets (section 9). Secrets policy: `docs/infrastructure/secrets.md`. Never ask the owner to paste a secret into chat; use hidden-prompt scripts such as `python3 -I scripts/infra/production-setup.py ask <NAME>`.
+
+---
+
+## 4. Mobile app status
+
+*Honest limit:* I have no access to Google Play Console or App Store Connect. The owner told me Android is published and iOS was submitted for review. I cannot confirm either. Everything below is from the repo, CI runs and saved notes, so version/build numbers marked [U] must be read off the consoles.
+
+### 4.1 Identities [R]
+iOS bundle `com.jawwid.jawwidChat` (Apple team `KX683HAR3Y`). Android application id `com.jawwid.jawwid_chat`. App name "Jawwid". Adults 18+ only, free, worldwide, developer account type Organization (Jawwid LLC, per owner decisions 2026-11-18).
+
+### 4.2 Builds on record [V from `gh run list`; R from notes]
+| When | CI run | Commit | Result | What |
+|---|---|---|---|---|
+| 2026-11-12 | 43215124577 | `b708295e` | success | iOS 1.0.0 (build 1) signed and uploaded by CI. |
+| 2026-11-18 | 44285965671, 44306602707 | `2e412701` | success | Android release AAB *1.0.0, versionCode 3*, targetSdk 36, 16 KB-aligned native libs (SHA-256 recorded in the notes; encrypted copy in `~/dev/jawwid-chat-release-assets/android-play/run-44306602707-encrypted`). |
+No newer store-build CI run exists after 2026-11-18. [V] So *if a newer iOS build was submitted to Apple, it was not produced by this workflow* (or was produced outside CI). [U] The iOS 1.0.0 (1) build is stale relative to main (100+ commits later, including teacher deletion request, Packages wording, currency digits). [R]
+
+*Exact current published/submitted version and build numbers: [U].* Ask the owner for: Play Console production release name and versionCode; App Store Connect version and build selected for review; submission date; review status.
+
+### 4.3 Release notes and review submission material [V]
+`docs/release/store-console/` holds listing copy, review notes (App Review Information "Notes", Play "App access"), age rating, Apple privacy, Google Data Safety, Play declarations. Review accounts (`parent@`, `teacher@`, `parent2@` on a review-only organization with made-up data) are provisioned by the `review-cohort.yml` workflow and described in `docs/release/review-accounts.md`; passwords are secrets in the `production` Environment and consoles only. *Apple needs the parent test account to accept Terms 1.0 once*; PR #638 adds this to the review notes. The owner must paste the updated Notes in App Store Connect and the Play text.
+
+### 4.4 Known review risks [R/I]
+- Apple 2.1 "Information Needed" has been raised (resolution pack in `docs/release/`, PRs #613/#614); Apple 3.2 and sign-in link to the public enrolment page (PR #613) pending. [R]
+- Parents are asked to accept Terms 1.0 on first request after the release: the reviewer's first sign-in shows a Terms screen. Needs the note above.
+- Calls: ringing while the app is closed only works if production sets `APNS_VOIP_ENABLED=true` (default off). Review notes depend on this. [R]
+- Staff features: Sales staff and the super admin can sign in to the app (PD-20), so "no staff in the app" would be false; notes describe it instead. No review account exists for the Sales role (open item). [R]
+- Card payments: Stripe is live-capable but cards were seeded *paused* in production (2026-11-17). Store copy was written card-free. [R]
+- UGC (Apple 1.2 / Google): Report and Block exist (PD-57). Quran audio rights are an open research item (`docs/legal/quran-audio-rights-research.md`). [R]
+- Legal: counsel not appointed; legal drafts say there is no automatic renewal, but Core may auto-charge some customers monthly (unverified, section 7). [R]
+
+### 4.5 If Apple rejects
+Read the rejection reason in App Store Connect Resolution Center (owner only). Typical path: fix in a branch, new PR, owner merges, run the "Release store builds" workflow with a higher `build_number`, owner selects the new build in App Store Connect, replies in the Resolution Center. Pure metadata/review-note rejections need no new build. Never claim an upload or submission without console proof. [I]

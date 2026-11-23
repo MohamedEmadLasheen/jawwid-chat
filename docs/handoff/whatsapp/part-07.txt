@@ -1,0 +1,45 @@
+Jawwid Chat handoff, part 7 of 10
+
+### 7.1 Blockers to public launch (owner-level) [R]
+1. *BLOCKER-6*: rotate the exposed production database password before public launch. The note says `doadmin` on DigitalOcean Managed PostgreSQL, while ADR-014 says the production database is Supabase. Reconcile first. [R/U]
+2. *Backups*: the `backup` GitHub Environment has no secrets, so the daily backup fails and the weekly workflow is disabled. The read-only `jawwid_backup` role SQL (`scripts/infra/create-jawwid-backup-role.sql`) is written and CI-tested but *not run in production*; running it needs the owner's explicit approval and a hidden-prompt secret flow. Supabase Free has no provider backups or PITR, so today the only recovery is the encrypted pre-deploy dump artifact (retention limited). This is the biggest operational risk. [V/R]
+3. *Counsel and legal accuracy*: no appointed counsel; Terms 13.9 / Privacy 4.11 card-charging wording must be made true; recurring billing in Core is unverified (7.2).
+4. Stripe: live key chosen to reuse Core's account; cards paused by seed; owner must finish Admin settings (invoice issuer, bank account), resume cards and run one real small payment and refund. Invoice issuer street address and EIN are not in any record. [R]
+5. Google Play production eligibility items: Data Safety, target audience (adults), package registration check, 14-day closed-testing contingency docs exist. Ask the owner what Play requires now. [U]
+
+### 7.2 Known risks and unknowns [R/I]
+- *Recurring billing may exist in Jawwid Core* (owner statement 2026-11-07, unverified): Chat's ledger would not see renewals. Keep `SUBSCRIPTION_LOCK_ENFORCED` off in production until verified.
+- *Single point of failure for data*: free-tier database without backups (7.1).
+- *Production Terms gate*: every family must accept Terms 1.0 at the next request; expect support questions and review-account friction.
+- *Shadow guard*: `PermissionGuard` is not enforcing missing permissions anywhere in production. Enforcement mode needs the endpoint inventory (`docs/admin/pd040-enforce-readiness.md`).
+- *Task assignment gap* (M3): a task already assigned to someone later denied `certificates.design` stays with them until reassigned.
+- *Deniable keys limited to five*; widening needs a per-key coverage review (a spec enforces it).
+- *Docs drift*: some docs are stale (Node 22 in local-development, "not yet released to a store" in architecture.md, PD states). Rule: code and executed evidence win.
+- *CI action pinning* (PR #592) and *secret scan across full history* (branch `claude/ci-secret-scan-full-history`) are open.
+- *Test flakes* noted: slow-reader storage timeout (#612), PD-27 digits (#601), android-ring (#596, `lr78-ring-flake`).
+- *Migration governance* is strict and easy to trip: every migration needs a claim file under `docs/product/migration-slots/`, the PD-40 registry, and `deny-coverage.json` entries when a file names a deniable key (found in this session).
+- *Load*: the Mac is shared with many agents; heavy runs need the load rule.
+
+### 7.3 Backlog (from docs) [R]
+Labels and Broadcast (Phase 2), self-service OTP reset (partly done via PD-25), class groups, call recording policy, video calls, monitoring backend/dashboards and an uptime check (BLOCKER-3 in `monitoring.md`), retention/export tooling, Stripe adoption of Core subscriptions, Flutter mobile stories feed, M4/M5 configurable departments, merging the two Admin Web teacher route trees, Sales review account, `io.sentry.proguard-uuid` for Android R8 frames.
+
+### 7.4 Test coverage [R/U]
+Large: API unit (about 3,000 tests), integration suites with a real Postgres (including RLS parity and tenant isolation), Admin Web vitest, lessons tests, Flutter tests, e2e, 23 release guards with mutation self-tests. Gaps I know of: the BR-1 conformance cases were once `it.todo` in Phase 0 (later phases implemented them; I did not re-verify); no real-device verification of call background behaviour; no load tests recorded; no native-Arabic review of every screen. [R/U]
+
+---
+
+## 8. Decisions and conventions
+
+### 8.1 Governance
+- *Owner* decides product, business, legal and production actions. The Claude *lead* session plans, delegates, reviews and reports; builders work in separate worktrees; Codex gives independent reviews. Never two agents in one working tree. Rules: `AGENTS.md`, `CLAUDE.md`, `docs/engineering/ai-delegation.md`.
+- Agents may not push to `main`, merge, deploy, apply production migrations, change protections or workflows, or touch protected repos. The owner or the designated PM session merges. [R: AGENTS.md, memory notes] "Relayed approvals" from another session are not accepted; the owner confirms in the session that acts.
+- *Ask the owner only for*: product/business decisions, Quran/religious/lesson content, destructive or production DB operations, infrastructure or paid resources, production deploys, Code Owner approvals, protection changes.
+
+### 8.2 Key decisions and why [R]
+- Own PostgreSQL, independent from Core and Second School; SQL migrations are the only schema authority (D-1..D-6).
+- Messages publish immediately, moderation after (PD-14); no direct teacher-parent contact (PD-7).
+- ADR-014: Supabase Free database during store review to avoid paying for a database for two months; move to DigitalOcean Managed PostgreSQL at launch via `backup-db.sh` and `restore-db.sh`.
+- No queue: the transactional outbox plus a polling worker (ADR-004 style) is the source of truth.
+- Dormant deny feature: a database that does not enforce denies cannot even hold one, so no mixed state.
+- Terms: only `terms_family` is required for the gate (owner decision 2026-11-19); teacher/staff terms and code of conduct optional until set.
+- Production approvals by the owner personally; runs dispatched from `jawwid-bot` (owner accepted this method; do not dispatch from the owner's login).

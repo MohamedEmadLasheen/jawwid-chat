@@ -1,0 +1,54 @@
+Jawwid Chat handoff, part 9 of 10
+
+### 10.1 Next steps
+1. *Finish verifying the live release* (small, now): sign in to https://admin.chat.jawwid.com/ as the super admin and click the new Certificates, Educational Materials, and Tasks → Escalations pages; confirm the Admin Web staff profile shows the Access panel; test the teacher portal login with a real teacher; check `doctl apps logs` for errors over an hour. (I can run the log and header checks; sign-ins need the owner or a test account.)
+2. *Merge PR #638* and paste the updated review notes into App Store Connect and Play so reviewers know about the one-time Terms acceptance. Highest-value small action for the store review.
+3. *Fix backups (biggest risk).* Owner approves running `scripts/infra/create-jawwid-backup-role.sql` in production via the hidden-prompt flow, then sets the `backup` Environment secrets, re-enables the weekly job, and runs a restore drill from a real dump into a disposable database.
+4. *Reconcile the database provider and the BLOCKER-6 password rotation* (Supabase vs DigitalOcean Managed). Then rotate once, with the prepared plan.
+5. *Get exact store state* from the owner (section 4.2), and build a fresh iOS build from `main` if the submitted build is the stale 1.0.0 (1). Plan around Apple's response.
+6. *Stripe go-live checklist* (Admin settings, resume cards, one real payment and refund), only after the owner decides to launch payments and the Core recurring-billing question is answered.
+7. *Sales pipeline stack*: resolve #630's conflict, merge #623-#632 in order with the owner's approval (do not change those PRs unless asked), then run the staging plan in #625.
+8. *Docs truth pass*: update PD states, Node version, "not released" claims; consider one up-to-date "operations" page.
+9. *Housekeeping*: audit the ~100 worktrees and 1,384 branches for uncommitted work, then prune with the owner's OK. Add an uptime check and Sentry alert routes.
+10. *Access management M4/M5* only after the owner prioritises configurable departments.
+
+My honest assessment: the product is feature-rich and heavily tested; the real risks are operational (no backups on the database, single-person approvals, owner-only console steps), not code. I would do items 2, 3, 1 first.
+
+### 10.2 Questions for the owner
+1. Exact Play production version name/versionCode, and Apple version/build and status. Is the submitted iOS build the old 1.0.0 (1)? Date submitted?
+2. Is the production database Supabase Free (ADR-014) or DigitalOcean Managed PostgreSQL? Has the exposed password already been rotated?
+3. May I run the production backup-role SQL, and who sets the `backup` Environment secrets? Is a restore drill allowed?
+4. Are cards still paused in production? Has the Core recurring-billing question been checked in the live Stripe account?
+5. Which Quran/hadith content rules exist in writing (Bukhari/Muslim only, sheikh approval)? Where is the approver list recorded?
+6. What was the Mac `bird`/iCloud issue and the last fix? Is anything still syncing that should not?
+7. Order for the Sales PD-59 PRs and who may merge; may I resolve #630's conflict on a new branch?
+8. Is `APNS_VOIP_ENABLED` meant to be on for launch?
+9. Terms teacher/staff/code of conduct: when should they become required?
+10. Who is the planned counsel, and when are the legal reviews due?
+
+---
+
+## 11. How to work with me (for the planner)
+
+*What I need to continue each piece of work*
+| Work | I need from the owner/planner |
+|---|---|
+| Production deploy | Owner personally approves in GitHub (Environment `production`). Planner gives the target commit SHA (a commit on `main` with a recorded staging digest). Prompt: "Dispatch Deploy production for `<sha>` from `jawwid-bot`; tell me when it reaches the approval gate." |
+| Production DB statement | The exact SQL, its owner approval in writing, a one-off workflow PR (as done for Terms 1.0). Never raw access. |
+| Store build | Approval of version/build number and the ref SHA; owner runs or approves the `store-release` workflow; owner does console steps. |
+| New feature | A decision recorded as PD-n (ask me to draft it), acceptance criteria, whether any migration is needed (slot claim). |
+| Bug | Role, screen, steps, expected vs actual, environment, screenshots without personal data. |
+| Review notes/legal text | Owner approval of wording; I edit docs only; the owner pastes into consoles. |
+
+*Prompts and commands that work well*
+- "Check CI and PR status for `<PR#>` and tell me only if something needs me."
+- "Run the release guards and the API unit suite on `<branch>` and report counts and the first failure." (`bash scripts/qa/guards.sh`, `npx jest --maxWorkers=2` in `apps/api`)
+- "Prepare a migration for X: claim the slot, add rollback, tests first, run `scripts/db/apply.sh` on a disposable Postgres 17, open a PR; do not apply anywhere shared."
+- "Verify production: run `doctl apps get 30b7bae3-f7bb-4c34-b066-92e13f1b8853`, the health URL, logs for the last hour and the legal-page hashes."
+- "Give me a read-only status of branches and worktrees; do not delete anything."
+- "Draft the PD for `<decision>` into `docs/product/pd-registry/` and propose the migration slot."
+Useful manual commands for the owner: `gh run list --workflow deploy-production.yml`, `gh pr list --state open`, `doctl apps logs <app-id> --type run`.
+
+*Things I will not do without an explicit owner instruction in their own session:* merge, deploy, run production SQL/migrations, change protections or workflows, touch Core/Second School, delete volumes, expose or request secrets, approve my own deployments, or record a Terms acceptance for anyone.
+
+---
