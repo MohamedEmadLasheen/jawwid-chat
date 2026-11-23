@@ -70,6 +70,29 @@ load_rules() {
 # py <json> <program>: tiny JSON helper, no dependencies beyond python3.
 py() { python3 -I -c "$2" <<<"$1"; }
 
+# require_pg: this helper manages the PostgreSQL cluster's Trusted Sources and nothing else. A
+# DATABASE_CLUSTER_ID that names another engine (for example the Valkey cluster, whose rule must
+# stay "this app only", ADR-015) is refused before any rule is read or changed.
+require_pg() {
+  local out err rc=0 engine
+  err="$(mktemp)"
+  out="$("$DOCTL" databases get "$CLUSTER" -o json 2>"$err")" || rc=$?
+  if [ "$rc" -ne 0 ]; then
+    local msg; msg="$(scrub "$(cat "$err")")"; rm -f "$err"
+    case "$msg" in
+      *401*|*403*|*orbidden*|*nauthorized*|*"not authorized"*|*"permission"*)
+        fatal "The DigitalOcean token cannot read the database cluster. It needs the custom scopes database:read and database:update (see docs/infrastructure/backup-recovery.md §9). DigitalOcean said: $msg" ;;
+      *) fatal "Could not read the database cluster ($msg). Check DATABASE_CLUSTER_ID." ;;
+    esac
+  fi
+  rm -f "$err"
+  engine="$(py "$out" 'import json,sys
+d=json.load(sys.stdin)
+d=d[0] if isinstance(d,list) and d else d
+print(d.get("engine","") if isinstance(d,dict) else "")')"
+  [ "$engine" = "pg" ] || fatal "DATABASE_CLUSTER_ID names a cluster whose engine is '${engine:-unknown}', not 'pg'. This helper only manages the PostgreSQL cluster's Trusted Sources and will not touch any other cluster (the Valkey cluster's rule must stay 'this app only'). Nothing was changed."
+}
+
 runner_ip() {
   local ip=""
   for url in ${IP_PROBE_URLS:-https://checkip.amazonaws.com https://api.ipify.org}; do
@@ -88,6 +111,7 @@ open)
   fi
   [ -n "${DIGITALOCEAN_ACCESS_TOKEN:-}" ] || fatal "DATABASE_CLUSTER_ID is set but DIGITALOCEAN_ACCESS_TOKEN is not available to this job. Add the token (database:read + database:update) to this GitHub Environment, or unset DATABASE_CLUSTER_ID."
   ensure_doctl
+  require_pg
   load_rules
   count="$(py "$rules" 'import json,sys;print(len(json.load(sys.stdin)))')"
   if [ "$count" = "0" ]; then
@@ -128,6 +152,7 @@ close)
   esac
   [ -n "$ip" ] && echo "::add-mask::$ip"
   ensure_doctl
+  require_pg
   load_rules
   target="$(py "$rules" "import json,sys
 uuid,ip='$uuid','$ip'
@@ -155,6 +180,7 @@ audit)
   [ -n "$CLUSTER" ] || { note "DATABASE_CLUSTER_ID is not set: audit is dormant."; exit 0; }
   [ -n "${DIGITALOCEAN_ACCESS_TOKEN:-}" ] || fatal "DATABASE_CLUSTER_ID is set but no DIGITALOCEAN_ACCESS_TOKEN is available to the audit."
   ensure_doctl
+  require_pg
   load_rules
   verdict="$(APP_ID="${DATABASE_FIREWALL_APP_ID:-}" ALLOW="${DATABASE_FIREWALL_ALLOW:-}" GRACE="$GRACE_MIN" ENFORCE="${DATABASE_FIREWALL_ENFORCE:-}" \
     python3 -I -c '

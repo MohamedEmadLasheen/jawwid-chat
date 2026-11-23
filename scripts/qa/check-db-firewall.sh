@@ -26,6 +26,7 @@ cat > "$SB/bin/doctl" <<'STUB'
 set -euo pipefail
 R="$STUB_RULES"
 [ "${STUB_DENY:-}" = "1" ] && { echo "Error: GET https://api.digitalocean.com/v2/databases/x/firewall: 403 (request \"abc\") You are not authorized to perform this operation" >&2; exit 1; }
+if [ "$1 $2" = "databases get" ]; then echo "[{\"id\":\"c\",\"engine\":\"${STUB_ENGINE:-pg}\"}]"; exit 0; fi
 [ "$1 $2" = "databases firewalls" ] || exit 2
 op="$3"; shift 3
 case "$op" in
@@ -111,6 +112,18 @@ rules "$APP"; out="$(STUB_DENY=1 run open || true)"
 echo "$out" | grep -q "database:read and database:update" && ok "missing scope is explained" || fail "missing scope not explained"
 echo "$out" | grep -q "$TOKEN" && fail "token in scope error" || ok "no token in the scope error"
 out="$(DIGITALOCEAN_ACCESS_TOKEN= run open || true)"; echo "$out" | grep -q "DIGITALOCEAN_ACCESS_TOKEN is not available" && ok "configured but no token: refuses clearly" || fail "no-token message"
+
+# 9b. only a PostgreSQL cluster is ever touched: a Valkey (or any other) cluster id is refused,
+# for open, close and audit, and its rules are left exactly as they were
+rules "$APP"; before="$(cat "$STUB_RULES")"
+for m in open audit; do
+  out="$(STUB_ENGINE=valkey run $m || true)"
+  echo "$out" | grep -q "engine is 'valkey', not 'pg'" && [ "$(cat "$STUB_RULES")" = "$before" ] && ok "$m refuses a non-pg cluster and changes nothing" || fail "$m on a non-pg cluster"
+done
+echo "ADDED u-x 198.51.100.9" > "$DB_FIREWALL_STATE"; out="$(STUB_ENGINE=valkey run close || true)"
+echo "$out" | grep -q "not 'pg'" && [ "$(cat "$STUB_RULES")" = "$before" ] && ok "close refuses a non-pg cluster and changes nothing" || fail "close on a non-pg cluster"
+rm -f "$DB_FIREWALL_STATE"
+STUB_ENGINE=pg run audit >/dev/null && ok "a pg cluster is accepted" || fail "pg cluster accepted"
 
 # 10. audit
 rules "$APP"; run audit >/dev/null && ok "audit passes with only the app rule" || fail "audit app only"
