@@ -10,7 +10,9 @@ import { STAGES, type ContactPresence, type LeadRow, type Stage } from './api'
 import { CreateLeadDialog } from './CreateLeadDialog'
 import { LeadDrawer } from './LeadDrawer'
 import { P, STAGE, lostText } from './copy'
-import { useLeads } from './hooks'
+import { ForbiddenPage } from '@/app/ForbiddenPage'
+import { ApiError } from '@/core/api/errors'
+import { useLeads, usePipelineAccess } from './hooks'
 import '../teachers/teachers.css'
 import '../trials/trials.css'
 import '../trials/new-students.css'
@@ -47,9 +49,15 @@ export function SalesPipelinePage() {
   const [openId, setOpenId] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const q = useDebounced(search.trim())
+  // The server decides who may open the pipeline. An account it refuses (a Teachers or
+  // Finance account that typed the address) gets the Forbidden page, not the page's frame.
+  const access = usePipelineAccess()
+  const refused = access.data?.allowed === false || (access.error instanceof ApiError && access.error.status === 403)
 
   const list = useLeads({ stage: stage === 'all' ? '' : stage, q, followUp: due ? 'due' : '', limit: PAGE_SIZE, offset })
   useEffect(() => setOffset(0), [stage, q, due])
+
+  if (refused) return <ForbiddenPage />
 
   const data = list.data
   const counts = data?.counts

@@ -1,0 +1,47 @@
+Jawwid Chat handoff, part 3 of 10
+
+| Path | What |
+|---|---|
+| `apps/api` | NestJS 11 + Prisma 6 API and worker (Node 24.18.0 in the Dockerfile). Modules under `apps/api/src/`: account-admin, account-deletion, account-recovery, action-log, admin, billing, calendar, cases, certificates, communication, core-boundary, dashboard, discipline, geo, infra, leave, legal, lesson-audio, lesson-content, lessons, materials, moderation, new-students, org, parent-profile, platform (authorization), quran, rewards, sales-pipeline, scheduled-calls, staff-accounts, staff-profile, subscriptions, supervision, tasks, teacher-file, teacher-supervisors, whiteboards. Entrypoints `main.ts` (API) and `worker.ts` (outbox drain). |
+| `apps/admin-web` | React 18 + Vite 6 + TypeScript 5 admin console. `src/features/*` has about 38 feature folders. Also `teacher-web/` (the Flutter web build is placed under `/teacher/`) and `legal-web/` (static bilingual legal pages), served by nginx 1.27. |
+| `apps/lessons` | Chat-owned lessons/materials renderer (Quran text from a verified snapshot, reviewed lesson JSON, audio manifests). Hosted on its own origin. |
+| `lib/`, `test/`, `ios/`, `android/`, `web/`, `pubspec.yaml` | The Flutter app (parents, teachers, some staff). Features: app_lock, auth, billing, calls, conversations, feedback, legal, lessons, materials, messages, moderation, notifications, profile, rewards, sales_payments, sessions, settings, stories, student_profile, supervision, tasks, teacher_profile, trials, whiteboards. Flutter SDK `^3.13` Dart, Flutter `>=3.47`. pubspec version is `0.1.0+1`, but store builds take the version from CI inputs, not pubspec (`docs/mobile/store-builds.md`). |
+| `supabase/migrations` | 183 SQL migrations; this is the *single schema authority* (Prisma is a query client only; `prisma migrate/db push` is forbidden). About 220 distinct `chat.*` tables created. Rollback scripts in `db/rollback/`, tests in `db/tests/`. |
+| `scripts/` | `db` (apply.sh), `infra` (production-setup.py, backup/restore, deploy helpers), `qa` (guards.sh: 23 release guards), `mobile` (build-store.sh), `lessons`, `legal`, `docs`, `ci`, `ops`, `ai`, `geo`, `brand`, `assets` |
+| `docs/` | Canonical docs index at `docs/README.md`. Code plus executed evidence beats docs, docs beat old reports. |
+| `infra/` | docker + env templates |
+| `.github/workflows/` | ci, deploy-staging, deploy-production, backup-daily, backup-weekly, storage-versioning, release-store-builds, review-cohort, livekit-probe, production-terms-config |
+
+Other local repos on this Mac [V, listed; contents not all inspected]:
+- `~/dev/jawwid-chat-release-assets`: store listing assets and Android/iOS readiness plans (not in git).
+- `~/dev/jawwid-sales-landing*` (several): the public sales landing page(s), including the adult programmes page experiments. A separate product; this handoff does not cover them in depth.
+- Many `~/dev/jawwid-wNN`, `jawwid-*` folders are *git worktrees* of the main repo for individual branches (about 100). See section 6.
+- *Protected, not in this repo and never to be touched without owner approval:* Jawwid Core (the older CRM; Stripe recurring billing may live there), Jawwid Teacher System, Jawwid Jadwal, Second School (`~/dev/second-school`). [R: AGENTS.md]
+
+### 2.2 Tech stack and versions [V from package/Docker files]
+- API: NestJS 11, Prisma 6, Socket.IO 4.8 (Redis adapter), `livekit-server-sdk` 2.x, `stripe` 23. Node 24.18.0 (Docker). Note: `docs/infrastructure/local-development.md` still says Node 22; it is stale. [V]
+- Database: PostgreSQL 17 (local containers postgres:17-alpine; production see 3.2). Redis 7 locally, Valkey/Redis 8.1 image in production.
+- Admin Web: React 18.3, Vite 6, TypeScript 5.7, vitest.
+- Mobile: Flutter, Sentry Flutter 10, webview_flutter (for lessons), LiveKit for audio.
+- Object storage: S3-compatible (DigitalOcean Spaces in production; MinIO locally). R2 is ruled out (no versioning).
+
+### 2.3 How the pieces talk [V/R]
+```
+Flutter app (parent/teacher)      Admin Web (staff)      Teacher web (/teacher/)
+        \                              |                       /
+         ---------- HTTPS /api/v1 + Socket.IO (WSS) ----------
+                                |
+                     NestJS API (apps/api)  <---- Stripe webhook
+                      |      |        \
+               PostgreSQL  Redis   Object storage (signed URLs; clients upload directly)
+                      |
+                 Worker (polls chat.outbox_event; no BullMQ queue by design)
+                      |
+        FCM / APNs push,  LiveKit (calls),  e-mail (SMTP),  WhatsApp (recovery codes)
+```
+- The database is authoritative. Realtime is a delivery optimisation; clients re-read state on reconnect. Realtime must not bypass authorization.
+- Readiness checks only Postgres and Redis (ADR-007); other dependencies degrade a feature, not the product.
+- Jawwid Core boundary: HTTPS API/webhooks only, never SQL; Chat keeps `external_id` + `synced_at`. Core still owns teachers' payroll history for non-cut-over teachers, etc. (PD-9, PD-10 as amended).
+
+### 2.4 Auth and roles [R]
+Username/e-mail + password; short-lived access tokens with rotating refresh tokens bound to device records; per-role idle/absolute session limits (PD-23); rate limiting and lockout; staff Admin Web can "keep me signed in". `PermissionGuard` (API) runs in *`shadow`* mode in production: it logs would-be refusals but only the legacy tier rules actually enforce, except denies (see 6.1). `chat.staff_has_permission` and `chat.staff_access_profile` are the one evaluator in SQL.

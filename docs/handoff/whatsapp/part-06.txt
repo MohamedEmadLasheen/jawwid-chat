@@ -1,0 +1,53 @@
+Jawwid Chat handoff, part 6 of 10
+
+### 4.6 Signing and release process (no keys) [R]
+- Android: upload key held in the `store-release` Environment (secrets) and, per `docs/release/android-upload-key.md`, Google manages app signing. First bundle upload had to be manual; owner chose option E (encrypted first-bundle artifact, `age` tool). Release builds need `android/key.properties`, never committed.
+- iOS: CI signs with the distribution certificate and App Store Connect API key (Environment secrets); entitlements `RunnerRelease.entitlements` (`aps-environment` production). Local alternative: `docs/release/signing-on-existing-mac.md`.
+- Debug symbols (Dart split-debug-info, dSYMs) are uploaded to Sentry in CI before the store upload.
+- Local phone installs require the owner's approval (saved rule). 
+
+---
+
+## 5. What is done (with evidence)
+
+| Area | Evidence |
+|---|---|
+| *Admin Web release of 2026-11-23* (M1 effective access, M2 department-kind audit, M3 dormant deny enforcement, Certificates and Educational Materials as top-level navigation, Escalations tab, materials author/review roles, PD-59 sales pipeline, PD-58 publish order) | Production run 45134892140 success; live bundle contains the new pages [V]; PR #634 merged as `a1fd1550`, #635, #636, #637 merged [V]; API unit tests 3,051 passing locally after the last fix (from my notes of this session) |
+| Six migrations applied in production | Run 45078561801 recorded them; the later run applied none (no-op) [V] |
+| Terms of Use 1.0 live and recorded | Run 45081665887 success; live pages hash to the recorded SHA-256 [V] |
+| Backup tooling fixes | `restore-db.sh` handles the `jawwid_backup` role (#636); CI restore drill updated [V] |
+| Core platform: messaging, groups, calls, push, authorization, RLS, audit, outbox worker, org structure, supervision | `docs/README.md` canonical set; protected security tests `docs/qa/protected-tests.tsv`; integration suites in `apps/api/test/integration` [R] |
+| Academy operations: lessons, scheduling, trials, new-student enrolment, instalments, payments, subscriptions, payroll, discipline, leave, certificates, materials, lesson audio, whiteboards, stories | PD-9 to PD-60 files; feature folders in 2.1 [V existence; R completeness] |
+| Store compliance: account deletion, report/block, privacy and terms links, crash reporting | PD-56, PD-57, `docs/release/store-console/` [R] |
+| Legal pages live and public | https://admin.chat.jawwid.com/legal/ [V for terms 1.0 ar/en] |
+| Android 1.0.0 (3) built from `2e412701` | CI run 44306602707 [V] |
+| Production safeguards | Environment protection, digest-bound deploys, encrypted pre-deploy dump, storage versioning check, smoke test [V] |
+
+Not counting: I never ran the Flutter suite in this session, so I do not state its test count. [U]
+
+---
+
+## 6. In progress or half-done
+
+### 6.1 Access management (the latest program) [V from docs in `jawwid-nav-ia` worktree]
+- *M1* effective-access visibility, *M2* department-kind audit (8 SQL rules corrected so a new configurable department cannot be confused with a core one), *M3* enforced denies: all *shipped to production but dormant*: switch OFF, guard shadow, so production behaves as before.
+- *M4/M5 not started*: configurable departments (relaxing the unique `(organization_id, kind)` to a partial unique on core kinds, department default roles, Prisma compound-key removal, create-department UI). Prerequisites are listed in `docs/admin/department-kind-audit.md`.
+- Turning denies on needs its own approval: export of staff and effective permissions, endpoint inventory, staged rollout for one department, rollback script exists.
+
+### 6.2 Open pull requests (as of this session; first 30 shown by `gh`) [V]
+Notable ones: #638 (review-notes Terms wording; owner to merge); PD-59 Sales stack #623-#632 (#623 gate fix, #624 integration tests, #625 stabilization doc, #627 F7 trial ownership, #628-#632 stacked on #627: needs-handover list, trial task owner, no family-login administration, prospect-id DB function, trial-group cards). *Do not modify #629-#632* (owner instruction). #630 conflicts with main in `pd040-catalogue-seed.spec.ts`. #633 owner redirect fix. #626 visual-review doc. Store/launch: #591 (store console and legal texts, "merge last"), #611 (store submission pack), #613/#614 (Apple 2.1 items), #610 (DB credential rotation blocker doc). Reliability/security: #567 (offboard fail-closed), #569-#571 (auth/token follow-ups), #586/#575 (review cohort), #588/#590 (push), #592 (pin actions), #596, #601, #612 (test flakes), #574, #578.
+There are more below #567 (list was truncated at 30). Ask me to re-run `gh pr list --state open` for the full set.
+
+### 6.3 Branches and worktrees [V]
+About 100 git worktrees exist (see `git worktree list`), many of them named `jawwid-wNN` for single-ticket branches, plus `.claude/worktrees/agent-*` from subagents and QA envs under `~/jawwid-qa-env`. `git branch -a` shows 1,384 branches. Some worktrees are locked. Most hold merged or abandoned work. Nobody has audited which are safe to delete. *Do not clean them without checking each for uncommitted work* (house rule: preserve the owner's uncommitted work).
+Current branch in the main checkout: `claude/pipeline-gate-on-server-access` (clean).
+
+### 6.4 Half-done items [R]
+- PD-59 migration changes prepared but not executed in production (#629-#631 carry "migration prepared").
+- PD-60 Students page: spec approved; verify status in `PD-60.md` (state says IN PROGRESS; the nav doc says built). [I: built, record not updated]
+- Teacher web portal login not verified with a real account after the release.
+- `docs/product/pd-registry` states lag reality for several PDs (marked IN PROGRESS although shipped). [I]
+
+---
+
+## 7. Not started, backlog, risks

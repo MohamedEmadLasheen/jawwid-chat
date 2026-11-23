@@ -1,0 +1,20 @@
+Jawwid Chat handoff, part 10 of 10
+
+## Appendix A: glossary
+PD-n product decision; BR-n business rule; M0-M5 delivery milestones (PRD) and M1-M5 access-management stages (separate series); LR-n launch readiness; RT-n red-team finding; ADR-n infra decision; `chat.*` the database schema; Core = Jawwid Core (separate system); the "owner" = the business owner (GitHub `MohamedEmadLasheen`); `jawwid-bot` = automation GitHub account used only to dispatch workflows.
+
+## Appendix B: key files
+- Rules: `AGENTS.md`, `CLAUDE.md`; product: `docs/product/JAWUID-CHAT-PRODUCT-BOUNDARY.md`, PRD v0.1/v0.2, `docs/product/pd-registry/`
+- Architecture: `docs/architecture/*`, `docs/infrastructure/architecture.md`, `docs/contracts/API-CONTRACT.md`
+- Ops: `docs/infrastructure/production-runbook.md`, `backup-recovery.md`, `monitoring.md`, `secrets.md`, `decisions.md`
+- Release: `docs/release/store-console/*`, `docs/release/review-accounts.md`, `docs/mobile/store-builds.md`, `docs/release/signed-builds-ci.md`
+- Admin Web: `apps/admin-web/src/app/navigation.ts`, `docs/admin/navigation-architecture.md`
+- Access program: `docs/admin/access-management-architecture.md`, `access-deny-enforcement.md`, `department-kind-audit.md` (on branch `claude/admin-web-nav-ia`, worktree `~/dev/jawwid-nav-ia`; check they landed on main) [V that the files exist there]
+- Workflows: `.github/workflows/deploy-production.yml`, `deploy-staging.yml`, `production-terms-config.yml`, `release-store-builds.yml`, `review-cohort.yml`
+
+## Appendix C: today's release timeline (for context)
+1. #634 (six migrations, Admin Web) merged; #635 added `build_only` staging; #636 fixed restore for the backup role.
+2. First production deploy (run 45078561801) applied all six migrations, then failed at Release: the API refused to start without `legal.current.terms_family`; DigitalOcean rolled back to the old API (`aaea48f0`). The database stayed on the new schema.
+3. Fix: #637 added a one-off approved workflow publishing Terms of Use 1.0 (effective 2026-11-17, re-acceptance required). Owner approved it (run 45081665887, success).
+4. Second production deploy (run 45134892140), dispatched from `jawwid-bot` and approved by the owner: success; DigitalOcean deployment `bdcba5b3-d12a-434e-a963-384d2f224b31`.
+5. I missed the PD-58 pre-step in the earlier release audit; it is now in my checklist.

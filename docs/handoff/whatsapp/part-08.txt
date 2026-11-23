@@ -1,0 +1,25 @@
+Jawwid Chat handoff, part 8 of 10
+
+### 8.3 Coding conventions [V: AGENTS.md]
+Tests first for behaviour changes; no `today+N` date fixtures; Admin Web uses `SearchableSelect`, Flutter a searchable picker, never native select/Dropdown; all user text in Arabic and English (`lib/l10n/app_ar.arb`, `app_en.arb`, Admin Web copy files; Arabic is primary); one PL/pgSQL trigger function per table; RLS never `for all using (true)`; object-storage keys are names, not capabilities; never copy a commit SHA from memory; verify a clean `git status` before checks; never skip or weaken a guard. Migration timestamps and PD numbers are claimed by adding one file each (`docs/product/migration-slots/`, `docs/product/pd-registry/`); `python3 -I scripts/docs/registry-index.py` prints the next free values.
+Naming: PD-n product decisions; LD/L/MG/AP for legal items (never "D-n"); RT-nnn red-team findings; LR-nn launch-readiness items; OA/OD owner questions; ENG-nn engineering tasks.
+
+### 8.4 Product and brand rules
+- Quran/hadith content rules (*from the owner's brief to me, not found in this repo by grep*) [U for the exact wording]: Bukhari and Muslim only; nothing child-facing without sheikh approval; never alter hadith text. In the repo, the enforcing mechanism that I did verify is the lessons engine: Quran text only from the verified snapshot (`data/quran/`, 6,236 verses, fails closed), lesson prose reviewed before release (pending files do not ship), and CODEOWNERS on Quran data and lesson content. [V/R]
+- Brand: Jawwid logo/colours/typography; WhatsApp look-alike allowed but no WhatsApp branding. No phone numbers shown to anyone. Children's imagery and any children-facing content need approval.
+- Arabic first, RTL, Gulf/Egypt academy audience; native-Arabic copy review is advised before launch.
+
+---
+
+## 9. Operations
+
+- *Monitoring*: Sentry (API, worker, app); structured JSON logs to stdout (read with `doctl apps logs <app-id> --type run|deploy`); health routes (`/health/live`, `/health/ready`) on the API; DigitalOcean alerts for `DEPLOYMENT_FAILED` and `DOMAIN_FAILED` only. No metrics backend, no dashboards, no uptime check yet (BLOCKER-3). [R]
+- *Backups*: see 7.1. Pre-deploy encrypted dump on every production deploy (works; run 45134892140 uploaded one). Daily/weekly scheduled backups: failing/disabled. Object storage: versioning with 30-day noncurrent retention, enforced by the deploy. Redis is not backed up by design. [V/R]
+- *Logs*: DigitalOcean App Platform logs; GitHub Actions logs (retention per GitHub). Never log secrets (the Terms workflow reads the DB URL from the environment and never prints it).
+- *Costs*: paid DigitalOcean app (api, worker, admin-web, Valkey) and Spaces; Supabase Free ($0); GitHub; Stripe fees; Sentry plan; LiveKit; Apple developer program; Google Play one-time fee; Cloudflare. Exact amounts: [U], owner has the bills.
+- *Mac disk / iCloud (bird) issue*: *status per my checks now [V]:* root disk 460 GiB total, 17 GiB used, 87 GiB free (17%); the `bird` process (iCloud Drive sync daemon) is running at about 27% CPU. I cannot see history of the original problem from this repo (no doc mentions it), so I do not know what was fixed or what remains. [U] Suggested watch items: keep repos and worktrees out of iCloud-synced folders (these live in `~/dev`, which is not an iCloud path [I]); watch for `bird` CPU spikes; large Docker volumes live in Colima's VM disk. Question for owner: what exactly was the symptom and the last fix?
+- *Periodic attention*: weekly check of CI on `main`; production deploys need the Terms/legal check; rotate the exposed DB credential (BLOCKER-6); backup role creation; storage-versioning workflow; dependency release-age (7 days) and supply-chain guards; review the open-PR list and the 100 worktrees; confirm Stripe card pause state before enabling payments; watch the Supabase Free project limits (storage, pausing after inactivity [I]).
+
+---
+
+## 10. Recommended next steps (priority order) and open questions
