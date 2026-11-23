@@ -11,7 +11,11 @@ Status: 🔴 **NOT READY.** Two different kinds of work remain, and they close s
 - **The owner's accounts and keys.** The deploy path is code-complete, but there is nothing to deploy to. This is most of the backend list below.
 - **Mobile store work.** Most of it is now built (account deletion, the privacy manifest, release signing, app crash reporting, Android push in review). What remains is the call ring with the app closed (S-06), owner credentials, and devices. The gates are S-01..S-08 in `docs/qa/release-gate.md` §2a, which is the source of truth for them. The phone-side test plan is `docs/qa/submission-device-test-plan.md`.
 
-## 0. The review period: database on Supabase Free (ADR-014)
+## 0. The review period: database on Supabase Free (ADR-014) — SUPERSEDED
+
+> **Superseded 2026-11-23 (ADR-017):** production's database is DigitalOcean Managed PostgreSQL
+> (`db-pgsql-nyc3-58796`, fra1, PostgreSQL 17). The text below is kept as history; the cost line and the
+> pooler/pause rules do not apply to production.
 
 Until launch, the production database is a dedicated **Supabase Free** project
 (its own organisation, Frankfurt, never Core's). Everything else is unchanged:

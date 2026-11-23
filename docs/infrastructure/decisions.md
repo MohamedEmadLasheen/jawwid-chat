@@ -480,6 +480,10 @@ DigitalOcean console).
 
 ## ADR-014 · Supabase Free hosts the database during the store-review period
 
+> **SUPERSEDED 2026-11-23 by ADR-017.** The production database is DigitalOcean Managed PostgreSQL, not
+> Supabase. This record is kept as history; do not follow its Supabase-specific rules (session pooler,
+> `<role>.<project-ref>` users, "no provider backups", "Free project pauses") for production.
+
 *2026-11-05. Owner's decision: do not pay for a production database while the
 apps wait two months or more for testing and store approval.*
 
@@ -645,3 +649,26 @@ what a compromised API can destroy). Skip the lifecycle read in the deploy
 **Trade-offs.** One more secret pair to rotate. A Full Access key can reach
 every bucket on the account. Today this is the only one; if more buckets are
 added, revisit whether Spaces offers a narrower admin scope.
+
+## ADR-017 · Production's database is DigitalOcean Managed PostgreSQL (supersedes ADR-014)
+
+*2026-11-23. Owner's statement: the production database is DigitalOcean Managed PostgreSQL, not Supabase.*
+
+**Decision.** Production's PostgreSQL is the DigitalOcean Managed PostgreSQL cluster `db-pgsql-nyc3-58796`
+(PostgreSQL 17, region fra1, one node `db-s-1vcpu-1gb`, 10 GiB, database `jawwid_chat`). ADR-014's Supabase Free
+plan is superseded and not in use for production.
+
+**Evidence (read-only, 2026-11-23).** `doctl databases list` shows the cluster online; `doctl databases backups`
+lists a daily provider backup at about 04:19 UTC for 2026-11-16 to 2026-11-23, with a size that grows day by day.
+Not verified from here: the application's `DATABASE_URL` (a secret) was not read; point-in-time-recovery window
+and trusted sources must be confirmed in the dashboard.
+
+**Consequences.**
+- The provider's daily backups and point-in-time recovery (documented 7 days) are the primary line
+  (`backup-recovery.md` §2). The earlier "no provider backup" rule (§3c) does not apply.
+- The independent `pg_dump` copies stay (daily artifact, weekly off-site, pre-deploy), now through the cluster's own
+  host, not a Supabase session pooler. The read-only role's default privileges must name the role that owns the
+  tables (see `backup-recovery.md` §3d).
+- The pool-size overrides ADR-014 introduced (`DATABASE_POOL_MAX`, `DATABASE_WORKER_POOL_MAX`) were sized for a
+  Supabase pooler; review them against the cluster's connection limit before changing anything.
+- Public legal texts that name Supabase are out of scope for this ADR and are the owner's and counsel's decision.

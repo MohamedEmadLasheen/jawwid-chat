@@ -22,8 +22,8 @@ moves this tool with it.
 
 Values come from the decisions recorded in docs/infrastructure/decisions.md:
 hostnames under chat.jawwid.com (production) and chat-staging.jawwid.com
-(staging, repository variables used to build the image), ADR-014 (Supabase,
-smaller pools) and ADR-015 (LAUNCH_PHASE=review, in-app Redis).
+(staging, repository variables used to build the image), ADR-014 (Supabase, superseded
+by ADR-017: production is DigitalOcean Managed PostgreSQL; the smaller pools remain) and ADR-015 (LAUNCH_PHASE=review, in-app Redis).
 """
 from __future__ import annotations
 
@@ -88,7 +88,7 @@ GENERATED = ("JWT_ACCESS_SECRET", "JWT_REFRESH_SECRET", "RESET_CODE_HASH_SECRET"
 
 # Who provides the rest, and how. Shown by `status`; never a value.
 HINTS = {
-    "DATABASE_URL": "Supabase Frankfurt project: session pooler string (port 5432, user postgres.<ref>) + ?sslmode=require",
+    "DATABASE_URL": "DigitalOcean Managed PostgreSQL (ADR-017): the cluster's direct connection string (port 25060) + ?sslmode=require",
     "DIGITALOCEAN_ACCESS_TOKEN": "DigitalOcean API token: read/create/update apps (+ read databases at launch)",
     "GHCR_PULL_CREDENTIALS": "<github-username>:<classic token with read:packages only>",
     "DIGITALOCEAN_APP_ID": "printed by the first `Deploy production` run with first_deploy=true",

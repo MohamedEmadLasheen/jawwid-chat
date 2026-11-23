@@ -289,7 +289,11 @@ No credential is in the repository. `scripts/qa/check-backup-offsite.sh` (CI
 guard `backup-offsite`) holds the upload, retention and own-key contract with the
 AWS CLI stubbed.
 
-### 3c. The review period on Supabase Free (ADR-014)
+### 3c. The review period on Supabase Free (ADR-014) — SUPERSEDED
+
+> **Superseded 2026-11-23 (ADR-017).** Production is on DigitalOcean Managed PostgreSQL, which takes daily backups
+> and point-in-time recovery itself. Kept as history. Where this section says "session pooler", "Supabase" or
+> "no provider backup", it no longer applies; the daily job is still useful as an independent copy (§3d).
 
 While the database is on Supabase Free there is **no provider backup and no
 point-in-time recovery**, so the layers in §2 shift down by one:
@@ -316,6 +320,40 @@ the review period, and re-enable it with the bucket.
 The recovery point is up to one day. That is accepted only because no real
 user is on this database: the store builds stay on manual release until the
 cutover to DigitalOcean (ADR-014).
+
+### 3d. Independent copy on DigitalOcean Managed PostgreSQL (proposal, NOT executed)
+
+Status 2026-11-23: nothing here has been run. The `backup` GitHub Environment is empty, so `backup-daily.yml`
+and `backup-weekly.yml` fail (daily) or are disabled (weekly); the provider's own backups work.
+
+1. **Find the table owner first (read-only, as the admin user):**
+   `select current_user; select tableowner, count(*) from pg_tables where schemaname = 'chat' group by 1;`
+   The default privileges below must name **that** role (expected `doadmin`). The older example in §3b and
+   `scripts/infra/create-jawwid-backup-role.sql` says `postgres` (Supabase) and would leave future tables
+   unreadable by the backup role on DigitalOcean.
+2. **Create the role with no password in the SQL**, as the admin user, in `jawwid_chat`:
+   ```sql
+   CREATE ROLE jawwid_backup LOGIN BYPASSRLS NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION CONNECTION LIMIT 2;
+   ALTER ROLE jawwid_backup SET statement_timeout = 0;
+   ALTER ROLE jawwid_backup SET default_transaction_read_only = on;
+   GRANT CONNECT ON DATABASE jawwid_chat TO jawwid_backup;
+   GRANT USAGE ON SCHEMA chat TO jawwid_backup;
+   GRANT SELECT ON ALL TABLES IN SCHEMA chat TO jawwid_backup;
+   GRANT SELECT ON ALL SEQUENCES IN SCHEMA chat TO jawwid_backup;
+   ALTER DEFAULT PRIVILEGES FOR ROLE doadmin IN SCHEMA chat GRANT SELECT ON TABLES TO jawwid_backup;
+   ALTER DEFAULT PRIVILEGES FOR ROLE doadmin IN SCHEMA chat GRANT SELECT ON SEQUENCES TO jawwid_backup;
+   ```
+3. **Set the password without it appearing anywhere**: in the same `psql` session type `\password jawwid_backup`
+   and enter the generated password at psql's hidden prompt. psql hashes it (SCRAM) before sending, so the
+   cleartext is not in the server log, not in `pg_stat_activity`, not in the shell history and not in a file.
+4. **Put the DSN in GitHub without printing it:** `gh secret set BACKUP_DATABASE_URL --env backup` (gh's hidden
+   prompt) with `postgresql://jawwid_backup:<password, percent-encoded>@<cluster host>:25060/jawwid_chat?sslmode=require`
+   (the direct port, not the connection pool). Set `BACKUP_ENCRYPTION_PASSPHRASE` the same way, and keep it in the
+   password manager too: without it no dump can be opened.
+5. **Verify, then drill:** run `backup-daily.yml` by hand once, then restore the artifact into a local `postgres:17`
+   (§5). Remove the Supabase wording from `backup-daily.yml` comments only after this works.
+Risks: the role bypasses row-level security and reads every table (including sealed payout data); it is read-only
+and capped at two connections. A leaked DSN means a full read. The passphrase is a single point of loss.
 
 ## 4. Restoring
 

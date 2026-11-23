@@ -42,7 +42,7 @@ for file in "$MIGRATIONS"/*.sql; do
   # failed migration is never recorded as applied.
   # `set local statement_timeout = 0`: a migration is never cancelled by the
   # RUNTIME's query timeout. Where a pooler drops the connection's `options`
-  # (Supabase's, ADR-014), that timeout is set on the role instead, and the
+  # (Supabase's did, ADR-014; production is now DigitalOcean, ADR-017), that timeout is set on the role instead, and the
   # migration runner connects as the same role. LOCAL ends with this
   # transaction, so nothing after it is affected.
   {
