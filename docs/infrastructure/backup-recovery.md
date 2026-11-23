@@ -540,3 +540,60 @@ rather than assumed.
   `storage-versioning.sh --verify-expiry check` passes on the real bucket.
 - Versioning protects against deletion, not against losing the bucket or the
   account. A second copy outside the account does not exist.
+
+## 9. Database Trusted Sources and runner access (Option A)
+
+**Why.** The production cluster (`db-pgsql-nyc3-58796`, ADR-017) admits every address until its Trusted Sources
+list has a rule, and the first rule closes it to everyone not listed. The target is **one rule: the App
+Platform app**. GitHub-hosted runners then cannot reach it, so each job that connects to the database opens
+**its own runner IP for the length of its database steps** and removes it in an `if: always()` step.
+DigitalOcean's own daily backups and point-in-time recovery need no firewall opening.
+
+**The helper.** `scripts/infra/db-firewall.sh open | close | audit` (doctl, pinned by `install-doctl.sh`).
+- `open`: lists the rules; if the list is **empty** (database still open) it does nothing, because adding a
+  rule would close the database to everyone else; otherwise it records its state first, adds the runner's IPv4
+  (`ip_addr`), reads it back, waits `FIREWALL_SETTLE_SECONDS` (15).
+- `close`: removes **only the rule recorded** (by uuid and address). It also cleans up when a run was cancelled
+  between recording and adding. It never removes an app rule, a rule it did not add, a rule another job
+  borrowed, or the **last remaining rule** (that would open the database); it fails loudly instead.
+- `audit` (`db-firewall-audit.yml`, daily 05:23 UTC, `backup` Environment): fails if a rule is not the app, not
+  in `DATABASE_FIREWALL_ALLOW`, and older than 90 minutes; fails if the app is not a rule; with
+  `DATABASE_FIREWALL_ENFORCE=true` also fails when there are no rules at all. It only reads.
+- **Dormant by default.** Without the variable `DATABASE_CLUSTER_ID` every step is a no-op, so merging this
+  changes nothing. With it set but a token that lacks database scope, the job **fails with the scope message**.
+- Never printed: the token, the runner's IP (also `::add-mask::`ed), any connection string. The audit prints a
+  rule's uuid, type and creation time, not its address.
+- Wired into: `deploy-production.yml` (open before the role preflight; close after the Quran loader),
+  `production-terms-config.yml`, `review-cohort.yml` (provision job), `backup-daily.yml`,
+  `backup-weekly.yml`. The `db-firewall` guard (`scripts/qa/check-db-firewall.sh`) tests the helper with doctl
+  stubbed and checks that every one of those workflows opens before its first database step and closes with
+  `if: always()` after its last.
+
+**The DigitalOcean token (owner, once).** Scopes are fixed when a token is created, so create new tokens:
+- `production` Environment, secret `DIGITALOCEAN_ACCESS_TOKEN`: the scopes it has today (apps read, create and
+  update; databases read) **plus `database:update`** (the firewall write). Replace the secret.
+- `backup` Environment, a **new** secret `DIGITALOCEAN_ACCESS_TOKEN`: custom scopes **`database:read` and
+  `database:update` only**, nothing else.
+- Set in both Environments the variable `DATABASE_CLUSTER_ID` (the cluster's id). In `backup` also, optionally,
+  `DATABASE_FIREWALL_APP_ID`, `DATABASE_FIREWALL_ALLOW` and `DATABASE_FIREWALL_ENFORCE`.
+- Where: DigitalOcean control panel, API, Tokens, Generate New Token, custom scopes (scope names as shown there).
+  Secrets: GitHub, Settings, Environments, `production` / `backup`.
+
+**Residual risks.** A token with `database:update` can change the firewall (it can already redeploy the app).
+If `close` fails the runner's address stays open until the audit flags it (within a day). Two jobs on one runner
+address at once are treated as "borrowed" and the first to finish leaves the rule for the other. A job needs
+about 15 seconds of extra time for the rule to settle.
+
+**Roll out in this order** (nothing changes until step 3): 1. merge the PR; 2. create the two tokens and replace
+or add the secrets; 3. set `DATABASE_CLUSTER_ID` in both Environments (the workflows are still no-ops while the
+database has no rules); 4. run **Database firewall audit** by hand (expect "no Trusted Sources yet"); 5. restrict
+the database to the app (dashboard or `doctl databases firewalls append <id> --rule app:<APP_ID>`), check
+`/health/ready` and the owner login at once; 6. set `DATABASE_FIREWALL_ENFORCE=true` and
+`DATABASE_FIREWALL_APP_ID`; run the audit again (expect pass); 7. prove the runner path with **Daily database
+backup** (needs the backup role and secrets, section 3d), then the next production deploy.
+
+**Rollback.** Fast: remove every rule (dashboard Trusted Sources, or `doctl databases firewalls remove <id>
+--uuid <rule>`); an empty list is open. To stop the workflows managing rules, delete the variable
+`DATABASE_CLUSTER_ID`. Do **not** delete the variable while the database is restricted: the next deploy would
+then fail to reach it.
+

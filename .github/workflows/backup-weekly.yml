@@ -63,6 +63,14 @@ jobs:
           [ "$HAS_BUCKET" = "true" ] || { echo "::error title=Backup::BACKUP_BUCKET, BACKUP_SPACES_ENDPOINT and BACKUP_SPACES_REGION must all be set"; rc=1; }
           exit $rc
 
+      - name: Open this runner as a temporary database Trusted Source
+        # Dormant until the variable DATABASE_CLUSTER_ID is set. See
+        # docs/infrastructure/backup-recovery.md §9.
+        env:
+          DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+          DATABASE_CLUSTER_ID: ${{ vars.DATABASE_CLUSTER_ID }}
+        run: scripts/infra/db-firewall.sh open
+
       - name: Back up the database, encrypted in the pipe
         # backup-db.sh refuses without the key for APP_ENV=production, before
         # pg_dump runs; no plaintext archive ever exists on the runner.
@@ -75,6 +83,13 @@ jobs:
           # LR-77 (#516): a scheduled backup is never a first deploy; a missing schema fails.
           FIRST_DEPLOY: 'false'
         run: scripts/infra/backup-db.sh --out ./backups --schema chat
+
+      - name: Close this runner's database Trusted Source
+        if: always()
+        env:
+          DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+          DATABASE_CLUSTER_ID: ${{ vars.DATABASE_CLUSTER_ID }}
+        run: scripts/infra/db-firewall.sh close
 
       - name: Store it in Spaces, read each object back, and keep the last 8 weeks
         env:

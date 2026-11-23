@@ -183,7 +183,7 @@ no_match() {
 # Each gate is a function gate_<id> (dashes become underscores). The title is
 # the CI step name, kept identical so the log reads the same in both places.
 
-GATE_IDS="g18 g20 g20-meta jc011 g31 secret-scan web-env env-example env-templates app-spec backup-client backup-encryption backup-offsite storage-admin-keys launch-redis pd-registry quran-dataset geo-dataset pd040-routes lesson-writer lessons-supply-chain app-icons ci-wiring"
+GATE_IDS="g18 g20 g20-meta jc011 g31 secret-scan web-env env-example env-templates app-spec backup-client backup-encryption backup-offsite db-firewall storage-admin-keys launch-redis pd-registry quran-dataset geo-dataset pd040-routes lesson-writer lessons-supply-chain app-icons ci-wiring"
 
 title() {
   case "$1" in
@@ -200,6 +200,7 @@ title() {
     backup-client) echo "The backup drill runs the pg_dump it is given" ;;
     backup-encryption) echo "Backups are encrypted, and restore refuses what it must" ;;
     backup-offsite) echo "The weekly off-site backup stores only encrypted archives and keeps 8 weeks" ;;
+    db-firewall)   echo "Runner access to the database: open and close touch only their own rule, dormant when unset, never print secrets; every DB workflow wires both steps" ;;
     storage-admin-keys) echo "Spaces: the bucket's versioning and lifecycle are checked with the admin key; the app never receives it" ;;
     launch-redis)  echo "ADR-015 · a LAUNCH_PHASE=launch deploy refuses any Redis but managed, locked-down Valkey" ;;
     pd-registry)   echo "PD numbers and migration slots — one claim each, every migration claimed" ;;
@@ -356,6 +357,12 @@ gate_backup_offsite() {
   # leaves the runner, every object is read back, and prune keeps exactly the
   # last 8 weeks. AWS CLI stubbed; no network, no credential.
   bash scripts/qa/check-backup-offsite.sh
+}
+
+gate_db_firewall() {
+  # scripts/infra/db-firewall.sh with doctl stubbed; plus the workflow wiring
+  # (open before the first database step, close with if: always() after the last).
+  bash scripts/qa/check-db-firewall.sh
 }
 
 gate_storage_admin_keys() {

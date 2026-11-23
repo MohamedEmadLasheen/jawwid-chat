@@ -204,6 +204,17 @@ for that chain even when the client forges an entry in front (unit test
 `proxy-hop-probe.spec.ts`). That is the expected answer, and the reason to measure
 rather than assume it.
 
+### 1e. Database Trusted Sources (runner access)
+
+Once the cluster admits only the App Platform app, every production workflow that connects to the database
+opens its own runner IP temporarily and closes it again (`scripts/infra/db-firewall.sh`). Before a deploy:
+the `production` Environment needs the variable `DATABASE_CLUSTER_ID` and a token with `database:read` and
+`database:update`. A deploy that stops at "Open this runner as a temporary database Trusted Source" names the
+missing scope. If a deploy is cancelled mid-way, the close step still runs; if the **Database firewall audit**
+reports a stray rule, remove it (`doctl databases firewalls list <id>`, then `remove <id> --uuid <rule>`). Never
+remove the app rule. Full procedure, scopes, rollout order and rollback:
+`backup-recovery.md` §9.
+
 ## 2. What exactly is running?
 
 ```bash
