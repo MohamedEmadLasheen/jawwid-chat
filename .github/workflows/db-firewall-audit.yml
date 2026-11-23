@@ -1,0 +1,46 @@
+name: Database firewall audit
+
+# Fails loudly if the production database's Trusted Sources contain anything that
+# is not (a) the App Platform app, (b) an address the owner allowed on purpose, or
+# (c) a runner rule younger than the grace period (a job in flight). A runner rule
+# left behind by a failed close step is therefore found within a day.
+#
+# Dormant until the variable DATABASE_CLUSTER_ID is set in the `backup`
+# Environment. Needs, in that Environment:
+#   secret   DIGITALOCEAN_ACCESS_TOKEN   custom scopes database:read + database:update only
+#   variable DATABASE_CLUSTER_ID         the cluster id (not a secret)
+#   variable DATABASE_FIREWALL_APP_ID    optional: the app that must be a rule
+#   variable DATABASE_FIREWALL_ALLOW     optional: comma-separated addresses allowed permanently
+#   variable DATABASE_FIREWALL_ENFORCE   optional: "true" once restricted, so "no rules" also fails
+# It only reads; it never changes a rule. docs/infrastructure/backup-recovery.md §9.
+
+on:
+  schedule:
+    - cron: '23 5 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: db-firewall-audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    name: Trusted Sources are the app and nothing stray
+    runs-on: ubuntu-latest
+    environment: backup
+    if: github.ref == 'refs/heads/main'
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Audit
+        env:
+          DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+          DATABASE_CLUSTER_ID: ${{ vars.DATABASE_CLUSTER_ID }}
+          DATABASE_FIREWALL_APP_ID: ${{ vars.DATABASE_FIREWALL_APP_ID }}
+          DATABASE_FIREWALL_ALLOW: ${{ vars.DATABASE_FIREWALL_ALLOW }}
+          DATABASE_FIREWALL_ENFORCE: ${{ vars.DATABASE_FIREWALL_ENFORCE }}
+        run: scripts/infra/db-firewall.sh audit

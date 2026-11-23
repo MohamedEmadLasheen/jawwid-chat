@@ -429,6 +429,14 @@ jobs:
           STORAGE_ADMIN_SECRET_KEY: ${{ secrets.STORAGE_ADMIN_SECRET_KEY }}
         run: scripts/infra/storage-versioning.sh verify
 
+      - name: Open this runner as a temporary database Trusted Source
+        # Dormant until the variable DATABASE_CLUSTER_ID is set. See
+        # docs/infrastructure/backup-recovery.md §9.
+        env:
+          DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+          DATABASE_CLUSTER_ID: ${{ vars.DATABASE_CLUSTER_ID }}
+        run: scripts/infra/db-firewall.sh open
+
       - name: Preflight the database role capability
         # BEFORE the backup and BEFORE any migration. 20260910120200 grants
         # BYPASSRLS, which not every managed PostgreSQL permits; without this
@@ -485,6 +493,13 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
           PSQL="psql -v ON_ERROR_STOP=1 $DATABASE_URL" scripts/db/load-quran.sh
+
+      - name: Close this runner's database Trusted Source
+        if: always()
+        env:
+          DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+          DATABASE_CLUSTER_ID: ${{ vars.DATABASE_CLUSTER_ID }}
+        run: scripts/infra/db-firewall.sh close
 
       - name: Release
         # Deploys the resolved .do/app.production.yaml with doctl and fails
