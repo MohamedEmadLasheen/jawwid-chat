@@ -285,7 +285,8 @@ jobs:
           DATABASE_STATEMENT_TIMEOUT_MS: '15000'
           # The API's pool; database-pool.ts has the 22-connection budget. An
           # Environment variable overrides it for a smaller database (Supabase
-          # Free's pooler during the review period, ADR-014).
+          # Free's pooler during the review period, ADR-014; production is DigitalOcean Managed
+          # PostgreSQL since ADR-017, so review these values against its connection limit).
           DATABASE_POOL_MAX: ${{ vars.DATABASE_POOL_MAX || '7' }}
           DATABASE_WORKER_POOL_MAX: ${{ vars.DATABASE_WORKER_POOL_MAX || '3' }}  # the worker's pool
           REDIS_URL: ${{ secrets.REDIS_URL }}

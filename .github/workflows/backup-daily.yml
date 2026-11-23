@@ -1,26 +1,16 @@
 name: Daily database backup (encrypted, GitHub artifact)
 
-# The review period's backup (ADR-014). While Jawwid Chat's database is on
-# Supabase Free, the provider takes NO backups and offers no point-in-time
-# recovery, so this job is the first line, not the third: every day, an
-# ENCRYPTED logical dump of the chat schema, kept 30 days as a workflow artifact.
-# It needs no bucket, so it costs nothing.
-#
-# It also keeps the Free project awake. Supabase pauses a Free project after
-# about a week of too little database activity; pg_dump reads every table every
-# day. (The worker's outbox polling does the same while the app runs; this is
-# the floor when it does not.)
+# Independent daily copy: an ENCRYPTED logical dump of the chat schema, kept 30 days
+# as a workflow artifact. Production's database is DigitalOcean Managed PostgreSQL
+# (ADR-017), whose own daily backups and point-in-time recovery are the primary line;
+# this job is the portable second copy. It needs no bucket, so it costs nothing.
 #
 # Same `backup` GitHub Environment as backup-weekly.yml, and only these two:
 #   secrets  BACKUP_DATABASE_URL           the READ-ONLY jawwid_backup role
-#                                          (backup-recovery.md §3b), through
-#                                          Supabase's SESSION pooler (port 5432,
-#                                          user jawwid_backup.<project-ref>):
-#                                          the direct host is IPv6-only and
-#                                          GitHub's runners are IPv4
+#                                          (backup-recovery.md §3d), the
+#                                          cluster's direct port, sslmode=require
 #            BACKUP_ENCRYPTION_PASSPHRASE  also held outside GitHub (§3)
-# Nothing in the repository. Retire this workflow, or keep it as a cheap extra
-# copy, once production runs on DigitalOcean's managed Postgres (ADR-014).
+# Nothing in the repository.
 
 on:
   schedule:
