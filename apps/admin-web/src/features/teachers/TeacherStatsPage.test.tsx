@@ -142,36 +142,91 @@ describe('the statistics', () => {
     renderWithProviders(<AppRoutes />, { staff: makeStaff({ role: 'manager' }), route: '/teachers?month=2026-10' })
     const table = await screen.findByRole('table')
     const one = within(table).getByRole('button', { name: 'Teacher One' }).closest('tr')!
-    expect(within(one).getByText('99 lessons · 65.8 h')).toBeInTheDocument()
+    // The row's three figures: late reports (with the on-time rate), student attendance, lessons held of counted.
+    expect(within(one).getByText('2')).toBeInTheDocument()
+    expect(within(one).getByText('75%')).toBeInTheDocument()
     expect(within(one).getByText('90%')).toBeInTheDocument()
-    // PD-15: make-ups completed of all, student excuses before + after the start, teacher excuses.
-    expect(within(one).getByText('8 / 9')).toBeInTheDocument()
-    expect(within(one).getByText('9 + 3')).toBeInTheDocument()
+    expect(within(one).getByText('99 / 130')).toBeInTheDocument()
     const two = within(table).getByRole('button', { name: 'Teacher Two' }).closest('tr')!
     expect(within(two).getByText(/Inactive/)).toBeInTheDocument()
-    expect(within(two).getAllByText('—')).toHaveLength(2)
-    // Trials this month, and how many subscribed; then (PD-31) lessons the teacher moved, a plain figure.
-    // One Trials cell: subscribed / all, with the moves under it (the last cell is the row's Open action).
-    expect(within(one).getByText('3 / 7')).toBeInTheDocument()
-    expect(within(table).getByRole('columnheader', { name: /^Trials/ })).toBeInTheDocument()
-    const moved = within(one).getByText('Moved by teacher: 4')
-    expect(moved).not.toHaveClass('ts-attention')
+    // Nothing to divide: attendance is a dash, and no on-time rate is claimed.
+    expect(within(two).getAllByText('—')).toHaveLength(1)
+    expect(within(two).queryByText(/on time/)).toBeNull()
     expect(calls(/\/stats\/teachers\?month=2026-10$/)).toBeGreaterThan(0)
+
+    // PD-15 excuses and make-ups, trials, and (PD-31) lessons the teacher moved are in the side sheet.
+    await userEvent.click(within(one).getByRole('button', { name: 'Teacher One' }))
+    const sheet = await screen.findByRole('dialog', { name: 'Teacher One' })
+    const fact = (label: string) => within(sheet).getByText(label).closest('div')!
+    expect(await within(sheet).findByText('3 of 7')).toBeInTheDocument()
+    expect(within(fact('Student excuses')).getByText('12')).toBeInTheDocument()
+    expect(within(fact('Student excuses')).getByText('9 before the start, 3 after')).toBeInTheDocument()
+    expect(within(fact('Teacher excuses')).getByText('4')).toBeInTheDocument()
+    expect(within(fact('Make-ups completed')).getByText('8 of 9')).toBeInTheDocument()
+    const moved = within(fact('Lessons moved by teacher')).getByText('4')
+    expect(within(fact('Lessons moved by teacher')).getByText('information only')).toBeInTheDocument()
+    expect(moved).not.toHaveClass('is-breach')
+  })
+
+  it('orders teachers by need for intervention, each with its reason', async () => {
+    renderWithProviders(<AppRoutes />, { staff: makeStaff({ role: 'manager' }), route: '/teachers?month=2026-10' })
+    const table = await screen.findByRole('table')
+    const one = within(table).getByRole('button', { name: 'Teacher One' }).closest('tr')!
+    // A teacher no-show makes the row urgent, whatever the other figures say; the reason says so.
+    expect(within(one.closest('tbody')!).getByRole('columnheader', { name: /Urgent/ })).toBeInTheDocument()
+    expect(within(one).getByText(/Missed 1 lesson without notice/)).toBeInTheDocument()
+    // The no-show is the red figure that put it there.
+    expect(within(one).getByText('teacher missed 1')).toHaveClass('is-breach')
+    // On an urgent row only its trigger is coloured: late reports below the threshold are not red, and a low on-time rate is not amber.
+    expect(within(one).getByText('2')).not.toHaveClass('is-breach')
+    expect(within(one).getByText('75%').closest('.tsx-sub')).not.toHaveClass('is-watch')
+    const two = within(table).getByRole('button', { name: 'Teacher Two' }).closest('tr')!
+    expect(within(two.closest('tbody')!).getByRole('columnheader', { name: /On track/ })).toBeInTheDocument()
+    // The thresholds in use are stated under the list.
+    expect(screen.getByText(/Urgent: 3 lessons or more without a report, or any teacher no-show\./)).toBeInTheDocument()
+  })
+
+  it('the header figures filter the list', async () => {
+    renderWithProviders(<AppRoutes />, { staff: makeStaff({ role: 'manager' }), route: '/teachers?month=2026-10' })
+    const table = await screen.findByRole('table')
+    expect(within(table).getByRole('button', { name: 'Teacher Two' })).toBeInTheDocument()
+    const urgent = screen.getByRole('button', { name: /Needs intervention/ })
+    expect(within(urgent).getByText('1')).toBeInTheDocument()
+    await userEvent.click(urgent)
+    expect(urgent).toHaveAttribute('aria-pressed', 'true')
+    expect(within(screen.getByRole('table')).queryByRole('button', { name: 'Teacher Two' })).toBeNull()
+    expect(within(screen.getByRole('table')).getByRole('button', { name: 'Teacher One' })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Show every teacher' }))
+    expect(within(screen.getByRole('table')).getByRole('button', { name: 'Teacher Two' })).toBeInTheDocument()
+  })
+
+  it("the side sheet's one action opens the teacher's supervision chat", async () => {
+    on(/\/teachers\/t-1\/supervision-conversation$/, () => json({ conversationId: 'c-9' }))
+    renderWithProviders(<AppRoutes />, { staff: makeStaff({ role: 'manager' }), route: '/teachers?month=2026-10' })
+    await userEvent.click(await screen.findByRole('button', { name: 'Teacher One' }))
+    const sheet = await screen.findByRole('dialog', { name: 'Teacher One' })
+    expect(within(sheet).getByRole('link', { name: 'Open teacher file' })).toHaveAttribute('href', '/teachers/files/t-1')
+    await userEvent.click(within(sheet).getByRole('button', { name: 'Message teacher: Teacher One' }))
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.some(([u, init]) => /\/teachers\/t-1\/supervision-conversation$/.test(String(u)) && (init as RequestInit | undefined)?.method === 'POST')).toBe(true),
+    )
   })
 
   it('opens one teacher: category cards broken down by length, like the Core dashboard, and what only Chat knows', async () => {
     renderWithProviders(<AppRoutes />, { staff: makeStaff({ role: 'manager' }), route: '/teachers?month=2026-10' })
-    await userEvent.click(await screen.findByRole('button', { name: 'Teacher One' }))
-    const held = await screen.findByRole('article', { name: 'Completed lessons' })
+    await openFullRecord()
+    const held = await screen.findByRole('article', { name: 'Lessons held' })
     expect(within(held).getByText('99')).toBeInTheDocument()
     expect(within(held).getByText('63 lessons')).toBeInTheDocument()
     expect(within(held).getByText('40 min')).toBeInTheDocument()
-    expect(within(held).getByText('99 lessons · 65.8 h')).toBeInTheDocument()
+    expect(within(held).getByText('99 lessons, 65.8 h')).toBeInTheDocument()
     // Paused lessons are shown, marked as counted for nobody.
     const paused = screen.getByRole('article', { name: 'Paused' })
     expect(within(paused).getByText(/not counted for or against anyone/)).toBeInTheDocument()
     // What Core never saw.
-    expect(within(screen.getByRole('article', { name: 'Lesson reports' })).getByText('91% · 90/99')).toBeInTheDocument()
+    const reports = screen.getByRole('article', { name: 'Lesson reports' })
+    expect(within(reports).getByText('91%')).toBeInTheDocument()
+    expect(within(reports).getByText('90 of 99')).toBeInTheDocument()
     expect(within(screen.getByRole('article', { name: 'Replies to families' })).getByText('95%')).toBeInTheDocument()
     // Each trial once, by its outcome: the month's breakdown, from Chat's records.
     const trials = screen.getByRole('article', { name: 'Trial lessons' })
@@ -222,6 +277,14 @@ describe('the Teachers area', () => {
   })
 })
 
+/** A row opens the teacher's month in a side sheet; the full-page record is one link further. */
+async function openFullRecord(link = 'Full month statistics') {
+  await userEvent.click(await screen.findByRole('button', { name: 'Teacher One' }))
+  const sheet = await screen.findByRole('dialog', { name: 'Teacher One' })
+  await userEvent.click(await within(sheet).findByRole('link', { name: link }))
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+}
+
 function calls(pattern: RegExp): number {
   return fetchMock.mock.calls.filter(([u]) => pattern.test(String(u))).length
 }
@@ -239,7 +302,7 @@ describe('readable statistics', () => {
   it('a long median delay reads in days and hours, and the month is named', async () => {
     on(/\/stats\/teachers\/t-1\?/, () => json({ ...DETAIL, reports: { ...DETAIL.reports, medianDelayMinutes: 5506 } }))
     renderWithProviders(<AppRoutes />, { staff: makeStaff({ role: 'manager' }), route: '/teachers?month=2026-10' })
-    await userEvent.click(await screen.findByRole('button', { name: 'Teacher One' }))
+    await openFullRecord()
     const reports = await screen.findByRole('article', { name: 'Lesson reports' })
     expect(within(reports).getByText('3 days 19 h')).toBeInTheDocument()
     expect(screen.getByText('Teaching statistics — October 2026')).toBeInTheDocument()
@@ -247,7 +310,7 @@ describe('readable statistics', () => {
 
   it('in Arabic, a count agrees with its number', async () => {
     renderWithProviders(<AppRoutes />, { staff: makeStaff({ role: 'manager' }), route: '/teachers?month=2026-10', locale: 'ar' })
-    await userEvent.click(await screen.findByRole('button', { name: 'Teacher One' }))
+    await openFullRecord('إحصائيات الشهر كاملة')
     expect(await screen.findByText('63 حصة')).toBeInTheDocument() // 11 and more: the singular
     expect(screen.getByText('5 حصص')).toBeInTheDocument() // 3 to 10: the plural
     expect(screen.queryByText('5 حصة')).toBeNull()
@@ -256,14 +319,14 @@ describe('readable statistics', () => {
   it('make-ups are counted once: with the month summary shown, no second, closed-only card beside it', async () => {
     on(/\/stats\/teachers\/t-1\?/, () => json({ ...DETAIL, summary: { ...summary } }))
     renderWithProviders(<AppRoutes />, { staff: makeStaff({ role: 'manager' }), route: '/teachers?month=2026-10' })
-    await userEvent.click(await screen.findByRole('button', { name: 'Teacher One' }))
+    await openFullRecord()
     await screen.findByRole('article', { name: 'Lesson reports' })
     expect(screen.queryByText('Closed make-ups')).toBeNull()
   })
 
   it('without a month summary the closed make-ups are shown, labelled as closed', async () => {
     renderWithProviders(<AppRoutes />, { staff: makeStaff({ role: 'manager' }), route: '/teachers?month=2026-10' })
-    await userEvent.click(await screen.findByRole('button', { name: 'Teacher One' }))
+    await openFullRecord()
     expect(await screen.findByText('Closed make-ups')).toBeInTheDocument()
     expect(screen.getByText('2 of 3 held')).toBeInTheDocument()
   })
