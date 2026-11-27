@@ -34,6 +34,7 @@ export const B = {
     ar: 'غادر المعلم. تُحذف هذه السبورة نهائيًا في {date} ما لم تُنسخ إلى معلم آخر.',
   },
   readOnly: { en: 'Read only', ar: 'للاطلاع فقط' },
+  open: { en: 'Open', ar: 'فتح' },
   allBoards: { en: 'All boards', ar: 'كل السبورات' },
   pageOf: { en: 'Page {n} of {m}', ar: 'الصفحة {n} من {m}' },
   previousPage: { en: 'Previous page', ar: 'الصفحة السابقة' },

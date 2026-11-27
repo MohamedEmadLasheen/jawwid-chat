@@ -92,3 +92,7 @@ button.rw-name { padding: 0; border: 0; background: none; font: inherit; font-si
   .rowx > .cell-actions > .btn { inline-size: 100%; justify-content: center; }
   .rw-dates { flex: 1 1 100%; }
 }
+
+/* A name that is a link reads as the name: ink, and teal under the pointer. */
+.rw-name a { color: inherit; text-decoration: none; }
+.rw-name a:hover { color: var(--teal); text-decoration: underline; text-underline-offset: 3px; }

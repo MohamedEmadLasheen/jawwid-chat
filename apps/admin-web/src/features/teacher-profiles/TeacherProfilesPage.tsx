@@ -6,6 +6,10 @@ import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
 import type { CertificateReviewItem, ReviewCertificate } from '@/core/api/endpoints'
 import { openCertificate, useDecideCertificate, usePendingReviews } from './hooks'
 import './teacher-profiles.css'
+import '@/features/teachers/rows.css'
+import { Icon } from '@/shared/components/Icon'
+import { PageHeader } from '@/shared/components/PageHeader'
+import { RowActions } from '@/shared/components/RowActions'
 
 /**
  * Teacher CREDENTIAL review.
@@ -29,55 +33,63 @@ import './teacher-profiles.css'
  * and the server never sends the other three.
  */
 export function TeacherProfilesPage() {
-  const { t } = useI18n()
+  const { t, number } = useI18n()
   const query = usePendingReviews()
 
   return (
     <div className="page">
       <div className="page__inner">
-      <header className="page-header">
-        <div className="page-header__text">
-          <h1 className="page-header__title">{t('nav.teacher-profiles')}</h1>
-        </div>
-      </header>
+        <PageHeader
+          title={t('nav.teacher-profiles')}
+          figures={
+            query.profiles.length > 0
+              ? [
+                  { key: 'pending', label: t('tprofile.pending.title'), value: number(query.profiles.reduce((n, p) => n + p.pendingCertificates, 0)), tone: 'key' },
+                ]
+              : undefined
+          }
+        />
 
-      <QueryBoundary
-        isLoading={query.isLoading}
-        error={query.error}
-        isEmpty={query.profiles.length === 0}
-        emptyTitle={t('tprofile.empty')}
-        onRetry={() => void query.refetch()}
-      >
-        <ul className="tp-list" aria-label={t('tprofile.pending.title')}>
-          {query.profiles.map((profile) => (
-            <TeacherRow key={profile.profileId} profile={profile} />
-          ))}
-        </ul>
-      </QueryBoundary>
+        <QueryBoundary
+          isLoading={query.isLoading}
+          error={query.error}
+          isEmpty={query.profiles.length === 0}
+          emptyTitle={t('tprofile.empty')}
+          onRetry={() => void query.refetch()}
+        >
+          <ul className="tp-list" aria-label={t('tprofile.pending.title')}>
+            {query.profiles.map((profile) => (
+              <TeacherRow key={profile.profileId} profile={profile} />
+            ))}
+          </ul>
+        </QueryBoundary>
       </div>
     </div>
   )
 }
 
+/** One teacher's certificates: a sheet headed by the teacher, each certificate a row decided in place. */
 function TeacherRow({ profile }: { profile: CertificateReviewItem }) {
   const { t } = useI18n()
 
   return (
-    <li className="tp-teacher">
-      <div className="tp-teacher__head">
+    <li className="sheet tp-teacher">
+      <div className="sheet__head">
         {/* The teacher's name as the SERVER resolved it, from chat.teacher.
             The console stores no identity of its own. */}
-        <strong className="tp-teacher__name" dir="auto">{profile.teacherName}</strong>
+        <strong className="sheet__title" dir="auto">
+          {profile.teacherName}
+        </strong>
         {profile.pendingCertificates > 0 ? (
-          <Badge tone="warn" dot>
+          <Badge tone="warn">
             {profile.pendingCertificates} · {t('tprofile.cert.state.pending')}
           </Badge>
         ) : (
-          <Badge tone="ok" dot>{t('tprofile.ready')}</Badge>
+          <Badge tone="ok" dot>
+            {t('tprofile.ready')}
+          </Badge>
         )}
       </div>
-
-      <h2 className="section-label tp-teacher__label">{t('tprofile.certificates')}</h2>
       <ul className="tp-certs" aria-label={t('tprofile.certificates')}>
         {profile.certificates.map((certificate) => (
           <CertificateRow key={certificate.id} certificate={certificate} />
@@ -100,47 +112,40 @@ function CertificateRow({ certificate }: { certificate: ReviewCertificate }) {
         : 'warn'
 
   return (
-    <li className="tp-cert">
-      <div className="tp-cert__main">
-        <div className="tp-cert__head">
-          <strong className="tp-cert__title" dir="auto">{certificate.title}</strong>
-          <Badge tone={tone} dot>{t(`tprofile.cert.state.${certificate.state}` as const)}</Badge>
-        </div>
-        <p className="tp-cert__meta">
-          {certificate.issuingOrganization}
-          {certificate.issuedOn && <> · {date(certificate.issuedOn)}</>}
-        </p>
-        {certificate.reviewNote && <p className="tp-cert__note" dir="auto">{certificate.reviewNote}</p>}
+    <li className="rowx tp-cert">
+      <div className="rw-who">
+        <span className="tp-cert__icon" aria-hidden="true">
+          <Icon name="certificates" size={18} />
+        </span>
+        <span className="rw-who__text">
+          <strong className="rw-name" dir="auto">{certificate.title}</strong>
+          <span className="rw-sub">
+            {certificate.issuingOrganization}
+            {certificate.issuedOn && <> · {date(certificate.issuedOn)}</>}
+          </span>
+        </span>
+      </div>
+      <div className="rw-meta">{certificate.reviewNote && <span dir="auto">{certificate.reviewNote}</span>}</div>
+      <div className="rw-tags">
+        <Badge tone={tone} dot>{t(`tprofile.cert.state.${certificate.state}` as const)}</Badge>
       </div>
 
-      <div className="tp-cert__actions">
-        <button
-          type="button"
-          className="btn btn--sm btn--ghost"
-          // A fresh signed URL per click. Nothing about where the file lives is
-          // held here between clicks, and no URL is constructed.
-          onClick={() => void openCertificate(certificate.id)}
-        >
-          {t('tprofile.cert.open')}
-        </button>
-        <button
-          type="button"
-          className="btn btn--sm btn--primary"
-          onClick={() =>
-            decide.mutate({ certificateId: certificate.id, approved: true })
+      <div className="cell-actions">
+        {/* The decision this page exists for is stated; the file and the refusal are behind the menu. */}
+        <RowActions
+          primary={
+            <button type="button" className="btn btn--sm btn--primary" onClick={() => decide.mutate({ certificateId: certificate.id, approved: true })} disabled={decide.isPending}>
+              {t('tprofile.cert.approve')}
+            </button>
           }
-          disabled={decide.isPending}
-        >
-          {t('tprofile.cert.approve')}
-        </button>
-        <button
-          type="button"
-          className="btn btn--sm"
-          onClick={() => setRejecting(true)}
-          disabled={decide.isPending}
-        >
-          {t('tprofile.cert.reject')}
-        </button>
+          more={[
+            // A fresh signed URL per click. Nothing about where the file lives is
+            // held here between clicks, and no URL is constructed.
+            { key: 'open', label: t('tprofile.cert.open'), icon: 'file', onSelect: () => void openCertificate(certificate.id) },
+            ...(decide.isPending ? [] : [{ key: 'reject', label: t('tprofile.cert.reject'), icon: 'xCircle' as const, danger: true, onSelect: () => setRejecting(true) }]),
+          ]}
+          label={`${t('tprofile.certificates')}: ${certificate.title}`}
+        />
       </div>
 
       {decide.error != null && <p className="tp-cert__error" role="alert">{(decide.error as Error).message}</p>}

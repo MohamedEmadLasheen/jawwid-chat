@@ -97,6 +97,12 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
+/** A certificate's row states Approve; the file and the refusal are behind its menu. */
+async function viaMenu(user: ReturnType<typeof userEvent.setup>, name: string) {
+  await user.click(screen.getByRole('button', { name: /^Certificates:/ }))
+  await user.click(await screen.findByRole('menuitem', { name }))
+}
+
 describe('navigation', () => {
   it('every operator role may open the area, and no department role may', () => {
     // The SAME set the server uses (canReviewTeacherProfile): the family-facing
@@ -279,7 +285,7 @@ describe('certificate decisions', () => {
     renderWithProviders(<TeacherProfilesPage />, { staff: makeStaff({ role: 'admin' }) })
     await screen.findByText('Ahmed Al-Masri')
 
-    await user.click(screen.getByRole('button', { name: 'Reject' }))
+    await viaMenu(user, 'Reject')
     await user.click(screen.getByRole('button', { name: 'Send' }))
 
     // Refused locally, so the reviewer is told before the round trip.
@@ -342,7 +348,7 @@ describe('certificate files', () => {
       renderWithProviders(<TeacherProfilesPage />, { staff: makeStaff({ role: 'admin' }) })
       await screen.findByText('Ahmed Al-Masri')
 
-      await user.click(screen.getByRole('button', { name: 'Open file' }))
+      await viaMenu(user, 'Open file')
       await waitFor(() =>
         expect(opened).toEqual(['https://signed.example/one-time?sig=abc']),
       )
@@ -361,10 +367,9 @@ describe('certificate files', () => {
     renderWithProviders(<TeacherProfilesPage />, { staff: makeStaff({ role: 'admin' }) })
     await screen.findByText('Ahmed Al-Masri')
 
-    const open = screen.getByRole('button', { name: 'Open file' })
-    await user.click(open)
+    await viaMenu(user, 'Open file')
     await waitFor(() => expect(issued).toBe(1))
-    await user.click(open)
+    await viaMenu(user, 'Open file')
     await waitFor(() => expect(issued).toBe(2))
   })
 })

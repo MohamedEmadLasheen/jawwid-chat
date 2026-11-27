@@ -1,18 +1,24 @@
 /* PD-48: the Lesson audio review page. The words set large on the paper, their clips as ruled lines. */
 .lesson-audio__note { margin: 0 0 var(--space-4); padding-inline-start: var(--space-3); border-inline-start: 2px solid var(--gold-line); color: var(--gold-text); font-size: var(--fs-sm); }
-/* The units: a ruled index. The one on view carries a teal rule above it. */
-.lesson-audio__units { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); margin-block-end: var(--space-4); border-block-start: 1px solid var(--hairline); }
-.lesson-audio__unit-tab { display: grid; align-content: start; justify-items: start; gap: 0; min-block-size: 52px; padding: 7px var(--space-2) 6px; border: 0; border-block-end: 1px solid var(--hairline); border-inline-end: 1px solid var(--hairline-soft); border-radius: 0; background: none; color: var(--ink-muted); font: inherit; text-align: start; cursor: pointer; transition: background var(--dur-fast) var(--ease-out); }
+/* The unit index on the start side, the unit's words as a sheet beside it. */
+.lesson-audio__split { display: grid; grid-template-columns: 232px minmax(0, 1fr); gap: var(--space-5); align-items: start; }
+.lesson-audio__units { position: sticky; inset-block-start: 0; display: grid; max-block-size: calc(100vh - 220px); overflow-y: auto; scrollbar-width: thin; }
+.lesson-audio__unit-tab { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 0 var(--space-2); min-block-size: 40px; padding: 7px var(--space-3); border: 0; border-block-end: 1px solid var(--hairline-soft); border-radius: 0; background: none; color: var(--ink-muted); font: inherit; text-align: start; cursor: pointer; transition: background var(--dur-fast) var(--ease-out); }
+.lesson-audio__unit-tab:last-child { border-block-end: 0; }
 .lesson-audio__unit-tab:hover { background: var(--surface-hover); }
-.lesson-audio__unit-tab[aria-pressed='true'] { background: var(--teal-tint); box-shadow: inset 0 2px 0 var(--teal); color: var(--teal-dark); }
+.lesson-audio__unit-tab[aria-pressed='true'] { background: var(--teal-tint); box-shadow: inset 3px 0 0 var(--gold); color: var(--teal-dark); }
+[dir='rtl'] .lesson-audio__unit-tab[aria-pressed='true'] { box-shadow: inset -3px 0 0 var(--gold); }
 .lesson-audio__unit-tab:focus-visible { outline-offset: -2px; }
 .lesson-audio__unit-name { font-size: var(--fs-sm); font-weight: 600; color: var(--ink); direction: ltr; unicode-bidi: isolate; overflow-wrap: anywhere; }
 .lesson-audio__count { font-size: var(--fs-xs); font-variant-numeric: tabular-nums; direction: ltr; unicode-bidi: isolate; }
-.lesson-audio__mark { font-size: 11.5px; font-weight: 600; color: var(--gold-text); }
+.lesson-audio__mark { grid-column: 1 / -1; font-size: 11.5px; font-weight: 600; color: var(--gold-text); }
 .lesson-audio__mark--decide { color: var(--terracotta); }
-.lesson-audio__bar { display: flex; gap: var(--space-2); margin-block-end: var(--space-2); }
-.lesson-audio__strings { list-style: none; margin: 0; padding: 0; border-block-start: 1px solid var(--hairline); }
-.lesson-audio__strings > li { padding: var(--space-4) 2px; border: 0; border-block-end: 1px solid var(--hairline); border-radius: 0; }
+.lesson-audio__unit { min-inline-size: 0; }
+.lesson-audio__unit .sheet__head .btn { flex: none; }
+.lesson-audio__bar { display: flex; gap: var(--space-2); }
+.lesson-audio__strings { list-style: none; margin: 0; padding: 0; }
+.lesson-audio__strings > li { padding: var(--space-4); border: 0; border-block-end: 1px solid var(--hairline-soft); border-radius: 0; }
+.lesson-audio__strings > li:last-child { border-block-end: 0; }
 /* The clip being heard: a teal edge on the word it belongs to. */
 .lesson-audio__strings > li.is-playing { box-shadow: inset -3px 0 0 var(--teal); padding-inline-start: var(--space-4); }
 [dir='ltr'] .lesson-audio__strings > li.is-playing { box-shadow: inset 3px 0 0 var(--teal); }
@@ -37,9 +43,11 @@
 .lesson-audio__history ul { list-style: none; margin: 0; padding: 0; }
 .lesson-audio__history li { padding-block: 4px; border-block-end: 1px solid var(--hairline-soft); }
 @media (max-width: 767px) {
-  /* On a phone the index is one line to swipe, so the words stay in reach. */
-  .lesson-audio__units { display: flex; overflow-x: auto; scrollbar-width: none; }
-  .lesson-audio__unit-tab { flex: none; min-inline-size: 104px; }
+  /* On a phone the index is one line to swipe, above the unit's sheet. */
+  .lesson-audio__split { grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
+  .lesson-audio__units { position: static; display: flex; max-block-size: none; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+  .lesson-audio__unit-tab { flex: none; min-inline-size: 112px; min-block-size: 48px; border-block-end: 0; border-inline-end: 1px solid var(--hairline-soft); }
+  .lesson-audio__unit-tab[aria-pressed='true'], [dir='rtl'] .lesson-audio__unit-tab[aria-pressed='true'] { box-shadow: inset 0 -3px 0 var(--gold); }
   .lesson-audio__text { font-size: 2.5rem; }
   .lesson-audio__decide { margin-inline-start: 0; }
 }
