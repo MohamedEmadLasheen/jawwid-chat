@@ -100,7 +100,9 @@ afterEach(() => {
 
 /** The file is a record with tabs (`?tab=`): open the one a section lives under. */
 async function openTab(name: string) {
-  await userEvent.click(await screen.findByRole('button', { name }))
+  // A tab with something in it carries its count in its name ("Students 1").
+  const tabs = await screen.findByRole('group', { name: /^(Parts of the file|أقسام الملف)$/ })
+  await userEvent.click(within(tabs).getByRole('button', { name: new RegExp(`^${name}`) }))
 }
 
 describe('the Teachers area', () => {
@@ -576,7 +578,7 @@ describe('lesson reports (RQA-F1)', () => {
     renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/files/t-1?tab=records' })
     const section = await screen.findByRole('region', { name: 'Lesson reports' })
     const filters = await within(section).findByRole('group')
-    expect(within(filters).getByRole('button', { name: /All · Reports 9/ })).toHaveAttribute('aria-pressed', 'true')
+    expect(within(filters).getByRole('button', { name: /All reports 9/ })).toHaveAttribute('aria-pressed', 'true')
     for (const [label, n] of [['On time', 8], ['Late', 1], ['Awaiting report', 2], ['Missing', 3]] as const) {
       expect(within(filters).getByRole('button', { name: new RegExp(`${label} ${n}`) })).toBeInTheDocument()
     }

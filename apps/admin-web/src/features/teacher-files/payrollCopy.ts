@@ -20,6 +20,10 @@ export const P = {
   hourlyMonthly: { en: 'Rate × hours of lessons held — see the financial summary', ar: 'الأجر × ساعات الحصص المنعقدة — انظر الملخص المالي' },
   effectiveFrom: { en: 'From {month}', ar: 'اعتبارًا من {month}' },
   noTerms: { en: 'No salary terms recorded yet.', ar: 'لم تُسجَّل شروط الراتب بعد.' },
+  noTermsYet: {
+    en: 'No salary terms are recorded yet, so there is nothing to sum. Set them under Overview, Employment; each month then appears here.',
+    ar: 'لم تُسجَّل شروط الراتب بعد، فلا شيء يُجمع. حدّدها من نظرة عامة، بيانات التوظيف؛ وعندها يظهر هنا كل شهر.',
+  },
   setTerms: { en: 'Change salary terms', ar: 'تغيير شروط الراتب' },
   termsHint: {
     en: 'Terms are kept as versions: a change applies from the month you choose, and earlier months keep the terms they had.',

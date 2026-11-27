@@ -6,6 +6,7 @@ import { FilterChips } from '@/shared/components/FilterChips'
 import type { TimelineItem } from './api'
 import { T, describeError, useCopy, type Pair } from './copy'
 import { useCalendarDate } from './calendar'
+import { By } from './Byline'
 import { useAddNote, useRecordBonus, useSupervisionTimeline } from './hooks'
 
 type Filter = 'all' | 'recognition' | 'concerns' | 'lessons' | 'moves'
@@ -63,7 +64,7 @@ export function SupervisionTimeline({ teacherId, canWrite }: { teacherId: string
             <button type="button" className="btn btn--sm" onClick={() => setDialog('note')}>
               {tx(T.addNote)}
             </button>
-            <button type="button" className="btn btn--sm btn--primary" onClick={() => setDialog('bonus')}>
+            <button type="button" className="btn btn--sm" onClick={() => setDialog('bonus')}>
               {tx(T.recordBonus)}
             </button>
           </div>
@@ -126,7 +127,7 @@ function TimelineRow({
           {tx(kind?.label ?? T.tOther)}
         </Badge>
         {context && <strong dir="auto">{context}</strong>}
-        <span className="tf-byline">{item.byName ? tx(T.by, { name: item.byName, date: when }) : when}</span>
+        <By name={item.byName} when={when} />
       </div>
       {item.body && (
         <p className="tf-entry__body" dir="auto">

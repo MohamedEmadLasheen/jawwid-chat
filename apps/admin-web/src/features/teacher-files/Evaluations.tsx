@@ -141,7 +141,7 @@ export function EvaluationsSection({ teacherId, canWrite, canEditCriteria }: { t
                 {e.superseded && <Badge tone="neutral">{tx(E.superseded)}</Badge>}
                 {e.sharedAt ? <Badge tone="ok" dot>{tx(E.shared)}</Badge> : <Badge tone="outline">{tx(E.notShared)}</Badge>}
                 {canWrite && !e.sharedAt && !e.superseded && (
-                  <button type="button" className="btn btn--sm btn--primary" disabled={act.isPending} onClick={() => act.mutate(() => evaluationsApi.shareEvaluation(e.id))}>
+                  <button type="button" className="btn btn--sm" disabled={act.isPending} onClick={() => act.mutate(() => evaluationsApi.shareEvaluation(e.id))}>
                     {tx(E.share)}
                   </button>
                 )}
@@ -161,7 +161,7 @@ export function EvaluationsSection({ teacherId, canWrite, canEditCriteria }: { t
                 <strong dir="auto">{p.title}</strong>
                 {p.sharedAt ? <Badge tone="ok" dot>{tx(E.shared)}</Badge> : <Badge tone="outline">{tx(E.notShared)}</Badge>}
                 {canWrite && !p.sharedAt && (
-                  <button type="button" className="btn btn--sm btn--primary" disabled={act.isPending} onClick={() => act.mutate(() => evaluationsApi.sharePlan(p.id))}>
+                  <button type="button" className="btn btn--sm" disabled={act.isPending} onClick={() => act.mutate(() => evaluationsApi.sharePlan(p.id))}>
                     {tx(E.share)}
                   </button>
                 )}
