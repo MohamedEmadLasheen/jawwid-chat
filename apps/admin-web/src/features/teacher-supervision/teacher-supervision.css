@@ -38,3 +38,8 @@
 @media (max-width: 767px) {
   .th-body .sheet .table.stack-table tbody tr { padding-inline: var(--space-4); }
 }
+/* The sections shrink to the page's column (a grid item's min-content would otherwise widen it past
+   the page, and its end was cut off beside an open sidebar); their rows then wrap as designed. */
+.th-body > * { min-inline-size: 0; }
+/* A tag in a narrow row wraps inside its cell rather than running past the sheet's edge. */
+.th-body .rw-tags .badge { white-space: normal; text-align: start; }

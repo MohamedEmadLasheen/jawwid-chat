@@ -247,3 +247,12 @@
   .tsx-page .figure--link[aria-pressed='true'] { background: none; }
   .tsx-page .tsx-row { break-inside: avoid; }
 }
+
+/* The list sized by its own room (the sidebar may be open beside a 1024px window): the
+   figures and the action narrow first, so a teacher's name and reason keep a readable line. */
+.tsx-list { container: tsx-list / inline-size; }
+@container tsx-list (max-width: 880px) and (min-width: 600px) {
+  .tsx-table thead th.num, .tsx-table thead th.num:nth-child(3) { inline-size: 92px; }
+  .tsx-table thead th.tsx-act { inline-size: 128px; }
+  .tsx-table thead th { white-space: normal; line-height: 1.3; }
+}

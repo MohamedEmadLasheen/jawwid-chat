@@ -104,10 +104,10 @@ export function LeaveRequestsList({ basePath }: { basePath: string }) {
                       const lessons = r.collidingLessons?.length ?? 0
                       return (
                         <tr key={r.id}>
-                          <td>
+                          <td className="sv-nowrap">
                             <TeacherName basePath={basePath} teacher={r.teacher} />
                           </td>
-                          <td data-label={tx(S.dates)}>{dates(r)}</td>
+                          <td className="sv-dates" data-label={tx(S.dates)}>{dates(r)}</td>
                           <td data-label={tx(S.days)}>
                             <div className="sv-cell-main">
                               <span>{number(r.days)}</span>

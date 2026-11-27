@@ -1162,3 +1162,12 @@ mark.cw-hit { background: var(--teal-tint-2); color: inherit; border-radius: 3px
 @media (prefers-reduced-motion: reduce) {
   .cw .conv-row, .cw-composer, .cw-send, .cw-msg__menu { transition: none; }
 }
+/* A narrow reading pane (a small window, the sidebar open): who waits keeps the whole first line;
+   how long and the action move under it. */
+.cw-queue { container: cw-queue / inline-size; }
+@container cw-queue (max-width: 460px) {
+  .cw-queue__row { flex-wrap: wrap; row-gap: 6px; padding-inline: 14px; }
+  .cw-queue__who { flex: 1 1 calc(100% - 60px); }
+  .cw-queue__waited { margin-inline-start: 58px; }
+  .cw-queue__row .btn { margin-inline-start: auto; }
+}

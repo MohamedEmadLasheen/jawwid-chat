@@ -25,3 +25,11 @@
 .sv-figure dd { margin: 0; font-family: var(--font-head); font-size: var(--fs-xl); font-weight: 600; line-height: 1.2; font-variant-numeric: tabular-nums lining-nums; }
 .sv-figure dd .sv-muted { font-family: var(--font); font-size: var(--fs-sm); font-weight: 400; }
 .sv-textarea { min-block-size: 5rem; resize: vertical; }
+/* A name reads as one piece; a date range breaks only at its dash, two balanced lines at most. */
+.sv-nowrap { white-space: nowrap; }
+@media (max-width: 767px) { .stack-table .sv-nowrap { white-space: normal; } }
+/* Beside an open sidebar the request table is narrow: the days and the reason give way (they wrap),
+   and if a row still cannot fit, the table scrolls rather than being cut at its start. */
+.sheet .table-wrap.sv-table-wrap { overflow-x: auto; }
+.sv-table-wrap .sv-cell-main { min-inline-size: 0; }
+.sv-dates { min-inline-size: 8.5rem; text-wrap: balance; }
