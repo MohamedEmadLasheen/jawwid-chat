@@ -59,32 +59,41 @@
 
 /* ----------------------------------------------------------- statistics */
 
-/* Every teacher's month in one dense table: zeros are set quietly. */
-.ts-table-wrap { overflow-x: auto; }
-.ts-table { min-inline-size: 1040px; }
-.ts-table th { white-space: nowrap; }
-.ts-table th, .ts-table td { padding-inline: var(--space-2); }
-.ts-table tbody th[scope='row'] { position: sticky; inset-inline-start: 0; z-index: 1; background: var(--paper); font-weight: 600; white-space: nowrap; border-block-end: 1px solid var(--hairline-soft); padding-block: 9px; }
+/* A ledger to compare teachers down the page: six columns, each a figure with
+   what qualifies it under it. The head says what a paired figure is. */
+.ts-table-wrap { overflow-x: auto; border: 0; border-radius: 0; }
+.ts-table th { vertical-align: bottom; line-height: 1.35; white-space: nowrap; }
+.ts-th-key { display: block; font-size: 11.5px; font-weight: 400; color: var(--ink-muted); }
+.ts-table td, .ts-table tbody th { vertical-align: top; }
+.ts-table tbody th[scope='row'] { position: sticky; inset-inline-start: 0; z-index: 1; background: var(--surface); font-weight: 600; white-space: nowrap; border-block-end: 1px solid var(--hairline-soft); padding-block: 11px; }
 .ts-table tbody tr:hover th[scope='row'] { background: var(--surface-hover); }
-.ts-table td.num { white-space: nowrap; }
+.ts-table tbody tr:last-child th[scope='row'] { border-block-end: 0; }
+.ts-fig { display: block; font-size: var(--fs-md); font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ts-fig__and { font-size: var(--fs-sm); font-weight: 400; color: var(--ink-muted); }
+.ts-sub { display: block; font-size: var(--fs-xs); font-weight: 400; color: var(--ink-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ts-sub.ts-attention { color: var(--terracotta); font-weight: 600; }
 /* A zero is quiet, never faint: muted ink, and what is there carries the weight. */
-.ts-table .ts-zero { color: var(--ink-muted); }
-.ts-table td.num:not(.ts-zero) { font-weight: 500; }
-.ts-key { margin: 0 0 var(--space-3); color: var(--ink-muted); font-size: var(--fs-xs); }
+.ts-table .ts-zero .ts-fig { color: var(--ink-muted); font-weight: 400; }
+@media (max-width: 767px) {
+  .ts-table tbody th[scope='row'] { white-space: normal; }
+  .ts-table .ts-sub, .ts-table .ts-fig { white-space: normal; }
+}
 
-/* One teacher: the month's ledger, then every lesson as a tick. */
-.ts-ledger { margin-block: var(--space-2) var(--space-5); }
-.ts-ledger .ledger__note { white-space: normal; }
-.ts-cats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: var(--space-7); }
+/* One teacher's month: every outcome is a sheet with one tick a lesson. */
+.ts-detail { min-inline-size: 0; }
+.ts-glance { padding: 4px var(--space-4) var(--space-2); margin-block-end: var(--space-5); }
+.ts-glance .jr-summary { margin: 0; }
+.ts-cats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); align-items: start; }
 @media (max-width: 899px) { .ts-cats { grid-template-columns: minmax(0, 1fr); } }
-.ts-cat { display: grid; align-content: start; gap: 6px; padding: var(--space-3) 2px var(--space-4); border-block-end: 1px solid var(--hairline-soft); --tick: var(--border-control); }
+.ts-cat { display: grid; align-content: start; gap: 6px; padding: var(--space-3) var(--space-4) var(--space-4); --tick: var(--border-control); }
+.ts-cats .sheet + .sheet { margin-block-start: 0; }
 .ts-cat--success { --tick: var(--teal); }
 .ts-cat--info { --tick: var(--brand-200); }
 .ts-cat--warning { --tick: var(--gold-line); }
 .ts-cat--danger { --tick: var(--terracotta); }
 .ts-cat__head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); }
 .ts-cat__title { margin: 0; font-size: var(--fs-md); font-weight: 600; }
-.ts-cat__count { font-family: var(--display); font-size: var(--fs-2xl); font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums lining-nums; direction: ltr; unicode-bidi: isolate; }
+.ts-cat__count { font-family: var(--display); font-size: var(--fs-2xl); font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums lining-nums; unicode-bidi: isolate; }
 .ts-cat--danger .ts-cat__count { color: var(--terracotta); }
 .ts-cat--none .ts-cat__count { color: var(--ink-muted); font-weight: 400; }
 .ts-cat__empty { margin: 0; font-size: var(--fs-sm); }
@@ -95,14 +104,12 @@
 .ts-cat__rows { list-style: none; margin: 0; padding: 0; font-size: var(--fs-sm); }
 .ts-cat__row { display: grid; grid-template-columns: 5.5rem minmax(0, 1fr) auto; align-items: baseline; gap: var(--space-3); padding-block: 2px; font-variant-numeric: tabular-nums; }
 .ts-cat__row strong { font-weight: 600; }
-.ts-cat__foot { display: flex; justify-content: space-between; gap: var(--space-3); font-size: var(--fs-sm); color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+.ts-cat__foot { display: flex; justify-content: space-between; gap: var(--space-3); padding-block-start: 6px; border-block-start: 1px solid var(--hairline-soft); font-size: var(--fs-sm); color: var(--ink-muted); font-variant-numeric: tabular-nums; }
 .ts-cat__foot strong { color: var(--ink); font-weight: 600; }
 .ts-card__note { margin: 0; font-size: var(--fs-xs); }
 
-.ts-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-5) var(--space-7); margin-block-start: var(--space-6); align-items: start; }
-@media (max-width: 1099px) { .ts-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 639px) { .ts-facts { grid-template-columns: minmax(0, 1fr); } }
-.ts-fact__title { margin: 0; padding-block-end: 8px; border-block-end: 1px solid var(--hairline); }
+/* What only Chat knows, beside the outcomes: labelled facts on the canvas. */
+.ts-facts { min-inline-size: 0; }
 .ts-fact__list { margin: 0; }
 .ts-fact__none { margin: 0; padding-block: 7px; font-size: var(--fs-sm); }
 .ts-metric { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-3); padding-block: 7px; border-block-end: 1px solid var(--hairline-soft); font-size: var(--fs-sm); }
@@ -111,7 +118,7 @@
 .ts-metric dd strong { font-weight: 600; }
 .ts-metric__hint { font-size: var(--fs-xs); }
 .ts-fact .ts-card__note { padding-block-start: 6px; }
-.ts-previous { margin-block-start: var(--space-5); font-size: var(--fs-sm); }
+.ts-previous { margin-block-start: var(--space-4); font-size: var(--fs-sm); }
 
 /* ---------------------------------------------- the daily queue and desks */
 
@@ -215,3 +222,18 @@
 .ts-preview__slots li > span { font-variant-numeric: tabular-nums; }
 .ts-preview__unmovable { margin: var(--space-1) 0 0; padding-inline-start: var(--space-4); }
 .ts-lessons { border-block-start: 1px solid var(--hairline); }
+
+/* ------------------------------------------------------- second pass: desks */
+/* The picker a desk answers to sits in its own sheet's bar. */
+.ts-pick { margin-block-end: var(--space-5); }
+.ts-pick .sheet-bar { align-items: flex-end; border-block-end: 0; }
+.ts-pick .sheet-bar:not(:last-child) { border-block-end: 1px solid var(--hairline-soft); }
+.ts-pick__field { display: grid; gap: 5px; inline-size: min(100%, 20rem); }
+.ts-pick__field .field__label { margin: 0; }
+.ts-desk { display: grid; gap: var(--space-5); min-inline-size: 0; }
+.ts-desk .sheet + .sheet { margin-block-start: 0; }
+.ts-queue + .ts-queue { margin-block-start: var(--space-5); }
+.ts-hours .ts-window .input { min-inline-size: 0; }
+.ts-hours .ts-window { flex-wrap: nowrap; }
+.ts-hours .ts-window .ss { flex: 1 1 6rem; min-inline-size: 0; }
+.ts-note { display: block; margin-block-start: 2px; color: var(--ink-muted); font-size: var(--fs-xs); }

@@ -10,6 +10,7 @@ import { O, WEEKDAY, describeOpsError } from './opsCopy'
 import { useAvailability, useOp, useRoster } from './opsHooks'
 import { StudentScheduleDesk, useTx } from './StudentScheduleDesk'
 import { SearchableSelect } from '@/shared/components/SearchableSelect'
+import { Icon } from '@/shared/components/Icon'
 import './teachers.css'
 
 const DEFAULT_ZONE = 'Africa/Cairo'
@@ -26,6 +27,7 @@ const WEEKDAYS = [1, 2, 3, 4, 5, 6, 7]
  */
 export function SchedulesPage() {
   const tx = useTx()
+  const { number } = useI18n()
   const roster = useRoster()
   const [params, setParams] = useSearchParams()
   const teacherId = params.get('teacher')
@@ -47,25 +49,38 @@ export function SchedulesPage() {
   return (
     <div className="page">
       <div className="page__inner">
-        <TeachersAreaTabs />
-        <PageHeader title={tx(O.schedulesTitle)} subtitle={tx(O.schedulesSubtitle)} />
+        <PageHeader
+          title={tx(O.schedulesTitle)}
+          subtitle={tx(O.schedulesSubtitle)}
+          figures={teacher ? [{ key: 'students', label: tx(O.students), value: number(students.length), tone: 'key' }] : undefined}
+          tabs={<TeachersAreaTabs />}
+        />
         <QueryBoundary isLoading={roster.isLoading} error={roster.error} onRetry={() => void roster.refetch()}>
-          <label className="ts-month">
-            <span className="field__label">{tx(O.chooseTeacher)}</span>
-            <SearchableSelect className="select" value={teacherId ?? ''} onValueChange={(v) => pickTeacher(v)} aria-label={tx(O.chooseTeacher)}>
-              <option value="">{tx(O.pickTeacher)}</option>
-              {teachers.map((t) => (
-                <option key={t.id} value={t.id}>{t.name}</option>
-              ))}
-            </SearchableSelect>
-          </label>
+          {/* Whose desk this is: the one control everything below answers to. */}
+          <div className="sheet ts-pick">
+            <div className="sheet-bar">
+              <label className="ts-pick__field">
+                <span className="field__label">{tx(O.chooseTeacher)}</span>
+                <SearchableSelect className="select" value={teacherId ?? ''} onValueChange={(v) => pickTeacher(v)} aria-label={tx(O.chooseTeacher)}>
+                  <option value="">{tx(O.pickTeacher)}</option>
+                  {teachers.map((t) => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </SearchableSelect>
+              </label>
+            </div>
+            {!teacher && <EmptyState title={tx(O.pickTeacher)} hint={tx(O.pickTeacherFirst)} />}
+          </div>
           {teacher && (
-            <>
-              <WorkingHours teacherId={teacher.id} />
-              <StudentScheduleDesk students={students} />
-            </>
+            <div className="split split--wide-aside">
+              <div>
+                <StudentScheduleDesk students={students} />
+              </div>
+              <aside>
+                <WorkingHours teacherId={teacher.id} />
+              </aside>
+            </div>
           )}
-          {!teacher && <EmptyState title={tx(O.pickTeacher)} hint={tx(O.pickTeacherFirst)} />}
         </QueryBoundary>
       </div>
     </div>
@@ -99,10 +114,11 @@ function WorkingHours({ teacherId }: { teacherId: string }) {
 
   return (
     <QueryBoundary isLoading={q.isLoading} error={q.error} onRetry={() => void q.refetch()}>
-      <section className="ts-section" aria-label={tx(O.workingHours)}>
-        <header className="ts-section__head">
-          <h2 className="ts-card__title">{tx(O.workingHours)}</h2>
+      <section className="sheet ts-hours" aria-label={tx(O.workingHours)}>
+        <header className="sheet__head">
+          <h2 className="sheet__title">{tx(O.workingHours)}</h2>
         </header>
+        <div className="sheet__body">
         {q.data && q.data.windows.length === 0 && <p className="ts-muted ts-section__hint">{tx(O.noAvailabilityYet)}</p>}
         <div className="field ts-inline">
           <label className="field__label" htmlFor={`tz-${teacherId}`}>{tx(O.timezone)}</label>
@@ -117,7 +133,9 @@ function WorkingHours({ teacherId }: { teacherId: string }) {
               <input className="input" type="time" aria-label={`start ${i + 1}`} value={w.start} onChange={(e) => set(i, { start: e.target.value })} />
               <span aria-hidden>–</span>
               <input className="input" type="time" aria-label={`end ${i + 1}`} value={w.end} onChange={(e) => set(i, { end: e.target.value })} />
-              <button type="button" className="btn btn--sm" onClick={() => setWindows((x) => x.filter((_, j) => j !== i))}>{tx(O.remove)}</button>
+              <button type="button" className="btn btn--sm btn--ghost btn--icon" aria-label={tx(O.remove)} title={tx(O.remove)} onClick={() => setWindows((x) => x.filter((_, j) => j !== i))}>
+                <Icon name="close" size={16} />
+              </button>
             </div>
           ))}
         </div>
@@ -136,7 +154,7 @@ function WorkingHours({ teacherId }: { teacherId: string }) {
           {q.data?.daysOff.map((d) => (
             <li key={d.date}>
               <span>{d.date}{d.reason ? ` — ${d.reason}` : ''}</span>
-              <button type="button" className="btn btn--sm" onClick={() => removeOff.mutate(d.date)}>{tx(O.remove)}</button>
+              <button type="button" className="btn btn--sm btn--ghost" onClick={() => removeOff.mutate(d.date)}>{tx(O.remove)}</button>
             </li>
           ))}
         </ul>
@@ -153,6 +171,7 @@ function WorkingHours({ teacherId }: { teacherId: string }) {
             onClose={() => setOffOpen(false)}
           />
         )}
+        </div>
       </section>
     </QueryBoundary>
   )

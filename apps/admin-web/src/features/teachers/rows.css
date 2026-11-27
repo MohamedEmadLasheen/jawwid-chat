@@ -64,3 +64,31 @@ button.rw-name { padding: 0; border: 0; background: none; font: inherit; font-si
 
 /* Tabs set on the masthead's lower edge carry no margin of their own. */
 .mast__tabs .ts-tabs, .mast__tabs .sv-tabs { margin-block-end: 0; border-block-end: 0; }
+
+/* The same row outside a table: a queue's line. */
+.rowx { display: flex; align-items: center; gap: 6px var(--space-4); min-block-size: 60px; padding: 10px var(--space-4); border-block-end: 1px solid var(--hairline-soft); font-size: var(--fs-sm); transition: background var(--dur-fast) var(--ease-out); }
+.rowx:last-child { border-block-end: 0; }
+.rowx:hover { background: var(--surface-hover); }
+.rowx--top { align-items: flex-start; }
+.rowx > .cell-actions { flex: none; margin-inline-start: auto; }
+/* A row that cannot go ahead as it stands: a terracotta edge, and its words say why. */
+.rowx--problem { box-shadow: inset 3px 0 0 var(--terracotta); }
+[dir='rtl'] .rowx--problem { box-shadow: inset -3px 0 0 var(--terracotta); }
+/* How long it has waited. */
+.rw-age { flex: none; min-inline-size: 6rem; color: var(--ink-muted); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.rw-age--late { color: var(--terracotta); font-weight: 600; }
+/* Two dates side by side, each under its label. */
+.rw-dates { flex: 0 1 15rem; display: flex !important; gap: var(--space-5); }
+.rw-date { display: grid; gap: 0; }
+.rw-date__v { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* A switch between two lists, set in the sheet's bar. */
+.chip[aria-selected='true'] { background: var(--teal); border-color: var(--teal); color: #fff; font-weight: 600; }
+@media (max-width: 767px) {
+  .rowx { flex-wrap: wrap; align-items: flex-start; padding: 12px var(--space-3); }
+  .rowx > .rw-who, .rowx > .rw-meta { flex: 1 1 100%; }
+  .rowx > .cell-actions { flex: 1 1 100%; margin-inline-start: 0; }
+  .rowx > .cell-actions .row-actions2 { inline-size: 100%; justify-content: space-between; }
+  .rowx > .cell-actions .row-actions2 > .btn { flex: 1; justify-content: center; }
+  .rowx > .cell-actions > .btn { inline-size: 100%; justify-content: center; }
+  .rw-dates { flex: 1 1 100%; }
+}
