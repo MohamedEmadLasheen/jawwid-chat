@@ -61,7 +61,11 @@ export function TeachersAreaTabs({ base = TEACHERS_AREA_BASE }: { base?: string 
   const held = TEACHERS_TABS.filter((t) => !t.anyOf || holdsAny(staff, t.anyOf))
   const tabs = pageOnly ? held.filter((t) => t.key === 'supervision') : held
   return (
-    <nav className="ts-tabs" aria-label={locale === 'ar' ? 'المعلمون' : 'Teachers'}>
+    <nav
+      className="ts-tabs"
+      aria-label={locale === 'ar' ? 'المعلمون' : 'Teachers'}
+      ref={(el) => el?.querySelector<HTMLElement>('[aria-current="page"]')?.scrollIntoView?.({ block: 'nearest', inline: 'center' })}
+    >
       {tabs.map((tab) => (
         <NavLink
           key={tab.key}

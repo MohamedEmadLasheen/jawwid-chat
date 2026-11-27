@@ -133,7 +133,7 @@ export function TestimonialsSection({
                         </button>
                       )}
                       {t.origin === 'parent' && (
-                        <button type="button" className="btn btn--primary btn--sm" onClick={() => setReplying(t)}>
+                        <button type="button" className="btn btn--sm" onClick={() => setReplying(t)}>
                           {t.response ? tx(R.changeReply) : tx(R.reply)}
                         </button>
                       )}

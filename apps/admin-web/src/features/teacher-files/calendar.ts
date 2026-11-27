@@ -7,7 +7,8 @@ import { LOCALE_TAG, useI18n } from '@/core/i18n/I18nProvider'
  */
 export function useCalendarDate() {
   const { locale } = useI18n()
-  const fmt = new Intl.DateTimeFormat(LOCALE_TAG[locale], { dateStyle: 'medium', timeZone: 'UTC' })
+  // Arabic reads the month's name (1 سبتمبر 2025), never a numeric date.
+  const fmt = new Intl.DateTimeFormat(LOCALE_TAG[locale], locale === 'ar' ? { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' } : { dateStyle: 'medium', timeZone: 'UTC' })
   const monthFmt = new Intl.DateTimeFormat(LOCALE_TAG[locale], { month: 'long', year: 'numeric', timeZone: 'UTC' })
   return {
     day: (ymd: string) => fmt.format(new Date(`${ymd}T00:00:00Z`)),

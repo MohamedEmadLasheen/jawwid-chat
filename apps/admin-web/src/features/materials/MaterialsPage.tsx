@@ -270,7 +270,7 @@ function ItemRow({ item, busy, onEdit, onPreview, onStatus }: {
         ? { label: tx(M.publish), to: 'published' as ItemStatus }
         : null
   const primary = step ? (
-    <button type="button" className="btn btn--sm btn--primary" disabled={busy} onClick={() => onStatus(step.to)}>
+    <button type="button" className="btn btn--sm" disabled={busy} onClick={() => onStatus(step.to)}>
       {step.label}
     </button>
   ) : (

@@ -41,7 +41,7 @@ export const M = {
   sortOrder: { en: 'Order', ar: 'الترتيب' },
   sortOrderHint: {
     en: 'Its place in the list: 1 comes first. Set from the import row; Quran always lists Al-Fatihah first, then by surah from An-Nas down.',
-    ar: 'مكانها في القائمة: ١ أولًا. يُؤخذ من صف الاستيراد؛ والقرآن يُعرض دائمًا بالفاتحة أولًا ثم بالسور من الناس نزولًا.',
+    ar: 'مكانها في القائمة: 1 أولًا. يُؤخذ من صف الاستيراد؛ والقرآن يُعرض دائمًا بالفاتحة أولًا ثم بالسور من الناس نزولًا.',
   },
   sortOrderShort: { en: 'Order {n}', ar: 'الترتيب {n}' },
   source: { en: 'Source', ar: 'المصدر' },
@@ -170,11 +170,11 @@ export const STATUS_LABEL: Record<ItemStatus, Pair> = {
 }
 
 export const AGE_LABEL: Record<AgeGroup, Pair> = {
-  '4-6': { en: '4–6 years', ar: '٤–٦ سنوات' },
-  '7-9': { en: '7–9 years', ar: '٧–٩ سنوات' },
-  '10-12': { en: '10–12 years', ar: '١٠–١٢ سنة' },
-  '13-17': { en: '13–17 years', ar: '١٣–١٧ سنة' },
-  '18+': { en: '18+', ar: '١٨ فأكثر' },
+  '4-6': { en: '4–6 years', ar: '4–6 سنوات' },
+  '7-9': { en: '7–9 years', ar: '7–9 سنوات' },
+  '10-12': { en: '10–12 years', ar: '10–12 سنة' },
+  '13-17': { en: '13–17 years', ar: '13–17 سنة' },
+  '18+': { en: '18+', ar: '18 فأكثر' },
 }
 
 const BY_CODE: Record<string, Pair> = {

@@ -137,7 +137,7 @@ function CertificateRow({ certificate }: { certificate: ReviewCertificate }) {
         {/* The decision this page exists for is stated; the file and the refusal are behind the menu. */}
         <RowActions
           primary={
-            <button type="button" className="btn btn--sm btn--primary" onClick={() => decide.mutate({ certificateId: certificate.id, approved: true })} disabled={decide.isPending}>
+            <button type="button" className="btn btn--sm" onClick={() => decide.mutate({ certificateId: certificate.id, approved: true })} disabled={decide.isPending}>
               {t('tprofile.cert.approve')}
             </button>
           }

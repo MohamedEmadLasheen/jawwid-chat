@@ -37,7 +37,6 @@ export function StudentsPage() {
         <PageHeader
           title={tx(O.studentsTitle)}
           subtitle={tx(O.studentsSubtitle)}
-          figures={q.data ? [{ key: 'n', label: tx(kind === 'temporary' ? O.pausedList : O.stoppedList), value: number(rows.length), tone: 'key' }] : undefined}
           tabs={<TeachersAreaTabs />}
         />
         <section className="sheet" aria-label={tx(O.studentsTitle)}>
@@ -46,6 +45,7 @@ export function StudentsPage() {
               {(['temporary', 'permanent'] as const).map((k) => (
                 <button key={k} type="button" role="tab" aria-selected={kind === k} className="chip" onClick={() => setKind(k)}>
                   {tx(k === 'temporary' ? O.pausedList : O.stoppedList)}
+                  {kind === k && q.data && <span className="chip__count">{number(rows.length)}</span>}
                 </button>
               ))}
             </div>

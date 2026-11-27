@@ -100,7 +100,9 @@ afterEach(() => {
 
 /** The file is a record with tabs (`?tab=`): open the one a section lives under. */
 async function openTab(name: string) {
-  await userEvent.click(await screen.findByRole('button', { name }))
+  // A tab with something in it carries its count in its name ("Students 1").
+  const tabs = await screen.findByRole('group', { name: /^(Parts of the file|أقسام الملف)$/ })
+  await userEvent.click(within(tabs).getByRole('button', { name: new RegExp(`^${name}`) }))
 }
 
 describe('the Teachers area', () => {
@@ -371,15 +373,21 @@ describe('schedule and monthly performance', () => {
     await within(section).findByLabelText('Key indicators')
     // Re-found each time: a new month replaces the list.
     const value = (label: string) => within(within(section).getByLabelText('Key indicators')).getByText(label).closest('div')!.querySelector('strong')!.textContent
-    expect(value('Lessons held')).toBe('12')
-    expect(value('Student attendance')).toBe('90%')
-    expect(value('Teacher reliability')).toBe('—')
+    // This month, lessons and attendance are the record's highlights (a rate with no lessons is left out there);
+    // the card holds the rest, and the full set for any other month.
+    const glance = screen.getByRole('region', { name: 'At a glance, this month' })
+    const highlight = (label: string) => within(glance).getByText(label).closest('.figure')!.querySelector('.figure__n')!.textContent
+    expect(highlight('Lessons this month')).toBe('12')
+    expect(highlight('Student attendance')).toBe('90%')
+    expect(within(glance).queryByText('Teacher reliability')).not.toBeInTheDocument()
     expect(value('Reports on time')).toBe('75%')
     expect(within(section).getByText('Strong month.')).toBeInTheDocument()
 
     const picker = within(section).getByLabelText('Month')
     fireEvent.change(picker, { target: { value: '2026-09' } })
     await waitFor(() => expect(value('Student attendance')).toBe('50%'))
+    expect(value('Lessons held')).toBe('12')
+    expect(value('Teacher reliability')).toBe('—')
     expect(within(section).getByRole('link', { name: 'Full statistics for this month' })).toHaveAttribute('href', '/teachers?teacher=t-1&month=2026-09')
   })
 
@@ -576,7 +584,7 @@ describe('lesson reports (RQA-F1)', () => {
     renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/files/t-1?tab=records' })
     const section = await screen.findByRole('region', { name: 'Lesson reports' })
     const filters = await within(section).findByRole('group')
-    expect(within(filters).getByRole('button', { name: /All · Reports 9/ })).toHaveAttribute('aria-pressed', 'true')
+    expect(within(filters).getByRole('button', { name: /All reports 9/ })).toHaveAttribute('aria-pressed', 'true')
     for (const [label, n] of [['On time', 8], ['Late', 1], ['Awaiting report', 2], ['Missing', 3]] as const) {
       expect(within(filters).getByRole('button', { name: new RegExp(`${label} ${n}`) })).toBeInTheDocument()
     }

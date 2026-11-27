@@ -46,11 +46,12 @@ function thisMonth(): string {
 // 1. Leave
 // ---------------------------------------------------------------------------
 
-export function LeaveSection({ basePath }: { basePath: string }) {
+export function LeaveSection({ basePath, teacherId }: { basePath: string; teacherId?: string }) {
   const tx = useCopy()
   const { number, locale } = useI18n()
   const overview = useLeaveOverview()
-  const rows = overview.data?.teachers ?? []
+  // With a teacher chosen at the head of the page, the sheet is about them alone.
+  const rows = (overview.data?.teachers ?? []).filter((t) => !teacherId || t.id === teacherId)
   // The balance is the Teachers department's: absent for an Operations-only teacher, and
   // the column with it when no row has one (PD-26 amendment).
   const balances = rows.some((t) => t.used !== undefined)

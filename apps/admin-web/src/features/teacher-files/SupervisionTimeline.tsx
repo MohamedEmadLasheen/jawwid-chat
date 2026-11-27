@@ -6,6 +6,7 @@ import { FilterChips } from '@/shared/components/FilterChips'
 import type { TimelineItem } from './api'
 import { T, describeError, useCopy, type Pair } from './copy'
 import { useCalendarDate } from './calendar'
+import { By } from './Byline'
 import { useAddNote, useRecordBonus, useSupervisionTimeline } from './hooks'
 
 type Filter = 'all' | 'recognition' | 'concerns' | 'lessons' | 'moves'
@@ -63,24 +64,23 @@ export function SupervisionTimeline({ teacherId, canWrite }: { teacherId: string
             <button type="button" className="btn btn--sm" onClick={() => setDialog('note')}>
               {tx(T.addNote)}
             </button>
-            <button type="button" className="btn btn--sm btn--primary" onClick={() => setDialog('bonus')}>
+            <button type="button" className="btn btn--sm" onClick={() => setDialog('bonus')}>
               {tx(T.recordBonus)}
             </button>
           </div>
         )}
       </div>
-      <p className="field__hint">{tx(T.timelineHint)}</p>
       <FilterChips<Filter>
         label={tx(T.timeline)}
         value={filter}
         onChange={setFilter}
-        options={[
+        options={([
           { value: 'all', label: tx(T.filterAll), count: items.length },
           { value: 'recognition', label: tx(T.filterRecognition), count: count('recognition') },
           { value: 'concerns', label: tx(T.filterConcerns), count: count('concerns') },
           { value: 'lessons', label: tx(T.filterLessons), count: count('lessons') },
           { value: 'moves', label: tx(T.filterMoves), count: count('moves') },
-        ]}
+        ] as Array<{ value: Filter; label: string; count: number }>).filter((o) => o.value === 'all' || o.value === filter || o.count > 0)}
       />
       {shown.length === 0 ? (
         <p className="tf-muted">{tx(T.noTimeline)}</p>
@@ -126,7 +126,7 @@ function TimelineRow({
           {tx(kind?.label ?? T.tOther)}
         </Badge>
         {context && <strong dir="auto">{context}</strong>}
-        <span className="tf-byline">{item.byName ? tx(T.by, { name: item.byName, date: when }) : when}</span>
+        <By name={item.byName} when={when} />
       </div>
       {item.body && (
         <p className="tf-entry__body" dir="auto">

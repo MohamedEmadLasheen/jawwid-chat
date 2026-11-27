@@ -196,7 +196,7 @@ export function UsersView({ section }: { section: AdminSection }) {
                           </button>
                           <span className="rw-sub">
                             {label(PRINCIPAL_KIND, u.principalKind)}
-                            {roleLabel(u.staffRole) ? ` · ${roleLabel(u.staffRole)}` : ''}
+                            {roleLabel(u.staffRole) ? `${locale === 'ar' ? '، ' : ', '}${roleLabel(u.staffRole)}` : ''}
                           </span>
                         </span>
                       </td>

@@ -92,6 +92,7 @@ const R = {
     ar: 'حصص الشهر المنتهية وتقاريرها. «في الوقت» تعني كتابة التقرير خلال {hours} ساعة من نهاية الحصة، كما يحسبها مؤشر الشهر.',
   },
   all: { en: 'All', ar: 'الكل' },
+  allReports: { en: 'All reports', ar: 'كل التقارير' },
   filter: { en: 'Show', ar: 'عرض' },
   reports: { en: 'Reports', ar: 'التقارير' },
   lesson: { en: 'Lesson', ar: 'الحصة' },
@@ -150,7 +151,7 @@ export function LessonReports({ teacherId, month }: { teacherId: string; month: 
                 aria-pressed={status === null}
                 onClick={() => setStatus(null)}
               >
-                {tx(R.all)} · {tx(R.reports)} <span className="chip__count">{first.counts.reports}</span>
+                {tx(R.allReports)} <span className="chip__count">{first.counts.reports}</span>
               </button>
               {ORDER.map((k) => (
                 <button
@@ -203,7 +204,7 @@ function ReportItem({ teacherId, row }: { teacherId: string; row: LessonReportRo
         <Badge tone={s.tone} dot>
           {tx(s.label)}
         </Badge>
-        <span className="tf-report__when">{dateTime(row.startsAt)}</span>
+        <bdi className="tf-report__when">{dateTime(row.startsAt)}</bdi>
         {row.anotherFamily ? (
           <span className="tf-muted">{tx(R.anotherFamily)}</span>
         ) : row.learner ? (

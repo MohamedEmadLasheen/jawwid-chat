@@ -87,6 +87,21 @@ const CATEGORY: Record<RejectCategory, Pair> = {
   other: { en: 'Something else', ar: 'غير ذلك' },
 }
 
+/** A unit is a letter of the alphabet: shown by its name, never its key. An unknown key is shown as it is. */
+const LETTER: Record<string, { ar: string; en: string }> = {
+  alif: { ar: 'ألف', en: 'Alif' }, ba: { ar: 'باء', en: 'Ba' }, ta: { ar: 'تاء', en: 'Ta' }, ta_marbuta: { ar: 'تاء مربوطة', en: 'Ta marbuta' },
+  tha: { ar: 'ثاء', en: 'Tha' }, jim: { ar: 'جيم', en: 'Jim' }, hha: { ar: 'حاء', en: 'Ḥa' }, kha: { ar: 'خاء', en: 'Kha' },
+  dal: { ar: 'دال', en: 'Dal' }, dhal: { ar: 'ذال', en: 'Dhal' }, ra: { ar: 'راء', en: 'Ra' }, zay: { ar: 'زاي', en: 'Zay' },
+  sin: { ar: 'سين', en: 'Sin' }, shin: { ar: 'شين', en: 'Shin' }, sad: { ar: 'صاد', en: 'Sad' }, dad: { ar: 'ضاد', en: 'Dad' },
+  tta: { ar: 'طاء', en: 'Ṭa' }, zza: { ar: 'ظاء', en: 'Ẓa' }, ain: { ar: 'عين', en: 'Ayn' }, ghain: { ar: 'غين', en: 'Ghayn' },
+  fa: { ar: 'فاء', en: 'Fa' }, qaf: { ar: 'قاف', en: 'Qaf' }, kaf: { ar: 'كاف', en: 'Kaf' }, lam: { ar: 'لام', en: 'Lam' },
+  mim: { ar: 'ميم', en: 'Mim' }, nun: { ar: 'نون', en: 'Nun' }, ha: { ar: 'هاء', en: 'Ha' }, waw: { ar: 'واو', en: 'Waw' },
+  ya: { ar: 'ياء', en: 'Ya' }, hamza: { ar: 'همزة', en: 'Hamza' }, alif_maqsura: { ar: 'ألف مقصورة', en: 'Alif maqsura' }, lam_alif: { ar: 'لام ألف', en: 'Lam alif' },
+}
+function unitName(unit: string, locale: 'ar' | 'en'): string {
+  return LETTER[unit]?.[locale] ?? unit
+}
+
 const errorText = (e: unknown) => (e instanceof ApiError ? e.message : String((e as Error)?.message ?? e))
 
 /**
@@ -97,6 +112,7 @@ const errorText = (e: unknown) => (e instanceof ApiError ? e.message : String((e
  */
 export function LessonAudioPage({ player: given }: { player?: ClipPlayer } = {}) {
   const tx = useCopy()
+  const { locale } = useI18n()
   const player = useMemo(() => given ?? browserPlayer(), [given])
   const [lesson] = useState<string>(LESSONS[0])
   const access = useQuery({ queryKey: lessonAudioKeys.access, queryFn: lessonAudioApi.access, staleTime: 60_000, retry: false })
@@ -140,7 +156,7 @@ export function LessonAudioPage({ player: given }: { player?: ClipPlayer } = {})
               title={[tx(C.unitApproved, { n: u.approved, of: u.strings }), u.pending ? tx(C.unitWaiting, { n: u.pending }) : '', u.needsDecision ? tx(C.unitDecide, { n: u.needsDecision }) : ''].filter(Boolean).join(' · ')}
               onClick={() => setUnit(u.unit)}
             >
-              <span className="lesson-audio__unit-name">{u.unit}</span>
+              <span className="lesson-audio__unit-name">{unitName(u.unit, locale)}</span>
               <span className="lesson-audio__count">
                 {u.approved}/{u.strings}
               </span>
@@ -160,7 +176,7 @@ export function LessonAudioPage({ player: given }: { player?: ClipPlayer } = {})
             required={view.data.approvalsRequired}
             canReview={access.data?.review === true}
             player={player}
-            title={current ?? ''}
+            title={current ? unitName(current, locale) : ''}
           />
         ) : (
           <div />
@@ -246,7 +262,6 @@ function Unit({ lesson, strings, required, canReview, player, title }: { lesson:
               </div>
               <div className="lesson-audio__meta">
                 <Badge tone={STATUS[s.status].tone} dot>{tx(STATUS[s.status].label)}</Badge>
-                <code className="ltr">{s.id}</code>
               </div>
             </div>
             {s.status === 'noAudio' ? <p className="lesson-audio__hint">{tx(C.noAudio)}</p> : null}
@@ -340,7 +355,7 @@ function Clip(props: {
         <span className="lesson-audio__decide">
           {canReview && c.canReview ? (
             <>
-              <button type="button" className="btn btn--sm btn--primary" disabled={!ready || approve.isPending} aria-describedby={heard ? undefined : hintId} onClick={() => approve.mutate()}>
+              <button type="button" className="btn btn--sm" disabled={!ready || approve.isPending} aria-describedby={heard ? undefined : hintId} onClick={() => approve.mutate()}>
                 {tx(C.approve)}
               </button>
               <button type="button" className="btn btn--sm" disabled={!ready} aria-describedby={heard ? undefined : hintId} onClick={() => setForm('reject')}>

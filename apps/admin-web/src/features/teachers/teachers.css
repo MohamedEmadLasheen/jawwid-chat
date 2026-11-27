@@ -20,13 +20,13 @@
 /* --------------------------------------------------------- shared pieces */
 
 .ts-muted { color: var(--ink-muted); }
-.ts-attention { color: var(--terracotta); font-weight: 600; }
+.ts-attention { color: var(--urgent); font-weight: 600; }
 .ts-toolbar { margin-block: 0 var(--space-3); max-inline-size: 26rem; }
 /* Refused by the server: one calm line and a lock, never a red block. */
 .ts-denied { display: flex; align-items: center; gap: 10px; margin: 0; padding: var(--space-4) 2px; border-block-start: 1px solid var(--hairline); color: var(--ink); font-size: var(--fs-md); }
 .ts-denied .icon { color: var(--teal); flex: none; }
 .ts-label { margin: var(--space-6) 0 0; padding-block-end: 8px; border-block-end: 1px solid var(--hairline); }
-.ts-subtitle { margin: var(--space-5) 0 var(--space-2); font-size: 12.5px; font-weight: 500; color: var(--ink-muted); }
+.ts-subtitle { margin: var(--space-5) 0 var(--space-2); font-size: var(--fs-xs); font-weight: 500; color: var(--ink-muted); }
 .ts-inline { display: grid; gap: 6px; max-inline-size: 18rem; }
 .ts-inline .field__label { margin: 0; }
 .ts-narrow { max-inline-size: 6rem; }
@@ -53,7 +53,7 @@
 [dir='rtl'] .monthpick__step--prev .icon { transform: scaleX(-1) rotate(180deg); }
 /* The month in the app's language; the browser's own month field lies over it, unseen. */
 .monthpick__field { position: relative; display: grid; place-items: center; min-inline-size: 10.5rem; padding: 0 var(--space-3); border-inline: 1px solid var(--hairline); }
-.monthpick__text { font-family: var(--display); font-size: var(--fs-lg); font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ink); white-space: nowrap; pointer-events: none; }
+.monthpick__text { font-family: var(--font-head); font-size: var(--fs-lg); font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ink); white-space: nowrap; pointer-events: none; }
 .monthpick__input { position: absolute; inset: 0; inline-size: 100%; block-size: 100%; margin: 0; padding: 0; border: 0; opacity: 0; cursor: pointer; font: inherit; }
 .monthpick__field:focus-within { outline: 2px solid var(--focus); outline-offset: -2px; }
 @media (max-width: 767px), (pointer: coarse) { .monthpick__step { inline-size: 44px; min-block-size: 44px; } }
@@ -64,7 +64,7 @@
    what qualifies it under it. The head says what a paired figure is. */
 .ts-table-wrap { overflow-x: auto; border: 0; border-radius: 0; }
 .ts-table th { vertical-align: bottom; line-height: 1.35; white-space: nowrap; }
-.ts-th-key { display: block; font-size: 11.5px; font-weight: 400; color: var(--ink-muted); }
+.ts-th-key { display: block; font-size: var(--fs-xs); font-weight: 400; color: var(--ink-muted); }
 .ts-table td, .ts-table tbody th { vertical-align: top; }
 .ts-table tbody th[scope='row'] { position: sticky; inset-inline-start: 0; z-index: 1; background: var(--surface); font-weight: 600; white-space: nowrap; border-block-end: 1px solid var(--hairline-soft); padding-block: 11px; }
 .ts-table tbody tr:hover th[scope='row'] { background: var(--surface-hover); }
@@ -72,7 +72,7 @@
 .ts-fig { display: block; font-size: var(--fs-md); font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ts-fig__and { font-size: var(--fs-sm); font-weight: 400; color: var(--ink-muted); }
 .ts-sub { display: block; font-size: var(--fs-xs); font-weight: 400; color: var(--ink-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.ts-sub.ts-attention { color: var(--terracotta); font-weight: 600; }
+.ts-sub.ts-attention { color: var(--urgent); font-weight: 600; }
 /* A zero is quiet, never faint: muted ink, and what is there carries the weight. */
 .ts-table .ts-zero .ts-fig { color: var(--ink-muted); font-weight: 400; }
 @media (max-width: 767px) {
@@ -90,12 +90,12 @@
 .ts-cats .sheet + .sheet { margin-block-start: 0; }
 .ts-cat--success { --tick: var(--teal); }
 .ts-cat--info { --tick: var(--brand-200); }
-.ts-cat--warning { --tick: var(--gold-line); }
-.ts-cat--danger { --tick: var(--terracotta); }
+.ts-cat--warning { --tick: var(--waiting); }
+.ts-cat--danger { --tick: var(--urgent); }
 .ts-cat__head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); }
 .ts-cat__title { margin: 0; font-size: var(--fs-md); font-weight: 600; }
-.ts-cat__count { font-family: var(--display); font-size: var(--fs-2xl); font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums lining-nums; unicode-bidi: isolate; }
-.ts-cat--danger .ts-cat__count { color: var(--terracotta); }
+.ts-cat__count { font-family: var(--font-head); font-size: var(--fs-2xl); font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums lining-nums; unicode-bidi: isolate; }
+.ts-cat--danger .ts-cat__count { color: var(--urgent); }
 .ts-cat--none .ts-cat__count { color: var(--ink-muted); font-weight: 400; }
 .ts-cat__empty { margin: 0; font-size: var(--fs-sm); }
 /* One tick a lesson; a wider gap separates one lesson length from the next. */
@@ -132,9 +132,9 @@
 .ts-section { margin-block-end: var(--space-6); }
 .card.ts-section, .page section.card:has(> .ts-card__title) { padding-block-start: var(--space-3); }
 .ts-section__head { display: flex; align-items: baseline; gap: var(--space-2); padding-block-end: 8px; border-block-end: 1px solid var(--hairline); }
-.ts-card__title { margin: 0; font-size: 12.5px; font-weight: 500; color: var(--ink-muted); }
-.ts-section__count { font-size: 12.5px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; direction: ltr; unicode-bidi: isolate; }
-.ts-section--late .ts-section__count { color: var(--terracotta); }
+.ts-card__title { margin: 0; font-size: var(--fs-xs); font-weight: 500; color: var(--ink-muted); }
+.ts-section__count { font-size: var(--fs-xs); font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; direction: ltr; unicode-bidi: isolate; }
+.ts-section--late .ts-section__count { color: var(--urgent); }
 .ts-section__hint { margin: 8px 0 0; font-size: var(--fs-sm); max-inline-size: 76ch; }
 .ts-rows { display: grid; gap: 0; list-style: none; margin: 0; padding: 0; }
 .ts-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-4); padding: 10px 2px; border: 0; border-block-end: 1px solid var(--hairline-soft); border-radius: 0; font-size: var(--fs-sm); }
@@ -144,9 +144,9 @@
 .ts-row__main > [dir='auto'] { justify-self: start; }
 .ts-row__actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 /* A request whose time was taken since: a terracotta edge, and the words say why. */
-.ts-row--stale { box-shadow: inset 2px 0 0 var(--terracotta); padding-inline-start: var(--space-3); }
-[dir='rtl'] .ts-row--stale { box-shadow: inset -2px 0 0 var(--terracotta); }
-.ts-stale { margin: 4px 0 0; padding: 0; background: none; color: var(--terracotta); font-size: var(--fs-sm); font-weight: 500; }
+.ts-row--stale { box-shadow: none; padding-inline-start: var(--space-3); }
+[dir='rtl'] .ts-row--stale { box-shadow: none; }
+.ts-stale { margin: 4px 0 0; padding: 0; background: none; color: var(--urgent); font-size: var(--fs-sm); font-weight: 500; }
 
 .ts-diff { display: grid; grid-template-columns: max-content 1fr; gap: 1px var(--space-3); margin: 2px 0; }
 .ts-diff dt { color: var(--ink-muted); }
@@ -154,7 +154,7 @@
 .ts-diff__slots, .ts-preview__slots { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
 .ts-diff__slots { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .ts-slot--free { color: var(--success); }
-.ts-slot--busy { color: var(--terracotta); }
+.ts-slot--busy { color: var(--urgent); }
 .ts-slot--free .sp, .ts-slot--busy .sp, .ts-preview__slots .btn { color: var(--ink); }
 .ts-slot__flag { font-size: var(--fs-xs); font-weight: 600; }
 
@@ -185,7 +185,7 @@
 .ts-window { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); padding-block: 6px; border-block-end: 1px solid var(--hairline-soft); }
 .ts-window .ss, .ts-window > .input { inline-size: auto; }
 .ts-window .input, .ts-window .ss input { min-block-size: 34px; }
-.ts-window > .btn, .ts-daysoff .btn { border-color: transparent; background: none; color: var(--teal); }
+.ts-window > .btn, .ts-daysoff .btn { border-color: transparent; background: none; color: var(--ink-muted); }
 .ts-section > .field { margin-block-start: var(--space-3); }
 .ts-section > .ts-row__actions { margin-block-start: var(--space-3); }
 .ts-daysoff { list-style: none; padding: 0; margin: 0 0 var(--space-2); }
@@ -204,7 +204,7 @@
 .ts-weekly__time { font-variant-numeric: tabular-nums; font-weight: 500; }
 .ts-weekly__old { color: var(--ink-muted); text-decoration: line-through; }
 /* What will happen, before the one button that does it. */
-.ts-summary { margin-block: var(--space-4) 0; padding: var(--space-2) 0; padding-inline-start: var(--space-3); border-inline-start: 2px solid var(--gold-line); background: none; border-radius: 0; font-size: var(--fs-sm); }
+.ts-summary { margin-block: var(--space-4) 0; padding: var(--space-2) 0; padding-inline-start: var(--space-3); border-inline-start: 2px solid var(--line-strong); background: none; border-radius: 0; font-size: var(--fs-sm); }
 .ts-summary p { margin: 2px 0; }
 .ts-summary .ts-subtitle { margin-block: 0 2px; }
 .ts-fieldset { border: none; padding: 0; margin: 0 0 var(--space-3); display: grid; gap: 4px; min-inline-size: 0; }
@@ -229,12 +229,29 @@
 .ts-pick { margin-block-end: var(--space-5); }
 .ts-pick .sheet-bar { align-items: flex-end; border-block-end: 0; }
 .ts-pick .sheet-bar:not(:last-child) { border-block-end: 1px solid var(--hairline-soft); }
-.ts-pick__field { display: grid; gap: 5px; inline-size: min(100%, 20rem); }
+.ts-pick__field { display: grid; gap: 5px; inline-size: min(100%, 18rem); }
 .ts-pick__field .field__label { margin: 0; }
 .ts-desk { display: grid; gap: var(--space-5); min-inline-size: 0; }
 .ts-desk .sheet + .sheet { margin-block-start: 0; }
 .ts-queue + .ts-queue { margin-block-start: var(--space-5); }
-.ts-hours .ts-window .input { min-inline-size: 0; }
-.ts-hours .ts-window { flex-wrap: nowrap; }
-.ts-hours .ts-window .ss { flex: 1 1 6rem; min-inline-size: 0; }
+/* A working window: the day on its own line, then from and to, then remove. Nothing clipped in a 380px aside. */
+.ts-hours .ts-window { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto; align-items: center; gap: 6px var(--space-2); }
+.ts-hours .ts-window > .ss, .ts-hours .ts-window > select { grid-column: 1 / -1; inline-size: 100%; }
+.ts-hours .ts-window .input { min-inline-size: 0; inline-size: 100%; }
 .ts-note { display: block; margin-block-start: 2px; color: var(--ink-muted); font-size: var(--fs-xs); }
+
+/* Needs action: one inbox. The queues are groups inside it, each named with its count and its rule. */
+.ts-inbox { overflow: hidden; }
+.ts-group + .ts-group { border-block-start: 1px solid var(--line); }
+.ts-group__head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px var(--space-3); padding: 14px var(--space-4) 6px; }
+.ts-group__title { display: flex; align-items: center; gap: 8px; margin: 0; font-family: var(--font-head); font-size: var(--fs-md); font-weight: 600; }
+.ts-group__hint { margin: 0; font-size: var(--fs-xs); color: var(--ink-muted); }
+.ts-item .ts-item__who { flex: 1 1 28rem; }
+.ts-inbox .rowx { border-block-end: 1px solid var(--line-2); }
+.ts-inbox .ts-rows > :last-child { border-block-end: 0; }
+.ts-inbox .ts-stale { color: var(--ink-2); font-weight: 400; }
+.ts-inbox .ts-slot--free { color: var(--ink); }
+.ts-inbox .ts-slot--busy { color: var(--ink-muted); text-decoration: line-through; }
+.ts-inbox .ts-slot--busy .ts-slot__flag { text-decoration: none; display: inline-block; }
+.ts-inbox .rw-age { inline-size: 7rem; flex: none; text-align: end; }
+.ts-inbox .cell-actions { min-inline-size: 11rem; display: flex; justify-content: flex-start; }
