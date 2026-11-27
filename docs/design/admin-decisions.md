@@ -46,3 +46,21 @@ One line each: what was decided, and why. Newest at the end of each section.
 ## Shell (critic round 0)
 - No top bar: search and the command palette (Ctrl/Cmd+K) sit at the top of the sidebar; the page header owns the first row (title at the start, controls at the end).
 - The sidebar is a clearly different surface from the canvas (not the logo teal), with the real logo, short labels that fit one line, "Today" first as home, and the account block (person, language, notifications, sign out) at its foot.
+
+## Shell and Today (critic rounds 1-3)
+- Today is a work queue only: the figure strip repeated its own sections and was removed; the first item of the first group is the page's one primary action.
+- Today uses the Conversations page's reply target (`REPLY_WAIT` in `features/chat/queue.ts`: amber after 60 min, red after 120) and its wait words, so one wait reads the same everywhere.
+- An instalment's age is amber until `INSTALMENT_LATE_RED_DAYS` (7, `features/today/TodayPage.tsx`) and red after: when every late row was red, red stopped meaning anything. Owner may change the number.
+- Today rows keep one stated action and no "⋯": nothing else is done from Today; the action opens the place where everything else is.
+- One "you are here" in the sidebar: the open page carries the pill and the gold mark; its place keeps weight only.
+- A place's flyout moves up just enough to stay inside the window; a group of one page has no heading.
+- On phones the account lives behind the face in the top bar (its menu says who you are); the drawer folds one place at a time; More is current for pages without a tab. The drawer has no second account block (two account menus on one screen).
+- A super admin on an operator page (`/tasks`, `/payments`) sees its place marked: the place is matched under its `/admin/…` name too.
+- Sign-in: the form alone on phones; the drawing of the academy's day only on wide screens; the reset link is one action under one question.
+- Search marks the matched letters with a teal tint (gold is "now" only).
+- People & Organization is shortened to "People" on the sidebar; its full name stays the accessible name and the flyout title.
+
+## Lead decisions while integrating
+- Shared fixes the builders reported went into `system.css` (outline tags without dashes, table row headers, neutral dots visible on white, stacked-sheet spacing, Arabic count size, switch buttons, one-letter Arabic avatars, a neutral note under an urgent figure); the teachers stylesheet's global `.sheet + .sheet` rule moved into the system.
+- "Teacher profiles" in Arabic reads "مؤهلات المعلمين" (credentials review): it shared its name with Teacher files.
+- Builders' tests changed only in wording (middle dots to commas, renamed actions, figures that became tabs), never in what they assert about data or permissions; each change is listed in the PR body.
