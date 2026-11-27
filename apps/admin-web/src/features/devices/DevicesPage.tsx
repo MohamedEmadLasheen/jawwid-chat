@@ -1,5 +1,4 @@
-import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useId, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { useSession } from '@/core/auth/SessionProvider'
@@ -17,12 +16,31 @@ type Pending = { act: 'one'; session: SessionDto } | { act: 'others' }
 
 /**
  * PD-23 `/profile/devices`: where the signed-in staff member's account is
- * signed in, with "Sign out" per device and "Sign out all other devices".
- * Signing out THIS browser ends the session here too -- locally, without
- * another request, because the server has already ended it.
+ * signed in. The page is its masthead and one sheet; the same sheet is the
+ * "Devices & sessions" tab of My profile, so the two read as one thing.
  */
 export function DevicesPage() {
   const tx = useCopy()
+  return (
+    <div className="page dev-page">
+      <div className="page__inner">
+        <PageHeader back={{ to: '/profile', label: tx(PROFILE.myProfile) }} title={tx(D.title)} />
+        <MyDevices />
+      </div>
+    </div>
+  )
+}
+
+/**
+ * The sheet of one's own signed-in devices: this browser first and tagged,
+ * "Sign out" on each row, and "Sign out all other devices" as the sheet's one
+ * action. Signing out THIS browser ends the session here too -- locally,
+ * without another request, because the server has already ended it.
+ */
+export function MyDevices() {
+  const tx = useCopy()
+  const { number } = useI18n()
+  const titleId = useId()
   const list = useQuery({ queryKey: sessionKeys.mine, queryFn: mySessionsApi.list })
   const sessions = list.data ?? []
   const others = sessions.filter((s) => !s.current).length
@@ -30,39 +48,38 @@ export function DevicesPage() {
   const [notice, setNotice] = useState<string | null>(null)
 
   return (
-    <div className="page pp pp-list">
-      <div className="page__inner dev-page">
-        {/* The second tab of My profile: the first goes back to it. */}
-        <nav className="seg dev-tabs" aria-label={tx(PROFILE.tabs)}>
-          <Link to="/profile" className="seg__item">{tx(PROFILE.tabProfile)}</Link>
-          <span className="seg__item" aria-current="page">{tx(D.open)}</span>
-        </nav>
-        <PageHeader
-          title={tx(D.title)}
-          subtitle={tx(D.subtitle)}
-          actions={
-            others > 0 && (
-              <button type="button" className="btn btn--sm btn--danger" onClick={() => setPending({ act: 'others' })}>
-                {tx(D.signOutOthers)}
-              </button>
-            )
-          }
-        />
-        {notice && (
-          <p className="notice notice--info" role="status">
-            {notice}
-          </p>
-        )}
+    <div className="dev-mine">
+      {notice && (
+        <p className="notice notice--info dev-notice" role="status">
+          {notice}
+        </p>
+      )}
+      <section className="sheet dev-sheet" aria-labelledby={titleId}>
+        <div className="sheet__head">
+          <div className="dev-sheet__title">
+            <h2 id={titleId} className="sheet__title">
+              {tx(D.signedInDevices)}
+            </h2>
+            {sessions.length > 0 && <span className="sheet__count">{number(sessions.length)}</span>}
+          </div>
+          {others > 0 && (
+            <button type="button" className="btn btn--sm btn--danger" onClick={() => setPending({ act: 'others' })}>
+              {tx(D.signOutOthers)}
+            </button>
+          )}
+        </div>
+        <p className="dev-sheet__rule">{tx(D.subtitle)}</p>
         <QueryBoundary
           isLoading={list.isLoading}
           error={list.error}
           isEmpty={sessions.length === 0}
           emptyTitle={tx(D.empty)}
           onRetry={() => void list.refetch()}
+          compact
         >
           <SessionList sessions={sessions} onSignOut={(session) => setPending({ act: 'one', session })} />
         </QueryBoundary>
-      </div>
+      </section>
 
       {pending?.act === 'one' && <RevokeOneDialog session={pending.session} onClose={() => setPending(null)} />}
       {pending?.act === 'others' && (

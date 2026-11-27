@@ -13,6 +13,7 @@ export const D = {
     ar: 'الأماكن التي سُجّل فيها الدخول إلى حسابك. سجّل الخروج من أي جهاز لا تعرفه.',
   },
   back: { en: 'Back to my profile', ar: 'العودة إلى ملفي' },
+  signedInDevices: { en: 'Signed-in devices', ar: 'الأجهزة المسجَّل دخولها' },
   device: { en: 'Device', ar: 'الجهاز' },
   platform: { en: 'Type', ar: 'النوع' },
   signedIn: { en: 'Signed in', ar: 'تسجيل الدخول' },
