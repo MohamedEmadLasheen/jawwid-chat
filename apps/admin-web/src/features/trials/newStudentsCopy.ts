@@ -37,6 +37,21 @@ export const NS = {
   },
   reset: { en: 'Reset attempts', ar: 'إعادة تعيين المحاولات' },
   resetDone: { en: 'Attempts reset. The parent can ask for a new code.', ar: 'أُعيد تعيين المحاولات. يمكن لولي الأمر طلب رمز جديد.' },
+  // The queue and its detail panel
+  kind: { en: 'New family', ar: 'أسرة جديدة' },
+  panelLabel: { en: 'Family details', ar: 'تفاصيل الأسرة' },
+  family: { en: 'Family', ar: 'الأسرة' },
+  supervisor: { en: 'Supervisor', ar: 'المشرف' },
+  recordedCol: { en: 'Recorded', ar: 'سُجّلت' },
+  status: { en: 'Status', ar: 'الحالة' },
+  lockedCount: { en: '{n} locked', ar: 'مقفل: {n}' },
+  oldest: { en: 'oldest {age}', ar: 'الأقدم {age}' },
+  stepTrial: { en: 'Trial lesson', ar: 'الحصة التجريبية' },
+  stepRecorded: { en: 'Subscription recorded', ar: 'تسجيل الاشتراك' },
+  emptyHint: {
+    en: 'A family appears here when Sales records "The student subscribed" on a trial.',
+    ar: 'تظهر الأسرة هنا عندما يسجّل قسم المبيعات «الطالب اشترك» على حصة تجريبية.',
+  },
 } satisfies Record<string, Pair>
 
 export type NewStudentStatus = 'unassigned' | 'waiting' | 'locked' | 'signed_up'

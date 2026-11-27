@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   certificateKeys,
   certificatesApi,
@@ -7,6 +7,7 @@ import {
   type ConsentBody,
   type ListQuery,
   type RequestBody,
+  type StateGroup,
 } from './api'
 
 /** What the caller may do on the page (nav, form, tabs). The server's answer, nothing inferred. */
@@ -16,6 +17,26 @@ export function useCertificateAccess(enabled = true) {
 
 export function useCertificates(q: ListQuery, enabled = true) {
   return useQuery({ queryKey: certificateKeys.list(q), queryFn: () => certificatesApi.list(q), enabled, staleTime: 15_000 })
+}
+
+/**
+ * The status strip counts every state, not only the open one. The server has no
+ * count endpoint, so each count is the existing list read, asked once per state
+ * (its first page; "+" when there is more). The open state's read is the list
+ * the page shows anyway, and the others make their state open at once. Set this
+ * to false to ask for the open state alone: the other cells then show no figure.
+ */
+export const COUNT_EVERY_STATE = true
+
+export function useCertificateCounts(category: CertificateCategory | undefined, groups: readonly StateGroup[], open: StateGroup) {
+  return useQueries({
+    queries: groups.map((status) => ({
+      queryKey: certificateKeys.list({ category, status }),
+      queryFn: () => certificatesApi.list({ category, status }),
+      enabled: !!category && (COUNT_EVERY_STATE || status === open),
+      staleTime: 15_000,
+    })),
+  })
 }
 
 export function useCertificate(certificateId: string | null) {

@@ -1,63 +1,101 @@
-/* Trial journey: the "+ -> Trial" card, the subscription form, the trial group's
-   membership bar and the New Students cards. Tokens only. */
+/* Trial journey: the "+ -> Trial" card, the booking and subscription forms and
+   the trial group's membership bar. Ruled rows on paper, no boxes. Tokens only;
+   logical properties only. */
 
-/* The card */
-.tj-picklist { list-style: none; margin: var(--space-2) 0 0; padding: 0; display: grid; gap: var(--space-2); }
+/* The card: which trial, then which of the three outcomes. Each is a ruled row
+   that leads on, so it ends in a small arrow. */
+.tj-picklist { list-style: none; margin: var(--space-2) 0 0; padding: 0; border-block-start: 1px solid var(--hairline); }
+.tj-options { display: grid; border-block-start: 1px solid var(--hairline); }
 .tj-pick,
 .tj-option {
   inline-size: 100%;
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-3);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--surface);
-  color: var(--text);
+  min-block-size: 48px;
+  padding: 10px 4px;
+  border: 0;
+  border-block-end: 1px solid var(--hairline-soft);
+  border-radius: 0;
+  background: none;
+  color: var(--ink);
   font: inherit;
   text-align: start;
   cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out);
 }
+.tj-pick::after,
+.tj-option::after {
+  content: '';
+  flex: none;
+  inline-size: 7px;
+  block-size: 7px;
+  margin-inline: auto 4px;
+  border-block-start: 1.5px solid var(--teal);
+  border-inline-end: 1.5px solid var(--teal);
+  transform: rotate(45deg);
+}
+[dir='rtl'] :is(.tj-pick, .tj-option)::after { transform: rotate(-45deg); }
+/* The dialog's own rule closes the list. */
+.tj-options > .tj-option:last-child, .tj-picklist > li:last-child > .tj-pick { border-block-end: 0; }
 .tj-pick:hover:not(:disabled),
-.tj-option:hover:not(:disabled) { background: var(--surface-hover); border-color: var(--border-strong); }
+.tj-option:hover:not(:disabled) { background: var(--surface-hover); }
 .tj-pick:focus-visible,
-.tj-option:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-.tj-pick:disabled { cursor: default; color: var(--text-muted); background: var(--surface-sunken); }
-.tj-pick__hint { margin: var(--space-1) 0 0; font-size: var(--fs-sm); }
-.tj-pick__name { font-weight: var(--fw-semibold); flex: 1 1 auto; min-inline-size: 0; overflow-wrap: anywhere; }
-.tj-options { display: grid; gap: var(--space-2); }
-.tj-option { justify-content: space-between; font-weight: var(--fw-semibold); }
-.tj-option:disabled { cursor: not-allowed; color: var(--text-muted); background: var(--surface-sunken); }
-.tj-option__why { font-weight: normal; font-size: var(--fs-sm); }
-.tj-trial-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2); margin: 0 0 var(--space-2); }
-.tj-current { margin: 0 0 var(--space-2); }
+.tj-option:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.tj-pick:disabled,
+.tj-option:disabled { cursor: not-allowed; color: var(--ink-muted); }
+:is(.tj-pick, .tj-option):disabled::after { border-color: var(--border-strong); }
+.tj-pick__hint { margin: var(--space-1) 0 var(--space-2); padding-inline-start: 4px; font-size: var(--fs-xs); }
+.tj-pick__name { font-weight: 600; flex: 1 1 auto; min-inline-size: 0; overflow-wrap: anywhere; }
+.tj-option { font-weight: 600; }
+.tj-option > span:first-child { flex: 1 1 auto; min-inline-size: 0; }
+.tj-option__why { font-weight: 400; font-size: var(--fs-xs); }
+.tj-trial-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2); margin: 0 0 var(--space-3); font-size: var(--fs-sm); }
+.tj-trial-head strong { font-size: var(--fs-md); }
+.tj-current { margin: 0 0 var(--space-2); font-size: var(--fs-sm); }
+/* What the group will read: set apart on gold paper, so nobody sends more than they meant to. */
 .tj-preview {
   display: grid;
   gap: var(--space-1);
-  margin-block-start: var(--space-3);
-  padding: var(--space-3);
-  border-radius: var(--radius-md);
-  background: var(--surface-sunken);
+  margin-block-start: var(--space-4);
+  padding: var(--space-2) var(--space-3);
+  border-inline-start: 2px solid var(--gold-line);
+  background: var(--gold-tint);
   font-size: var(--fs-sm);
 }
-.tj-preview q { font-weight: var(--fw-semibold); font-size: var(--fs-md); }
+.tj-preview q { font-weight: 600; font-size: var(--fs-md); color: var(--ink); }
+.tj-preview .ts-muted { color: var(--gold-text); }
 
-/* The form */
+/* The forms: each part is a quiet label over a rule, not a box. */
 .tj-form { display: grid; gap: var(--space-4); }
-.tj-fieldset { border: 1px solid var(--border); border-radius: var(--radius-md); padding: var(--space-3); margin: 0; min-inline-size: 0; display: grid; gap: var(--space-2); }
-.tj-legend { padding-inline: var(--space-1); font-weight: var(--fw-semibold); }
+.tj-fieldset {
+  border: 0;
+  border-block-start: 1px solid var(--hairline);
+  border-radius: 0;
+  padding: var(--space-3) 0 var(--space-2);
+  margin: 0 0 var(--space-2);
+  min-inline-size: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+/* Floated, the legend sits under the rule as a label instead of breaking it. */
+.tj-legend { float: inline-start; inline-size: 100%; padding: 0; margin: 0; font-size: 12.5px; font-weight: 500; color: var(--ink-muted); }
+.tj-legend + * { clear: both; }
+.tj-fieldset > p { margin: 0; font-size: var(--fs-sm); }
 .tj-row { display: grid; gap: var(--space-3); grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); }
 .tj-row > .field { margin: 0; }
-.tj-child { display: grid; gap: var(--space-2); padding-block: var(--space-2); border-block-end: 1px dashed var(--border); }
+.tj-child { display: grid; gap: var(--space-2); padding-block: var(--space-2) var(--space-3); border-block-end: 1px solid var(--hairline-soft); }
 .tj-child:last-of-type { border-block-end: none; }
 .tj-child__head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
-.tj-child__title { font-weight: var(--fw-semibold); }
+.tj-child__title { font-weight: 600; font-size: var(--fs-sm); }
 .tj-schedule { display: grid; gap: var(--space-2); justify-items: start; }
 .tj-slot { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .tj-slot .ss,
 .tj-slot > .input { inline-size: auto; min-inline-size: 8rem; }
-.tj-choices { display: flex; flex-wrap: wrap; gap: var(--space-3); padding-block: var(--space-1); }
-.tj-choice { display: inline-flex; align-items: center; gap: var(--space-1); cursor: pointer; }
+.tj-choices { display: flex; flex-wrap: wrap; gap: var(--space-4); padding-block: var(--space-1); }
+.tj-choice { display: inline-flex; align-items: center; gap: var(--space-2); cursor: pointer; }
+.tj-choice input { accent-color: var(--teal); }
+.tj-location { display: grid; gap: var(--space-2); }
 
 /* The trial group's membership bar */
 .tj-bar {
@@ -66,28 +104,9 @@
   align-items: center;
   gap: var(--space-2);
   padding: var(--space-2) var(--space-3);
-  border-block-start: 1px solid var(--border);
-  background: var(--surface-sunken);
+  border-block-start: 1px solid var(--hairline);
+  background: var(--paper);
   font-size: var(--fs-sm);
-  color: var(--text-muted);
+  color: var(--ink-muted);
 }
 .tj-bar > span:first-child { flex: 1 1 auto; }
-
-/* New Students */
-.tj-students { display: grid; gap: var(--space-4); }
-.tj-student { display: grid; gap: var(--space-3); }
-.tj-student__head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--space-2); }
-.tj-student__title { margin: 0; font-size: var(--fs-md); font-weight: var(--fw-semibold); }
-.tj-student__meta { font-size: var(--fs-sm); }
-.tj-facts { display: grid; gap: var(--space-3); grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); margin: 0; }
-.tj-facts > div { display: grid; gap: 2px; }
-.tj-facts dt { color: var(--text-muted); font-size: var(--fs-sm); }
-.tj-facts dd { margin: 0; overflow-wrap: anywhere; }
-.tj-schedule-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
-
-/* PD-16: a new student's setup on their card. */
-.tj-setup { padding-block-start: var(--space-3); border-block-start: 1px solid var(--border); display: grid; gap: var(--space-2); }
-.tj-setup__parent { grid-column: 1 / -1; }
-.tj-code { font-size: 1.25rem; letter-spacing: 0.2em; font-variant-numeric: tabular-nums; padding-inline: var(--space-2); }
-.tj-setup__supervisor { display: inline-flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
-.tj-location { display: grid; gap: var(--space-2); }

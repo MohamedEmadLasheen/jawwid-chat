@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Badge } from '@/shared/components/Badge'
+import { Icon } from '@/shared/components/Icon'
 import { EmptyState } from '@/shared/components/States'
 import { FilterChips, type FilterOption } from '@/shared/components/FilterChips'
 import { parentPath } from '@/features/profiles/api'
@@ -66,8 +67,10 @@ function EnteredFamiliesList({ data }: { data: EnteredList }) {
           <FilterChips options={options} value={filter} onChange={setFilter} label={tx(OP.filterLabel)} formatCount={(n) => number(n)} />
         </div>
       )}
-      {shown.length === 0 ? (
-        <EmptyState title={tx(OP.noneHere)} />
+      {data.families.length === 0 ? (
+        <p className="rq-note">{tx(OP.enteredNone)}</p>
+      ) : shown.length === 0 ? (
+        <EmptyState title={tx(OP.noneHere)} compact />
       ) : (
         <div className="ns-list">
           {shown.map((f) => (
@@ -91,7 +94,7 @@ function EnteredCard({ f, canAssign, canSuggest }: { f: EnteredFamily; canAssign
       <header className="ns-card__head">
         <div className="ns-card__who">
           <div className="ns-card__title-row">
-            <h3 id={headingId} className="ns-card__title" dir="auto">{f.parentName ?? '—'}</h3>
+            <h3 id={headingId} className="ns-card__title"><bdi>{f.parentName ?? '—'}</bdi></h3>
             {f.kind === 'added_children' && <Badge tone="info">{tx(OP.childAdded)}</Badge>}
             {f.needsOperationsSupervisor && <Badge tone="waiting" dot>{tx(OP.needs)}</Badge>}
           </div>
@@ -106,6 +109,12 @@ function EnteredCard({ f, canAssign, canSuggest }: { f: EnteredFamily; canAssign
           {f.needsOperationsSupervisor && !canAssign && canSuggest && (
             <button type="button" className="btn btn--sm" onClick={() => setDialog('suggest')}>{tx(OP.suggest)}</button>
           )}
+          {f.groupConversationId && (
+            <Link className="btn btn--sm btn--ghost" to={`/chat/${encodeURIComponent(f.groupConversationId)}`}>
+              <Icon name="conversations" size={16} />
+              {tx(OP.openGroup)}
+            </Link>
+          )}
           <Link className="btn btn--sm btn--ghost" to={parentPath(f.contactId)}>{tx(OP.openParent)}</Link>
         </div>
       </header>
@@ -115,7 +124,7 @@ function EnteredCard({ f, canAssign, canSuggest }: { f: EnteredFamily; canAssign
           <dd>
             <ul className="ns-slots">
               {f.children.map((c) => (
-                <li key={c.id} dir="auto">{c.name ?? '—'}</li>
+                <li key={c.id}><bdi>{c.name ?? '—'}</bdi></li>
               ))}
             </ul>
           </dd>

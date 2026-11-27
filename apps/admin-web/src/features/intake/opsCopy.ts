@@ -18,6 +18,8 @@ export const OP = {
   signedUp: { en: 'Signed up', ar: 'أنشأ حسابه' },
   recent: { en: 'Recently entered', ar: 'أُدخلت مؤخرًا' },
   noneHere: { en: 'No family matches this filter.', ar: 'لا توجد أسرة تطابق هذا الفلتر.' },
+  enteredNone: { en: 'No family has been entered by hand yet.', ar: 'لم تُدخل أي أسرة يدويًا بعد.' },
+  openGroup: { en: 'Open group', ar: 'فتح المجموعة' },
   enteredBy: { en: 'Entered by', ar: 'أدخلها' },
   childAdded: { en: 'Child added', ar: 'أُضيف طفل' },
   children: { en: 'Children', ar: 'الأطفال' },
