@@ -33,8 +33,8 @@
   flex: none;
   border-radius: var(--radius);
   object-fit: cover;
-  background: var(--teal-tint);
-  color: var(--teal-dark);
+  background: var(--accent-soft);
+  color: var(--text-link);
   font-weight: 600;
 }
 .pp-head__mark .sp-avatar { font-size: 29px !important; }
@@ -143,7 +143,8 @@ html[lang='ar'] .pp-side > .sp-card > .sp-card__title { font-size: 13.5px; }
 .sp-row--compact { grid-template-columns: minmax(200px, 1fr) minmax(220px, 2fr); }
 .sp-row__who { display: flex; gap: 10px; align-items: center; min-inline-size: 0; }
 .sp-row__names { min-inline-size: 0; overflow-wrap: anywhere; }
-.sp-row__link { font-weight: 600; color: var(--ink); text-decoration: none; }
+/* A name that opens a profile is a link, and reads as one: --text-link, never --accent. */
+.sp-row__link { font-weight: 600; color: var(--text-link); text-decoration: none; }
 .sp-row__link:hover { color: var(--teal-dark); text-decoration: underline; text-underline-offset: 3px; }
 .sp-row__sub { display: flex; flex-wrap: wrap; align-items: center; gap: 2px var(--space-2); font-size: var(--fs-xs); color: var(--ink-muted); }
 .sp-row__sub .badge { font-size: var(--fs-xs); }
@@ -165,7 +166,7 @@ html[lang='ar'] .sp-row__nums dt { font-size: 12.5px; }
 .sp-tabs { display: flex; gap: var(--space-5); flex-wrap: wrap; border-block-end: 1px solid var(--hairline); margin-block-start: var(--space-3); }
 .sp-tab { font: inherit; font-size: var(--fs-sm); font-weight: 500; background: transparent; border: none; border-block-end: 2px solid transparent; margin-block-end: -1px; padding: 9px 0; color: var(--ink-muted); cursor: pointer; }
 .sp-tab:hover { color: var(--ink); }
-.sp-tab[aria-selected='true'] { color: var(--teal-dark); border-block-end-color: var(--teal); font-weight: 600; }
+.sp-tab[aria-selected='true'] { color: var(--text-link); border-block-end-color: var(--accent); font-weight: 600; }
 .sp-tabpanel { padding-block-start: var(--space-4); min-inline-size: 0; }
 .sp-subtitle { margin: var(--space-5) 0 6px; font-size: 12.5px; font-weight: 500; color: var(--ink-muted); }
 html[lang='ar'] .sp-subtitle { font-size: 13.5px; }

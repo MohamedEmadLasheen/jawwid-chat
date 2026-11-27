@@ -4,15 +4,17 @@
 .sa-tabs { display: flex; gap: var(--space-5); flex-wrap: wrap; border-block-end: 1px solid var(--hairline); margin-block-end: var(--space-5); }
 .sa-tab { display: inline-flex; align-items: center; min-block-size: 40px; padding: 0; margin-block-end: -1px; color: var(--ink-muted); font-size: var(--fs-sm); font-weight: 500; text-decoration: none; border-block-end: 2px solid transparent; }
 .sa-tab:hover { color: var(--ink); }
-.sa-tab--active { color: var(--teal-dark); border-block-end-color: var(--teal); font-weight: 600; }
+.sa-tab--active { color: var(--text-link); border-block-end-color: var(--accent); font-weight: 600; }
 
-.sa-name { background: none; border: 0; padding: 0; min-block-size: 32px; font: inherit; font-weight: 600; color: var(--ink); cursor: pointer; text-align: start; }
+.sa-name { background: none; border: 0; padding: 0; min-block-size: 32px; font: inherit; font-weight: 600; color: var(--text-link); cursor: pointer; text-align: start; }
 .sa-name:hover { color: var(--teal-dark); text-decoration: underline; text-underline-offset: 3px; }
 .sa-chips { display: flex; flex-wrap: wrap; gap: 2px var(--space-3); }
 .sa-filters { align-items: flex-end; }
 .sa-filters .field { margin: 0; min-inline-size: 190px; }
 .sa-filters .chips { align-self: center; }
 .sa-page .table td .field__hint { display: block; font-size: var(--fs-xs); }
+/* A role's key is Latin; in Arabic it still sits under the role's name, on its side. */
+[dir='rtl'] .sa-page .table td .field__hint[dir='ltr'] { text-align: right; }
 .sa-step { color: var(--ink-muted); margin: 0 0 var(--space-3); font-size: var(--fs-sm); }
 .sa-fixed { display: grid; grid-template-columns: max-content 1fr; gap: 0 var(--space-4); margin: var(--space-2) 0; font-size: var(--fs-sm); }
 .sa-fixed dt, .sa-fixed dd { margin: 0; padding-block: 7px; border-block-end: 1px solid var(--hairline-soft); }

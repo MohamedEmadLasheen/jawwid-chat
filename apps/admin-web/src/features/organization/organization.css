@@ -4,7 +4,8 @@
 .org-tabs { display: flex; gap: var(--space-5); flex-wrap: wrap; border-block-end: 1px solid var(--hairline); margin-block: 0 var(--space-4); }
 .org-tab { font: inherit; font-size: var(--fs-sm); font-weight: 500; min-block-size: 40px; background: transparent; border: none; border-block-end: 2px solid transparent; margin-block-end: -1px; padding: 0; color: var(--ink-muted); cursor: pointer; }
 .org-tab:hover { color: var(--ink); }
-.org-tab[aria-selected='true'] { color: var(--teal-dark); border-block-end-color: var(--teal); font-weight: 600; }
+/* The label in --text-link and the underline in --accent: the pair the theme tests hold to 4.5:1 and 3:1. */
+.org-tab[aria-selected='true'] { color: var(--text-link); border-block-end-color: var(--accent); font-weight: 600; }
 
 /* A department: a ruled section, never a box. */
 .org-page .org-dept { margin: 0 0 var(--space-6); padding: 0; border: 0; background: none; }
