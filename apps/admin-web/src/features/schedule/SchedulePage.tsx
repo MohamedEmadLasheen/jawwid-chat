@@ -6,6 +6,7 @@ import { PageHeader } from '@/shared/components/PageHeader'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
 import { FilterChips } from '@/shared/components/FilterChips'
 import { Dialog } from '@/shared/components/Dialog'
+import { Icon } from '@/shared/components/Icon'
 import { useMediaQuery } from '@/shared/hooks/useMediaQuery'
 import { AgendaView, MonthAgenda } from './Agenda'
 import type { CalendarLesson } from './api'
@@ -15,8 +16,18 @@ import { useCalendarOptions, useCalendarStats, useCalendarSummary, useCalendarWi
 import { PaletteStyle } from './palette'
 import { Legend, LessonDetails, StatsBar } from './Panels'
 import { DayView, MonthView, WeekView } from './Timeline'
-import { VIEWS, academyToday, activeFilterCount, addDays, apiQuery, parseViewState, rangeFor, step, toParams, type View, type ViewState } from './viewState'
+import { VIEWS, academyToday, activeFilterCount, addDays, apiQuery, clearFilters, parseViewState, rangeFor, step, toParams, type View, type ViewState } from './viewState'
 import './schedule.css'
+
+/** Whether the filter row is folded away: the person's own choice, kept on this browser. */
+const FILTERS_FOLDED_KEY = 'jawwid.schedule.filters-folded'
+function readFolded(): boolean {
+  try {
+    return localStorage.getItem(FILTERS_FOLDED_KEY) === '1'
+  } catch {
+    return false
+  }
+}
 
 /**
  * PD-38: the academy's scheduling calendar -- every teacher's shift, lessons
@@ -39,6 +50,16 @@ export function SchedulePage() {
   // A phone: the agenda, and the filters in a bottom sheet (owner, 2026-10-28).
   const narrow = useMediaQuery('(max-width: 720px)')
   const [filtersOpen, setFiltersOpen] = useState(false)
+  // The desktop filter row folds into its one button, and stays as it was left.
+  const [folded, setFolded] = useState(readFolded)
+  const fold = (next: boolean) => {
+    setFolded(next)
+    try {
+      localStorage.setItem(FILTERS_FOLDED_KEY, next ? '1' : '0')
+    } catch {
+      // Storage blocked: the row still folds for this visit.
+    }
+  }
 
   const options = useCalendarOptions()
   const q = useMemo(() => apiQuery(state), [state])
@@ -87,6 +108,23 @@ export function SchedulePage() {
 
         <QueryBoundary isLoading={options.isLoading} error={options.error} onRetry={() => void options.refetch()}>
           <div className="sc-toolbar">
+            <div className="sc-nav">
+              <h2 className="sc-range" aria-live="polite">{title}</h2>
+              {/* Earlier is to the left and later to the right, as on the grid's own axis, in both languages. */}
+              <div className="sc-nav__step" dir="ltr">
+                <button type="button" className="btn btn--sm btn--icon" aria-label={tx(S.previous)} onClick={() => update({ ...state, date: step(state.view, state.date, -1) })}>
+                  <span aria-hidden="true" className="sc-chev sc-chev--earlier" />
+                </button>
+                <button type="button" className="btn btn--sm" onClick={() => update({ ...state, date: today })}>{tx(S.today)}</button>
+                <button type="button" className="btn btn--sm btn--icon" aria-label={tx(S.next)} onClick={() => update({ ...state, date: step(state.view, state.date, 1) })}>
+                  <span aria-hidden="true" className="sc-chev sc-chev--later" />
+                </button>
+              </div>
+              <label className="sc-date">
+                <span className="sr-only">{tx(S.date)}</span>
+                <input type="date" className="input" value={state.date} onChange={(e) => e.target.value && update({ ...state, date: e.target.value })} />
+              </label>
+            </div>
             <FilterChips
               variant="tabs"
               label={tx(S.viewLabel)}
@@ -94,20 +132,6 @@ export function SchedulePage() {
               onChange={setView}
               options={VIEWS.map((v) => ({ value: v, label: tx(VIEW_LABEL[v]) }))}
             />
-            <div className="sc-nav">
-              <button type="button" className="btn btn--sm" aria-label={tx(S.previous)} onClick={() => update({ ...state, date: step(state.view, state.date, -1) })}>
-                <span aria-hidden="true" className="sc-flip">‹</span>
-              </button>
-              <button type="button" className="btn btn--sm" onClick={() => update({ ...state, date: today })}>{tx(S.today)}</button>
-              <button type="button" className="btn btn--sm" aria-label={tx(S.next)} onClick={() => update({ ...state, date: step(state.view, state.date, 1) })}>
-                <span aria-hidden="true" className="sc-flip">›</span>
-              </button>
-              <label className="sc-date">
-                <span className="sr-only">{tx(S.date)}</span>
-                <input type="date" className="input" value={state.date} onChange={(e) => e.target.value && update({ ...state, date: e.target.value })} />
-              </label>
-              <h2 className="sc-range" aria-live="polite">{title}</h2>
-            </div>
           </div>
 
           {narrow ? (
@@ -116,7 +140,30 @@ export function SchedulePage() {
               {activeFilterCount(state) > 0 && <span className="sc-filter__count">{activeFilterCount(state)}</span>}
             </button>
           ) : (
-            <FilterBar state={state} options={options.data} onChange={update} />
+            <div className={`sc-filterrow${folded ? ' sc-filterrow--folded' : ''}`}>
+              <button
+                type="button"
+                className="sc-filterrow__toggle"
+                aria-expanded={!folded}
+                aria-controls="sc-filterrow-body"
+                onClick={() => fold(!folded)}
+              >
+                <span className="sc-filterrow__caret" aria-hidden="true"><Icon name="chevronDown" size={16} /></span>
+                {tx(S.filters)}
+                {activeFilterCount(state) > 0 && <span className="sc-filter__count">{activeFilterCount(state)}</span>}
+              </button>
+              <div id="sc-filterrow-body" className="sc-filterrow__body">
+                {folded ? (
+                  activeFilterCount(state) > 0 && (
+                    <button type="button" className="btn btn--sm btn--ghost" onClick={() => update(clearFilters(state))}>
+                      {tx(S.clearAll)} ({activeFilterCount(state)})
+                    </button>
+                  )
+                ) : (
+                  <FilterBar state={state} options={options.data} onChange={update} />
+                )}
+              </div>
+            </div>
           )}
           {options.data?.viewer.scope === 'supervisor' && state.lists.supervisorIds.includes(options.data.viewer.staffId) && (
             <p className="sc-hint">{tx(S.mineDefault)}</p>
@@ -126,8 +173,9 @@ export function SchedulePage() {
           <Legend supervisors={supervisors} selected={state.lists.supervisorIds} onToggle={toggleSupervisor} />
 
           <QueryBoundary isLoading={active.isLoading} error={active.error} onRetry={() => void active.refetch()}>
-            <div className={narrow ? 'sc-agenda-wrap' : 'sc-scroll'} aria-busy={active.isFetching}>
-              {teachers && teachers.length === 0 && <EmptyState title={tx(S.noTeachers)} />}
+            {teachers && teachers.length === 0 && <EmptyState title={tx(S.noTeachers)} hint={tx(S.noTeachersHint)} />}
+            {/* A time axis reads left to right in both languages: the grids sit in an ltr wrapper. */}
+            <div className={narrow ? 'sc-agenda-wrap' : 'sc-scroll'} dir={narrow ? undefined : 'ltr'} aria-busy={active.isFetching}>
               {teachers && teachers.length > 0 && narrow && (
                 <>
                   {!month && win.data && <AgendaView data={win.data} onLesson={setLesson} />}

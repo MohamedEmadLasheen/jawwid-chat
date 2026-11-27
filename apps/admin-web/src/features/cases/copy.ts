@@ -11,6 +11,10 @@ export const C = {
     ar: 'ما لم يستطع المشرف حله وحده، مُصعَّدًا إلى قسم المعلمين أو قسم العمليات.',
   },
   empty: { en: 'No cases here.', ar: 'لا توجد حالات هنا.' },
+  emptyHint: {
+    en: 'A case appears here when a supervisor escalates one from a teacher, a student or a family.',
+    ar: 'تظهر الحالة هنا حين يصعّدها مشرف من صفحة معلم أو طالب أو عائلة.',
+  },
   showClosed: { en: 'Show closed', ar: 'عرض المغلقة' },
   owner: { en: 'Owner', ar: 'المسؤول' },
   noOwner: { en: 'No owner', ar: 'بلا مسؤول' },

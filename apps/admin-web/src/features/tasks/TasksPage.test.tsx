@@ -323,6 +323,26 @@ describe('the level colours', () => {
     expect(tasksCss).toMatch(/\.task-level--medium \{ color: var\(--gold-700\); background: var\(--gold-50\);/)
     expect(tasksCss).not.toMatch(/#[0-9a-f]{6}/i)
   })
+
+  it('on the Tasks page a level is a word on the paper: its colour clears 4.5:1 on the page and on a selected row, light and dark', () => {
+    const paper = readFileSync(join(__dirname, '../../core/theme/paper.css'), 'utf8')
+    const light = paper.slice(paper.indexOf(':root {'), paper.indexOf('}', paper.indexOf(':root {')))
+    const darkStart = paper.indexOf(":root:not([data-theme='light']) {")
+    const dark = paper.slice(darkStart, paper.indexOf('}', darkStart))
+    const value = (block: string, name: string): string => {
+      const re = new RegExp(`--${name}:\\s*(#[0-9a-f]{6}|var\\(--([a-z0-9-]+)\\));`, 'i')
+      const m = re.exec(block) ?? re.exec(light)
+      if (!m) throw new Error(`no --${name} in paper.css`)
+      return m[2] ? value(block, m[2]) : m[1]!
+    }
+    for (const fg of ['danger', 'gold-700', 'ok', 'text-muted']) {
+      for (const [theme, block] of [['light', light], ['dark', dark]] as const) {
+        for (const bg of ['paper', 'teal-tint']) {
+          expect(contrast(value(block, fg), value(block, bg)), `--${fg} on --${bg}, ${theme}`).toBeGreaterThanOrEqual(4.5)
+        }
+      }
+    }
+  })
 })
 
 describe('switching, links and keys', () => {

@@ -245,7 +245,7 @@ function StoryList({
       }
       emptyIcon="stories"
     >
-      <section className="kpi-strip" aria-label={tx(S.insights)}>
+      <section className="kpi-strip kpi-strip--line" aria-label={tx(S.insights)}>
         {kpis.map((k) => (
           <div key={k.key} className={`kpi kpi--${k.key}`}>
             <span className="kpi__label">{k.label}</span>

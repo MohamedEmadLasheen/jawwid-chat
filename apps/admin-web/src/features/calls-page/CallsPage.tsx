@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { useSession } from '@/core/auth/SessionProvider'
+import { ACADEMY_ZONE, clock12In, dayMonthIn, weekdayIn } from '@/core/time/academyTime'
 import { ApiError } from '@/core/api/errors'
 import { Avatar } from '@/shared/components/Avatar'
 import { Badge } from '@/shared/components/Badge'
@@ -66,7 +67,7 @@ function UpcomingRow({
   onCancel: (c: ScheduledCall) => void
 }) {
   const copy = useCallsCopy()
-  const { dateTime } = useI18n()
+  const { dateTime, locale } = useI18n()
   const actions = useCallActions()
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -84,15 +85,16 @@ function UpcomingRow({
   }, [menuOpen])
 
   return (
-    <li className="cp-row" data-testid="upcoming-row">
-      <span className="cp-row__glyph" aria-hidden="true">
-        <Icon name={call.kind === 'link' ? 'link' : 'calendar'} size={18} />
-      </span>
-      <span className="cp-row__body">
-        <span className="cp-row__name">{name}</span>
-        <span className="cp-row__sub">
-          <time dateTime={call.startsAt}>{dateTime(call.startsAt)}</time>
+    <li className={open ? 'cp-up cp-up--open' : 'cp-up'} data-testid="upcoming-row">
+      {/* The hour first: it is what a scheduled call is read for. */}
+      <time className="cp-up__when" dateTime={call.startsAt} title={dateTime(call.startsAt)}>
+        <bdi className="cp-up__time">{clock12In(call.startsAt, ACADEMY_ZONE, locale)}</bdi>
+        <span className="cp-up__day">
+          {weekdayIn(call.startsAt, ACADEMY_ZONE, locale)} {dayMonthIn(call.startsAt, ACADEMY_ZONE, locale)}
         </span>
+      </time>
+      <span className="cp-row__body">
+        <span className="cp-row__name" dir="auto">{name}</span>
         <span className="cp-row__badges">
           {call.kind === 'link' && <Badge tone="info">{copy.linkBadge}</Badge>}
           <StateBadge state={state} />
@@ -181,25 +183,31 @@ function RecentRow({
     : row.outcome ?? copy.ongoing
 
   return (
-    <li className="cp-row" data-testid="recent-row" data-direction={direction} data-outcome={row.outcome ?? ''}>
-      <Avatar name={name} seed={row.conversationId} size="sm" />
-      <span className="cp-row__body">
-        <span className="cp-row__top">
+    <tr className="cp-recent" data-testid="recent-row" data-direction={direction} data-outcome={row.outcome ?? ''}>
+      <th scope="row" className="cp-recent__who">
+        <span className="cp-recent__name">
+          <Avatar name={name} seed={row.conversationId} size="sm" />
           <span className={missed ? 'cp-row__name cp-row__name--missed' : 'cp-row__name'}>{name}</span>
           {isTrialGroup(conversation) && <TrialBadge />}
-          <time className="cp-row__time" dateTime={row.startedAt} title={dateTime(row.startedAt)}>
-            {listTime(row.startedAt, locale)}
-          </time>
         </span>
-        <span className={missed ? 'cp-row__sub cp-row__sub--missed' : 'cp-row__sub'}>
-          <Icon name={direction === 'outgoing' ? 'callOutgoing' : 'callIncoming'} size={14} />
-          <span className="sr-only">{direction === 'outgoing' ? copy.outgoing : copy.incoming}</span>
+      </th>
+      <td className="cp-recent__dir">
+        <Icon name={direction === 'outgoing' ? 'callOutgoing' : 'callIncoming'} size={14} />
+        <span>{direction === 'outgoing' ? copy.outgoing : copy.incoming}</span>
+      </td>
+      <td className="cp-recent__status">
+        <Badge tone={missed ? 'danger' : row.outcome === 'answered' ? 'ok' : row.outcome ? 'neutral' : 'info'}>
           <span>{status}</span>
-          {row.endReason === 'connection_lost' ? <span>· {copy.connectionLost}</span> : null}
-          {row.durationSeconds ? <span dir="ltr">· {copy.duration(row.durationSeconds)}</span> : null}
-        </span>
-      </span>
-      <span className="cp-row__end">
+        </Badge>
+        {row.endReason === 'connection_lost' ? <span className="cp-recent__lost">· {copy.connectionLost}</span> : null}
+      </td>
+      <td className="cp-recent__len num">{row.durationSeconds ? <span>{copy.duration(row.durationSeconds)}</span> : null}</td>
+      <td className="cp-recent__when">
+        <time className="cp-row__time" dateTime={row.startedAt} title={dateTime(row.startedAt)}>
+          {listTime(row.startedAt, locale)}
+        </time>
+      </td>
+      <td className="cp-recent__call">
         {conversation && (
           <button
             type="button"
@@ -209,18 +217,18 @@ function RecentRow({
             aria-label={copy.callTo(name)}
             onClick={() => void actions.startCall(conversation)}
           >
-            <Icon name="calls" size={16} />
+            <Icon name="phone" size={16} />
           </button>
         )}
-      </span>
-    </li>
+      </td>
+    </tr>
   )
 }
 
 /* ------------------------------------------------------------------- page */
 
-const TILES: Array<{ mode: PickerMode; icon: IconName; label: 'startCall' | 'newLink' | 'selectMember' | 'scheduleCall'; brand?: boolean }> = [
-  { mode: 'call', icon: 'calls', label: 'startCall', brand: true },
+const ACTIONS: Array<{ mode: PickerMode; icon: IconName; label: 'startCall' | 'newLink' | 'selectMember' | 'scheduleCall'; primary?: boolean }> = [
+  { mode: 'call', icon: 'phone', label: 'startCall', primary: true },
   { mode: 'link', icon: 'link', label: 'newLink' },
   { mode: 'select', icon: 'users', label: 'selectMember' },
   { mode: 'schedule', icon: 'calendarPlus', label: 'scheduleCall' },
@@ -228,9 +236,9 @@ const TILES: Array<{ mode: PickerMode; icon: IconName; label: 'startCall' | 'new
 
 /**
  * THE CALLS PAGE (PD-13), for operators at /calls and the super admin at
- * /admin/calls. A list on the inline start (Upcoming, Favorites, Recent) and
- * four actions in the middle, like a desktop messenger's Calls tab. Voice
- * only. Every list is the server's answer for THIS account; every action is
+ * /admin/calls. Four actions beside the title; what is scheduled, with its
+ * hour first; the account's history as a ruled table; pinned chats to ring
+ * in one click. Voice only. Every list is the server's answer for THIS account; every action is
  * decided again by the server, and the call itself runs in the one existing
  * call window.
  */
@@ -298,112 +306,143 @@ export function CallsPage() {
 
   const searching = query.trim().length > 0
 
+  const upcomingSection = (
+    <section className="cp-section" aria-labelledby="cp-upcoming">
+      <h2 className="section-label cp-section__title" id="cp-upcoming">
+        {copy.upcoming}
+      </h2>
+      {upcoming.isLoading ? (
+        <LoadingState compact />
+      ) : upcoming.error ? (
+        <ErrorState compact error={upcoming.error} onRetry={() => void upcoming.refetch()} />
+      ) : upcomingRows.length === 0 ? (
+        <p className="cp-empty">{searching ? copy.noMatches : copy.noUpcoming}</p>
+      ) : (
+        <ul className="cp-list" onKeyDown={onListKeyDown}>
+          {upcomingRows.map((c) => (
+            <UpcomingRow key={c.id} call={c} name={upcomingName(c)} now={now} onCancel={setCancelling} />
+          ))}
+        </ul>
+      )}
+    </section>
+  )
+
+  const favoritesSection = (
+    <section className="cp-section" aria-labelledby="cp-favorites">
+      <h2 className="section-label cp-section__title" id="cp-favorites">
+        {copy.favorites}
+      </h2>
+      {conversations.isLoading ? (
+        <LoadingState compact />
+      ) : conversations.error ? (
+        <ErrorState compact error={conversations.error} onRetry={() => void conversations.refetch()} />
+      ) : favorites.length === 0 ? (
+        <p className="cp-empty">{searching ? copy.noMatches : copy.noFavorites}</p>
+      ) : (
+        <ul className="cp-list" onKeyDown={onListKeyDown}>
+          {favorites.map((c) => {
+            const n = name(c)
+            return (
+              <li className="cp-row" key={c.id} data-testid="favorite-row">
+                <Avatar name={n} seed={c.id} size="sm" />
+                <span className="cp-row__body">
+                  <span className="cp-row__name">
+                    {n} {isTrialGroup(c) && <TrialBadge />}
+                  </span>
+                  <span className="cp-row__sub">{chat.kind[c.type] ?? c.type}</span>
+                </span>
+                <span className="cp-row__end">
+                  <button
+                    type="button"
+                    className="btn btn--ghost btn--icon btn--sm cp-row__call"
+                    data-cp-item
+                    disabled={!actions.available || actions.busy}
+                    aria-label={copy.callTo(n)}
+                    onClick={() => void actions.startCall(c)}
+                  >
+                    <Icon name="phone" size={16} />
+                  </button>
+                </span>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </section>
+  )
+
+  const recentSection = (
+    <section className="cp-section" aria-labelledby="cp-recent">
+      <h2 className="section-label cp-section__title" id="cp-recent">
+        {copy.recent}
+      </h2>
+      {history.isLoading ? (
+        <LoadingState compact />
+      ) : history.error ? (
+        <ErrorState compact error={history.error} onRetry={() => void history.refetch()} />
+      ) : recentRows.length === 0 ? (
+        <p className="cp-empty">{searching ? copy.noMatches : copy.noRecent}</p>
+      ) : (
+        <table className="table cp-table">
+          <thead>
+            <tr>
+              <th scope="col">{copy.colName}</th>
+              <th scope="col">{copy.colDirection}</th>
+              <th scope="col">{copy.colStatus}</th>
+              <th scope="col" className="num">{copy.colDuration}</th>
+              <th scope="col">{copy.colWhen}</th>
+              <th scope="col"><span className="sr-only">{copy.colCall}</span></th>
+            </tr>
+          </thead>
+          <tbody onKeyDown={onListKeyDown}>
+            {recentRows.map((r) => (
+              <RecentRow key={r.row.id} row={r.row} name={r.name} conversation={r.conversation} selfId={selfId} />
+            ))}
+          </tbody>
+        </table>
+      )}
+      {history.hasNextPage && (
+        <button
+          type="button"
+          className="btn btn--sm cp-more"
+          disabled={history.isFetchingNextPage}
+          onClick={() => void history.fetchNextPage()}
+        >
+          {copy.loadMore}
+        </button>
+      )}
+    </section>
+  )
+
   return (
-    <div className="cp-page">
-      <section className="cp-side" aria-labelledby="cp-title">
-        <div className="cp-side__head">
-          <h1 className="cp-side__title" id="cp-title">
-            {copy.title}
-          </h1>
-          <SearchField value={query} onChange={setQuery} label={copy.search} clearLabel={copy.clearSearch} />
-        </div>
-
-        <div className="cp-side__scroll">
-          <section className="cp-section" aria-labelledby="cp-upcoming">
-            <h2 className="cp-section__title" id="cp-upcoming">
-              {copy.upcoming}
-            </h2>
-            {upcoming.isLoading ? (
-              <LoadingState compact />
-            ) : upcoming.error ? (
-              <ErrorState compact error={upcoming.error} onRetry={() => void upcoming.refetch()} />
-            ) : upcomingRows.length === 0 ? (
-              <p className="cp-empty">{searching ? copy.noMatches : copy.noUpcoming}</p>
-            ) : (
-              <ul className="cp-list" onKeyDown={onListKeyDown}>
-                {upcomingRows.map((c) => (
-                  <UpcomingRow key={c.id} call={c} name={upcomingName(c)} now={now} onCancel={setCancelling} />
-                ))}
-              </ul>
-            )}
-          </section>
-
-          <section className="cp-section" aria-labelledby="cp-favorites">
-            <h2 className="cp-section__title" id="cp-favorites">
-              {copy.favorites}
-            </h2>
-            {conversations.isLoading ? (
-              <LoadingState compact />
-            ) : conversations.error ? (
-              <ErrorState compact error={conversations.error} onRetry={() => void conversations.refetch()} />
-            ) : favorites.length === 0 ? (
-              <p className="cp-empty">{searching ? copy.noMatches : copy.noFavorites}</p>
-            ) : (
-              <ul className="cp-list" onKeyDown={onListKeyDown}>
-                {favorites.map((c) => {
-                  const n = name(c)
-                  return (
-                    <li className="cp-row" key={c.id} data-testid="favorite-row">
-                      <Avatar name={n} seed={c.id} size="sm" />
-                      <span className="cp-row__body">
-                        <span className="cp-row__name">
-                          {n} {isTrialGroup(c) && <TrialBadge />}
-                        </span>
-                        <span className="cp-row__sub">{chat.kind[c.type] ?? c.type}</span>
-                      </span>
-                      <span className="cp-row__end">
-                        <button
-                          type="button"
-                          className="btn btn--ghost btn--icon btn--sm cp-row__call"
-                          data-cp-item
-                          disabled={!actions.available || actions.busy}
-                          aria-label={copy.callTo(n)}
-                          onClick={() => void actions.startCall(c)}
-                        >
-                          <Icon name="calls" size={16} />
-                        </button>
-                      </span>
-                    </li>
-                  )
-                })}
-              </ul>
-            )}
-          </section>
-
-          <section className="cp-section" aria-labelledby="cp-recent">
-            <h2 className="cp-section__title" id="cp-recent">
-              {copy.recent}
-            </h2>
-            {history.isLoading ? (
-              <LoadingState compact />
-            ) : history.error ? (
-              <ErrorState compact error={history.error} onRetry={() => void history.refetch()} />
-            ) : recentRows.length === 0 ? (
-              <p className="cp-empty">{searching ? copy.noMatches : copy.noRecent}</p>
-            ) : (
-              <ul className="cp-list" onKeyDown={onListKeyDown}>
-                {recentRows.map((r) => (
-                  <RecentRow key={r.row.id} row={r.row} name={r.name} conversation={r.conversation} selfId={selfId} />
-                ))}
-              </ul>
-            )}
-            {history.hasNextPage && (
+    <div className="page cp-page">
+      <div className="page__inner">
+        <header className="page-header cp-head">
+          <div className="page-header__text">
+            <h1 className="page-header__title" id="cp-title">
+              {copy.title}
+            </h1>
+          </div>
+          <section className="cp-actions" aria-label={copy.actions}>
+            {ACTIONS.map((t) => (
               <button
+                key={t.mode}
                 type="button"
-                className="btn btn--sm btn--ghost cp-more"
-                disabled={history.isFetchingNextPage}
-                onClick={() => void history.fetchNextPage()}
+                className={t.primary ? 'btn btn--primary cp-action' : 'btn cp-action'}
+                onClick={() => {
+                  setNotice(null)
+                  setFlow({ kind: 'picker', mode: t.mode })
+                }}
               >
-                {copy.loadMore}
+                <Icon name={t.icon} size={16} />
+                {copy[t.label]}
               </button>
-            )}
+            ))}
           </section>
-        </div>
-      </section>
+        </header>
 
-      <section className="cp-main" aria-label={copy.actions}>
         {notice && (
-          <div className="banner banner--info cp-notice" role="status">
+          <div className="cp-notice" role="status">
             <span>{notice}</span>
             <button
               type="button"
@@ -415,25 +454,19 @@ export function CallsPage() {
             </button>
           </div>
         )}
-        <div className="cp-tiles">
-          {TILES.map((t) => (
-            <button
-              key={t.mode}
-              type="button"
-              className={t.brand ? 'cp-tile cp-tile--brand' : 'cp-tile'}
-              onClick={() => {
-                setNotice(null)
-                setFlow({ kind: 'picker', mode: t.mode })
-              }}
-            >
-              <span className="cp-tile__box" aria-hidden="true">
-                <Icon name={t.icon} size={30} />
-              </span>
-              <span className="cp-tile__label">{copy[t.label]}</span>
-            </button>
-          ))}
+
+        <div className="cp-search">
+          <SearchField value={query} onChange={setQuery} label={copy.search} clearLabel={copy.clearSearch} />
         </div>
-      </section>
+
+        <div className="cp-cols">
+          <div className="cp-cols__main">
+            {upcomingSection}
+            {recentSection}
+          </div>
+          <aside className="cp-cols__side">{favoritesSection}</aside>
+        </div>
+      </div>
 
       {flow.kind === 'picker' && (
         <MemberPickerDialog mode={flow.mode} onClose={closeFlow} onSchedule={onSchedule} onLink={onLink} />

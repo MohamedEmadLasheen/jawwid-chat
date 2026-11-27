@@ -1,27 +1,132 @@
-/* PD-44: the manager Dashboard. Tiles reuse the portal's .kpi-grid / .kpi-card
-   (portal.css), which already wrap to two per row on a phone. */
+/* PD-44: the manager Dashboard. A ruled book of figures: each section is a
+   name beside its numbers; what is waiting is set as large serif numerals,
+   everything else as a plain line. Every figure is a link to its page. */
 
-.dash-section { margin-block-end: var(--space-5); }
+.dash-book { border-block-end: 1px solid var(--hairline); }
+.dash-section {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  gap: var(--space-2) var(--space-5);
+  align-items: start;
+  padding-block: var(--space-4) var(--space-5);
+  border-block-start: 1px solid var(--hairline);
+}
 .dash-section__title {
-  margin: 0 0 var(--space-3);
-  font-size: var(--fs-md);
-  font-weight: var(--fw-semibold);
-}
-.dash-section .kpi-grid { margin-block-end: 0; }
-
-/* A backlog that is waiting: its number and its edge say so; colour is never alone (the label names it). */
-.dash-tile--alert { border-inline-start: 3px solid var(--warn); }
-.dash-tile--alert .kpi-card__value { color: var(--warn); }
-
-.dash-section__clear {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
   margin: 0;
-  padding: var(--space-3) var(--space-4);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  color: var(--text-muted);
+  padding-block-start: 9px;
+  font-family: var(--display);
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--ink);
 }
-.dash-section__clear .icon { color: var(--ok); }
+html[lang='ar'] .dash-section__title { font-weight: 700; }
+.dash-section__body { min-inline-size: 0; }
+@media (max-width: 899px) {
+  .dash-section { grid-template-columns: minmax(0, 1fr); padding-block: var(--space-3) var(--space-4); }
+  .dash-section__title { padding-block-start: 0; }
+}
+
+/* What is waiting: large numerals in a ruled row that wraps. Each cell's start
+   rule and bottom rule are clipped at the edges, so a wrapped row stays clean. */
+.dash-ledger {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(188px, 1fr));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow: hidden;
+}
+.dash-ledger > li {
+  display: flex;
+  margin-block-end: -1px;
+  margin-inline-start: -1px;
+  border-inline-start: 1px solid var(--hairline);
+  border-block-end: 1px solid var(--hairline-soft);
+}
+.dash-tile {
+  color: inherit;
+  text-decoration: none;
+  transition: background var(--dur-fast) var(--ease-out);
+}
+.dash-tile:hover { background: var(--surface-hover); }
+.dash-tile:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.dash-tile--large {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-inline-size: 0;
+  padding: 10px var(--space-4) 12px;
+}
+.dash-tile--large .dash-tile__label { order: -1; font-size: 12.5px; line-height: 1.45; color: var(--ink-muted); }
+.dash-tile--large .dash-tile__value {
+  font-family: var(--display);
+  font-size: var(--fs-kpi);
+  font-weight: 600;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums lining-nums;
+  color: var(--ink);
+  /* The numeral is isolated left to right; it sits at the cell's start in either language. */
+  align-self: flex-start;
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+.dash-tile--large:hover .dash-tile__value { color: var(--teal-dark); }
+.dash-tile__note { font-size: var(--fs-xs); color: var(--ink-muted); }
+
+/* The rest of the section: a name, a figure. */
+.dash-lines {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  column-gap: var(--space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.dash-ledger + .dash-lines { margin-block-start: var(--space-2); }
+.dash-tile--line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 0 var(--space-3);
+  min-block-size: 36px;
+  padding: 7px var(--space-4) 6px;
+  border-block-end: 1px solid var(--hairline-soft);
+  font-size: var(--fs-sm);
+}
+.dash-tile--line .dash-tile__value {
+  font-family: var(--display);
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums lining-nums;
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+.dash-tile--line .dash-tile__note { grid-column: 1 / -1; }
+.dash-tile--zero { color: var(--ink-muted); }
+.dash-tile--zero .dash-tile__value { font-weight: 400; }
+@media (max-width: 767px) {
+  .dash-ledger { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dash-tile--large { padding-inline: var(--space-3); }
+  .dash-tile--line { min-block-size: 44px; padding-inline: 2px; align-items: center; }
+}
+
+.dash-section__clear,
+.dash-failed,
+.dash-stale {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  margin: 0;
+  padding: 9px var(--space-4) 8px;
+  font-size: var(--fs-sm);
+  color: var(--ink-muted);
+}
+.dash-failed__text { color: var(--terracotta); font-weight: 500; }
+.dash-stale { margin-block-end: var(--space-2); border-inline-start: 2px solid var(--gold-line); }
+.dash-loading { display: grid; grid-template-columns: repeat(3, minmax(0, 188px)); gap: var(--space-3); padding: 6px var(--space-4); }
+@media (max-width: 767px) {
+  .dash-section__clear, .dash-failed, .dash-stale, .dash-loading { padding-inline: 2px; }
+}

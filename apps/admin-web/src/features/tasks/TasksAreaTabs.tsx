@@ -5,6 +5,7 @@ import { useSession } from '@/core/auth/SessionProvider'
 import { holdsAny } from '@/core/permissions/capabilities'
 import { casesApi } from '@/features/cases/api'
 import '../teachers/teachers.css'
+import './tasks.css'
 
 /** The cases an account works on: the ones it owns and, for a department's manager, the department's open ones. */
 export const CASES_ACCESS_KEYS = ['cases.manage'] as const

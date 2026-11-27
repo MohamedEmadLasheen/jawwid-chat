@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { FilterChips } from '@/shared/components/FilterChips'
+import { Icon } from '@/shared/components/Icon'
 import { PageHeader } from '@/shared/components/PageHeader'
 import { QueryBoundary } from '@/shared/components/States'
 import { inboxApi, inboxKeys, routeFor, type InboxEntryDto, type InboxTab, type NotificationSettingsDto } from './api'
@@ -22,7 +23,7 @@ export function NotificationsPage() {
   const tab = tabs.includes(chosen) ? chosen : 'all'
 
   return (
-    <div className="page">
+    <div className="page nc-page">
       <div className="page__inner">
         <PageHeader title={tx(N.title)} subtitle={tx(N.subtitle)} />
         <div className="nc-tabs">
@@ -72,37 +73,47 @@ function TabList({ tab }: { tab: InboxTab }) {
       error={list.error}
       isEmpty={entries.length === 0}
       emptyTitle={tx(N.empty)}
-      emptyIcon="notifications"
+      emptyHint={tx(tab === 'all' ? N.emptyHint : N.emptyTabHint)}
       onRetry={() => void list.refetch()}
     >
       {entries.some((e) => !e.read) && (
-        <button type="button" className="btn btn--sm" onClick={() => readAll.mutate()} disabled={readAll.isPending}>
-          {tx(N.markAllRead)}
-        </button>
+        <div className="nc-bar">
+          <button type="button" className="btn btn--sm btn--ghost" onClick={() => readAll.mutate()} disabled={readAll.isPending}>
+            <Icon name="check" size={16} />
+            {tx(N.markAllRead)}
+          </button>
+        </div>
       )}
-      <ul className="nc-list">
+      <ul className="nc-list ruled">
         {entries.map((entry) => {
           const to = routeFor(entry.action)
           return (
             <li key={entry.id} className={`nc-item${entry.read ? '' : ' nc-item--unread'}`} data-testid={`nc-${entry.id}`}>
-              <span className="nc-item__title">{entry.title}</span>
-              <time className="nc-item__time" dateTime={entry.at}>
-                {dateTime(entry.at)}
-              </time>
-              <p className="nc-item__body">{entry.body}</p>
-              {to && (
-                <div className="nc-item__actions">
-                  <button type="button" className="btn btn--sm btn--ghost" onClick={() => void open(entry, to)}>
+              <span className="nc-item__dot" aria-hidden="true" />
+              <div className="nc-item__text">
+                <span className="nc-item__title"><bdi>{entry.title}</bdi></span>
+                {entry.body && <p className="nc-item__body"><bdi>{entry.body}</bdi></p>}
+              </div>
+              <div className="nc-item__meta">
+                <span className="nc-item__kind">{tx(CATEGORIES[entry.category] ?? SYSTEM)}</span>
+                <time className="nc-item__time" dateTime={entry.at}>
+                  {dateTime(entry.at)}
+                </time>
+              </div>
+              <div className="nc-item__actions">
+                {to && (
+                  <button type="button" className="btn btn--sm btn--ghost nc-item__open" onClick={() => void open(entry, to)}>
                     {tx(N.open)}
+                    <Icon name="chevronForward" size={16} />
                   </button>
-                </div>
-              )}
+                )}
+              </div>
             </li>
           )
         })}
       </ul>
       {list.hasNextPage && (
-        <button type="button" className="btn btn--sm" onClick={() => void list.fetchNextPage()} disabled={list.isFetchingNextPage}>
+        <button type="button" className="btn btn--sm nc-more" onClick={() => void list.fetchNextPage()} disabled={list.isFetchingNextPage}>
           {tx(N.loadOlder)}
         </button>
       )}
@@ -128,7 +139,7 @@ function SettingsPanel() {
 
   return (
     <section className="nc-settings" aria-labelledby="nc-settings-title">
-      <h2 id="nc-settings-title">{tx(N.settings)}</h2>
+      <h2 id="nc-settings-title" className="nc-settings__title">{tx(N.settings)}</h2>
       <QueryBoundary isLoading={settings.isLoading} error={settings.error} onRetry={() => void settings.refetch()} compact>
         {s && <SettingsForm settings={s} saving={save.isPending} onSave={(body) => save.mutate(body)} />}
       </QueryBoundary>
@@ -146,6 +157,7 @@ function SettingsForm({
   onSave: (body: Record<string, unknown>) => void
 }) {
   const tx = useCopy()
+  const ids = useId()
   const q = settings.quietHours
   const [from, setFrom] = useState(toClock(q.startMinute))
   const [until, setUntil] = useState(toClock(q.endMinute))
@@ -157,44 +169,56 @@ function SettingsForm({
   }
 
   return (
-    <>
-      <div className="nc-settings__row">
-        <label className="nc-settings__row">
-          <input type="checkbox" checked={q.enabled} disabled={saving} onChange={(e) => quiet(e.target.checked)} />
-          <strong>{tx(N.quietHours)}</strong>
-        </label>
-      </div>
-      <p className="field__hint">{tx(N.quietHint)}</p>
-      <div className="nc-settings__row">
-        <label>
-          {tx(N.from)} <input type="time" value={from} onChange={(e) => setFrom(e.target.value)} />
-        </label>
-        <label>
-          {tx(N.until)} <input type="time" value={until} onChange={(e) => setUntil(e.target.value)} />
-        </label>
-        <button type="button" className="btn btn--sm" disabled={saving} onClick={() => quiet(true)}>
-          {tx(N.save)}
-        </button>
-        {!q.isDefault && (
-          <button type="button" className="btn btn--sm btn--ghost" disabled={saving} onClick={() => onSave({ quietHours: null })}>
-            {tx(N.useDefault)}
+    <div className="nc-settings__cols">
+      <div className="nc-settings__col">
+        <div className="nc-settings__head">
+          <label className="nc-check nc-check--lead">
+            <input type="checkbox" checked={q.enabled} disabled={saving} onChange={(e) => quiet(e.target.checked)} />
+            <strong>{tx(N.quietHours)}</strong>
+          </label>
+        </div>
+        <p className="field__hint nc-settings__hint">{tx(N.quietHint)}</p>
+        <div className="nc-hours">
+          <div className="field">
+            <label className="field__label" htmlFor={`${ids}-from`}>{tx(N.from)}</label>
+            <input id={`${ids}-from`} className="input" type="time" value={from} onChange={(e) => setFrom(e.target.value)} />
+          </div>
+          <div className="field">
+            <label className="field__label" htmlFor={`${ids}-until`}>{tx(N.until)}</label>
+            <input id={`${ids}-until`} className="input" type="time" value={until} onChange={(e) => setUntil(e.target.value)} />
+          </div>
+        </div>
+        <div className="nc-settings__actions">
+          <button type="button" className="btn btn--sm" disabled={saving} onClick={() => quiet(true)}>
+            {tx(N.save)}
           </button>
-        )}
+          {!q.isDefault && (
+            <button type="button" className="btn btn--sm btn--ghost" disabled={saving} onClick={() => onSave({ quietHours: null })}>
+              {tx(N.useDefault)}
+            </button>
+          )}
+        </div>
       </div>
-      <h3>{tx(N.pushHeading)}</h3>
-      <p className="field__hint">{tx(N.pushHint)}</p>
-      {settings.categories.map((c) => (
-        <label key={c.category} className="nc-settings__row">
-          <input
-            type="checkbox"
-            checked={c.locked || c.push}
-            disabled={c.locked || saving}
-            onChange={(e) => onSave({ categories: [{ category: c.category, push: e.target.checked }] })}
-          />
-          {tx(CATEGORIES[c.category] ?? SYSTEM)}
-          {c.locked && <span className="field__hint">{tx(N.alwaysOn)}</span>}
-        </label>
-      ))}
-    </>
+      <div className="nc-settings__col">
+        <h3 className="nc-settings__head">{tx(N.pushHeading)}</h3>
+        <p className="field__hint nc-settings__hint">{tx(N.pushHint)}</p>
+        <ul className="nc-kinds">
+          {settings.categories.map((c) => (
+            <li key={c.category}>
+              <label className={c.locked ? 'nc-check nc-check--locked' : 'nc-check'}>
+                <input
+                  type="checkbox"
+                  checked={c.locked || c.push}
+                  disabled={c.locked || saving}
+                  onChange={(e) => onSave({ categories: [{ category: c.category, push: e.target.checked }] })}
+                />
+                <span className="nc-check__name">{tx(CATEGORIES[c.category] ?? SYSTEM)}</span>
+                {c.locked && <span className="nc-check__note">{tx(N.alwaysOn)}</span>}
+              </label>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
   )
 }
