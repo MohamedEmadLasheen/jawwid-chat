@@ -444,12 +444,35 @@ export function soleEntry(destination: Destination): NavEntry | null {
 /** Pages reached from another page's tab strip rather than from the rail: the rail item they belong to. */
 const PAGE_OF: Readonly<Record<string, string>> = { '/cases': '/tasks' }
 
-/** Which destination the current page belongs to, if any. */
-export function destinationForPath(destinations: Destination[], pathname: string): DestinationKey | null {
+/**
+ * The entry the current page belongs to: the entry whose path it sits under most
+ * closely, so `/teachers/needs-action` is Needs action and not Teachers. A super admin
+ * reaches operator pages (`/teachers/files`, `/tasks`) under the names its own places
+ * link to (`/admin/teachers`, `/admin/tasks`): the entry is the same.
+ */
+export function entryForPath(
+  destinations: Destination[],
+  pathname: string,
+): { destination: DestinationKey; entry: string } | null {
   const host = Object.entries(PAGE_OF).find(([p]) => pathname === p || pathname.startsWith(`${p}/`))
   if (host) pathname = host[1]
-  const match = (path: string) => destinations.find((d) => entriesOf(d).some((e) => path === e.path || path.startsWith(`${e.path}/`)))?.key ?? null
-  // The super admin reaches the operator pages (/tasks, /payments) under the names its own
-  // places link to (/admin/tasks, /admin/payments): the place is the same.
-  return match(pathname) ?? (pathname.startsWith('/admin/') ? null : match(`/admin${pathname}`))
+  const closest = (path: string) => {
+    let found: { destination: DestinationKey; entry: string } | null = null
+    let length = -1
+    for (const d of destinations) {
+      for (const e of entriesOf(d)) {
+        if ((path === e.path || path.startsWith(`${e.path}/`)) && e.path.length > length) {
+          found = { destination: d.key, entry: e.key }
+          length = e.path.length
+        }
+      }
+    }
+    return found
+  }
+  return closest(pathname) ?? (pathname.startsWith('/admin/') ? null : closest(`/admin${pathname}`))
+}
+
+/** Which destination the current page belongs to, if any. */
+export function destinationForPath(destinations: Destination[], pathname: string): DestinationKey | null {
+  return entryForPath(destinations, pathname)?.destination ?? null
 }

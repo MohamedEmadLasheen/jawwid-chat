@@ -570,6 +570,18 @@ describe('The desktop rail', () => {
     expect(localStorage.getItem('jawwid.sidebar.expanded')).toBe('0')
   })
 
+  it('marks the page\'s own entry on a teachers page the super admin reaches under its operator name', async () => {
+    localStorage.setItem('jawwid.sidebar.expanded', '1')
+    vi.stubGlobal('fetch', routeFetch({}))
+    renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/teachers/files' })
+    const nav = await screen.findByRole('navigation', { name: 'Admin Portal' })
+    // People is the place; under it, Teachers (which links to /admin/teachers) is the page.
+    await waitFor(() => expect(within(nav).getByRole('button', { name: 'People & Organization' })).toHaveAttribute('aria-current', 'true'))
+    const sub = within(nav).getByRole('list', { name: 'People & Organization' })
+    expect(within(sub).getByRole('link', { name: 'Teachers' })).toHaveAttribute('aria-current', 'page')
+    expect(within(sub).getAllByRole('link').filter((l) => l.getAttribute('aria-current'))).toHaveLength(1)
+  })
+
   it('names a folded icon in a tooltip on hover', async () => {
     vi.stubGlobal('fetch', routeFetch({}))
     renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/admin/stories' })

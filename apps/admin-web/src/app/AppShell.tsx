@@ -1,5 +1,7 @@
 import {
+  createContext,
   useCallback,
+  useContext,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -28,6 +30,7 @@ import { useMediaQuery } from '@/shared/hooks/useMediaQuery'
 import {
   AREA_PATH,
   destinationForPath,
+  entryForPath,
   entriesOf,
   soleEntry,
   type Destination,
@@ -235,22 +238,37 @@ function pendingTitle(label: string, entry: NavEntry, inDevelopment: string): st
   return entry.inDevelopment ? `${label} · ${inDevelopment}` : undefined
 }
 
+/**
+ * A link to one of the navigation's pages. It is current on every page that belongs to
+ * its entry (entryForPath), not only on its own URL: a super admin on a teachers page
+ * sees Teachers marked although that link points at its /admin name.
+ */
+const CurrentEntry = createContext<string | null>(null)
+
+function EntryLink({ entry, className, children, tabIndex, title }: { entry: NavEntry; className: string; children: ReactNode; tabIndex?: number; title?: string }) {
+  const current = useContext(CurrentEntry) === entry.key
+  return (
+    <Link to={entry.path} className={className} aria-current={current ? 'page' : undefined} tabIndex={tabIndex} title={title}>
+      {children}
+    </Link>
+  )
+}
+
 /* The drawer: every destination open, every page one tap away. */
 
 function DrawerLink({ entry }: { entry: NavEntry }) {
   const tx = useText()
   const label = useEntryLabel()(entry)
   return (
-    <NavLink
-      to={entry.path}
-      end={entry.exact}
+    <EntryLink
+      entry={entry}
       className={entry.inDevelopment ? 'side__item side__item--pending' : 'side__item'}
       title={pendingTitle(label, entry, tx(TEXT.inDevelopment))}
     >
       <Icon name={entry.icon} size={20} />
       <span className="side__label">{label}</span>
       {entry.inDevelopment && <PendingMark />}
-    </NavLink>
+    </EntryLink>
   )
 }
 
@@ -308,16 +326,15 @@ function MenuLink({ entry }: { entry: NavEntry }) {
   const tx = useText()
   const label = useEntryLabel()(entry)
   return (
-    <NavLink
-      to={entry.path}
-      end={entry.exact}
+    <EntryLink
+      entry={entry}
       className={entry.inDevelopment ? 'side__menu-link side__menu-link--pending' : 'side__menu-link'}
       title={pendingTitle(label, entry, tx(TEXT.inDevelopment))}
     >
       <Icon name={entry.icon} size={18} />
       <span className="side__label">{label}</span>
       {entry.inDevelopment && <PendingMark />}
-    </NavLink>
+    </EntryLink>
   )
 }
 
@@ -371,12 +388,12 @@ function RailItem({
   if (sole) {
     return (
       <li className={itemClass}>
-        <NavLink to={sole.path} className="side__item" data-destination={d.key}>
+        <Link to={sole.path} className="side__item" data-destination={d.key} aria-current={current ? 'page' : undefined}>
           <Icon name={sole.icon} size={20} />
           <span className="side__label">{entryLabel(sole)}</span>
           <RailBadge count={badge} />
           {sole.inDevelopment && <PendingMark />}
-        </NavLink>
+        </Link>
       </li>
     )
   }
@@ -422,9 +439,9 @@ function RailItem({
         <ul className="ruled side__sub" aria-label={tx(d.label)}>
           {entriesOf(d).map((e) => (
             <li key={e.key}>
-              <NavLink to={e.path} end={e.exact} className="side__sub-link" tabIndex={-1}>
+              <EntryLink entry={e} className="side__sub-link" tabIndex={-1}>
                 {entryLabel(e)}
-              </NavLink>
+              </EntryLink>
             </li>
           ))}
         </ul>
@@ -534,6 +551,8 @@ function Sidebar({
   const mac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform ?? '')
   const aside = useRef<HTMLElement>(null)
   const folded = rail && !expanded
+  const { pathname } = useLocation()
+  const here = entryForPath(useDestinations(), pathname)?.entry ?? null
   const toggleLabel = tx(expanded ? RAIL_TOGGLE.collapse : RAIL_TOGGLE.expand)
 
   return (
@@ -576,7 +595,7 @@ function Sidebar({
           <span className="side__label">{tx(TODAY_LABEL)}</span>
         </NavLink>
       )}
-      {rail ? <RailNav /> : <DrawerNav />}
+      <CurrentEntry.Provider value={here}>{rail ? <RailNav /> : <DrawerNav />}</CurrentEntry.Provider>
       {rail && (
         <div className="side__foot">
           {/* The fold: icons only, or icon and word. */}
