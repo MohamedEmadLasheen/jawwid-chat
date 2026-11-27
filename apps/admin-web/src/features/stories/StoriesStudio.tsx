@@ -49,7 +49,7 @@ export function viewRate(s: Pick<StudioStory, 'recipientCount' | 'viewCount'>): 
   return s.recipientCount > 0 ? Math.min(1, s.viewCount / s.recipientCount) : null
 }
 
-/** "Parents & students · UAE, Kuwait · 6 months" -- the audience in words. */
+/** "Parents & students; UAE, Kuwait; 6 months" -- the audience in words. */
 export function useAudienceSummary() {
   const tx = useText()
   const { locale } = useI18n()
@@ -65,7 +65,7 @@ export function useAudienceSummary() {
         if (f.countries?.length) bits.push(f.countries.map(countryName).join(sep))
         if (f.planMonths?.length) bits.push(f.planMonths.map((m) => tx(PLAN_LABEL[m] ?? { en: `${m}`, ar: `${m}` })).join(sep))
         if (f.children?.length) bits.push(f.children.map((c) => tx(CHILDREN_LABEL[c] ?? { en: `${c}`, ar: `${c}` })).join(sep))
-        return bits.join(' · ')
+        return bits.join(locale === 'ar' ? '؛ ' : '; ')
       }
       return tx(LEGACY_AUDIENCE[a.kind] ?? { en: a.kind, ar: a.kind })
     })
@@ -138,9 +138,8 @@ export function StoriesStudio({ basePath, eyebrow }: { basePath: string; eyebrow
   const figures: MastFigure[] | undefined = query.isLoading || query.error
     ? undefined
     : [
-        { key: 'live', label: tx(STATE_LABEL.published), value: number(counts.published ?? 0), tone: (counts.published ?? 0) > 0 ? 'key' : 'quiet', to: `?${stateSearch('published')}` },
-        { key: 'draft', label: tx(STATE_LABEL.draft), value: number(counts.draft ?? 0), to: `?${stateSearch('draft')}` },
-        { key: 'reach', label: tx(S.totalReach), value: number(reach), note: fill(tx(S.reachWeek), { n: number(reachWeek) }) },
+        // How far the stories went; how many are live or drafts is said by the tabs below.
+        { key: 'reach', label: tx(S.totalReach), value: number(reach), tone: 'key', note: fill(tx(S.reachWeek), { n: number(reachWeek) }) },
         {
           key: 'views',
           label: tx(S.totalViews),
@@ -159,7 +158,6 @@ export function StoriesStudio({ basePath, eyebrow }: { basePath: string; eyebrow
         <PageHeader
           eyebrow={eyebrow}
           title={tx(S.title)}
-          subtitle={tx(S.subtitle)}
           figures={figures}
           actions={
             <Link to={`${basePath}/new`} className="btn btn--primary">
@@ -382,7 +380,7 @@ function StoryCard({
             <>
               <span className="story-row__views">
                 {fill(tx(S.viewedOf), { views: number(s.viewCount), reach: number(s.recipientCount) })}
-                {s.cta && <span className="story-row__taps"> · {plural(COUNT.taps, s.ctaTapCount)}</span>}
+                {s.cta && <span className="story-row__taps">{plural(COUNT.taps, s.ctaTapCount)}</span>}
               </span>
               <span className="reach__bar" aria-hidden="true">
                 <span className="reach__fill" style={{ inlineSize: `${Math.round(rate * 100)}%` }} />

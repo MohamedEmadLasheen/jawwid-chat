@@ -40,11 +40,11 @@ export function AudienceDataPanel() {
             <span className="kpi__value">{number(facts.data.families)}</span>
           </div>
           <div className="kpi">
-            <span className="kpi__label">{`${tx(S.country)} · ${tx(S.notSet)}`}</span>
+            <span className="kpi__label">{tx(S.countryNotSet)}</span>
             <span className="kpi__value">{number(facts.data.unknownCountry)}</span>
           </div>
           <div className="kpi">
-            <span className="kpi__label">{`${tx(S.plan)} · ${tx(S.notSet)}`}</span>
+            <span className="kpi__label">{tx(S.planNotSet)}</span>
             <span className="kpi__value">{number(facts.data.unknownPlan)}</span>
           </div>
         </section>
