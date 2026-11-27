@@ -276,7 +276,9 @@ describe('insights', () => {
       }),
     )
     renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/admin/stories/st1' })
-    await userEvent.click(await screen.findByRole('button', { name: 'Delete story' }))
+    // Deleting is behind the masthead's "⋯", last and marked as destructive.
+    await userEvent.click(await screen.findByRole('button', { name: /^More actions/ }))
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Delete story' }))
     const dialog = screen.getByRole('dialog', { name: 'Delete this story?' })
     const confirm = within(dialog).getByRole('button', { name: 'Delete story' })
     expect(confirm).toBeDisabled()

@@ -7,8 +7,8 @@ export { useCopy, type Pair } from '@/features/organization/copy'
 export const N = {
   title: { en: 'Notifications', ar: 'الإشعارات' },
   subtitle: {
-    en: 'What needs your attention, newest first. Times are in your own time zone.',
-    ar: 'ما يحتاج إلى انتباهك، الأحدث أولًا. الأوقات بحسب توقيتك.',
+    en: 'Newest first, by day. Times are in your own time zone.',
+    ar: 'الأحدث أولًا، يومًا بيوم. الأوقات بحسب توقيتك.',
   },
   bell: { en: 'Notifications, {n} unread', ar: 'الإشعارات، {n} غير مقروءة' },
   empty: { en: 'No notifications yet', ar: 'لا إشعارات بعد' },
@@ -23,6 +23,9 @@ export const N = {
   loadOlder: { en: 'Show older', ar: 'عرض الأقدم' },
   open: { en: 'Open', ar: 'فتح' },
   settings: { en: 'Notification settings', ar: 'إعدادات الإشعارات' },
+  settingsTab: { en: 'Settings', ar: 'الإعدادات' },
+  today: { en: 'Today', ar: 'اليوم' },
+  yesterday: { en: 'Yesterday', ar: 'أمس' },
   quietHours: { en: 'Quiet hours', ar: 'ساعات الهدوء' },
   quietHint: {
     en: 'Pushes to your phone wait until quiet hours end. Calls always come through.',

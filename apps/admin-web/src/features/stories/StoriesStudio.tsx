@@ -3,7 +3,9 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Badge, type Tone } from '@/shared/components/Badge'
 import { Icon } from '@/shared/components/Icon'
-import { PageHeader } from '@/shared/components/PageHeader'
+import { PageHeader, type MastFigure } from '@/shared/components/PageHeader'
+import { RowActions } from '@/shared/components/RowActions'
+import type { MenuItem } from '@/shared/components/Menu'
 import { SearchField } from '@/shared/components/SearchField'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
 import { fill, relativeTime, usePlural, useText, type Bilingual } from '@/features/admin/copy'
@@ -12,6 +14,7 @@ import type { StoryState, StudioStory } from './api'
 import { AudienceDataPanel } from './AudienceDataPanel'
 import { CHILDREN_LABEL, COUNT, CTA_LABEL, KIND_LABEL, PLAN_LABEL, S, STATE_LABEL, useCountryName } from './copy'
 import { useCanManageAudienceData, usePublishStory, useStudioStories } from './hooks'
+import { DeleteDialog } from './StoryInsights'
 import { StoryPreview } from './StoryPreview'
 import { SearchableSelect } from '@/shared/components/SearchableSelect'
 import './stories.css'
@@ -85,10 +88,16 @@ export function storyName(s: StudioStory, untitled: string): string {
   return s.internalName ?? s.title ?? (s.kind === 'text' && s.body ? s.body.slice(0, 60) : untitled)
 }
 
+const WEEK_MS = 7 * 86_400_000
+
 /**
- * The Stories studio's front page: what is live, how it is doing, and the way
- * to make a new one. Shared by the Admin Portal (`/admin/stories`) and the
- * operator console (`/stories`); `basePath` is the only difference.
+ * The Stories studio's front page. Shared by the Admin Portal
+ * (`/admin/stories`) and the operator console (`/stories`); `basePath` is the
+ * only difference.
+ *
+ * A studio: the masthead says how many are live, how many are drafts and how
+ * far they reached, and carries the states as its tabs; the body is a grid of
+ * story sheets, each led by the story's own face, because a story is a picture.
  *
  * The status filter, the sort and the tab live in the URL, so the dashboard
  * can link to "drafts" and a filtered view can be shared.
@@ -96,18 +105,53 @@ export function storyName(s: StudioStory, untitled: string): string {
 export function StoriesStudio({ basePath, eyebrow }: { basePath: string; eyebrow?: string }) {
   const tx = useText()
   const { number } = useI18n()
+  const plural = usePlural()
   const [params, setParams] = useSearchParams()
   const [search, setSearch] = useState('')
   const canManageData = useCanManageAudienceData()
+  const query = useStudioStories()
   useDocumentTitle(tx(S.title))
+  const now = Date.now()
 
   const tab = params.get('tab') === 'audience' && canManageData ? 'audience' : 'stories'
+  const stateFilter = params.get('state') ?? 'all'
   const withParam = (key: string, value: string | null) => {
     const next = new URLSearchParams(params)
     if (value === null) next.delete(key)
     else next.set(key, value)
     return next
   }
+  const stateSearch = (state: string | null) => {
+    const next = withParam('state', state)
+    next.delete('tab')
+    return next.toString()
+  }
+
+  const stories = query.stories
+  const counts: Record<string, number> = {}
+  for (const st of stories) counts[effectiveState(st, now)] = (counts[effectiveState(st, now)] ?? 0) + 1
+  const counted = stories.filter((st) => st.state !== 'deleted')
+  const reach = counted.reduce((n, st) => n + st.recipientCount, 0)
+  const reachWeek = counted
+    .filter((st) => st.publishedAt && now - new Date(st.publishedAt).getTime() < WEEK_MS)
+    .reduce((n, st) => n + st.recipientCount, 0)
+  const figures: MastFigure[] | undefined = query.isLoading || query.error
+    ? undefined
+    : [
+        { key: 'live', label: tx(STATE_LABEL.published), value: number(counts.published ?? 0), tone: (counts.published ?? 0) > 0 ? 'key' : 'quiet', to: `?${stateSearch('published')}` },
+        { key: 'draft', label: tx(STATE_LABEL.draft), value: number(counts.draft ?? 0), to: `?${stateSearch('draft')}` },
+        { key: 'reach', label: tx(S.totalReach), value: number(reach), note: fill(tx(S.reachWeek), { n: number(reachWeek) }) },
+        {
+          key: 'views',
+          label: tx(S.totalViews),
+          value: number(counted.reduce((n, st) => n + st.viewCount, 0)),
+          note: plural(COUNT.taps, counted.reduce((n, st) => n + st.ctaTapCount, 0)),
+        },
+      ]
+  const tabs = [
+    { key: 'all', label: tx(S.all), count: stories.length },
+    ...STATES.map((st) => ({ key: st as string, label: tx(STATE_LABEL[st]), count: counts[st] ?? 0 })),
+  ]
 
   return (
     <div className="page stories-studio">
@@ -116,47 +160,45 @@ export function StoriesStudio({ basePath, eyebrow }: { basePath: string; eyebrow
           eyebrow={eyebrow}
           title={tx(S.title)}
           subtitle={tx(S.subtitle)}
+          figures={figures}
           actions={
             <Link to={`${basePath}/new`} className="btn btn--primary">
               <Icon name="plus" size={16} />
               {tx(S.newStory)}
             </Link>
           }
+          tabs={
+            <nav className="seg studio-tabs" aria-label={tx(S.status)}>
+              {tabs.map((t) => (
+                <Link
+                  key={t.key}
+                  to={{ search: stateSearch(t.key === 'all' ? null : t.key) }}
+                  replace
+                  className="seg__item studio-tab"
+                  aria-current={tab === 'stories' && stateFilter === t.key ? 'true' : undefined}
+                >
+                  {t.label}
+                  <span className="seg__count">{number(t.count)}</span>
+                </Link>
+              ))}
+              {canManageData && (
+                <Link
+                  to={{ search: withParam('tab', 'audience').toString() }}
+                  replace
+                  className="seg__item studio-tab studio-tab--data"
+                  aria-current={tab === 'audience' ? 'page' : undefined}
+                >
+                  {tx(S.tabAudience)}
+                </Link>
+              )}
+            </nav>
+          }
         />
-
-        {canManageData && (
-          <nav className="studio-tabs" aria-label={tx(S.title)}>
-            <Link
-              to={{ search: withParam('tab', null).toString() }}
-              replace
-              className="studio-tab"
-              aria-current={tab === 'stories' ? 'page' : undefined}
-            >
-              {tx(S.tabStories)}
-            </Link>
-            <Link
-              to={{ search: withParam('tab', 'audience').toString() }}
-              replace
-              className="studio-tab"
-              aria-current={tab === 'audience' ? 'page' : undefined}
-            >
-              {tx(S.tabAudience)}
-            </Link>
-          </nav>
-        )}
 
         {tab === 'audience' ? (
           <AudienceDataPanel />
         ) : (
-          <StoryList
-            basePath={basePath}
-            search={search}
-            setSearch={setSearch}
-            params={params}
-            setParams={setParams}
-            withParam={withParam}
-            number={number}
-          />
+          <StoryList basePath={basePath} search={search} setSearch={setSearch} params={params} setParams={setParams} withParam={withParam} />
         )}
       </div>
     </div>
@@ -170,7 +212,6 @@ function StoryList({
   params,
   setParams,
   withParam,
-  number,
 }: {
   basePath: string
   search: string
@@ -178,12 +219,11 @@ function StoryList({
   params: URLSearchParams
   setParams: ReturnType<typeof useSearchParams>[1]
   withParam: (key: string, value: string | null) => URLSearchParams
-  number: (n: number) => string
 }) {
   const tx = useText()
-  const label = (s: StoryState) => tx(STATE_LABEL[s])
   const query = useStudioStories()
   const summary = useAudienceSummary()
+  const [deleting, setDeleting] = useState<string | null>(null)
   const now = Date.now()
 
   const stories = query.stories
@@ -204,25 +244,11 @@ function StoryList({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [stories, search],
   )
-  const counts: Record<string, number> = {}
-  for (const s of searched) counts[effectiveState(s, now)] = (counts[effectiveState(s, now)] ?? 0) + 1
   const visible = searched.filter((s) => stateFilter === 'all' || effectiveState(s, now) === stateFilter)
   if (sort === 'oldest') visible.reverse()
   else if (sort === 'views') visible.sort((a, b) => b.viewCount - a.viewCount)
   else if (sort === 'reach') visible.sort((a, b) => b.recipientCount - a.recipientCount)
   else if (sort === 'taps') visible.sort((a, b) => b.ctaTapCount - a.ctaTapCount)
-
-  const counted = stories.filter((s) => s.state !== 'deleted')
-  // How many are live is the Live state's own figure in the strip; these are what it does not say.
-  const kpis = [
-    { key: 'reach', label: tx(S.totalReach), value: counted.reduce((n, s) => n + s.recipientCount, 0) },
-    { key: 'views', label: tx(S.totalViews), value: counted.reduce((n, s) => n + s.viewCount, 0) },
-    { key: 'taps', label: tx(S.totalTaps), value: counted.reduce((n, s) => n + s.ctaTapCount, 0) },
-  ]
-  const tiles = [
-    { key: 'all', label: tx(S.all), count: searched.length },
-    ...STATES.map((s) => ({ key: s, label: label(s), count: counts[s] ?? 0 })),
-  ]
   const filtered = search !== '' || stateFilter !== 'all'
 
   return (
@@ -236,65 +262,34 @@ function StoryList({
         <>
           <span>{tx(S.noStoriesHint)}</span>
           <span className="empty-action">
-            <Link to={`${basePath}/new`} className="btn btn--primary">
+            <Link to={`${basePath}/new`} className="btn btn--sm">
               <Icon name="plus" size={16} />
               {tx(S.newStory)}
             </Link>
           </span>
         </>
       }
-      emptyIcon="stories"
     >
-      {/* One ruled strip: the states to filter by, and the studio's totals as its last cell. */}
-      <div className="studio-strip">
-      <nav className="status-tiles" aria-label={tx(S.status)}>
-        {tiles.map((t) => (
-          <Link
-            key={t.key}
-            to={{ search: withParam('state', t.key === 'all' ? null : t.key).toString() }}
-            replace
-            className={`status-tile status-tile--${t.key === 'all' ? 'all' : t.key}`}
-            aria-current={stateFilter === t.key ? 'true' : undefined}
-          >
-            <span className="status-tile__label">
-              {t.key !== 'all' && <span className="status-tile__dot" aria-hidden="true" />}
-              {t.label}
-            </span>
-            <span className="status-tile__count">{number(t.count)}</span>
-          </Link>
-        ))}
-      </nav>
-      <section className="studio-totals" aria-label={tx(S.insights)}>
-        {kpis.map((k) => (
-          <div key={k.key} className="studio-totals__row">
-            <span className="studio-totals__label">{k.label}</span>
-            <span className="studio-totals__value">{number(k.value)}</span>
+      <div className="story-board">
+        <div className="sheet sheet-bar story-board__bar">
+          <SearchField value={search} onChange={setSearch} label={tx(S.searchStories)} clearLabel={tx(S.clearSearch)} />
+          <div className="sheet-bar__end">
+            <SearchableSelect
+              className="select select--inline"
+              value={sort}
+              onValueChange={(v) => setParams(withParam('sort', v === 'newest' ? null : v), { replace: true })}
+              aria-label="Sort"
+            >
+              {SORTS.map((k) => (
+                <option key={k} value={k}>{tx(SORT_LABEL[k])}</option>
+              ))}
+            </SearchableSelect>
           </div>
-        ))}
-      </section>
-      </div>
-
-      <div className="toolbar">
-        <SearchField value={search} onChange={setSearch} label={tx(S.searchStories)} clearLabel={tx(S.clearSearch)} />
-        <div className="toolbar__end">
-          <SearchableSelect
-            className="select select--inline"
-            value={sort}
-            onValueChange={(v) => setParams(withParam('sort', v === 'newest' ? null : v), { replace: true })}
-            aria-label="Sort"
-          >
-            {SORTS.map((k) => (
-              <option key={k} value={k}>{tx(SORT_LABEL[k])}</option>
-            ))}
-          </SearchableSelect>
         </div>
-      </div>
 
-      {visible.length === 0 ? (
-        <div className="table-wrap">
+        {visible.length === 0 ? (
           <EmptyState
             compact
-            icon="search"
             title={tx(S.noMatches)}
             action={
               filtered && (
@@ -304,19 +299,33 @@ function StoryList({
               )
             }
           />
-        </div>
-      ) : (
-        <ul className="story-rows" aria-label={tx(S.title)}>
-          {visible.map((s) => (
-            <StoryRow key={s.id} story={s} basePath={basePath} now={now} audience={summary(s)} />
-          ))}
-        </ul>
-      )}
+        ) : (
+          <ul className="story-grid" aria-label={tx(S.title)}>
+            {visible.map((s) => (
+              <StoryCard key={s.id} story={s} basePath={basePath} now={now} audience={summary(s)} onDelete={() => setDeleting(s.id)} />
+            ))}
+          </ul>
+        )}
+      </div>
+      {deleting && <DeleteDialog storyId={deleting} onClose={() => setDeleting(null)} onDeleted={() => setDeleting(null)} />}
     </QueryBoundary>
   )
 }
 
-function StoryRow({ story: s, basePath, now, audience }: { story: StudioStory; basePath: string; now: number; audience: string }) {
+/** One story as a sheet: its own face first, then what it is, who it is for and how it did. */
+function StoryCard({
+  story: s,
+  basePath,
+  now,
+  audience,
+  onDelete,
+}: {
+  story: StudioStory
+  basePath: string
+  now: number
+  audience: string
+  onDelete: () => void
+}) {
   const tx = useText()
   const plural = usePlural()
   const { locale, number } = useI18n()
@@ -329,10 +338,14 @@ function StoryRow({ story: s, basePath, now, audience }: { story: StudioStory; b
   const when = s.publishedAt
     ? fill(tx(S.publishedAgo), { when: relativeTime(s.publishedAt, locale) })
     : fill(tx(S.createdAgo), { when: relativeTime(s.createdAt, locale) })
+  const more: MenuItem[] = [
+    ...(s.state === 'draft' ? [{ key: 'open', label: tx(S.viewInsights), icon: 'chart' as const, onSelect: () => navigate(href) }] : []),
+    ...(s.state !== 'deleted' ? [{ key: 'delete', label: tx(S.delete), icon: 'trash' as const, danger: true, onSelect: onDelete }] : []),
+  ]
 
   return (
-    <li className={`story-row story-row--${state}`}>
-      <Link to={href} className="story-row__thumb" tabIndex={-1} aria-hidden="true">
+    <li className={`story-card story-card--${state}`}>
+      <Link to={href} className="story-card__thumb" tabIndex={-1} aria-hidden="true">
         <StoryPreview
           size="thumb"
           story={{
@@ -346,58 +359,64 @@ function StoryRow({ story: s, basePath, now, audience }: { story: StudioStory; b
         />
       </Link>
 
-      <div className="story-row__main">
-        <Link to={href} className="story-row__name" dir="auto">{name}</Link>
-        <span className="story-row__meta">
+      <div className="story-card__body">
+        <div className="story-card__top">
+          <Badge tone={STATE_TONE[state] ?? 'neutral'} dot>{tx(STATE_LABEL[state])}</Badge>
           <span className="story-row__kind">{tx(KIND_LABEL[s.kind])}</span>
           {s.cta && <span className="story-row__cta">{tx(CTA_LABEL[s.cta.kind])}</span>}
+        </div>
+        <Link to={href} className="story-row__name" dir="auto">{name}</Link>
+        <span className="story-row__audience" title={audience}>
+          <Icon name="users" size={14} />
+          <span>{audience}</span>
+        </span>
+        <span className="story-row__meta">
           <span>{fill(tx(S.by), { name: s.creatorName })}</span>
           <span>{when}</span>
         </span>
-        <span className="story-row__audience" title={audience}>
-          <Icon name="users" size={14} />
-          {audience}
-        </span>
-      </div>
 
-      <div className="story-row__status">
-        <Badge tone={STATE_TONE[state] ?? 'neutral'} dot>{tx(STATE_LABEL[state])}</Badge>
-      </div>
+        <div className="story-row__perf">
+          {rate === null ? (
+            <span className="cell-muted">{tx(S.notPublished)}</span>
+          ) : (
+            <>
+              <span className="story-row__views">
+                {fill(tx(S.viewedOf), { views: number(s.viewCount), reach: number(s.recipientCount) })}
+                {s.cta && <span className="story-row__taps"> · {plural(COUNT.taps, s.ctaTapCount)}</span>}
+              </span>
+              <span className="reach__bar" aria-hidden="true">
+                <span className="reach__fill" style={{ inlineSize: `${Math.round(rate * 100)}%` }} />
+              </span>
+            </>
+          )}
+        </div>
 
-      <div className="story-row__perf">
-        {rate === null ? (
-          <span className="cell-muted">{tx(S.notPublished)}</span>
-        ) : (
-          <>
-            <span className="story-row__views">
-              {fill(tx(S.viewedOf), { views: number(s.viewCount), reach: number(s.recipientCount) })}
-            </span>
-            <span className="reach__bar" aria-hidden="true">
-              <span className="reach__fill" style={{ inlineSize: `${Math.round(rate * 100)}%` }} />
-            </span>
-            {s.cta && <span className="story-row__taps">{plural(COUNT.taps, s.ctaTapCount)}</span>}
-          </>
-        )}
+        <div className="story-card__actions">
+          <RowActions
+            label={fill(tx(S.moreActions), { name })}
+            primary={
+              s.state === 'draft' ? (
+                <button
+                  type="button"
+                  className="btn btn--sm"
+                  disabled={publish.isPending}
+                  onClick={() => publish.mutate(s.id, { onSuccess: () => navigate(href) })}
+                >
+                  <Icon name="send" size={16} />
+                  {tx(S.publish)}
+                </button>
+              ) : (
+                <Link to={href} className="btn btn--sm" aria-label={`${tx(S.viewInsights)}: ${name}`} title={tx(S.viewInsights)}>
+                  <Icon name="chart" size={16} />
+                  {tx(S.insights)}
+                </Link>
+              )
+            }
+            more={more}
+          />
+        </div>
+        {publish.error && <p className="field__error story-row__error" role="alert">{(publish.error as Error).message}</p>}
       </div>
-
-      <div className="story-row__actions">
-        {s.state === 'draft' ? (
-          <button
-            type="button"
-            className="btn btn--sm btn--primary"
-            disabled={publish.isPending}
-            onClick={() => publish.mutate(s.id, { onSuccess: () => navigate(href) })}
-          >
-            {tx(S.publish)}
-          </button>
-        ) : (
-          <Link to={href} className="btn btn--sm btn--ghost" aria-label={`${tx(S.viewInsights)}: ${name}`} title={tx(S.viewInsights)}>
-            <Icon name="chart" size={16} />
-            <span className="story-row__action-text">{tx(S.viewInsights)}</span>
-          </Link>
-        )}
-      </div>
-      {publish.error && <p className="field__error story-row__error" role="alert">{(publish.error as Error).message}</p>}
     </li>
   )
 }

@@ -1,27 +1,10 @@
-/* PD-35 B5: the escalation queue. It shares its strip, list, open-case column
-   and history with Tasks (tasks.css); only what differs lives here. */
-.cases__row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
-  gap: 2px var(--space-4);
-  padding: 13px 2px 12px;
-  border-block-end: 1px solid var(--hairline-soft);
-  transition: background var(--dur-fast) var(--ease-out);
+/* PD-35 B5: the escalation queue. It shares its queue, groups, inspector and
+   history with Tasks (tasks.css); only what differs lives here. */
+.tq-row--case { grid-template-columns: minmax(0, 1fr) minmax(150px, 200px) minmax(110px, auto); }
+.cases__about { display: inline-flex; align-items: center; gap: 5px; }
+.cases__about .icon { color: var(--teal); }
+.cases__controls .input { inline-size: 100%; }
+@container tq (max-width: 760px) {
+  .tq-row--case { grid-template-columns: minmax(0, 1fr) auto; }
+  .tq-row--case .tq-row__level { grid-column: 1; }
 }
-.cases__main { min-inline-size: 0; }
-.cases__state { padding-block-start: 2px; }
-.cases__row .cases__meta { gap: 2px 5px; }
-.cases__panel .cases__meta { color: var(--ink-muted); }
-.cases__controls {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-  gap: var(--space-3) var(--space-4);
-  margin-block: var(--space-4);
-  padding-block-start: var(--space-4);
-  border-block-start: 1px solid var(--hairline-soft);
-}
-.cases__controls .field { margin: 0; }
-.cases__controls .cases__actions { grid-column: 1 / -1; margin: 0; }
-.cases__note { justify-self: start; }
-

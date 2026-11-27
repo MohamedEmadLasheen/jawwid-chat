@@ -23,23 +23,29 @@
   --sc-head-w: 220px;
 }
 
-.sc-page .page-header { margin-block-end: var(--space-4); }
-
-/* Toolbar: the range you are looking at, the steps, and the three views. */
-.sc-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: var(--space-2) var(--space-5);
-  border-block-end: 1px solid var(--hairline);
-}
-.sc-toolbar .seg { border-block-end: 0; flex-wrap: nowrap; }
-.sc-nav { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); padding-block-end: 6px; }
+/* The masthead: the range and its steps beside the title, the view's four
+   figures, and Day | Week | Month on its lower edge. */
+.sc-page .page-header.mast--tabs { padding-block-end: 0; }
+.sc-nav { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
 .sc-nav__step { display: inline-flex; align-items: center; gap: 4px; }
+.sc-jump { position: relative; }
+.sc-jump__button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-block-size: var(--control-h);
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+}
+.sc-jump__button:hover, .sc-jump__button[aria-expanded='true'] { background: var(--paper); border-color: var(--hairline); }
+.sc-jump__button .icon { color: var(--ink-muted); }
 .sc-range {
-  margin: 0;
-  margin-inline-end: var(--space-2);
   font-family: var(--display);
   font-size: var(--fs-xl);
   font-weight: 600;
@@ -47,36 +53,53 @@
   font-variant-numeric: lining-nums;
 }
 html[lang='ar'] .sc-range { font-weight: 700; }
-.sc-date .input { min-block-size: var(--control-h-sm); block-size: var(--control-h-sm); padding-block: 0; font-size: var(--fs-sm); }
+.sc-jump__panel {
+  position: absolute;
+  z-index: 30;
+  inset-block-start: calc(100% + 6px);
+  inset-inline-end: 0;
+  min-inline-size: 220px;
+  padding: var(--space-3);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-pop);
+  animation: fade var(--dur-fast) var(--ease-out);
+}
+.sc-jump__panel .field { margin: 0; }
+.sc-jump__panel .input { inline-size: 100%; }
 /* The step arrows follow the reading direction: earlier points to the start of the line. */
 .sc-chev { display: block; inline-size: 7px; block-size: 7px; border: solid currentColor; border-width: 0 1.6px 1.6px 0; }
 .sc-chev--earlier { transform: translateX(2px) rotate(135deg); }
 .sc-chev--later { transform: translateX(-2px) rotate(-45deg); }
 [dir='rtl'] .sc-chev--earlier { transform: translateX(-2px) rotate(-45deg); }
 [dir='rtl'] .sc-chev--later { transform: translateX(2px) rotate(135deg); }
-.sc-hint { margin-block: var(--space-2); color: var(--ink-muted); font-size: var(--fs-sm); }
+.sc-hint { margin: 0; color: var(--ink-muted); font-size: var(--fs-sm); }
 .sc-muted { color: var(--ink-muted); font-size: var(--fs-sm); }
 .sc-link { padding: 0; border: 0; background: none; color: var(--text-link); font: inherit; cursor: pointer; }
 .sc-link:hover { text-decoration: underline; }
+.sc-stats { min-block-size: 8px; }
+.sc-unit { font-family: var(--font); font-size: var(--fs-xs); font-weight: 400; color: var(--ink-muted); }
+html[lang='ar'] .sc-unit { font-family: var(--font-ar, var(--font)); }
 
-/* Filters: one row that folds into its button. ------------------------------ */
-.sc-filterrow {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-2) var(--space-4);
-  padding-block: 8px;
-  border-block-end: 1px solid var(--hairline-soft);
+/* The frame: a filter rail at the start, the grid's sheet beside it. */
+.sc-work { display: grid; grid-template-columns: 216px minmax(0, 1fr); gap: var(--space-4); align-items: start; }
+.sc-work--folded { grid-template-columns: 48px minmax(0, 1fr); }
+.sc-page--narrow .sc-work { grid-template-columns: minmax(0, 1fr); }
+@media (prefers-reduced-motion: no-preference) {
+  .sc-work { transition: grid-template-columns var(--dur) var(--ease-out); }
 }
-.sc-filterrow__toggle {
-  flex: none;
-  display: inline-flex;
+
+/* The rail: every filter a row; folded, a column of icons. */
+.sc-rail { position: sticky; inset-block-start: 0; display: grid; gap: 2px; min-inline-size: 0; }
+.sc-rail__toggle {
+  display: flex;
   align-items: center;
-  gap: 6px;
-  min-block-size: 32px;
-  padding: 0 6px 0 0;
-  padding-inline: 0 6px;
+  gap: 10px;
+  min-block-size: 40px;
+  padding: 0 12px;
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   background: none;
   color: var(--ink);
   font: inherit;
@@ -84,19 +107,16 @@ html[lang='ar'] .sc-range { font-weight: 700; }
   font-weight: 600;
   cursor: pointer;
 }
-.sc-filterrow__toggle:hover { color: var(--teal-dark); }
-.sc-filterrow__caret { display: inline-flex; color: var(--teal); transition: transform var(--dur) var(--ease-out); }
-.sc-filterrow--folded .sc-filterrow__caret { transform: rotate(-90deg); }
-[dir='rtl'] .sc-filterrow--folded .sc-filterrow__caret { transform: rotate(90deg); }
-@media (prefers-reduced-motion: reduce) {
-  .sc-filterrow__caret { transition: none; }
-}
-.sc-filterrow__body { flex: 1; min-inline-size: 0; }
-.sc-filterrow--folded .sc-filterrow__body { display: flex; align-items: center; min-block-size: 32px; }
+.sc-rail__toggle:hover { background: var(--surface-hover); }
+.sc-rail__toggle > .icon { flex: none; color: var(--teal); }
+.sc-rail__toggle .sc-filter__label { flex: 1; text-align: start; }
+.sc-rail__caret { display: inline-flex; color: var(--ink-muted); }
 
 .sc-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.sc-filters--rail { display: grid; gap: 2px; }
 .sc-filter { position: relative; }
 .sc-filter__trigger { display: inline-flex; align-items: center; gap: 6px; min-block-size: 32px; cursor: pointer; }
+.sc-filter__trigger > .icon { flex: none; }
 .sc-filter__caret {
   inline-size: 6px;
   block-size: 6px;
@@ -125,8 +145,39 @@ html[lang='ar'] .sc-range { font-weight: 700; }
   animation: fade var(--dur-fast) var(--ease-out);
 }
 @media (prefers-reduced-motion: reduce) {
-  .sc-filter__panel { animation: none; }
+  .sc-filter__panel, .sc-jump__panel { animation: none; }
 }
+/* In the rail a filter is a full-width row, and its choices open beside it. */
+.sc-filters--rail .sc-filter__trigger {
+  inline-size: 100%;
+  min-block-size: 38px;
+  gap: 10px;
+  padding: 0 12px;
+  border-color: transparent;
+  background: none;
+  color: var(--ink);
+  font-weight: 500;
+}
+.sc-filters--rail .sc-filter__trigger > .icon { color: var(--ink-muted); }
+.sc-filters--rail .sc-filter__trigger:hover { background: var(--surface-hover); border-color: transparent; }
+.sc-filters--rail .sc-filter__trigger[aria-expanded='true'] { background: var(--surface); border-color: var(--hairline); }
+.sc-filters--rail .sc-filter__label { flex: 1; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: start; }
+.sc-filters--rail .sc-filter--on { background: var(--surface); border-color: var(--hairline); color: var(--text-link); font-weight: 600; }
+.sc-filters--rail .sc-filter--on > .icon { color: var(--teal); }
+.sc-filters--rail .sc-filter__count { display: inline-grid; place-items: center; min-inline-size: 18px; block-size: 18px; padding-inline: 5px; border-radius: 9px; background: var(--teal); color: var(--text-inverse); font-size: 11px; }
+.sc-filters--rail .sc-filter__caret { transform: rotate(-45deg); margin: 0; }
+[dir='rtl'] .sc-filters--rail .sc-filter__caret { transform: rotate(135deg); }
+.sc-filters--rail .sc-filter__panel { inset-block-start: 0; inset-inline-start: calc(100% + 8px); }
+.sc-filters--rail .sc-check--inline { margin: var(--space-2) 0 0; padding: 8px 12px 0; border-block-start: 1px solid var(--hairline); align-items: flex-start; line-height: 1.4; }
+.sc-filters--rail .sc-check--inline .sc-filter__label { white-space: normal; overflow: visible; }
+.sc-filters--rail .sc-check--inline input { margin-block-start: 3px; }
+.sc-filters--rail .sc-filters__clear { justify-content: flex-start; gap: 10px; padding-inline: 12px; }
+/* Folded: icons only. Each keeps its name for a pointer and for a reader, and its count as a dot. */
+.sc-work--folded :is(.sc-rail__toggle, .sc-filters--rail .sc-filter__trigger, .sc-filters--rail .sc-filters__clear) { justify-content: center; padding-inline: 0; gap: 0; }
+.sc-work--folded .sc-rail :is(.sc-filter__label, .sc-filter__caret, .sc-rail__caret, .sc-check--inline) { display: none; }
+.sc-work--folded .sc-rail .count { display: none; }
+.sc-work--folded .sc-filters--rail .sc-filter__count { position: absolute; inset-block-start: 3px; inset-inline-end: 3px; min-inline-size: 16px; block-size: 16px; padding-inline: 4px; }
+
 .sc-checklist { border: 0; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
 .sc-checklist__items { display: grid; max-block-size: 280px; overflow-y: auto; }
 .sc-check { display: flex; align-items: center; gap: var(--space-2); min-block-size: 32px; cursor: pointer; font-size: var(--fs-sm); }
@@ -135,53 +186,31 @@ html[lang='ar'] .sc-range { font-weight: 700; }
 .sc-hours { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); }
 .sc-hours .field { margin: 0; }
 
-/* Figures: a ruled ledger for exactly what is shown. ------------------------- */
-.sc-stats-wrap { margin-block: var(--space-4) var(--space-3); }
-.sc-stats { min-block-size: 8px; }
-.sc-ledger { margin-block-end: 0; }
-.sc-ledger .ledger__label { display: flex; align-items: center; gap: 7px; }
-.sc-ledger .ledger__label .sc-key { flex: none; }
-.sc-figure { display: flex; align-items: baseline; gap: 5px; }
-.sc-ledger .ledger__unit { margin: 0; font-size: var(--fs-sm); }
+/* The sheet: a bar of the view's other facts, the grid, the legend in its foot. */
+.sc-sheet { display: flex; flex-direction: column; min-inline-size: 0; overflow: hidden; }
+.sc-sheet__bar { min-block-size: 48px; }
+.sc-sheet > .state { padding: var(--space-5) var(--space-4); }
+.sc-sheet__note { padding: 8px var(--space-4); border-block-end: 1px solid var(--hairline-soft); background: var(--paper); }
+.sc-facts { display: flex; flex-wrap: wrap; gap: 2px var(--space-5); margin: 0; font-size: var(--fs-sm); }
+.sc-facts > div { display: flex; align-items: baseline; gap: 6px; }
+.sc-facts dt { color: var(--ink-muted); }
+.sc-facts dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+.sc-facts__also { font-weight: 400; color: var(--ink-muted); }
 .sc-num { font-variant-numeric: tabular-nums; white-space: nowrap; text-align: end; }
-.sc-byteacher .table th.num { text-align: end; }
-.sc-byteacher { margin-block-start: var(--space-2); }
-.sc-byteacher > summary {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-block-size: 32px;
-  list-style: none;
-  cursor: pointer;
-  color: var(--teal);
-  font-size: var(--fs-sm);
-  font-weight: 500;
-}
-.sc-byteacher > summary::-webkit-details-marker { display: none; }
-.sc-byteacher > summary::before {
-  content: '';
-  inline-size: 6px;
-  block-size: 6px;
-  border: solid currentColor;
-  border-width: 0 1.5px 1.5px 0;
-  transform: rotate(-45deg);
-  transition: transform var(--dur) var(--ease-out);
-}
-[dir='rtl'] .sc-byteacher > summary::before { transform: rotate(135deg); }
-@media (prefers-reduced-motion: reduce) {
-  .sc-byteacher > summary::before { transition: none; }
-}
-.sc-byteacher[open] > summary::before, [dir='rtl'] .sc-byteacher[open] > summary::before { transform: rotate(45deg); }
-.sc-byteacher .table-wrap { margin-block-start: var(--space-1); overflow-x: auto; }
-.sc-byteacher .table th[scope='row'] { position: static; color: var(--ink); font-size: var(--fs-sm); font-weight: 600; text-align: start; border-block-end: 1px solid var(--hairline-soft); background: none; }
+.sc-byteacher { max-block-size: 40vh; overflow: auto; border-block-end: 1px solid var(--hairline); }
+.sc-byteacher .table :is(th.num, td.sc-num) { text-align: end; }
+.sc-byteacher__cat { display: block; font-size: var(--fs-xs); font-weight: 400; color: var(--ink-muted); }
 
 /* Legend: small swatches in one quiet line. ---------------------------------- */
 .sc-legend {
+  flex: none;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px var(--space-5);
-  margin-block: var(--space-3) var(--space-2);
+  gap: 2px var(--space-5);
+  padding: 6px var(--space-4);
+  border-block-start: 1px solid var(--hairline);
+  background: var(--paper);
   font-size: var(--fs-xs);
   color: var(--ink-muted);
 }
@@ -219,11 +248,11 @@ html[lang='ar'] .sc-range { font-weight: 700; }
 .sc-key--held { border: 1.5px solid var(--ink-muted); border-inline-start: 3px solid var(--terracotta); }
 
 /* Grid ------------------------------------------------------------------------ */
-.sc-scroll { overflow-x: auto; border-block: 1px solid var(--hairline); }
+.sc-scroll { flex: 1; min-block-size: 0; overflow: auto; scrollbar-width: thin; }
 .sc-scroll:empty { display: none; }
 .sc-scroll[aria-busy='true'] { opacity: 0.7; transition: opacity var(--dur-fast) var(--ease-out); }
 .sc-grid { min-inline-size: 720px; }
-.sc-grid--week { min-inline-size: 1100px; }
+.sc-grid--week { min-inline-size: 900px; }
 .sc-grid--month { min-inline-size: calc(var(--sc-head-w) + var(--sc-days, 31) * 30px); }
 /* A clock time is one unit: it never reorders inside the text around it. */
 .sc-lesson__time, .sc-agenda__time, .sc-axis__tick { unicode-bidi: isolate; }
@@ -236,7 +265,7 @@ html[lang='ar'] .sc-range { font-weight: 700; }
   position: sticky;
   inset-block-start: 0;
   z-index: 3;
-  background: var(--paper);
+  background: var(--surface);
   border-block-end: 1px solid var(--hairline);
   content-visibility: visible;
   font-size: 12.5px;
@@ -253,8 +282,8 @@ html[lang='ar'] .sc-range { font-weight: 700; }
   column-gap: var(--space-2);
   min-inline-size: 0;
   padding-block: 5px;
-  padding-inline: 2px var(--space-3);
-  background: var(--paper);
+  padding-inline: var(--space-4) var(--space-3);
+  background: var(--surface);
   border-inline-end: 1px solid var(--hairline);
 }
 .sc-row--axis .sc-row__head { display: flex; align-items: center; font-weight: 500; }
@@ -404,30 +433,52 @@ html[lang='ar'] .sc-range { font-weight: 700; }
 .sc-filters-button { min-block-size: 44px; display: inline-flex; align-items: center; gap: var(--space-2); margin-block: var(--space-3) 0; }
 .sc-filters--sheet { flex-direction: column; align-items: stretch; flex-wrap: nowrap; }
 .sc-filters--sheet .sc-filter { inline-size: 100%; }
-.sc-filters--sheet .sc-filter__trigger { inline-size: 100%; min-block-size: 44px; justify-content: space-between; }
+.sc-filters--sheet .sc-filter__trigger { inline-size: 100%; min-block-size: 44px; gap: 10px; justify-content: flex-start; }
+.sc-filters--sheet .sc-filter__trigger .sc-filter__label { flex: 1; text-align: start; }
 .sc-filters--sheet .sc-filter__panel { position: static; inline-size: 100%; max-inline-size: none; box-shadow: none; border: 0; padding-inline: var(--space-2); animation: none; }
 .sc-filters--sheet .sc-check { min-block-size: 44px; }
 .sc-filters--sheet .sc-check--inline { margin-inline-start: 0; }
 
 /* The phone: an agenda, touch targets of at least 44 px. */
 .sc-page--narrow { --sc-head-w: 120px; }
-.sc-page--narrow .sc-toolbar { flex-direction: column-reverse; align-items: stretch; border-block-end: 0; }
-.sc-page--narrow .sc-toolbar .seg { border-block-end: 1px solid var(--hairline); }
-.sc-page--narrow .sc-nav { padding-block-end: 0; }
-.sc-page--narrow .sc-nav .btn, .sc-page--narrow .sc-nav .input { min-block-size: 44px; block-size: 44px; min-inline-size: 44px; }
+.sc-page--narrow .sc-nav { inline-size: 100%; justify-content: space-between; }
+.sc-page--narrow .sc-nav .btn { min-block-size: 44px; min-inline-size: 44px; }
+.sc-page--narrow .sc-jump__button { padding-inline: 0 6px; min-block-size: 44px; }
+.sc-page--narrow .sc-jump__panel { inset-inline: 0 auto; }
+.sc-page--narrow .sc-range { font-size: var(--fs-lg); }
 .sc-page--narrow .seg__item { min-block-size: 44px; }
-.sc-page--narrow :is(.sc-legend__sup, .sc-byteacher > summary) { min-block-size: 44px; }
-.sc-page--narrow .sc-range { inline-size: 100%; margin-inline-end: 0; }
-/* The phone: the figures are one compact wrapped line, so the day starts on the first screen. */
-.sc-page--narrow .sc-stats-wrap { margin-block: var(--space-3) 0; }
-.sc-page--narrow .sc-ledger { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px var(--space-4); padding-block: 8px; overflow: visible; }
-.sc-page--narrow .sc-ledger .ledger__cell { flex-direction: row-reverse; align-items: baseline; gap: 5px; margin: 0; padding: 0; border: 0; }
-.sc-page--narrow .sc-ledger .ledger__label { font-size: var(--fs-xs); overflow: visible; }
-.sc-page--narrow .sc-ledger .ledger__value { font-size: var(--fs-lg); }
-.sc-page--narrow .sc-ledger .ledger__unit { font-size: var(--fs-xs); }
-.sc-page--narrow .sc-ledger :is(.ledger__note, .sc-key) { display: none; }
+.sc-page--narrow .sc-legend__sup { min-block-size: 44px; }
+.sc-page--narrow .sc-sheet { overflow: visible; }
+.sc-page--narrow .sc-sheet__bar { padding-inline: var(--space-3); }
+.sc-page--narrow .sc-facts { order: 3; flex-basis: 100%; font-size: var(--fs-xs); gap: 0 var(--space-3); }
+/* A phone gets to its day sooner: the four figures in one row that scrolls sideways, without their notes. */
+.sc-page--narrow .sc-stats-wrap .figures { display: flex; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-block-start: var(--space-3); }
+.sc-page--narrow .sc-stats-wrap .figure { flex: none; padding-block: 8px; padding-inline: 0 var(--space-4); margin-inline-end: var(--space-4); border-inline-end: 1px solid var(--hairline-soft); }
+.sc-page--narrow .sc-stats-wrap .figure:last-child { border-inline-end: 0; margin-inline-end: 0; }
+.sc-page--narrow .sc-stats-wrap .figure__note { display: none; }
+.sc-page--narrow .mast__tabs { margin-block-start: var(--space-2); }
+/* A phone's day: the week as a strip of days, the open one solid. */
+.sc-strip { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; padding: 8px var(--space-3); border-block-end: 1px solid var(--hairline-soft); }
+.sc-strip__day {
+  display: grid;
+  justify-items: center;
+  gap: 1px;
+  min-block-size: 52px;
+  padding: 4px 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--ink-muted);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+.sc-strip__n { font-family: var(--display); font-size: var(--fs-lg); font-weight: 600; color: var(--ink); font-variant-numeric: lining-nums; }
+.sc-strip__day--today { border-color: var(--gold); }
+.sc-strip__day[aria-pressed='true'] { background: var(--teal); border-color: var(--teal); color: var(--text-inverse); }
+.sc-strip__day[aria-pressed='true'] .sc-strip__n { color: var(--text-inverse); }
 /* Each agenda row says its state in words, so the swatch keys stay on the desktop grid. */
-.sc-page--narrow .sc-legend { margin-block: 0 var(--space-2); }
+.sc-page--narrow .sc-legend { padding-inline: var(--space-3); }
 .sc-page--narrow .sc-legend__group:not(.sc-legend__group--people) { display: none; }
 .sc-page--narrow .sc-legend__group--people { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
 .sc-page--narrow .sc-legend__group--people > * { flex: none; }
@@ -437,7 +488,7 @@ html[lang='ar'] .sc-range { font-weight: 700; }
   inset-block-start: 0;
   z-index: 2;
   margin: 0;
-  padding: 8px 2px;
+  padding: 8px var(--space-3);
   background: var(--paper);
   border-block-end: 1px solid var(--hairline);
   font-family: var(--display);
@@ -445,8 +496,8 @@ html[lang='ar'] .sc-range { font-weight: 700; }
   font-weight: 600;
 }
 html[lang='ar'] .sc-agenda__date { font-weight: 700; }
-.sc-agenda__none { padding: var(--space-3) 2px; margin: 0; }
-.sc-agenda__teacher { padding: var(--space-3) 2px; border-block-end: 1px solid var(--hairline-soft); }
+.sc-agenda__none { padding: var(--space-3); margin: 0; }
+.sc-agenda__teacher { padding: var(--space-3); border-block-end: 1px solid var(--hairline-soft); }
 .sc-agenda__who { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); margin-block-end: var(--space-2); }
 .sc-agenda__list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .sc-agenda__item {
@@ -486,6 +537,8 @@ html[lang='ar'] .sc-agenda__date { font-weight: 700; }
   font-size: var(--fs-sm);
 }
 .sc-agenda__leave { min-block-size: 44px; display: flex; align-items: center; padding-inline: var(--space-3); border-radius: var(--radius); background: var(--gold-tint); border: 1px solid var(--gold-line); font-size: var(--fs-sm); }
+/* The month on a phone: its days as a list set in from the sheet's edge. */
+.sc-agenda.sc-agenda__list { padding: var(--space-3); }
 .sc-agenda__month { grid-template-columns: 1fr auto; grid-template-rows: auto; }
 .sc-agenda__month .sc-agenda__status { grid-row: auto; }
 .sc-agenda__month--empty { border-inline-start: 3px dashed var(--border-control); }
@@ -494,4 +547,16 @@ html[lang='ar'] .sc-agenda__date { font-weight: 700; }
 @media (max-width: 767px) {
   .sc-page :is(.btn, .btn--sm) { min-block-size: 44px; }
   .sc-page .btn--icon { min-inline-size: 44px; }
+}
+
+/* From 1100px on a screen with room the calendar is a tool with a frame: the
+   masthead stays put, the rail and the sheet fill the rest, and the grid scrolls
+   inside its sheet under a sticky head row and beside a sticky teacher column. */
+@media (min-width: 1100px) and (min-height: 800px) {
+  .page.sc-page:not(.sc-page--narrow) { display: flex; flex-direction: column; overflow: hidden; padding-block-end: var(--space-4); }
+  .sc-page:not(.sc-page--narrow) > .page__inner { flex: 1; min-block-size: 0; inline-size: 100%; display: flex; flex-direction: column; }
+  .sc-page:not(.sc-page--narrow) .sc-mast { flex: none; }
+  .sc-page:not(.sc-page--narrow) .sc-work { flex: 1; min-block-size: 0; grid-template-rows: minmax(0, 1fr); align-items: stretch; }
+  .sc-page:not(.sc-page--narrow) .sc-rail { position: static; align-content: start; overflow: visible; }
+  .sc-page:not(.sc-page--narrow) .sc-sheet { min-block-size: 0; }
 }

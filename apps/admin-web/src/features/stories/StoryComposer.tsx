@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useState, type InputHTMLAttributes, type ReactNode } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
 import { Icon, type IconName } from '@/shared/components/Icon'
@@ -167,14 +167,10 @@ export function StoryComposer({ basePath }: { basePath: string }) {
   return (
     <div className="page stories-studio">
       <div className="page__inner">
-        <Link to={basePath} className="back-link">
-          <Icon name="arrowBack" size={16} />
-          {tx(S.back)}
-        </Link>
-        <PageHeader title={tx(S.composeTitle)} />
+        <PageHeader back={{ to: basePath, label: tx(S.back) }} title={tx(S.composeTitle)} />
 
         <div className="composer">
-          <div className="composer__form">
+          <div className="composer__form sheet">
             {/* 1 · Content */}
             <Step n={1} title={tx(S.stepContent)}>
               <div className="type-cards" role="radiogroup" aria-label={tx(S.storyType)}>
@@ -316,6 +312,7 @@ export function StoryComposer({ basePath }: { basePath: string }) {
                 dir="auto"
               />
             </Step>
+
           </div>
 
           <aside className="composer__aside">
@@ -327,25 +324,28 @@ export function StoryComposer({ basePath }: { basePath: string }) {
                 estimate={estimate.data}
                 error={estimate.error as Error | null}
               />
-              {create.error && (
-                <p className="field__error" role="alert">{(create.error as Error).message}</p>
-              )}
-              <div className="composer__actions">
-                <button type="button" className="btn" onClick={() => submit(false)} disabled={create.isPending}>
-                  {tx(S.saveDraft)}
-                </button>
-                <button
-                  type="button"
-                  className="btn btn--primary"
-                  onClick={() => submit(true)}
-                  disabled={create.isPending || (attempted && !ready)}
-                >
-                  <Icon name="send" size={16} />
-                  {tx(S.publishNow)}
-                </button>
-              </div>
             </div>
           </aside>
+
+          {/* The stepper ends in its one action; saving a draft is beside it. It follows the
+              preview in the document, so a phone reads the form, the preview, then the action. */}
+          <div className="composer__foot">
+            {create.error && (
+              <p className="field__error composer__error" role="alert">{(create.error as Error).message}</p>
+            )}
+            <button type="button" className="btn" onClick={() => submit(false)} disabled={create.isPending}>
+              {tx(S.saveDraft)}
+            </button>
+            <button
+              type="button"
+              className="btn btn--primary"
+              onClick={() => submit(true)}
+              disabled={create.isPending || (attempted && !ready)}
+            >
+              <Icon name="send" size={16} />
+              {tx(S.publishNow)}
+            </button>
+          </div>
         </div>
       </div>
 

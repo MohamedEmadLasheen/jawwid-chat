@@ -49,6 +49,8 @@ export const S = {
   publishNow: { en: 'Publish now', ar: 'انشر الآن' },
   saveDraft: { en: 'Save as draft', ar: 'حفظ كمسودة' },
   viewInsights: { en: 'View insights', ar: 'عرض الأداء' },
+  moreActions: { en: 'More actions: {name}', ar: 'إجراءات أخرى: {name}' },
+  reachWeek: { en: '{n} in the last 7 days', ar: '{n} في آخر 7 أيام' },
 
   // composer
   composeTitle: { en: 'New story', ar: 'حالة جديدة' },

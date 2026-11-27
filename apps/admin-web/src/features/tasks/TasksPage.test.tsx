@@ -189,7 +189,11 @@ describe('a task', () => {
     expect(within(panel).getByRole('button', { name: 'Mark done' })).toBeInTheDocument()
     expect(within(panel).queryByRole('button', { name: 'Remove' })).toBeNull()
     expect(within(panel).queryByRole('button', { name: 'Hand on' })).toBeNull()
-    await userEvent.click(within(panel).getByRole('button', { name: 'Not my responsibility' }))
+    // One stated action; the rest of what the server allows is behind "⋯".
+    await userEvent.click(within(panel).getByRole('button', { name: /^More actions/ }))
+    expect(within(panel).queryByRole('menuitem', { name: 'Remove' })).toBeNull()
+    expect(within(panel).queryByRole('menuitem', { name: 'Hand on' })).toBeNull()
+    await userEvent.click(within(panel).getByRole('menuitem', { name: 'Not my responsibility' }))
     const dialog = await screen.findByRole('dialog')
     await userEvent.type(within(dialog).getByRole('textbox'), 'This is the Sales team\'s')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Send' }))
@@ -216,7 +220,9 @@ describe('a task', () => {
     await chooseOption(userEvent, within(panel).getByRole('combobox', { name: 'Level set by a person' }), 'high')
     await waitFor(() => expect(sent('POST', /priority$/)).toEqual([expect.objectContaining({ body: { priority: 'high' } })]))
 
-    await userEvent.click(within(panel).getByRole('button', { name: 'Remove' }))
+    // Remove is behind "⋯" (Hand on is the stated action for someone who cannot complete it).
+    await userEvent.click(within(panel).getByRole('button', { name: /^More actions/ }))
+    await userEvent.click(within(panel).getByRole('menuitem', { name: 'Remove' }))
     dialog = await screen.findByRole('dialog')
     await userEvent.type(within(dialog).getByRole('textbox'), 'The family withdrew')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Remove' }))

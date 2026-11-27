@@ -106,6 +106,8 @@ describe('PD-34: the Notification Center', () => {
   it('settings: a locked kind cannot be switched off; switching messages off is saved', async () => {
     on('PUT', /\/me\/notification-settings$/, () => json({ ...settings, categories: [{ category: 'conversation', push: false, locked: false }, settings.categories[1]] }))
     renderWithProviders(<NotificationsPage />, { route: '/notifications' })
+    // The settings are the page's last tab.
+    await userEvent.click(await screen.findByRole('button', { name: 'Settings' }))
     const tasks = await screen.findByRole('checkbox', { name: /Tasks/ })
     expect(tasks).toBeDisabled()
     await userEvent.click(screen.getByRole('checkbox', { name: /Messages/ }))

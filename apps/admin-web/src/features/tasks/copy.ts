@@ -7,8 +7,8 @@ export { useCopy } from '@/features/organization/copy'
 export const C = {
   title: { en: 'Tasks', ar: 'المهام' },
   subtitle: {
-    en: 'Everything someone must do, until it is done. A task leaves a list only when it is completed, removed or handed on.',
-    ar: 'كل ما يجب على أحد إنجازه، حتى يُنجَز. لا تغادر المهمة القائمة إلا إذا أُنجزت أو أُزيلت أو أُسندت لغيره.',
+    en: 'A task leaves a list only when it is completed, removed or handed on.',
+    ar: 'لا تغادر المهمة القائمة إلا إذا أُنجزت أو أُزيلت أو أُسندت لغيره.',
   },
   empty: { en: 'No open tasks in this list', ar: 'لا مهام مفتوحة في هذه القائمة' },
   emptyClosed: { en: 'No closed tasks yet', ar: 'لا مهام مغلقة بعد' },
@@ -20,6 +20,17 @@ export const C = {
   emptyClosedHint: { en: 'Tasks you finish or remove are kept here with their history.', ar: 'تُحفظ هنا المهام المنجزة أو المُزالة مع سجلها.' },
   loadMore: { en: 'Show more', ar: 'عرض المزيد' },
   newTask: { en: 'New task', ar: 'مهمة جديدة' },
+  // The masthead's figures: the viewer's own open tasks
+  figOverdue: { en: 'My overdue', ar: 'متأخرة لديّ' },
+  figToday: { en: 'Mine due today', ar: 'تستحق اليوم لديّ' },
+  figOpen: { en: 'My open tasks', ar: 'مهامي المفتوحة' },
+  figDecisions: { en: 'Awaiting my decision', ar: 'تنتظر قراري' },
+  filters: { en: 'Filters', ar: 'تصفية' },
+  moreActions: { en: 'More actions: {name}', ar: 'إجراءات أخرى: {name}' },
+  taskDetails: { en: 'Task details', ar: 'تفاصيل المهمة' },
+  factAssignee: { en: 'Assigned to', ar: 'مسندة إلى' },
+  factFrom: { en: 'Given by', ar: 'أسندها' },
+  factWhere: { en: 'Where the work is', ar: 'مكان العمل' },
   // Filters
   level: { en: 'Level', ar: 'المستوى' },
   anyLevel: { en: 'Any level', ar: 'كل المستويات' },
@@ -91,6 +102,15 @@ export const C = {
   choose: { en: 'Choose…', ar: 'اختر…' },
   markFinancial: { en: 'Financial', ar: 'مالية' },
   created: { en: 'Created. It is in their tasks now.', ar: 'أُنشئت. أصبحت ضمن مهامه الآن.' },
+} satisfies Record<string, Pair>
+
+/** The list's groups: when a task is due. */
+export const GROUP_LABEL = {
+  overdue: { en: 'Overdue', ar: 'متأخرة' },
+  today: { en: 'Due today', ar: 'تستحق اليوم' },
+  week: { en: 'Next 7 days', ar: 'خلال 7 أيام' },
+  later: { en: 'Later', ar: 'لاحقًا' },
+  none: { en: 'No due date', ar: 'بلا موعد' },
 } satisfies Record<string, Pair>
 
 export const TAB_LABEL: Record<TaskView | 'closed', Pair> = {
