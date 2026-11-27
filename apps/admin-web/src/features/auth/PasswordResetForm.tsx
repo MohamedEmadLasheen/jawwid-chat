@@ -5,6 +5,7 @@ import { ApiError } from '@/core/api/errors'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { useCopy, type Pair } from '@/features/organization/copy'
 import { PASSWORD_MIN_LENGTH } from './passwordPolicy'
+import { PasswordField } from './AuthFrame'
 
 
 export const R = {
@@ -19,6 +20,8 @@ export const R = {
   confirm: { en: 'Repeat the new password', ar: 'أعد كتابة كلمة المرور الجديدة' },
   tooShort: { en: `At least ${PASSWORD_MIN_LENGTH} characters.`, ar: `${PASSWORD_MIN_LENGTH} أحرف على الأقل.` },
   mismatch: { en: 'The two passwords differ.', ar: 'كلمتا المرور غير متطابقتين.' },
+  same: { en: 'Both entries match.', ar: 'الكلمتان متطابقتان.' },
+  rules: { en: 'Password rules', ar: 'شروط كلمة المرور' },
   submit: { en: 'Set password', ar: 'تعيين كلمة المرور' },
   saving: { en: 'Saving…', ar: 'جارٍ الحفظ…' },
   back: { en: 'Back to sign in', ar: 'العودة إلى تسجيل الدخول' },
@@ -97,15 +100,13 @@ export function PasswordResetForm({ initialEmail, onDone, onBack }: { initialEma
           onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
         />
       </label>
-      <label className="field">
-        <span className="field__label">{tx(R.password)}</span>
-        <input className="input" type="password" value={password} autoComplete="new-password" required onChange={(e) => setPassword(e.target.value)} />
-        <span className="field__hint">{tx(R.tooShort)}</span>
-      </label>
-      <label className="field">
-        <span className="field__label">{tx(R.confirm)}</span>
-        <input className="input" type="password" value={confirm} autoComplete="new-password" required onChange={(e) => setConfirm(e.target.value)} />
-      </label>
+      <PasswordField label={tx(R.password)} value={password} onChange={setPassword} autoComplete="new-password" invalid={touched && password.length < PASSWORD_MIN_LENGTH} />
+      <PasswordField label={tx(R.confirm)} value={confirm} onChange={setConfirm} autoComplete="new-password" invalid={touched && password !== confirm} />
+      {/* The rules, visible before a mistake is made. The server enforces the same ones. */}
+      <ul className="auth__rules" aria-label={tx(R.rules)}>
+        <li className={password.length >= PASSWORD_MIN_LENGTH ? 'auth__rule auth__rule--met' : 'auth__rule'}>{tx(R.tooShort)}</li>
+        <li className={confirm.length > 0 && password === confirm ? 'auth__rule auth__rule--met' : 'auth__rule'}>{tx(R.same)}</li>
+      </ul>
 
       {touched && problem && (
         <div className="field__error" role="alert">
@@ -118,10 +119,10 @@ export function PasswordResetForm({ initialEmail, onDone, onBack }: { initialEma
         </div>
       )}
 
-      <button type="submit" className="btn btn--primary btn--block" disabled={complete.isPending} style={{ marginBlockStart: 'var(--space-2)' }}>
+      <button type="submit" className="btn btn--primary btn--block" disabled={complete.isPending}>
         {complete.isPending ? tx(R.saving) : tx(R.submit)}
       </button>
-      <button type="button" className="btn btn--ghost btn--block" onClick={onBack}>
+      <button type="button" className="auth__link" onClick={onBack}>
         {tx(R.back)}
       </button>
     </form>

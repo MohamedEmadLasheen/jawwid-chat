@@ -18,7 +18,7 @@
   border: 1px solid var(--hairline);
   border-radius: 12px;
   background: var(--surface);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-palette);
   overflow: hidden;
   animation: palette-in var(--dur-dialog) var(--ease-out);
 }
