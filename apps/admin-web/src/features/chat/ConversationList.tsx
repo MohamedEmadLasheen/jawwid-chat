@@ -15,7 +15,7 @@ import { Highlighted, SEARCH_ACROSS_MIN, searchable, snippetAround, useDebounced
 import { Avatar } from '@/shared/components/Avatar'
 import { chatCopyFor } from './copy'
 import { LabelChip, LabelsDialog } from './LabelsDialog'
-import { ConversationAvatar, conversationName, isGroup, isMuted, previewParts, textDir, toneOfKind } from './chatView'
+import { ConversationAvatar, conversationName, isGroup, isMuted, previewParts, toneOfKind } from './chatView'
 import { useConversationPreferences } from './useChatActions'
 import { TrialBadge, isTrialGroup } from '@/shared/components/TrialBadge'
 
@@ -203,7 +203,9 @@ export function ConversationList({
                         </span>
                         <span className="cw-hit-row__main">
                           <span className="cw-hit-row__top">
-                            <span className="cw-hit-row__where" dir="auto">{where}</span>
+                            <span className="cw-hit-row__where">
+                              <bdi className="cw-line">{where}</bdi>
+                            </span>
                             <time className="cw-hit-row__time" dateTime={m.createdAt}>{listTime(m.createdAt, locale)}</time>
                           </span>
                           <span className="cw-hit-row__body" dir="auto">
@@ -279,17 +281,19 @@ function ConversationRow({
         <ConversationAvatar c={c} name={name} selfId={selfId} />
         <span className="conv-row__body">
           <span className="conv-row__top">
-            <span className="conv-row__name" dir="auto">{name}</span>
+            <span className="conv-row__name">
+              <bdi className="cw-line">{name}</bdi>
+            </span>
             {isTrialGroup(c) && <TrialBadge />}
             <time className="conv-row__time" dateTime={c.lastActivityAt} title={dateTime(c.lastActivityAt)}>
               {listTime(c.lastActivityAt, locale)}
             </time>
           </span>
           <span className="conv-row__bottom">
-            <span className="conv-row__sub" dir={textDir(preview)}>
-              {said.who && <bdi>{said.who}</bdi>}
-              {said.who && ': '}
-              {preview}
+            <span className="conv-row__sub">
+              {/* "You:" leads the line in the pane's direction; what was said follows it in its own. */}
+              {said.who && <span className="cw-row__who">{said.who}:</span>}
+              <bdi className="cw-line">{preview}</bdi>
             </span>
             {c.needsReply && <Badge tone="now">{copy.needsReply}</Badge>}
             {/* PD-36: asked in and not yet answered; the dot keeps it from being colour-only. */}

@@ -2,6 +2,7 @@ import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties } fr
 import { Link, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useI18n } from '@/core/i18n/I18nProvider'
+import { ACADEMY_ZONE, clock12In, dayMonthIn, weekdayIn, zoneLabel } from '@/core/time/academyTime'
 import { useSession } from '@/core/auth/SessionProvider'
 import { useRealtime } from '@/core/realtime/RealtimeProvider'
 import { ApiError } from '@/core/api/errors'
@@ -27,7 +28,7 @@ import { ExportDialog } from './ExportDialog'
 import { ThemeDialog } from './ThemeDialog'
 import { ThreadSearch } from './ThreadSearch'
 import { Highlighted, searchable } from './search'
-import { ConversationAvatar, cardFallbackText, conversationName, isGroup, isMuted, toneOfKind } from './chatView'
+import { ConversationAvatar, cardFallbackText, conversationName, isGroup, isMuted, toneOfKind, westernDigits } from './chatView'
 import { useConversationPreferences } from './useChatActions'
 import { VoiceNotePlayer } from './VoiceRecorder'
 import { ThreadCalls } from './ThreadCalls'
@@ -51,6 +52,30 @@ import {
 } from '@/features/calls-page/ScheduledCallCard'
 import { TrialBadge, isTrialGroup } from '@/shared/components/TrialBadge'
 import { CaseEscalatedCard, readCaseEscalatedCard } from '@/features/cases/CaseEscalatedCard'
+
+/** "Sun 29 Nov, 5:00 PM (Cairo time)": when a scheduled call starts, on the academy's clock, in the UI language. */
+export function callWhen(iso: string, locale: 'ar' | 'en'): string {
+  if (Number.isNaN(new Date(iso).getTime())) return ''
+  const day = `${weekdayIn(iso, ACADEMY_ZONE, locale)} ${dayMonthIn(iso, ACADEMY_ZONE, locale)}`
+  return `${day}${locale === 'ar' ? '،' : ','} ${clock12In(iso, ACADEMY_ZONE, locale)} (${zoneLabel(ACADEMY_ZONE, locale)})`
+}
+
+/** A booked trial's card, reduced to what is drawn; null when it does not carry its instant (then its words are shown). */
+export function readTrialBookedCard(
+  payload: Record<string, unknown> | null | undefined,
+): { startsAt: string; who: string | null; students: string[]; minutes: number | null; level: string | null } | null {
+  const p = payload ?? {}
+  if (typeof p.startsAt !== 'string' || Number.isNaN(new Date(p.startsAt).getTime())) return null
+  const students = Array.isArray(p.students) ? p.students.filter((x): x is string => typeof x === 'string' && x !== '') : []
+  return {
+    startsAt: p.startsAt,
+    // The server's own name for them where it gave one; else the students, joined when drawn.
+    who: typeof p.prospectName === 'string' && p.prospectName !== '' ? p.prospectName : null,
+    students,
+    minutes: typeof p.durationMinutes === 'number' ? p.durationMinutes : null,
+    level: typeof p.level === 'string' && p.level !== '' ? p.level : null,
+  }
+}
 
 /** The quick reactions, the same six as the mobile app. */
 export const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏'] as const
@@ -516,8 +541,11 @@ export function ChatThread({
                 <span className={peerState?.online ? 'thread-head__sub thread-head__sub--online' : 'thread-head__sub'}>
                   {peerPresence ?? (
                     <>
-                      {copy.kind[conv.type] ?? conv.type}
-                      {memberCount > 0 && ` · ${copy.membersCount(memberCount)}`}
+                      <span className="thread-head__kind">
+                        {copy.kind[conv.type] ?? conv.type}
+                        {memberCount > 0 && ' · '}
+                      </span>
+                      {memberCount > 0 && copy.membersCount(memberCount)}
                     </>
                   )}
                 </span>
@@ -973,10 +1001,18 @@ function MessageItem({
   const live = !m.deletedForAll
   // PD-13: a scheduled-call card is drawn with its Join button; any other card
   // (or one this client cannot read) keeps showing its plain-text body.
-  const callCard =
+  const readCall =
     live && m.type === 'card' && m.card && SCHEDULED_CALL_CARD_KINDS.has(m.card.kind)
       ? readScheduledCallCard(m.card.payload)
       : null
+  // The card's `when` is a sentence the server wrote once, in one language and
+  // with its own digits. The instant itself is in the payload: it is set here,
+  // on the academy's clock, in the UI language. Without the instant the
+  // server's sentence stays, with its digits folded to Western ones (DD-09).
+  const callCard = readCall && {
+    ...readCall,
+    when: readCall.startsAt ? callWhen(readCall.startsAt, locale) : readCall.when ? westernDigits(readCall.when) : null,
+  }
   // PD-31: a moved lesson's card draws "previous → new" on the academy's clock.
   const movedCard = live && m.type === 'card' && m.card?.kind === 'lesson_moved' ? readLessonMovedCard(m.card.payload) : null
   // An excused lesson's reason and its make-up's time; a make-up's day, date and time.
@@ -987,6 +1023,8 @@ function MessageItem({
     : null
   // PD-35 B6: a case escalated to this department, linked to Escalations.
   const caseCard = live && m.type === 'card' && m.card?.kind === 'case_escalated' ? readCaseEscalatedCard(m.card.payload) : null
+  // A booked trial carries its instant: it is set here in the UI language, like a scheduled call.
+  const trialCard = live && m.type === 'card' && m.card?.kind === 'trial_booked' ? readTrialBookedCard(m.card.payload) : null
   const reactions = summarize(m.reactions ?? [], selfId)
   // A card is a reference, not something somebody typed: it is drawn as a ruled card, not a bubble.
   const isCard = live && m.type === 'card'
@@ -1100,6 +1138,16 @@ function MessageItem({
             <LessonExcuseCard card={excuseCard} />
           ) : caseCard ? (
             <CaseEscalatedCard payload={caseCard} />
+          ) : trialCard ? (
+            <PlainCard
+              title={[copy.cardTrial, trialCard.who ?? trialCard.students.join(copy.listSeparator)].filter(Boolean).join(': ')}
+              lines={[
+                copy.cardWhen(callWhen(trialCard.startsAt, locale)),
+                ...(trialCard.minutes !== null ? [copy.cardLength(trialCard.minutes)] : []),
+                ...(trialCard.level ? [copy.cardLevel(trialCard.level)] : []),
+              ]}
+              highlight={highlight}
+            />
           ) : (
             <>
               {m.attachments.map((a) => (
@@ -1108,7 +1156,11 @@ function MessageItem({
               {m.body &&
                 (isCard ? (
                   // A card this client cannot draw: the server's own words for it, its first line as the card's title.
-                  <FallbackCard text={cardFallbackText(m.body)} highlight={highlight} />
+                  // What Jawwid wrote itself takes Western digits; a person's own words in a card are left as typed.
+                  <FallbackCard
+                    text={m.authorKind === 'system' ? westernDigits(cardFallbackText(m.body)) : cardFallbackText(m.body)}
+                    highlight={highlight}
+                  />
                 ) : (
                   <span dir="auto">
                     {highlight ? <Highlighted text={m.body} query={highlight} /> : <MentionText body={m.body} mentions={m.mentions} selfId={selfId} />}
@@ -1194,6 +1246,11 @@ function MessageItem({
 /** A card drawn from its plain words: the first line is its title, the rest its facts. */
 function FallbackCard({ text, highlight }: { text: string; highlight?: string }) {
   const [title = '', ...lines] = text.split('\n').filter((line) => line.trim() !== '')
+  return <PlainCard title={title} lines={lines} highlight={highlight} />
+}
+
+/** A reference card in words: a title in the display face, then its facts line by line. */
+function PlainCard({ title, lines, highlight }: { title: string; lines: string[]; highlight?: string }) {
   const show = (line: string) => (highlight ? <Highlighted text={line} query={highlight} /> : line)
   return (
     <span className="cw-card">

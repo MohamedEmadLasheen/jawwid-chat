@@ -28,6 +28,8 @@
 .cw-who .avatar:not(.avatar--photo) { --avatar-bg: var(--cw-who-bg); --avatar-fg: var(--cw-who-fg); }
 /* Neutral on paper needs an edge to be seen at all. */
 .cw-who--staff .avatar:not(.avatar--photo) { box-shadow: inset 0 0 0 1px var(--hairline); }
+/* No name of its own: the conversations glyph stands in, never a placeholder's initials. */
+.cw-who .avatar--blank .icon { --icon-accent: currentColor; opacity: 0.85; }
 
 /* =================================================================== layout */
 
@@ -35,15 +37,6 @@
 .cw .workspace__list { background: var(--paper); border-inline-end: 1px solid var(--hairline); }
 .cw .workspace__thread { background: var(--chat-bg); }
 .cw .workspace__list > .banner { padding-inline: var(--cw-pad); }
-/* "I'm away" is about you, not about a conversation: it sits at the foot of the list. */
-.cw .workspace__list > .cover-banner--quiet {
-  order: 9;
-  justify-content: flex-start;
-  padding: 7px var(--cw-pad);
-  border-block-start: 1px solid var(--hairline);
-}
-.cw .workspace__list > .cover-banner--quiet .btn { border-color: transparent; background: none; color: var(--teal); padding-inline: 0; }
-.cw .workspace__list > .cover-banner--quiet .btn:hover { color: var(--teal-dark); text-decoration: underline; text-underline-offset: 4px; }
 
 /* ============================================================== list header */
 
@@ -67,9 +60,18 @@ html[lang='ar'] .cw .workspace__title { font-size: 28px; }
 /* Views of the list: words with a count, the open one underlined in teal.
    One line that scrolls sideways; the rule under it runs the pane's width. */
 .cw-filters { display: flex; min-inline-size: 0; margin-inline: calc(-1 * var(--cw-pad)); }
-.cw-filters .seg { flex: 1; min-inline-size: 0; gap: 18px; padding-inline: var(--cw-pad); }
-.cw .workspace__head .seg__item { min-block-size: 36px; }
+.cw-filters .seg { flex: 1; min-inline-size: 0; gap: 14px; padding-inline: var(--cw-pad); scroll-padding-inline: 44px; }
+.cw .workspace__head .seg__item { min-block-size: 36px; gap: 5px; }
 .cw-filters .seg__count { margin-inline-start: 0; }
+/* More tabs than the pane is wide: the row scrolls, and the side that hides
+   more fades out over a tab's width, so a label is never cut off hard. (Masks
+   are physical: each direction names its own side.) */
+.cw-filters .seg[data-more-end] { mask-image: linear-gradient(to right, #000 calc(100% - 56px), transparent calc(100% - 4px)); }
+.cw-filters .seg[data-more-start] { mask-image: linear-gradient(to left, #000 calc(100% - 56px), transparent calc(100% - 4px)); }
+.cw-filters .seg[data-more-start][data-more-end] { mask-image: linear-gradient(to right, transparent 4px, #000 56px, #000 calc(100% - 56px), transparent calc(100% - 4px)); }
+[dir='rtl'] .cw-filters .seg[data-more-end] { mask-image: linear-gradient(to left, #000 calc(100% - 56px), transparent calc(100% - 4px)); }
+[dir='rtl'] .cw-filters .seg[data-more-start] { mask-image: linear-gradient(to right, #000 calc(100% - 56px), transparent calc(100% - 4px)); }
+[dir='rtl'] .cw-filters .seg[data-more-start][data-more-end] { mask-image: linear-gradient(to right, transparent 4px, #000 56px, #000 calc(100% - 56px), transparent calc(100% - 4px)); }
 
 /* ===================================================================== rows */
 
@@ -86,10 +88,14 @@ html[lang='ar'] .cw .workspace__title { font-size: 28px; }
 .cw .conv-list > li:last-child .conv-row__body { border-block-end-color: transparent; }
 .cw .conv-row:hover { background: var(--surface-hover); }
 .cw .conv-row:focus-visible { outline: 2px solid var(--teal); outline-offset: -2px; border-radius: var(--radius-sm); }
-/* A name or a preview may run the other way (a Latin name in the Arabic list):
-   it keeps its own direction, so it is cut at its own end, but it stays in the
-   pane's column beside the monogram instead of drifting to the far side. */
-.cw .conv-row__name, .cw .conv-row__sub { flex: 0 1 auto; margin-inline-end: auto; }
+/* A name or a preview may run the other way (a Latin name in the Arabic list).
+   The pane decides where every line starts: beside the monogram, in both
+   languages. The text decides only its own order: it sits in an isolated box
+   (.cw-line) that starts at the line's start, and is cut at its own end. */
+.cw .conv-row__name, .cw .conv-row__sub, .cw-hit-row__where { display: flex; align-items: baseline; gap: 4px; overflow: visible; }
+.cw-line { flex: 0 1 auto; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* "You:" leads the preview, at the line's start. */
+.cw-row__who { flex: none; }
 .cw .conv-row__name { font-size: var(--fs-md); font-weight: 500; line-height: 1.4; color: var(--ink); }
 .cw .conv-row__time { font-size: 12px; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
 .cw .conv-row__sub { font-size: var(--fs-sm); line-height: 1.5; color: var(--ink-muted); }
@@ -388,6 +394,11 @@ html[lang='ar'] .cw .thread-head__name { font-weight: 700; line-height: 1.5; }
 .cw-card__title { font-family: var(--display); font-size: var(--fs-lg); font-weight: 600; line-height: 1.4; }
 html[lang='ar'] .cw-card__title { font-weight: 700; }
 .cw-card__line { font-size: var(--fs-sm); color: var(--ink); }
+/* A card's words read in their own direction and start on the card's leading side. */
+.cw-card__title, .cw-card__line { text-align: -webkit-match-parent; text-align: match-parent; }
+/* A button that cannot be pressed yet reads as one: quiet, with words that can still be read. */
+.cw .cw-msg--card .btn:disabled { opacity: 1; background: var(--paper-dark); border-color: var(--hairline); color: var(--ink-muted); }
+.cw .cw-msg--card .btn:disabled .icon { --icon-accent: currentColor; }
 .cw .cw-msg--card .case-card { display: block; }
 
 .cw-quote {
@@ -920,10 +931,11 @@ mark.cw-hit { background: var(--gold-tint); color: inherit; border-radius: 2px; 
 .cw-hit-row { display: flex; align-items: flex-start; gap: 11px; inline-size: 100%; padding: 8px var(--cw-pad); border: 0; background: none; text-align: start; cursor: pointer; color: inherit; font: inherit; }
 .cw-hit-row:hover, .cw-hit-row:focus-visible { background: var(--surface-hover); }
 .cw-hit-row__main { flex: 1; min-inline-size: 0; display: grid; gap: 1px; }
-.cw-hit-row__top { display: flex; align-items: baseline; gap: 8px; }
+.cw-hit-row__top { display: flex; align-items: baseline; gap: 8px; min-inline-size: 0; }
 .cw-hit-row__where { flex: 1; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-sm); font-weight: 600; }
 .cw-hit-row__time { flex: none; font-size: var(--fs-xs); color: var(--ink-muted); }
-.cw-hit-row__body { font-size: var(--fs-sm); color: var(--ink-muted); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
+/* Two lines in the text's own direction, but starting on the pane's side (the two spellings are one value, per engine). */
+.cw-hit-row__body { font-size: var(--fs-sm); color: var(--ink-muted); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; text-align: -webkit-match-parent; text-align: match-parent; }
 .cw-hit-row__who { color: var(--ink); }
 
 /* @mentions. Gold is split by job: gold-text carries words, gold only rules. */
@@ -1048,9 +1060,21 @@ mark.cw-hit { background: var(--gold-tint); color: inherit; border-radius: 2px; 
   .cw .athread { padding-inline: 12px; }
   .cw .bubble-row { max-inline-size: 86%; }
   .cw .bubble-row.cw-msg.cw-msg--card { max-inline-size: 94%; }
+  /* The list fills the screen: no rule down its edge. */
+  .cw .workspace__list { border-inline-end: 0; }
   .cw .thread-head { padding-inline: 4px 6px; }
   .cw-head__who { gap: 9px; padding-inline: 2px; }
+  /* The name takes the room: up to two lines, and under it only what the monogram does not already say. */
+  .cw .thread-head__name {
+    font-size: var(--fs-lg);
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow-wrap: anywhere;
+  }
   .cw .thread-head__sub { flex-basis: 100%; }
+  .cw .thread-head__kind { display: none; }
   /* A phone's header keeps the name readable: search and the panel are in the options menu, and the name opens the panel. */
   .cw-head__actions > .btn--icon { display: none; }
   .cw-media { max-inline-size: 240px; }

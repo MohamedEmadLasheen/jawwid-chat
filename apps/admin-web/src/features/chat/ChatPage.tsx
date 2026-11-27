@@ -24,7 +24,10 @@ import { StarredDialog } from './StarredDialog'
 import { JoinGroupDialog } from './SeatParts'
 import { Icon } from '@/shared/components/Icon'
 import { isGroup } from './chatView'
-import { MyCoverBanner } from '@/features/organization/CoverBanner'
+import { CoverActions } from '@/features/organization/CoverBanner'
+import { HandOverDialog } from '@/features/organization/HandOverDialog'
+import { T as OrgT, useCopy as useOrgCopy } from '@/features/organization/copy'
+import { useMyCover } from '@/features/organization/hooks'
 import './chat.css'
 
 export { conversationName } from './chatView'
@@ -50,7 +53,7 @@ function readInfoPref(): boolean {
  * pane shows at a time. J / K / Enter / Escape work the list from the keyboard.
  */
 export function ChatPage() {
-  const { locale } = useI18n()
+  const { locale, date } = useI18n()
   const copy = chatCopyFor(locale)
   const navigate = useNavigate()
   const { conversationId } = useParams<{ conversationId: string }>()
@@ -65,6 +68,16 @@ export function ChatPage() {
   const [creatingDirect, setCreatingDirect] = useState(false)
   const [showingStarred, setShowingStarred] = useState(false)
   const [joiningGroup, setJoiningGroup] = useState(false)
+  // PD-33, as MyCoverBanner (features/organization) has it: who covers and until
+  // when stay banners over the list; "I'm away" itself is a quiet action in the
+  // list's header rather than a bar of its own. Supervisors and backups only;
+  // the server says who may hand over.
+  const otx = useOrgCopy()
+  const mayCover = !!staff && (staff.role === 'admin' || staff.role === 'coverage')
+  const myCover = useMyCover(mayCover)
+  const cover = mayCover ? myCover.data : undefined
+  const canGoAway = !!cover && !cover.away && cover.canHandOver
+  const [handingOver, setHandingOver] = useState(false)
   const wide = useMediaQuery('(min-width: 1100px)')
   const resizable = useMediaQuery('(min-width: 1024px)')
   const listWidth = useResizableWidth(LIST_WIDTH_KEY, 360, 280, 520)
@@ -132,8 +145,25 @@ export function ChatPage() {
             {copy.offline}
           </div>
         )}
-        {/* PD-33: "I'm away", or who covers until when. */}
-        <MyCoverBanner />
+        {/* PD-33: who covers until when ("I'm away" is in the list's header). */}
+        {cover?.away && (
+          <div className="banner banner--info cover-banner" role="status">
+            <span dir="auto">
+              {cover.away.status === 'scheduled'
+                ? otx(OrgT.scheduled, { backup: cover.away.backup.name, date: date(cover.away.startsAt) })
+                : otx(OrgT.awayBanner, { backup: cover.away.backup.name, date: date(cover.away.endsAt) })}
+            </span>
+            <CoverActions cover={cover.away} />
+          </div>
+        )}
+        {(cover?.covering ?? [])
+          .filter((x) => x.status === 'active')
+          .map((x) => (
+            <div key={x.id} className="banner banner--info cover-banner" role="status">
+              <span dir="auto">{otx(OrgT.coveringBanner, { name: x.supervisor.name, date: date(x.endsAt) })}</span>
+              <CoverActions cover={x} />
+            </div>
+          ))}
         {list.isLoading ? (
           <LoadingState />
         ) : list.error ? (
@@ -148,6 +178,17 @@ export function ChatPage() {
             initialView={params.get('view') === 'waiting' ? 'waiting' : undefined}
             actions={
               <>
+                {canGoAway && (
+                  <button
+                    type="button"
+                    className="btn btn--ghost btn--icon btn--sm"
+                    onClick={() => setHandingOver(true)}
+                    aria-label={otx(OrgT.imAway)}
+                    title={otx(OrgT.imAway)}
+                  >
+                    <Icon name="calendarPlus" size={18} />
+                  </button>
+                )}
                 <button
                   type="button"
                   className="btn btn--ghost btn--icon btn--sm"
@@ -196,6 +237,7 @@ export function ChatPage() {
         </Dialog>
       )}
 
+      {handingOver && staff && <HandOverDialog supervisor={{ id: staff.id, name: staff.name }} onClose={() => setHandingOver(false)} />}
       {showingStarred && (
         <StarredDialog
           onClose={() => setShowingStarred(false)}
