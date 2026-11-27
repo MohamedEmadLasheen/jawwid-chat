@@ -98,6 +98,12 @@ export const P = {
   // The queue and its detail panel
   kind: { en: 'Lead', ar: 'عميل محتمل' },
   panelLabel: { en: 'Lead details', ar: 'تفاصيل العميل المحتمل' },
+  moreActions: { en: 'More actions', ar: 'إجراءات أخرى' },
+  leads: { en: 'Leads', ar: 'العملاء المحتملون' },
+  openLeads: { en: 'Being worked', ar: 'قيد العمل' },
+  stageEmpty: { en: 'No lead at this stage.', ar: 'لا يوجد عميل في هذه المرحلة.' },
+  showAll: { en: 'Show all {n}', ar: 'عرض الكل ({n})' },
+  neverContacted: { en: 'Not contacted yet', ar: 'لم يُتواصل معه بعد' },
   steps: { en: 'Steps', ar: 'الخطوات' },
   about: { en: 'About', ar: 'عن العميل' },
   followUp: { en: 'Follow-up', ar: 'المتابعة' },

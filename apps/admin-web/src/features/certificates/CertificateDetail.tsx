@@ -1,11 +1,12 @@
-import { useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Badge } from '@/shared/components/Badge'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
-import { Icon } from '@/shared/components/Icon'
+import { Icon, type IconName } from '@/shared/components/Icon'
+import type { MenuItem } from '@/shared/components/Menu'
 import { ReasonDialog } from '@/shared/components/ReasonDialog'
-import { DetailActions, DetailEnd, DetailSection, FlowSteps, type FlowStep, type StepState } from '@/shared/components/RequestQueue'
+import { DetailFoot, DetailSection, FlowSteps, type FlowStep, type StepState } from '@/shared/components/RequestQueue'
 import { QueryBoundary } from '@/shared/components/States'
 import {
   CERTIFICATE_ACCEPT,
@@ -32,10 +33,34 @@ const WITH_REASON: Partial<Record<CertificateAct, { path: string; field: 'reason
 }
 const DIRECT: Partial<Record<CertificateAct, string>> = { start: 'start', resubmit: 'resubmit', release: 'release' }
 const PRIMARY: ReadonlySet<CertificateAct> = new Set<CertificateAct>(['approve', 'send', 'start', 'upload', 'accept'])
-/** The acts that end a request: offered at the end of the detail, apart from the ones that move it on. */
+/** The acts that end a request: last behind "⋯", and marked as such. */
 const ENDS: ReadonlySet<CertificateAct> = new Set<CertificateAct>(['cancel', 'decline'])
-/** The act that moves the request on comes first. */
-const rank = (a: CertificateAct) => (PRIMARY.has(a) ? 0 : 1)
+const rank = (a: CertificateAct) => (PRIMARY.has(a) ? 0 : ENDS.has(a) ? 2 : 1)
+/**
+ * The server's allowed acts in the order they are offered: the one that moves
+ * the request on first (it is the card's and the inspector's one stated
+ * action), what ends it last. Nothing is added to them and nothing left out.
+ */
+export const orderedActs = (actions: readonly CertificateAct[]): CertificateAct[] => [...actions].sort((a, b) => rank(a) - rank(b))
+export const actEnds = (a: CertificateAct) => ENDS.has(a)
+const ACT_ICON: Record<CertificateAct, IconName> = {
+  edit: 'pencil',
+  resubmit: 'send',
+  cancel: 'xCircle',
+  accept: 'checkCircle',
+  decline: 'xCircle',
+  start: 'play',
+  return: 'undo',
+  release: 'undo',
+  upload: 'upload',
+  approve: 'checkCircle',
+  redesign: 'refresh',
+  withdraw_approval: 'undo',
+  send: 'send',
+  consent: 'userCheck',
+  story: 'stories',
+}
+export const actIcon = (a: CertificateAct): IconName => ACT_ICON[a]
 
 /** How far along the flow each state stands: request, design, review, send. */
 const STAGE: Record<CertificateState, number> = {
@@ -145,10 +170,25 @@ function historyLabel(h: HistoryEntry, tx: ReturnType<typeof useCopy>): string {
  * One certificate: its steps, what it says, its design, the review, the
  * delivery and the history. The buttons are the server's `actions` -- the
  * Designer never sees approve, send or Story, because the server never offers
- * them. The page shows it in the panel beside the queue, or in the side sheet.
+ * them. The page shows it in the inspector beside the board, or in the side sheet.
+ *
+ * `intent` is the act a card asked for. It is taken once the certificate has
+ * arrived and only if the server still offers it: an act with a dialog or a
+ * reason opens there, one that needs neither is sent. Approve and upload are
+ * never taken from a card -- the design is approved where it can be seen, and
+ * a file is chosen by hand -- so for those the inspector simply opens.
  */
-export function CertificateDetail({ certificateId }: { certificateId: string }) {
+export function CertificateDetail({
+  certificateId,
+  intent = null,
+  onIntentDone,
+}: {
+  certificateId: string
+  intent?: CertificateAct | null
+  onIntentDone?: () => void
+}) {
   const tx = useCopy()
+  const navigate = useNavigate()
   const { locale, dateTime } = useI18n()
   const one = useCertificate(certificateId)
   const act = useCertificateAct()
@@ -174,32 +214,48 @@ export function CertificateDetail({ certificateId }: { certificateId: string }) 
     window.open(url, '_blank', 'noopener')
   }
 
-  const button = (a: CertificateAct) => {
-    const label = tx(actLabel(a))
-    const cls = PRIMARY.has(a) ? 'btn btn--primary' : ENDS.has(a) ? 'btn btn--sm rq-danger' : 'btn'
-    if (WITH_REASON[a]) return <button key={a} type="button" className={cls} onClick={() => setReasonFor(a)}>{label}</button>
-    if (DIRECT[a]) return <button key={a} type="button" className={cls} disabled={act.isPending} onClick={() => run(DIRECT[a]!)}>{label}</button>
-    if (a === 'approve') {
-      return (
-        <button key={a} type="button" className={cls} disabled={act.isPending || !c?.currentFile} onClick={() => run('approve', { fileId: c!.currentFile!.id })}>
-          {label}
-        </button>
-      )
-    }
-    if (a === 'upload') {
-      return (
-        <button key={a} type="button" className={cls} disabled={upload.isPending} onClick={() => fileInput.current?.click()}>
-          {upload.isPending ? '…' : label}
-        </button>
-      )
-    }
-    if (a === 'send' || a === 'story' || a === 'consent' || a === 'edit' || a === 'accept') {
-      return <button key={a} type="button" className={cls} onClick={() => setDialog(a)}>{label}</button>
-    }
-    return null
+  /** One act, as the page performs it: a reason first where one is owed, a dialog where there is something to confirm. */
+  const perform = (a: CertificateAct) => {
+    if (WITH_REASON[a]) setReasonFor(a)
+    else if (DIRECT[a]) run(DIRECT[a]!)
+    else if (a === 'approve') {
+      if (c?.currentFile) run('approve', { fileId: c.currentFile.id })
+    } else if (a === 'upload') fileInput.current?.click()
+    else if (a === 'send' || a === 'story' || a === 'consent' || a === 'edit' || a === 'accept') setDialog(a)
   }
 
+  // The act a card asked for, taken once the certificate is here and the server still offers it.
+  const state = c?.state
+  useEffect(() => {
+    if (!intent || !c) return
+    if (c.actions.includes(intent) && intent !== 'approve' && intent !== 'upload') perform(intent)
+    onIntentDone?.()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per request from the card
+  }, [intent, c?.id, state])
+
   const chat = c?.projection === 'full' ? c.sent?.conversationId ?? null : null
+  const acts = c ? orderedActs(c.actions) : []
+  const first = acts[0]
+  // The foot: the first act stated, the rest behind "⋯" (what ends the request last).
+  const primary = first ? (
+    <button
+      type="button"
+      className={PRIMARY.has(first) ? 'btn btn--primary' : 'btn'}
+      disabled={first === 'approve' ? act.isPending || !c?.currentFile : first === 'upload' ? upload.isPending : DIRECT[first] ? act.isPending : false}
+      onClick={() => perform(first)}
+    >
+      {first === 'upload' && upload.isPending ? '…' : tx(actLabel(first))}
+    </button>
+  ) : chat ? (
+    <Link className="btn" to={`/chat/${encodeURIComponent(chat)}`}>
+      <Icon name="conversations" size={18} />
+      {tx(C.openChat)}
+    </Link>
+  ) : undefined
+  const more: MenuItem[] = [
+    ...acts.slice(1).map((a) => ({ key: a, label: tx(actLabel(a)), icon: ACT_ICON[a], danger: ENDS.has(a), onSelect: () => perform(a) })),
+    ...(first && chat ? [{ key: 'chat', label: tx(C.openChat), icon: 'conversations' as const, onSelect: () => navigate(`/chat/${encodeURIComponent(chat)}`) }] : []),
+  ]
 
   return (
     <>
@@ -289,18 +345,7 @@ export function CertificateDetail({ certificateId }: { certificateId: string }) 
               </div>
             )}
             {c.actions.includes('upload') && <p className="field__hint">{tx(C.uploadHint)}</p>}
-            {c.actions.some((x) => ENDS.has(x)) && <DetailEnd>{c.actions.filter((x) => ENDS.has(x)).map(button)}</DetailEnd>}
-            {(c.actions.some((x) => !ENDS.has(x)) || chat) && (
-              <DetailActions>
-                {c.actions.filter((x) => !ENDS.has(x)).sort((a, b) => rank(a) - rank(b)).map(button)}
-                {chat && (
-                  <Link className="btn" to={`/chat/${encodeURIComponent(chat)}`}>
-                    <Icon name="conversations" size={18} />
-                    {tx(C.openChat)}
-                  </Link>
-                )}
-              </DetailActions>
-            )}
+            <DetailFoot primary={primary} more={more} label={`${tx(C.moreActions)}: ${c.printedName}`} />
           </>
         )}
       </QueryBoundary>

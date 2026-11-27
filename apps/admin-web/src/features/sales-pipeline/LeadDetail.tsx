@@ -2,7 +2,8 @@ import { useEffect, useId, useState } from 'react'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Badge } from '@/shared/components/Badge'
 import { DialogCancelButton } from '@/shared/components/Dialog'
-import { DetailActions, DetailEnd, DetailSection, FlowSteps, type FlowStep, type StepState } from '@/shared/components/RequestQueue'
+import type { MenuItem } from '@/shared/components/Menu'
+import { DetailFoot, DetailSection, FlowSteps, type FlowStep, type StepState } from '@/shared/components/RequestQueue'
 import { SearchableSelect } from '@/shared/components/SearchableSelect'
 import { QueryBoundary } from '@/shared/components/States'
 import { formatWhen } from '@/features/trials/copy'
@@ -134,6 +135,29 @@ function LeadBody({ lead }: { lead: Lead }) {
   }
 
   const manual = lead.manualStage
+  const markContacted = () =>
+    contacted.mutate({ nextFollowUpOn: followUp || null, followUpNote: followUpNote.trim() || null }, { onSuccess: () => setMessage(tx(P.contactedDone)) })
+  const reopen = () => update.mutate({ stage: 'contacted' })
+  // The foot states one act: the hand-over when the server offers it, else the contact just made, else the way back from Lost.
+  const first = lead.canConvert ? 'convert' : manual && lead.stage !== 'lost' ? 'contacted' : manual && lead.stage === 'lost' ? 'reopen' : null
+  const primary =
+    first === 'convert' ? (
+      <button type="button" className="btn btn--primary" disabled={convert.isPending} onClick={doConvert} title={tx(P.convertHint)}>
+        {tx(P.convert)}
+      </button>
+    ) : first === 'contacted' ? (
+      <button type="button" className="btn btn--primary" disabled={contacted.isPending} onClick={markContacted}>
+        {tx(P.markContacted)}
+      </button>
+    ) : first === 'reopen' ? (
+      <button type="button" className="btn" disabled={update.isPending} onClick={reopen}>{tx(P.reopen)}</button>
+    ) : undefined
+  // The rest is behind "⋯"; what ends the lead comes last and is marked.
+  const more: MenuItem[] = [
+    ...(first !== 'contacted' && manual && lead.stage !== 'lost' ? [{ key: 'contacted', label: tx(P.markContacted), icon: 'phone' as const, onSelect: markContacted }] : []),
+    ...(first !== 'reopen' && manual && lead.stage === 'lost' ? [{ key: 'reopen', label: tx(P.reopen), icon: 'undo' as const, onSelect: reopen }] : []),
+    ...(manual && lead.stage !== 'lost' && !losing ? [{ key: 'lost', label: tx(P.markLost), icon: 'xCircle' as const, danger: true, onSelect: () => setLosing(true) }] : []),
+  ]
   return (
     <>
       {error && <div className="banner banner--danger" role="alert">{describePipelineError(error, locale)}</div>}
@@ -265,32 +289,8 @@ function LeadBody({ lead }: { lead: Lead }) {
         </section>
       )}
 
-      {manual && lead.stage !== 'lost' && !losing && (
-        <DetailEnd>
-          <button type="button" className="btn btn--sm rq-danger" onClick={() => setLosing(true)}>{tx(P.markLost)}</button>
-        </DetailEnd>
-      )}
       {lead.canConvert && <p className="field__hint lead-convert-hint">{tx(P.convertHint)}</p>}
-      <DetailActions>
-        {lead.canConvert && (
-          <button type="button" className="btn btn--primary" disabled={convert.isPending} onClick={doConvert} title={tx(P.convertHint)}>
-            {tx(P.convert)}
-          </button>
-        )}
-        {manual && lead.stage !== 'lost' && (
-          <button
-            type="button"
-            className="btn"
-            disabled={contacted.isPending}
-            onClick={() => contacted.mutate({ nextFollowUpOn: followUp || null, followUpNote: followUpNote.trim() || null }, { onSuccess: () => setMessage(tx(P.contactedDone)) })}
-          >
-            {tx(P.markContacted)}
-          </button>
-        )}
-        {manual && lead.stage === 'lost' && (
-          <button type="button" className="btn" disabled={update.isPending} onClick={() => update.mutate({ stage: 'contacted' })}>{tx(P.reopen)}</button>
-        )}
-      </DetailActions>
+      <DetailFoot primary={primary} more={more} label={`${tx(P.moreActions)}: ${lead.displayName}`} />
 
       {handing && intake.data && (
         <IntakeDialog

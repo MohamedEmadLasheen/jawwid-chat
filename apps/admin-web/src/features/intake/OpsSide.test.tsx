@@ -120,10 +120,14 @@ describe('New Students: the families entered by hand', () => {
     expect(within(card).getByText(/Suggested:/)).toHaveTextContent('Suggested: Supervisor Two')
     expect(within(card).getByText(/Sales owner/)).toBeInTheDocument()
     expect(within(card).getByText('482913')).toBeInTheDocument()
-    expect(within(card).getByRole('link', { name: /Open the parent/ })).toHaveAttribute('href', '/parents/p-1')
     const other = within(region).getByRole('heading', { name: 'Parent Beta' }).closest('article')!
     expect(within(other).getByText('Supervisor One')).toBeInTheDocument()
     expect(within(other).queryByText('Needs an Operations supervisor')).not.toBeInTheDocument()
+    // A family with nothing to decide leads to its parent; one that waits for a supervisor keeps the way there behind "⋯".
+    expect(within(other).getByRole('link', { name: /Open the parent/ })).toHaveAttribute('href', '/parents/p-2')
+    await userEvent.click(within(card).getByRole('button', { name: /More actions/ }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: /Open the parent/ }))
+    await waitFor(() => expect(fetchMock.mock.calls.some(([u]) => /\/parent-profiles\/p-1$/.test(String(u)))).toBe(true))
   })
 
   it('filters: needs a supervisor, waiting for sign-up, signed up, and -- for managers -- recently entered', async () => {
@@ -224,7 +228,7 @@ describe('A trial sibling: Assign adds the children to the family the parent is 
     })
     renderWithProviders(<AppRoutes />, { staff, route: '/trials/new-students' })
     const card = (await screen.findByRole('heading', { name: 'Parent Delta' })).closest('article')!
-    await userEvent.click(within(card).getByRole('button', { name: 'Assign' }))
+    await userEvent.click(within(card).getByRole('button', { name: 'Assign supervisor' }))
     const dialog = await screen.findByRole('dialog', { name: /Assign a supervisor/ })
     await chooseOption(userEvent, await within(dialog).findByLabelText('Supervisor'), 'sup-1')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Assign' }))

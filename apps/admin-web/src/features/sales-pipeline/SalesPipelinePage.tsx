@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Badge } from '@/shared/components/Badge'
 import { Icon } from '@/shared/components/Icon'
-import { PageHeader } from '@/shared/components/PageHeader'
-import { Age, FlowStrip, FlowStripCell, RequestQueue, RowOpen, rowOpener, type FlowCell } from '@/shared/components/RequestQueue'
+import { PageHeader, type MastFigure } from '@/shared/components/PageHeader'
+import { Age, Board, BoardCard, RequestQueue, type BoardStage } from '@/shared/components/RequestQueue'
+import { RowActions } from '@/shared/components/RowActions'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
 import { STAGES, type ContactPresence, type LeadDetail, type LeadRow, type Stage } from './api'
 import { CreateLeadDialog } from './CreateLeadDialog'
@@ -19,6 +20,8 @@ import './sales-pipeline.css'
 
 const PAGE_SIZE = 25
 type StageFilter = Stage | 'all'
+/** The stages a lead is still being worked in. */
+const OPEN: readonly Stage[] = ['new_lead', 'contacted', 'trial_booked', 'trial_completed']
 
 /** A search that waits for a pause in typing, so each key is not a request. */
 function useDebounced<T>(value: T, ms = 300): T {
@@ -32,12 +35,16 @@ function useDebounced<T>(value: T, ms = 300): T {
 
 /**
  * The Sales pipeline (PD-59): leads from the first call to the hand-over, as a
- * queue under its stages (the counts are the board's column heads). A lead is
- * a trial prospect; Trial booked, Trial completed, Converted and a trial's Lost
- * come from the trial itself. A row says whether a channel is on file, never the
- * contact: that arrives with the lead's own panel, and is audited -- so the
- * panel is there only while a lead is open, never by itself. The server decides
- * who may open any of it.
+ * board with one column per stage (each headed by the server's count). A lead
+ * is a trial prospect; Trial booked, Trial completed, Converted and a trial's
+ * Lost come from the trial itself. A card says whether a channel is on file,
+ * never the contact: that arrives with the lead's own inspector, and is
+ * audited -- so the inspector is there only while a lead is open, never by
+ * itself. The server decides who may open any of it.
+ *
+ * The board is the page's one read, as before: the newest leads across every
+ * stage. A stage with more leads than that read brought says so and opens by
+ * itself, as the server's filtered, paged list.
  */
 export function SalesPipelinePage() {
   const { locale, number } = useI18n()
@@ -56,7 +63,7 @@ export function SalesPipelinePage() {
 
   const list = useLeads({ stage: stage === 'all' ? '' : stage, q, followUp: due ? 'due' : '', limit: PAGE_SIZE, offset })
   useEffect(() => setOffset(0), [stage, q, due])
-  // The open lead, as its panel read it (the one audited read of the contact happens there, on opening).
+  // The open lead, as its inspector read it (the one audited read of the contact happens there, on opening).
   const [loaded, setLoaded] = useState<LeadDetail | null>(null)
   const lead = loaded && loaded.id === openId ? loaded : null
 
@@ -65,13 +72,46 @@ export function SalesPipelinePage() {
   const data = list.data
   const counts = data?.counts
   const total = counts ? STAGES.reduce((n, s) => n + counts[s], 0) : null
-  const cells: Array<FlowCell<StageFilter>> = [
-    { key: 'all', label: tx(P.all), count: total },
-    ...STAGES.map((s) => ({ key: s as StageFilter, label: tx(STAGE[s].label), count: counts ? counts[s] : null })),
-  ]
   const rows = data?.leads ?? []
   const last = data ? Math.min(data.offset + rows.length, data.total) : 0
   const openRow = rows.find((r) => r.id === openId)
+  const n = (count: number | null | undefined) => (count == null ? '–' : number(count))
+
+  const figures: MastFigure[] = [
+    { key: 'all', label: tx(P.leads), value: n(total), onClick: () => setStage('all'), pressed: stage === 'all' },
+    { key: 'open', label: tx(P.openLeads), value: n(counts ? OPEN.reduce((sum, s) => sum + counts[s], 0) : null), tone: 'key' },
+    {
+      key: 'due',
+      label: tx(P.followUpDue),
+      value: n(data?.dueCount),
+      tone: (data?.dueCount ?? 0) > 0 ? 'urgent' : 'quiet',
+      // Not a stage: the leads whose follow-up date has passed, across every stage.
+      onClick: () => setDue((d) => !d),
+      pressed: due,
+    },
+    { key: 'converted', label: tx(STAGE.converted.label), value: n(counts?.converted), tone: 'quiet', onClick: () => setStage('converted'), pressed: stage === 'converted' },
+  ]
+
+  const stages: Array<BoardStage<Stage>> = STAGES.map((s) => {
+    const mine = rows.filter((r) => r.stage === s)
+    const count = counts ? counts[s] : null
+    // With a search or the follow-up filter on, the server's stage counts no longer describe what is shown.
+    const narrowed = !!q || due
+    const hidden = stage === 'all' && !narrowed && count !== null ? count - mine.length : 0
+    return {
+      key: s,
+      label: tx(STAGE[s].label),
+      count: narrowed ? mine.length : count,
+      cards: mine.map((r) => <LeadCard key={r.id} row={r} selected={r.id === openId} onOpen={() => setOpenId(r.id)} />),
+      empty: tx(P.stageEmpty),
+      foot:
+        hidden > 0 ? (
+          <button type="button" className="btn btn--sm btn--ghost rq-col__foot" onClick={() => setStage(s)}>
+            {tx(P.showAll).replace('{n}', number(count!))}
+          </button>
+        ) : undefined,
+    }
+  })
 
   return (
     <div className="page rq-page">
@@ -79,16 +119,14 @@ export function SalesPipelinePage() {
         <PageHeader
           title={tx(P.title)}
           subtitle={tx(P.subtitle)}
-          actions={<button type="button" className="btn btn--primary" onClick={() => setCreating(true)}>{tx(P.newLead)}</button>}
+          figures={figures}
+          actions={
+            <button type="button" className="btn btn--primary" onClick={() => setCreating(true)}>
+              <Icon name="plus" size={16} />
+              {tx(P.newLead)}
+            </button>
+          }
         />
-        <FlowStrip label={tx(P.filterLabel)} cells={cells} value={stage} onChange={setStage}>
-          {/* Not a stage: the leads whose follow-up date has passed, across every stage. */}
-          <FlowStripCell
-            cell={{ label: tx(P.followUpDue), count: data ? data.dueCount : null, late: (data?.dueCount ?? 0) > 0 }}
-            active={due}
-            onClick={() => setDue((d) => !d)}
-          />
-        </FlowStrip>
         <RequestQueue
           label={tx(P.panelLabel)}
           detail={
@@ -104,45 +142,29 @@ export function SalesPipelinePage() {
               : null
           }
         >
-          <div className="rq-toolbar">
+          <div className="lead-bar">
             <label className="search">
               <Icon name="search" size={16} />
               <span className="sr-only">{tx(P.search)}</span>
               <input className="input" type="search" value={search} placeholder={tx(P.search)} aria-describedby="sp-search-hint" onChange={(e) => setSearch(e.target.value)} />
             </label>
-            <span id="sp-search-hint" className="rq-toolbar__hint">{tx(P.searchHint)}</span>
+            <span id="sp-search-hint" className="lead-bar__hint">{tx(P.searchHint)}</span>
           </div>
           <QueryBoundary isLoading={list.isLoading} error={list.error} onRetry={() => void list.refetch()}>
-            {rows.length === 0 ? (
-              <EmptyState title={total === 0 && stage === 'all' && !q && !due ? tx(P.empty) : tx(P.noMatch)} />
+            {rows.length === 0 && (total === 0 || !!q || due) ? (
+              <div className="sheet rq-blank">
+                <EmptyState title={total === 0 && stage === 'all' && !q && !due ? tx(P.empty) : tx(P.noMatch)} />
+              </div>
             ) : (
               <>
-                <div className="table-wrap">
-                  <table className="table rq-table">
-                    <thead>
-                      <tr>
-                        <th scope="col">{tx(P.lead)}</th>
-                        <th scope="col">{tx(P.stage)}</th>
-                        <th scope="col" className="rq-c--more">{tx(P.owner)}</th>
-                        <th scope="col" className="rq-c--extra">{tx(P.lastContacted)}</th>
-                        <th scope="col">{tx(P.nextFollowUp)}</th>
-                        <th scope="col" className="rq-c--extra">{tx(P.channels)}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {rows.map((r) => (
-                        <LeadRowView key={r.id} row={r} selected={r.id === openId} onOpen={() => setOpenId(r.id)} />
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <Board label={tx(P.filterLabel)} stages={stages} value={stage} onChange={setStage} />
                 {/* One page needs no pager. */}
-                {data && data.total > rows.length && (
-                <div className="lead-pager">
-                  <span className="ts-muted ltr">{number(data!.offset + 1)}–{number(last)} / {number(data!.total)}</span>
-                  <button type="button" className="btn btn--sm" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}>{tx(P.previous)}</button>
-                  <button type="button" className="btn btn--sm" disabled={!data || last >= data.total} onClick={() => setOffset(offset + PAGE_SIZE)}>{tx(P.next)}</button>
-                </div>
+                {data && stage !== 'all' && data.total > rows.length && (
+                  <div className="lead-pager">
+                    <span className="ts-muted ltr">{number(data.offset + 1)}–{number(last)} / {number(data.total)}</span>
+                    <button type="button" className="btn btn--sm" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}>{tx(P.previous)}</button>
+                    <button type="button" className="btn btn--sm" disabled={last >= data.total} onClick={() => setOffset(offset + PAGE_SIZE)}>{tx(P.next)}</button>
+                  </div>
                 )}
                 {data?.truncated && <p className="field__hint">{tx(P.truncated)}</p>}
               </>
@@ -160,34 +182,56 @@ function channelsText(c: ContactPresence, tx: (p: { en: string; ar: string }) =>
   return on.length > 0 ? on.join(' · ') : tx(P.noChannel)
 }
 
-function LeadRowView({ row, selected, onOpen }: { row: LeadRow; selected: boolean; onOpen: () => void }) {
+/** A lead on the board: who, whose it is, what is on file, and when it is next due. Its one action opens it. */
+function LeadCard({ row, selected, onOpen }: { row: LeadRow; selected: boolean; onOpen: () => void }) {
   const { locale, date } = useI18n()
   const tx = (p: { en: string; ar: string }) => (locale === 'ar' ? p.ar : p.en)
-  const stage = STAGE[row.stage]
   return (
-    <tr data-selected={selected || undefined} onClick={rowOpener(onOpen)}>
-      <th scope="row" className="rq-c-who">
-        <RowOpen selected={selected} onOpen={onOpen} label={`${tx(P.open)} ${row.displayName}`}>{row.displayName}</RowOpen>
-      </th>
-      <td className="rq-c-status">
-        <Badge tone={stage.tone} dot>{tx(stage.label)}</Badge>
-        {row.stage === 'lost' && row.lostReason && <span className="rq-sub">{lostText(row.lostReason, locale)}</span>}
-      </td>
-      <td className="rq-c-meta rq-c--more">{row.owner?.name ? <bdi>{row.owner.name}</bdi> : <span className="rq-muted">{tx(P.unassigned)}</span>}</td>
-      <td className="rq-c--extra">
-        {row.lastContactedAt ? <Age iso={row.lastContactedAt} /> : <span className="rq-muted">{tx(P.never)}</span>}
-      </td>
-      <td className="rq-c-when">
-        {row.nextFollowUpOn ? (
-          <>
-            <time dateTime={row.nextFollowUpOn} className={row.followUpDue ? 'rq-age rq-age--late' : 'rq-age'}>{date(`${row.nextFollowUpOn}T12:00:00Z`)}</time>
-            {row.followUpDue && <span className="rq-sub lead-due">{tx(P.followUpDue)}</span>}
-          </>
+    <BoardCard
+      title={row.displayName}
+      titleOpens={false}
+      selected={selected}
+      onOpen={onOpen}
+      age={row.lastContactedAt ? <>{tx(P.lastContacted)} <Age iso={row.lastContactedAt} /></> : tx(P.neverContacted)}
+      actions={
+        <RowActions
+          label={`${tx(P.moreActions)}: ${row.displayName}`}
+          primary={
+            <button type="button" className="btn btn--sm" onClick={onOpen} aria-label={`${tx(P.open)} ${row.displayName}`} aria-current={selected ? 'true' : undefined}>
+              {tx(P.open)}
+            </button>
+          }
+        />
+      }
+    >
+      <p className="rq-card__line">
+        <Icon name="user" size={15} />
+        {row.owner?.name ? <bdi>{row.owner.name}</bdi> : <span>{tx(P.unassigned)}</span>}
+      </p>
+      <p className="rq-card__line">
+        <Icon name="phone" size={15} />
+        <span>{channelsText(row.contact, tx)}</span>
+      </p>
+      {row.stage === 'lost' && row.lostReason && (
+        <p className="rq-card__line">
+          <Icon name="xCircle" size={15} />
+          <span>{lostText(row.lostReason, locale)}</span>
+        </p>
+      )}
+      {row.nextFollowUpOn &&
+        (row.followUpDue ? (
+          <div className="rq-card__tags">
+            <Badge tone="danger">{tx(P.followUpDue)}</Badge>
+            <time dateTime={row.nextFollowUpOn} className="rq-age rq-age--late">{date(`${row.nextFollowUpOn}T12:00:00Z`)}</time>
+          </div>
         ) : (
-          <span className="rq-muted">—</span>
-        )}
-      </td>
-      <td className="rq-c--extra">{channelsText(row.contact, tx)}</td>
-    </tr>
+          <p className="rq-card__line">
+            <Icon name="calendar" size={15} />
+            <span>
+              {tx(P.nextFollowUp)} · <time dateTime={row.nextFollowUpOn}>{date(`${row.nextFollowUpOn}T12:00:00Z`)}</time>
+            </span>
+          </p>
+        ))}
+    </BoardCard>
   )
 }

@@ -1,6 +1,10 @@
-/* PD-41: the Certificates page. The strip, the queue and the panel come from the
+/* PD-41: the Certificates page. The board and the inspector come from the
    shared request queue; this file holds only what a certificate adds. */
-.cert-more { margin-block: var(--space-3); }
+
+/* Above the board: the search every column answers, and the way to the closed ones. */
+.cert-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
+.cert-bar .search { flex: 1 1 14rem; max-inline-size: 360px; }
+.cert-bar__closed { margin-inline-start: auto; }
 .rq-page .cert-types { flex: 1; min-block-size: 0; overflow-y: auto; padding-block: var(--space-4) var(--space-6); }
 
 /* What the designer was asked to change: the one note that must not be missed. */

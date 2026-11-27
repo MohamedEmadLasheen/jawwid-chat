@@ -7,9 +7,10 @@ import { makeStaff, renderWithProviders } from '@/test/utils'
 import type { CertificateAccess, FullCertificate } from './api'
 
 /**
- * Certificates as a request queue: the strip that counts every state, and the
- * detail panel that opens only when a row is opened. What the server allows and
- * what each act sends is proven in Certificates.test.tsx (the narrow width).
+ * Certificates as a board by state: one column per list, fed by one read each,
+ * cards that state the server's first allowed act, and the inspector that opens
+ * only when a card is opened. What the server allows and what each act sends is
+ * proven in Certificates.test.tsx (the narrow width).
  * Synthetic people only.
  */
 
@@ -85,34 +86,88 @@ afterEach(() => {
   tokenStore.clear()
 })
 
-describe('the strip of states', () => {
-  it('counts every state with the list read the page already uses, once each, and says when a list is longer', async () => {
+const stated = (card: HTMLElement) => [...card.querySelectorAll('.row-actions2 > .btn')].map((b) => b.textContent)
+const cardOf = (name: string) => screen.getByRole('heading', { name, level: 3 }).closest('article')!
+
+describe('the board of states', () => {
+  it('is one column per state in the order a certificate moves, each fed by the list read the page already uses, once', async () => {
+    viewport(true)
     renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/certificates' })
-    const strip = await screen.findByRole('group', { name: 'Certificates by state' })
-    await waitFor(() => expect(within(strip).getByRole('button', { name: /^Sent/ })).toHaveTextContent('1'))
-    expect(within(strip).getByRole('button', { name: /^Pending/ })).toHaveTextContent('1+')
-    expect(within(strip).getByRole('button', { name: /^Completed/ })).toHaveTextContent('1')
-    expect(within(strip).getByRole('button', { name: /^In progress/ })).toHaveTextContent('0')
-    // One read per state and no more: the open state's count is the list on screen.
-    for (const status of ['suggested', 'pending', 'in_progress', 'completed', 'sent', 'closed']) {
+    const board = await screen.findByRole('group', { name: 'Certificates by state' })
+    // Closed is kept behind its switch, and is not read until it is asked for.
+    expect(within(board).getAllByRole('region').map((c) => c.getAttribute('aria-label'))).toEqual(['Suggested', 'Pending', 'In progress', 'Completed', 'Sent'])
+    const count = (name: string) => within(board).getByRole('region', { name }).querySelector('.count')?.textContent
+    // A list longer than its first page says so.
+    expect(count('Pending')).toMatch(/^1\+/)
+    expect(count('Completed')).toBe('1')
+    expect(count('Sent')).toBe('1')
+    expect(count('In progress')).toBe('0')
+    expect(within(within(board).getByRole('region', { name: 'In progress' })).getByText('None here.')).toBeInTheDocument()
+    expect(within(within(board).getByRole('region', { name: 'Completed' })).getByRole('heading', { name: 'Child Alpha' })).toBeInTheDocument()
+    for (const status of ['suggested', 'pending', 'in_progress', 'completed', 'sent']) {
       expect(calls('GET', new RegExp(`/certificates\\?.*status=${status}(&|$)`))).toHaveLength(1)
     }
+    expect(calls('GET', /\/certificates\?.*status=closed(&|$)/)).toHaveLength(0)
+    // The masthead sums the board up from the same lists: what is open, whose turn it is, what went out.
+    const figures = [...document.querySelectorAll('.figures .figure')].map((f) => f.textContent)
+    expect(figures).toEqual(['Open requests2+', 'With the designer1+', 'To review or send1', 'Sent1'])
+    expect(screen.getByRole('button', { name: /^To review or send/ })).toHaveClass('figure--key')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Closed' }))
+    expect(await within(board).findByRole('region', { name: 'Closed' })).toBeInTheDocument()
+    await waitFor(() => expect(calls('GET', /\/certificates\?.*status=closed(&|$)/)).toHaveLength(1))
   })
 
-  it('a click opens that state, already loaded', async () => {
+  it('a card says whose, what kind and who asked, states the server\'s first allowed act and keeps the others behind "⋯"', async () => {
+    viewport(true)
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/certificates' })
+    await screen.findByRole('heading', { name: 'Child Alpha' })
+    const alpha = cardOf('Child Alpha')
+    expect(within(alpha).getByText("Juz' completed")).toBeInTheDocument()
+    expect(within(alpha).getByText('Supervisor One')).toBeInTheDocument()
+    expect(stated(alpha)).toEqual(['Approve this design'])
+    await userEvent.click(within(alpha).getByRole('button', { name: 'More actions: Child Alpha' }))
+    expect(screen.getAllByRole('menuitem').map((i) => i.textContent)).toEqual(['Ask for a redesign', 'Cancel request'])
+    await userEvent.keyboard('{Escape}')
+    expect(stated(cardOf('Child Beta'))).toEqual(['Edit request'])
+    // A certificate with nothing left to do opens, and offers nothing else.
+    expect(stated(cardOf('Child Omega'))).toEqual(['Open'])
+    expect(within(cardOf('Child Omega')).queryByRole('button', { name: /More actions/ })).not.toBeInTheDocument()
+  })
+
+  it('an act chosen on a card is taken in the inspector: one that owes a reason asks for it; an approval waits for the design to be on screen', async () => {
+    viewport(true)
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/certificates' })
+    await screen.findByRole('heading', { name: 'Child Alpha' })
+    await userEvent.click(within(cardOf('Child Alpha')).getByRole('button', { name: 'Approve this design' }))
+    const panel = screen.getByRole('complementary', { name: 'Certificate details' })
+    expect(await within(panel).findByRole('list', { name: 'Steps' })).toBeInTheDocument()
+    // Nothing was approved from the card: the foot's button does that, with the design in view.
+    expect(calls('POST', /\/approve$/)).toHaveLength(0)
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+
+    await userEvent.click(within(cardOf('Child Alpha')).getByRole('button', { name: 'More actions: Child Alpha' }))
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Ask for a redesign' }))
+    expect(await screen.findByRole('dialog', { name: 'Ask for a redesign' })).toBeInTheDocument()
+  })
+
+  it('without room the states are tabs with their counts and the cards a list, opening on Pending', async () => {
     renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/certificates' })
     expect(await screen.findByRole('button', { name: 'Child Beta' })).toBeInTheDocument()
-    const strip = screen.getByRole('group', { name: 'Certificates by state' })
-    await waitFor(() => expect(within(strip).getByRole('button', { name: /^Completed/ })).toHaveTextContent('1'))
-    await userEvent.click(within(strip).getByRole('button', { name: /^Completed/ }))
-    expect(within(strip).getByRole('button', { name: /^Completed/ })).toHaveAttribute('aria-pressed', 'true')
+    const tabs = screen.getByRole('group', { name: 'Certificates by state' })
+    expect(within(tabs).getByRole('button', { name: /^Pending/ })).toHaveAttribute('aria-pressed', 'true')
+    await waitFor(() => expect(within(tabs).getByRole('button', { name: /^Completed/ })).toHaveTextContent('1'))
+    expect(within(tabs).getByRole('button', { name: /^Pending/ })).toHaveTextContent('1+')
+    expect(within(tabs).getByRole('button', { name: /^In progress/ })).toHaveTextContent('0')
+    await userEvent.click(within(tabs).getByRole('button', { name: /^Completed/ }))
+    expect(within(tabs).getByRole('button', { name: /^Completed/ })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('button', { name: 'Child Alpha' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Child Beta' })).not.toBeInTheDocument()
   })
 })
 
-describe('the detail panel, from 1100px', () => {
-  it('reads no certificate until a row is opened: until then there is no panel, and the queue has the width', async () => {
+describe('the inspector, from 1100px', () => {
+  it('reads no certificate until a card is opened: until then there is no inspector, and the board has the width', async () => {
     viewport(true)
     renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/certificates' })
     await screen.findByRole('button', { name: 'Child Beta' })
@@ -120,12 +175,10 @@ describe('the detail panel, from 1100px', () => {
     expect(calls('GET', /\/certificates\/c-[0-9]+$/)).toHaveLength(0)
   })
 
-  it('an opened row shows its steps, offers exactly the server\'s actions, and keeps the one that ends it apart', async () => {
+  it('an opened card shows its steps; the foot states the first of the server\'s actions and keeps the rest behind "⋯", the one that ends it last', async () => {
     viewport(true)
     on('POST', /\/certificates\/c-1\/approve$/, () => json({ certificate: certificate({ state: 'approved', actions: ['send'] }) }))
     renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/certificates' })
-    const strip = await screen.findByRole('group', { name: 'Certificates by state' })
-    await userEvent.click(within(strip).getByRole('button', { name: /^Completed/ }))
     await userEvent.click(await screen.findByRole('button', { name: 'Child Alpha' }))
     const panel = screen.getByRole('complementary', { name: 'Certificate details' })
     expect(within(panel).getByRole('heading', { name: 'Child Alpha' })).toBeInTheDocument()
@@ -135,9 +188,13 @@ describe('the detail panel, from 1100px', () => {
     expect(within(steps).getAllByRole('listitem').map((li) => li.querySelector('.rq-step__label')?.textContent)).toEqual([
       'Requested (done)', 'Design (done)', 'Review (now)', 'Sent to the group (next)',
     ])
-    expect(within(panel).getAllByRole('button').map((b) => b.textContent).filter((t) => t && t !== 'Open')).toEqual([
-      'Cancel request', 'Approve this design', 'Ask for a redesign',
-    ])
+    const foot = panel.querySelector<HTMLElement>('.rq-foot')!
+    expect(within(foot).getAllByRole('button').map((b) => b.getAttribute('aria-label') ?? b.textContent)).toEqual(['Approve this design', 'More actions: Child Alpha'])
+    expect(within(foot).getByRole('button', { name: 'Approve this design' })).toHaveClass('btn--primary')
+    await userEvent.click(within(foot).getByRole('button', { name: 'More actions: Child Alpha' }))
+    // Exactly the server's other actions, nothing added: no send before approval.
+    expect(screen.getAllByRole('menuitem').map((i) => i.textContent)).toEqual(['Ask for a redesign', 'Cancel request'])
+    await userEvent.keyboard('{Escape}')
     expect(within(panel).queryByRole('button', { name: 'Send to group' })).not.toBeInTheDocument()
     // The history reads as the state it moved to, or the event's own name when the state stayed.
     const history = within(panel).getByRole('region', { name: 'History' })
@@ -154,8 +211,6 @@ describe('the detail panel, from 1100px', () => {
   it('a sent certificate links to the chat it was posted in', async () => {
     viewport(true)
     renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/certificates' })
-    const strip = await screen.findByRole('group', { name: 'Certificates by state' })
-    await userEvent.click(within(strip).getByRole('button', { name: /^Sent/ }))
     await userEvent.click(await screen.findByRole('button', { name: 'Child Omega' }))
     const panel = screen.getByRole('complementary', { name: 'Certificate details' })
     expect(await within(panel).findByRole('link', { name: 'Open the chat' })).toHaveAttribute('href', '/chat/conv%207')
