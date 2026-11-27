@@ -168,7 +168,7 @@ export function RequestsPage() {
   const settled = ![trials, families, renewals, receipts, access, ...certificates].some((q) => q.isLoading)
   const longer = certificates.some((c) => !!c.data?.nextCursor)
   const cells: Array<FlowCell<Filter>> = [
-    { key: 'all', label: tx(RQ.all), count: settled ? rows.length : null, note: note(lateOf()), late: lateOf() > 0, apart: true },
+    { key: 'all', label: tx(RQ.all), count: settled ? rows.length : null, note: note(lateOf()), late: lateOf() > 0 },
     ...offered.map((k) => ({
       key: k as Filter,
       label: tx(RQ[k]),
@@ -176,7 +176,6 @@ export function RequestsPage() {
       more: k === 'certificate' && longer,
       note: note(lateOf(k)),
       late: lateOf(k) > 0,
-      apart: true,
     })),
   ]
   const shown = filter === 'all' ? rows : rows.filter((r) => r.kind === filter)

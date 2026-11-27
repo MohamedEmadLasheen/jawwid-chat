@@ -112,16 +112,11 @@ describe('the strip of states', () => {
 })
 
 describe('the detail panel, from 1100px', () => {
-  it('reads no certificate until a row is opened, and says what a row will show', async () => {
+  it('reads no certificate until a row is opened: until then there is no panel, and the queue has the width', async () => {
     viewport(true)
     renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/certificates' })
     await screen.findByRole('button', { name: 'Child Beta' })
-    const panel = screen.getByRole('complementary', { name: 'Certificate details' })
-    expect(within(panel).getByText('Open a certificate')).toBeInTheDocument()
-    // The flow itself, as a legend.
-    expect(within(within(panel).getByRole('list', { name: 'Steps' })).getAllByRole('listitem').map((li) => li.querySelector('.rq-step__label')?.firstChild?.textContent)).toEqual([
-      'Requested', 'Design', 'Review', 'Sent to the group',
-    ])
+    expect(screen.queryByRole('complementary', { name: 'Certificate details' })).not.toBeInTheDocument()
     expect(calls('GET', /\/certificates\/c-[0-9]+$/)).toHaveLength(0)
   })
 
@@ -153,7 +148,7 @@ describe('the detail panel, from 1100px', () => {
     expect(JSON.parse(String((calls('POST', /\/approve$/)[0]![1] as RequestInit).body))).toEqual({ fileId: 'f-2' })
 
     await userEvent.click(within(panel).getByRole('button', { name: 'Close' }))
-    expect(within(panel).getByText('Open a certificate')).toBeInTheDocument()
+    expect(screen.queryByRole('complementary', { name: 'Certificate details' })).not.toBeInTheDocument()
   })
 
   it('a sent certificate links to the chat it was posted in', async () => {

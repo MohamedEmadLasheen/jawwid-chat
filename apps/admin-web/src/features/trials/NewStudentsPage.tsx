@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { useSession } from '@/core/auth/SessionProvider'
 import { isSuperAdmin } from '@/core/permissions/capabilities'
@@ -27,7 +27,7 @@ import { EmptyState, QueryBoundary } from '@/shared/components/States'
 import type { Pair } from '../teachers/copy'
 import { describeOpsError } from '../teachers/opsCopy'
 import { trialsApi, type NewStudentDto } from './api'
-import { TrialsAreaTabs, useTrialsAccess } from './area'
+import { TRIALS_AREA_BASE, TrialsAreaTabs, useTrialsAccess } from './area'
 import { PAYMENT_METHOD, TR, WEEKDAY, formatWhen } from './copy'
 import {
   NS,
@@ -103,7 +103,7 @@ export function NewStudentsPage() {
   const oldest = unassigned.reduce<NewStudentDto | null>((a, s) => (a === null || s.recordedAt < a.recordedAt ? s : a), null)
   const locked = searched.filter((s) => statusOf(s) === 'locked').length
   const cells: Array<FlowCell<StatusFilter>> = [
-    { key: 'all', label: tx(NS.all), count: count('all'), apart: true },
+    { key: 'all', label: tx(NS.all), count: count('all') },
     {
       key: 'unassigned',
       label: tx(STATUS.unassigned.label),
@@ -143,11 +143,17 @@ export function NewStudentsPage() {
         {students.length > 0 && <FlowStrip label={tx(NS.filterLabel)} cells={cells} value={filter} onChange={setFilter} />}
         <RequestQueue
           label={tx(NS.panelLabel)}
+          reserve={wide && q.isLoading}
           detail={open && { id: open.trialId, title: open.parent.name, bare: true, pinned: true, onClose: () => setOpenId(null), body: record(open) }}
         >
           <QueryBoundary isLoading={q.isLoading} error={q.error} onRetry={() => void q.refetch()}>
             {students.length === 0 ? (
-              <EmptyState title={tx(TR.nothingNew)} hint={tx(NS.emptyHint)} />
+              // The one empty state of the page: what will be here, and where it comes from.
+              <EmptyState
+                title={tx(TR.nothingNew)}
+                hint={tx(NS.emptyHint)}
+                action={<Link className="btn btn--sm" to={TRIALS_AREA_BASE}>{tx(NS.openTrials)}</Link>}
+              />
             ) : (
               <>
                 <div className="rq-toolbar">

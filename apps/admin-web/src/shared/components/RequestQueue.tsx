@@ -1,4 +1,4 @@
-import { useEffect, useState, type MouseEvent, type ReactNode } from 'react'
+import { Children, useEffect, useState, type CSSProperties, type MouseEvent, type ReactNode } from 'react'
 import { LOCALE_TAG, useI18n } from '@/core/i18n/I18nProvider'
 import { ACADEMY_ZONE } from '@/core/time/academyTime'
 import { Dialog } from './Dialog'
@@ -9,12 +9,12 @@ import './request-queue.css'
  * The one pattern every requests-and-approvals page shares:
  *
  *   FlowStrip      the page's states as a ruled row of counts; a click filters
- *   RequestQueue   the queue beside a detail panel that stays on screen
+ *   RequestQueue   the queue, and the open row's detail beside it
  *   FlowSteps      the request's steps as a vertical list of dots
  *
- * From 1100px the detail is a panel at the inline end; below that it is the
- * side sheet (one pane on a phone). The page owns its data, its filter and its
- * rules: these components only lay them out.
+ * From 1100px the detail is a panel at the inline end, there while a row is
+ * open; below that it is the side sheet (one pane on a phone). The page owns
+ * its data, its filter and its rules: these components only lay them out.
  */
 
 type Pair = { en: string; ar: string }
@@ -116,14 +116,18 @@ export function DetailHead({
 export function RequestQueue({
   label,
   detail,
-  placeholder,
+  reserve = false,
   children,
 }: {
   /** The detail panel's accessible name. */
   label: string
+  /** The open row. With none, the queue has the full width; the panel comes in when a row opens. */
   detail: RequestDetail | null
-  /** What the panel says while no row is open. Left out, the queue takes the full width. */
-  placeholder?: ReactNode
+  /**
+   * Keep the panel's place although no row is open yet: for a page whose panel
+   * always shows a row, while its list is still loading, so nothing moves when it arrives.
+   */
+  reserve?: boolean
   children: ReactNode
 }) {
   const wide = useWidePane()
@@ -150,32 +154,21 @@ export function RequestQueue({
     )
   }
 
-  const panel = detail ? (
-    <div className="rq-detail" key={detail.id}>
-      {!detail.bare && (
-        <DetailHead title={detail.title} kind={detail.kind} status={detail.status} onClose={detail.pinned ? undefined : detail.onClose} />
-      )}
-      {detail.body}
-    </div>
-  ) : (
-    placeholder
-  )
-
   return (
-    <div className={panel ? 'rq rq--split' : 'rq'}>
+    <div className={detail || reserve ? 'rq rq--wide rq--split' : 'rq rq--wide'}>
       <div className="rq__queue">{children}</div>
-      {panel && (
+      {detail && (
         <aside className="rq__panel" aria-label={label}>
-          {panel}
+          <div className="rq-detail" key={detail.id}>
+            {!detail.bare && (
+              <DetailHead title={detail.title} kind={detail.kind} status={detail.status} onClose={detail.pinned ? undefined : detail.onClose} />
+            )}
+            {detail.body}
+          </div>
         </aside>
       )}
     </div>
   )
-}
-
-/** What the panel says before a row is opened: one line, and what a row will show. */
-export function PanelHint({ children }: { children: ReactNode }) {
-  return <div className="rq-hint">{children}</div>
 }
 
 /** A titled part of the detail: a quiet label over a hairline. */
@@ -217,14 +210,13 @@ export interface FlowCell<K extends string> {
   note?: string
   /** A real problem: the numeral and the note turn terracotta. */
   late?: boolean
-  /** A total or a side list, set apart from the steps of the flow. */
-  apart?: boolean
 }
 
 /**
- * The states of a page as a ruled row of counts. The cells that are steps of
- * the flow are joined by a small notch on the rule between them; a total or a
- * closed list stands apart. `tabs` keeps tab semantics where a page had tabs.
+ * The states of a page as a ruled row of counts, on the shared ledger. Every
+ * state stays on screen at every width: one row with room, two rows on a
+ * narrower screen, rows of two or three on a phone. `tabs` keeps tab semantics
+ * where a page had tabs.
  */
 export function FlowStrip<K extends string>({
   label,
@@ -242,8 +234,21 @@ export function FlowStrip<K extends string>({
   /** Further cells the page draws itself (a toggle that is not one of the states). */
   children?: ReactNode
 }) {
+  // How many columns each width gets, so the rows are even and nothing is hidden or cut.
+  const n = cells.length + Children.toArray(children).length
+  const columns = { '--rq-n': n, '--rq-m': n <= 5 ? n : Math.ceil(n / 2), '--rq-p': n <= 3 ? n : n === 4 ? 2 : 3 }
+  // A last row that is not full is completed with empty ruled cells, so its rules run the whole width.
+  const missing = (per: number) => (per - (n % per)) % per
+  const fill = { m: missing(columns['--rq-m']), p: missing(columns['--rq-p']) }
   return (
-    <div className="ledger rq-strip" role={tabs ? 'tablist' : 'group'} aria-label={label}>
+    <div
+      className="ledger rq-strip"
+      role={tabs ? 'tablist' : 'group'}
+      aria-label={label}
+      style={columns as CSSProperties}
+      data-m={columns['--rq-m']}
+      data-p={columns['--rq-p']}
+    >
       {cells.map((c) => (
         <FlowStripCell
           key={c.key}
@@ -254,6 +259,13 @@ export function FlowStrip<K extends string>({
         />
       ))}
       {children}
+      {Array.from({ length: Math.max(fill.m, fill.p) }, (_, i) => (
+        <span
+          key={`fill-${i}`}
+          className={['ledger__cell', 'rq-strip__fill', i < fill.m ? 'rq-strip__fill--m' : '', i < fill.p ? 'rq-strip__fill--p' : ''].filter(Boolean).join(' ')}
+          aria-hidden="true"
+        />
+      ))}
     </div>
   )
 }
@@ -270,13 +282,7 @@ export function FlowStripCell({
   tab?: boolean
 }) {
   const { locale, number } = useI18n()
-  const cls = [
-    'ledger__cell',
-    'rq-strip__cell',
-    cell.apart ? 'rq-strip__cell--apart' : 'rq-strip__cell--step',
-    cell.late ? 'ledger__cell--late' : '',
-    cell.count === 0 ? 'rq-strip__cell--zero' : '',
-  ]
+  const cls = ['ledger__cell', 'rq-strip__cell', cell.late ? 'ledger__cell--late' : '', cell.count === 0 ? 'rq-strip__cell--zero' : '']
     .filter(Boolean)
     .join(' ')
   const state = tab ? { role: 'tab' as const, 'aria-selected': active } : { 'aria-pressed': active }

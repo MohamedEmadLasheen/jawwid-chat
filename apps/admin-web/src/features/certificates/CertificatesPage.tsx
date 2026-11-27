@@ -4,28 +4,26 @@ import { useI18n } from '@/core/i18n/I18nProvider'
 import { Badge } from '@/shared/components/Badge'
 import { FilterChips } from '@/shared/components/FilterChips'
 import { PageHeader } from '@/shared/components/PageHeader'
-import { Age, FlowSteps, FlowStrip, PanelHint, RequestQueue, RowOpen, rowOpener, type FlowCell } from '@/shared/components/RequestQueue'
+import { Age, FlowStrip, RequestQueue, RowOpen, rowOpener, type FlowCell } from '@/shared/components/RequestQueue'
 import { SearchField } from '@/shared/components/SearchField'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
 import type { Certificate, CertificateCategory, StateGroup } from './api'
 import { C, GROUPS, groupLabel, stateLabel, stateTone, useCopy } from './copy'
 import { useCertificate, useCertificateAccess, useCertificateCounts, useCertificates } from './hooks'
-import { CertificateDetail, CertificateStatus, certificateSteps } from './CertificateDetail'
+import { CertificateDetail, CertificateStatus } from './CertificateDetail'
 import { RequestDialog } from './RequestDialog'
 import { TypesPanel } from './TypesPanel'
 import './certificates.css'
 
 type Tab = CertificateCategory | 'types'
 
-/** Suggested is where a teacher's proposal waits, and Closed is where a request ends: both stand apart from the flow. */
-const APART: ReadonlySet<StateGroup> = new Set<StateGroup>(['suggested', 'closed'])
-
 /**
  * PD-41: the Certificates page (docs/product/pd041-certificates-design.md §10).
  *
  * Students | Teachers (only the categories this account reaches), then the
  * owner's lists -- Pending, In progress, Completed, Sent -- plus Suggested and
- * Closed, as a strip of counts. A row opens its detail beside the queue: the
+ * Closed, as a strip of counts. A row opens its detail beside the queue (the
+ * panel is there only while a row is open, so no certificate is read unasked): the
  * steps, the request, the design, the review, the delivery, the Story and the
  * history. Every button comes from the row's `actions`, which the server
  * computes; the page re-derives nothing.
@@ -71,7 +69,6 @@ export function CertificatesPage() {
     label: tx(groupLabel(g)),
     count: counts[i]?.data ? counts[i]!.data!.certificates.length : null,
     more: !!counts[i]?.data?.nextCursor,
-    apart: APART.has(g),
   }))
 
   // The open certificate is read once it is opened; until it arrives the row names it.
@@ -139,13 +136,6 @@ export function CertificatesPage() {
                       onClose: () => setOpenId(null),
                     }
                   : null
-              }
-              placeholder={
-                <PanelHint>
-                  <p className="rq-hint__title">{tx(C.pick)}</p>
-                  <p className="rq-hint__line">{tx(C.pickLine)}</p>
-                  <FlowSteps steps={certificateSteps(null, tx, dateTime)} label={tx(C.steps)} />
-                </PanelHint>
               }
             >
               <div className="rq-toolbar">

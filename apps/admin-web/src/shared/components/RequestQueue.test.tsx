@@ -17,7 +17,7 @@ afterEach(() => vi.unstubAllGlobals())
 
 type Key = 'all' | 'new' | 'late' | 'unknown'
 const CELLS: Array<FlowCell<Key>> = [
-  { key: 'all', label: 'All', count: 7, apart: true },
+  { key: 'all', label: 'All', count: 7 },
   { key: 'new', label: 'New', count: 0 },
   { key: 'late', label: 'Overdue', count: 25, more: true, note: 'oldest 3 days ago', late: true },
   { key: 'unknown', label: 'Closed', count: null },
@@ -42,6 +42,24 @@ describe('FlowStrip', () => {
   it('never shows a zero for a count it does not know', () => {
     renderWithProviders(<FlowStrip label="States" cells={CELLS} value="all" onChange={() => {}} />)
     expect(screen.getByRole('button', { name: 'Closed' })).toHaveTextContent(/^Closed$/)
+  })
+
+  it('tells the layout how many columns each width gets, so every state stays on screen', () => {
+    // Four states: one row with room, and two rows of two on a phone.
+    renderWithProviders(<FlowStrip label="States" cells={CELLS} value="all" onChange={() => {}} />)
+    const four = screen.getByRole('group', { name: 'States' })
+    expect([four.style.getPropertyValue('--rq-n'), four.dataset.m, four.dataset.p]).toEqual(['4', '4', '2'])
+  })
+
+  it('more than five states take two rows on a narrower screen and rows of three on a phone, the page\'s own cell included', () => {
+    const seven = [...CELLS, { key: 'a' as Key, label: 'A', count: 1 }, { key: 'b' as Key, label: 'B', count: 1 }, { key: 'c' as Key, label: 'C', count: 1 }]
+    renderWithProviders(
+      <FlowStrip label="States" cells={seven} value="all" onChange={() => {}}>
+        <button type="button">Due</button>
+      </FlowStrip>,
+    )
+    const strip = screen.getByRole('group', { name: 'States' })
+    expect([strip.style.getPropertyValue('--rq-n'), strip.dataset.m, strip.dataset.p]).toEqual(['8', '4', '3'])
   })
 
   it('keeps tab semantics where the page had tabs', () => {
@@ -86,7 +104,7 @@ describe('RequestQueue', () => {
 
   it('below 1100px the detail is the side sheet, and there is no panel', () => {
     renderWithProviders(
-      <RequestQueue label="Details" detail={detail()} placeholder={<p>Open a row</p>}>
+      <RequestQueue label="Details" detail={detail()}>
         <p>the queue</p>
       </RequestQueue>,
     )
@@ -95,7 +113,6 @@ describe('RequestQueue', () => {
     expect(within(sheet).getByText('Certificate')).toBeInTheDocument()
     expect(within(sheet).getByText('Pending')).toBeInTheDocument()
     expect(screen.queryByRole('complementary')).not.toBeInTheDocument()
-    expect(screen.queryByText('Open a row')).not.toBeInTheDocument()
   })
 
   it('from 1100px the detail stays on screen beside the queue, with its title as a heading', async () => {
@@ -114,29 +131,33 @@ describe('RequestQueue', () => {
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
-  it('says what a row will show while none is open, and offers no close on a panel that always shows one', () => {
+  it('with no row open there is no panel: the queue has the page to itself until one opens', () => {
     viewport(true)
-    const { rerender } = renderWithProviders(
-      <RequestQueue label="Details" detail={null} placeholder={<p>Open a row</p>}>
+    const { rerender, container } = renderWithProviders(
+      <RequestQueue label="Details" detail={null}>
         <p>the queue</p>
       </RequestQueue>,
     )
-    expect(within(screen.getByRole('complementary', { name: 'Details' })).getByText('Open a row')).toBeInTheDocument()
+    expect(screen.queryByRole('complementary')).not.toBeInTheDocument()
+    expect(container.querySelector('.rq')).not.toHaveClass('rq--split')
     rerender(
       <RequestQueue label="Details" detail={detail({ pinned: true })}>
         <p>the queue</p>
       </RequestQueue>,
     )
+    expect(container.querySelector('.rq')).toHaveClass('rq--split')
+    // A panel that always shows a row offers no close.
     expect(within(screen.getByRole('complementary', { name: 'Details' })).queryByRole('button', { name: 'Close' })).not.toBeInTheDocument()
   })
 
-  it('with nothing open and nothing to say, the queue has the page to itself', () => {
+  it('a page whose panel always shows a row keeps its place while the list loads, so nothing moves when it arrives', () => {
     viewport(true)
-    renderWithProviders(
-      <RequestQueue label="Details" detail={null}>
+    const { container } = renderWithProviders(
+      <RequestQueue label="Details" detail={null} reserve>
         <p>the queue</p>
       </RequestQueue>,
     )
+    expect(container.querySelector('.rq')).toHaveClass('rq--split')
     expect(screen.queryByRole('complementary')).not.toBeInTheDocument()
   })
 })
