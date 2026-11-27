@@ -74,6 +74,9 @@
 @media (max-width: 767px) {
   .adm-users .chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; max-inline-size: 100%; }
   .adm-users .chips .chip { flex: none; }
+  /* A person's last sign-in reads as one line beside their state. */
+  .adm-users .rowlist .rw-meta { display: flex; align-items: baseline; gap: 6px; flex: 1 1 auto; }
+  .adm-users .rowlist .rw-tags { flex: none; }
 }
 
 /* -------------------------------------------------------- unbuilt sections */
