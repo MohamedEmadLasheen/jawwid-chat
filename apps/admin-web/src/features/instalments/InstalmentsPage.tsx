@@ -121,25 +121,6 @@ export function InstalmentsPage({ eyebrow }: { eyebrow?: string }) {
               {tx(I.beforeGoLive)}
               {data?.counts.beforeGoLive ? ` (${data.counts.beforeGoLive})` : ''}
             </label>
-            {/* What the plan marks mean. Each strip also says it in words. */}
-            <p className="sheet-bar__end plan-key" aria-hidden="true">
-              <span className="plan-key__item">
-                <span className="plan__tick plan__tick--paid" />
-                {tx(I.keyPaid)}
-              </span>
-              <span className="plan-key__item">
-                <span className="plan__tick plan__tick--overdue" />
-                {tx(I.keyLate)}
-              </span>
-              <span className="plan-key__item">
-                <span className="plan__tick plan__tick--due" />
-                {tx(I.keyDue)}
-              </span>
-              <span className="plan-key__item">
-                <span className="plan__tick" />
-                {tx(I.keyUpcoming)}
-              </span>
-            </p>
           </div>
           {beforeGoLive && data?.lockFrom && <p className="in-bar__note">{tx(I.beforeGoLiveHint, { date: formatDay(data.lockFrom, locale) })}</p>}
         </div>
@@ -267,8 +248,8 @@ function Group({
 }
 
 /**
- * One mark per instalment of the plan that this list holds: paid, late, due
- * today, still to come. The row's own instalment stands taller.
+ * The plan in words, the way a person reads an instalment (Tabby): which one of
+ * how many (or how many are still open), then what is still owed on it.
  */
 function PlanStrip({ row, plan, view }: { row: Instalment; plan: Instalment[]; view: PlanView }) {
   const tx = useCopy()
@@ -294,11 +275,6 @@ function PlanStrip({ row, plan, view }: { row: Instalment; plan: Instalment[]; v
   return (
     <span className="plan">
       <span className="plan__line" role="img" aria-label={label} title={label}>
-        <span className="plan__ticks">
-          {plan.map((r) => (
-            <span key={r.id} className={`plan__tick plan__tick--${r.status}${r.id === row.id ? ' plan__tick--here' : ''}`} />
-          ))}
-        </span>
         {view === 'whole' ? (
           <span className="plan__at">{tx(I.planOf, { i: at, n: plan.length })}</span>
         ) : view === 'open' ? (

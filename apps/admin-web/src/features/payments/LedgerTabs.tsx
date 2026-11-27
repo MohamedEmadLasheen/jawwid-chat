@@ -782,7 +782,7 @@ function TransactionDetailBody({ d }: { d: TransactionDetail }) {
       </Section>
 
       {p.stripe && (
-        <Section title={tx(LED.stripeRefs)} aside={p.stripe.livemode === false ? <Badge tone="warn">{tx(LED.testMode)}</Badge> : undefined}>
+        <Section title={tx(LED.stripeRefs)} aside={p.stripe.livemode === false ? <Badge tone="neutral">{tx(LED.testMode)}</Badge> : undefined}>
           <dl className="tf-kv pay-refs">
             {refs.map((r) => (
               <Fragment key={r.key}>
@@ -880,7 +880,7 @@ function TransactionDetailBody({ d }: { d: TransactionDetail }) {
                 <div className="pf-entry__head">
                   <Code>{e.type}</Code>
                   <OutcomeBadge outcome={e.outcome} />
-                  {!e.livemode && <Badge tone="warn">{tx(LED.testMode)}</Badge>}
+                  {!e.livemode && <Badge tone="neutral">{tx(LED.testMode)}</Badge>}
                 </div>
                 <p className="pf-entry__meta">{dateTime(e.receivedAt)}</p>
               </li>
@@ -1104,16 +1104,21 @@ function AttemptRow({ a, onOpenPayment }: { a: CardAttemptRow; onOpenPayment: (p
       <td className="tx-c-why">
         <FailureWords a={a} />
         <span className="pay-sub tx-declines">
-          <span>
-            {tx(LED.colTries)} <span className="pay-count">{number(a.failureCount)}</span>
-          </span>
+          {/* No decline is no news. */}
+          {a.failureCount > 0 && (
+            <span>
+              {tx(LED.colTries)} <span className="pay-count">{number(a.failureCount)}</span>
+            </span>
+          )}
           {a.lastFailedAt && <span>{tx(LED.lastFailedAt, { date: dateTime(a.lastFailedAt) })}</span>}
         </span>
       </td>
       <td className="tx-c-state">
         <AttemptStatusBadge status={a.status} />
+        {/* The second fact, apart from the attempt's own status: was the money paid in the end. */}
         <span className="pay-sub tx-paid">
-          {tx(LED.colPaid)} <Badge tone={paymentId ? 'ok' : 'neutral'}>{tx(paymentId ? LED.yes : LED.no)}</Badge>
+          {tx(LED.colPaid)}:{' '}
+          <strong className={paymentId ? 'tx-paid__yes' : 'tx-paid__no'}>{tx(paymentId ? LED.yes : LED.no)}</strong>
         </span>
       </td>
       <td className="tx-c-amount tx-end">
@@ -1253,7 +1258,7 @@ function EventRow({ e }: { e: StripeEvent }) {
         <OutcomeBadge outcome={e.outcome} />
       </td>
       <td className="tx-c-object">{e.objectId ? <Code>{e.objectId}</Code> : <span className="pay-quiet">—</span>}</td>
-      <td className="tx-c-mode">{e.livemode ? tx(LED.live) : <Badge tone="warn">{tx(LED.testMode)}</Badge>}</td>
+      <td className="tx-c-mode">{e.livemode ? tx(LED.live) : <Badge tone="neutral">{tx(LED.testMode)}</Badge>}</td>
     </tr>
   )
 }

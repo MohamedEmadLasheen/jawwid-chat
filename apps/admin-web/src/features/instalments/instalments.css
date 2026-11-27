@@ -2,15 +2,12 @@
    per state, late first. Colour is state only: red for late (the age and the
    solid count), amber for due today, green for paid; the rest is ink. */
 
-/* The bar the sections share: who is responsible, what to include, the plan key. */
+/* The bar the sections share: who is responsible, what to include. */
 .in-bar { margin-block-end: var(--space-5); }
 .in-bar .sheet-bar { border-block-end: 0; gap: 8px var(--space-5); }
 .in-check { display: inline-flex; align-items: center; gap: var(--space-2); min-block-size: 34px; font-size: var(--fs-sm); color: var(--ink-2); cursor: pointer; }
 .in-check input { inline-size: 17px; block-size: 17px; margin: 0; accent-color: var(--teal); }
 .in-bar__note { margin: 0; padding: 10px var(--space-4); border-block-start: 1px solid var(--line-2); font-size: var(--fs-sm); color: var(--ink-muted); }
-.plan-key { margin-block: 0; gap: 2px var(--space-4); flex-wrap: wrap; font-size: var(--fs-xs); color: var(--ink-muted); }
-.plan-key__item { display: inline-flex; align-items: center; gap: 6px; line-height: 1.2; }
-.plan-key .plan__tick { flex: none; inline-size: 7px; }
 
 /* One state, one sheet. Its name, a count (solid red when it asks for action), its sum. */
 .in-group { margin-block-end: var(--space-5); overflow: hidden; }
@@ -77,18 +74,10 @@
 .in-row__amount { justify-self: end; white-space: nowrap; }
 .in-row__act { justify-self: end; }
 
-/* The plan: one mark per instalment this list holds, then what is left on it.
-   Paid is green and filled, late red, due today amber; still to come is an
-   outline, so the strip reads without its colours. The row's own mark is taller. */
+/* The plan in words: which of how many (or how many open), then what is left on it. */
 .plan { display: grid; gap: 2px; min-inline-size: 0; }
-.plan__line { display: inline-flex; align-items: center; gap: 8px; min-block-size: 22px; }
-.plan__ticks { display: flex; align-items: flex-end; gap: 3px; block-size: 16px; max-inline-size: 96px; }
-.plan__tick { flex: 0 1 7px; min-inline-size: 4px; block-size: 9px; border-radius: 2px; box-shadow: inset 0 0 0 1.5px var(--line-strong); }
-.plan__tick--paid { background: var(--done); box-shadow: none; }
-.plan__tick--overdue { background: var(--urgent); box-shadow: none; }
-.plan__tick--due { background: var(--waiting); box-shadow: none; }
-.plan__tick--here { block-size: 16px; }
-.plan__at { font-size: var(--fs-xs); color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.plan__line { display: inline-flex; align-items: center; min-block-size: 22px; }
+.plan__at { font-size: var(--fs-sm); color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .plan__left { display: flex; flex-wrap: wrap; gap: 0 8px; font-size: var(--fs-xs); color: var(--ink-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
 
 /* The billing supervisor dialog. */
@@ -99,7 +88,7 @@
 .in-textarea { min-block-size: 4rem; resize: vertical; }
 
 /* Beside less room the supervisor gives way first: it is in the row's menu. */
-@media (max-width: 1279px) {
+@media (max-width: 1439px) {
   .in-row { grid-template-columns: minmax(0, 1fr) 140px 132px 132px var(--in-act); }
   .in-row__sup { display: none; }
 }
@@ -109,8 +98,9 @@
 @media (max-width: 767px) {
   .in-bar .sheet-bar { gap: 4px var(--space-4); }
   .in-check { min-block-size: 44px; }
-  /* Each plan says itself in words; the key is for the wide table only. */
-  .plan-key { display: none; }
+  /* What is left on the plan waits in the file; the row keeps to three lines. */
+  .plan__left { display: none; }
+  .in-row__sup .in-sub { display: none; }
   .in-row {
     grid-template-columns: minmax(0, 1fr) auto;
     grid-template-areas: 'who amount' 'when plan' 'sup act';

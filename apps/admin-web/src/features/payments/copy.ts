@@ -132,10 +132,10 @@ export const PAY = {
     en: 'Parents can pay by card again, in the app and from payment links. This change is audited.',
     ar: 'سيستطيع أولياء الأمور الدفع بالبطاقة مجددًا في التطبيق ومن روابط الدفع. يُسجَّل هذا التغيير في سجل التدقيق.',
   },
-  webhookOn: { en: 'Webhook configured', ar: 'الـWebhook مُعَد' },
+  webhookOn: { en: 'Webhook configured', ar: 'إعداد Webhook مكتمل' },
   webhookOff: {
     en: 'Webhook not configured: card payments cannot be confirmed, so none is recorded.',
-    ar: 'الـWebhook غير مُعَد: لا يمكن تأكيد الدفع بالبطاقة، فلا تُسجَّل أي دفعة.',
+    ar: 'لم يُعَدّ Webhook: لا يمكن تأكيد الدفع بالبطاقة، فلا تُسجَّل أي دفعة.',
   },
   readOnlySettings: {
     en: 'Only the super admin and the Operations Manager change these settings.',

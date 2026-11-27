@@ -31,6 +31,15 @@
 .pay-rules__list li { display: inline-flex; align-items: baseline; gap: 8px; }
 .pay-rules__list li::before { content: ''; flex: none; inline-size: 5px; block-size: 5px; border-radius: 50%; background: var(--line-strong); transform: translateY(-2px); }
 
+/* One masthead height on every tab, so switching tabs never moves the page:
+   the figures sit on one short line and give the work its height. */
+@media (min-width: 768px) {
+  .pay-page .figures { margin-block-start: var(--space-4); }
+  .pay-page .figure { padding-block: 8px 10px; }
+  .pay-page .figure__n { font-size: 28px; }
+  .pay-page .mast__tabs { margin-block-start: var(--space-3); }
+}
+
 /* ------------------------------------------------------ receipts: the desk */
 
 /* The queue at the start, the receipt being read beside it on its own white
@@ -58,21 +67,32 @@
   .rq-page .rv-desk .rq__panel { overflow: hidden; padding-block-end: var(--space-4); }
   .rq-page .rv-desk .rq__panel > .rq-detail { block-size: 100%; min-block-size: 0; overflow-y: auto; scrollbar-width: thin; }
   .rq-page .pay-rules { margin-block: var(--space-3); }
-  /* The proof takes the room the sheet has left: the receipt at the sheet's width, read by scrolling inside its frame. */
-  .rq-page .rv-desk .rv__image { flex: 1 1 0; min-block-size: 180px; max-block-size: none; place-items: start center; overflow: auto; scrollbar-width: thin; }
+  /* The receipt beside what it is checked against: the facts in a narrow column at the start, the
+     proof filling the rest of the sheet at its width, read by scrolling inside its own frame. */
+  .rq-page .rv-desk .rv {
+    display: grid;
+    grid-template-columns: minmax(170px, 32%) minmax(0, 1fr);
+    grid-template-rows: auto auto auto auto minmax(0, 1fr) auto;
+    grid-template-areas: 'amount image' 'facts image' 'said image' 'file image' '. image' 'foot foot';
+    gap: var(--space-4) var(--space-5);
+  }
+  .rq-page .rv-desk .rv__amount { grid-area: amount; grid-template-columns: minmax(0, 1fr); padding: 0; border: 0; }
+  .rq-page .rv-desk .rv__amount .rv__sub { justify-self: start; padding: 0; }
+  .rq-page .rv-desk .money--lg { flex-wrap: wrap; }
+  .rq-page .rv-desk .money--lg .money__n { font-size: 28px; }
+  .rq-page .rv-desk .rv__facts { grid-area: facts; grid-template-columns: minmax(0, 1fr); margin: 0; }
+  .rq-page .rv-desk .rv__said { grid-area: said; }
+  .rq-page .rv-desk .rv__said .rv__note { font-size: var(--fs-sm); }
+  .rq-page .rv-desk .rv__file { grid-area: file; }
+  .rq-page .rv-desk .rv__image { grid-area: image; min-block-size: 0; max-block-size: none; place-items: start center; overflow: auto; scrollbar-width: thin; }
   .rq-page .rv-desk .rv__image img { inline-size: 100%; max-inline-size: 640px; max-block-size: none; }
-  .rq-page .rv-desk .rv__image--file { flex: none; place-items: center; }
-  /* The masthead gives the desk its height back: the figures sit on one short line. */
-  .rq-page .figures { margin-block-start: var(--space-4); }
-  .rq-page .figure { padding-block: 8px 10px; }
-  .rq-page .figure__n { font-size: 28px; }
-  .rq-page .mast__tabs { margin-block-start: var(--space-3); }
+  .rq-page .rv-desk .rv__image--file { place-items: center; }
+  .rq-page .rv-desk .rv > .rq-foot { grid-area: foot; }
   /* The sheet is the receipt: no word above its title, a smaller title, the amount on one line. */
   .rv-desk .rq-kind { visibility: hidden; }
   .rv-desk .rq-panel__top { min-block-size: 0; block-size: 0; }
   .rv-desk .rq-panel__close { position: relative; inset-block-start: 14px; }
   html .rv-desk .rq-panel__title { font-size: var(--fs-xl); margin-block: 0 4px; }
-  .rq-page .rv-desk .money--lg .money__n { font-size: 30px; }
 }
 .rv-queue { overflow: hidden; }
 .tx-sheet > .state, .rv-queue > .state, .rn > .state { padding: var(--space-5) var(--space-4); }
@@ -203,7 +223,9 @@
 .pay-row--voided .money__n { color: var(--ink-muted); font-weight: 500; text-decoration: line-through; }
 .tx-c-why { max-inline-size: 26rem; }
 .tx-declines { display: flex; flex-wrap: wrap; gap: 0 var(--space-3); margin-block-start: 2px; }
-.tx-paid { display: flex; align-items: center; gap: 6px; margin-block-start: 4px; }
+.tx-paid { display: block; margin-block-start: 4px; }
+.tx-paid strong { font-weight: 600; color: var(--ink-2); }
+.tx-paid .tx-paid__yes { color: var(--done); }
 .tx-c-time { white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--ink-muted); }
 /* Live is the rule and stays quiet; test mode, the exception, is the tag. */
 .tx-c-mode { color: var(--ink-muted); font-size: var(--fs-sm); }
@@ -225,6 +247,8 @@
   border-end-start-radius: var(--radius-lg);
   border-end-end-radius: var(--radius-lg);
   background: var(--surface);
+  /* It floats over the rows while they scroll: a soft shadow says so. */
+  box-shadow: 0 -6px 16px rgba(13, 47, 55, 0.06);
 }
 .tx-totals__name { font-family: var(--font-head); font-size: var(--fs-sm); font-weight: 600; color: var(--ink-2); }
 .tx-totals__lines { margin: 0; padding: 0; list-style: none; }
@@ -250,7 +274,10 @@
 .pay-detail .pay-detail__section > .tf-section__head { margin-inline: 0; margin-block-end: var(--space-2); padding: 0; min-block-size: 36px; border-block-end: 0; }
 .pay-detail > .tf-section.pay-detail__section + .pay-detail__section { padding-block-start: var(--space-4); border-block-start: 1px solid var(--line-2); }
 .pay-detail .tf-section__title { font-family: var(--font-head); font-size: var(--fs-lg); font-weight: 600; }
-.pay-detail .tf-kv { font-size: var(--fs-sm); }
+.pay-detail .tf-kv { font-size: var(--fs-sm); row-gap: 2px; }
+/* Facts read as pairs by their rhythm, not by a rule under each. */
+.pay-detail .tf-kv :is(dt, dd) { border: 0; padding-block: 5px; }
+.pay-detail .tf-section__head { justify-content: flex-start; gap: var(--space-3); }
 .pay-detail .tf-kv dt { font-size: var(--fs-xs); color: var(--ink-muted); }
 .pay-detail .pf-timeline { gap: 0; margin-block-start: var(--space-2); }
 .pay-detail .pf-entry { padding: 10px 0; border: 0; border-block-end: 1px solid var(--line-2); border-radius: 0; font-size: var(--fs-sm); }
@@ -287,7 +314,7 @@
 /* The open group: lifted onto white, its icon in teal. */
 .set__item[aria-current='true'] { background: var(--teal-tint); color: var(--ink); font-weight: 600; }
 .set__item[aria-current='true'] .icon { color: var(--teal); }
-.set__item-name { flex: 1; min-inline-size: 0; }
+.set__item-name { flex: 0 1 auto; min-inline-size: 0; }
 /* Edited and not saved: waiting. */
 .set__edited-dot { display: block; inline-size: 8px; block-size: 8px; border-radius: 50%; background: var(--teal); }
 
@@ -316,8 +343,10 @@
 /* A short line down the start: each reminder a stop on it, the due date filled. */
 .set-reminders { display: grid; margin: 0 0 0 0; margin-inline-start: 6px; padding: 0; list-style: none; border-inline-start: 2px solid var(--line); }
 .set-reminder { position: relative; padding-block: 2px; padding-inline-start: var(--space-5); }
-.set-reminder::before { content: ''; position: absolute; inset-block-start: 16px; inset-inline-start: -6px; inline-size: 10px; block-size: 10px; border-radius: 50%; background: var(--surface); box-shadow: 0 0 0 2px var(--line-strong); }
-.set-reminder--due::before { background: var(--teal); box-shadow: 0 0 0 2px var(--teal); }
+/* The stop is not a control: a small mark on the line, filled when that reminder is on. */
+.set-reminder::before { content: ''; position: absolute; inset-block-start: 17px; inset-inline-start: -5px; inline-size: 8px; block-size: 8px; border-radius: 50%; background: var(--line-strong); }
+.set-reminder:has(input:checked)::before { background: var(--teal); }
+.set-reminder--due::before { inset-block-start: 15px; inset-inline-start: -7px; inline-size: 12px; block-size: 12px; }
 .set-reminder label { display: inline-flex; align-items: center; gap: var(--space-3); min-block-size: 40px; font-size: var(--fs-md); cursor: pointer; }
 .set-reminder input { flex: none; inline-size: 18px; block-size: 18px; margin: 0; accent-color: var(--teal); }
 .set-reminder--due label { font-weight: 600; }
@@ -409,8 +438,8 @@ fieldset:disabled .set-reminder label { cursor: default; }
   .set__head, .set__body { padding-inline: var(--space-4); }
   .set-grid { grid-template-columns: minmax(0, 1fr); }
   .set-reminder label { min-block-size: 44px; }
-  .set-reminder::before { inset-block-start: 18px; }
-  .set-save { position: sticky; inset-block-end: 0; padding-inline: var(--space-4); }
+  /* Sticky to the screen's foot, just above the tab bar (the page's own bottom padding is overlapped). */
+  .set-save { position: sticky; inset-block-end: calc(-1 * var(--space-7)); padding-inline: var(--space-4); box-shadow: 0 -6px 16px rgba(13, 47, 55, 0.08); }
   .set-save .btn { flex: 1 1 100%; justify-content: center; min-block-size: 48px; }
 }
 
