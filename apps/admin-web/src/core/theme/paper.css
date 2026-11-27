@@ -277,7 +277,7 @@ html[lang='ar'] .display { font-weight: 700; }
   flex: none;
   border-block-end: 1px solid var(--hairline);
 }
-.rail__home .brand-logo { block-size: auto; inline-size: 50px; }
+.rail__home .brand-logo { block-size: auto; inline-size: 58px; }
 .rail__home:focus-visible { outline-offset: -4px; }
 .rail__list { gap: 2px; padding-block-start: var(--space-3); inline-size: 100%; }
 .rail__item { display: grid; justify-items: center; inline-size: 100%; }
@@ -315,8 +315,8 @@ html[lang='ar'] .display { font-weight: 700; }
 
 .rail__badge {
   position: absolute;
-  inset-block-start: 3px;
-  inset-inline-end: 1px;
+  inset-block-start: -3px;
+  inset-inline-end: -5px;
   min-inline-size: 17px;
   block-size: 17px;
   padding-inline: 4px;
@@ -477,7 +477,9 @@ html[lang='ar'] .display { font-weight: 700; }
     block-size: 3px;
     background: var(--gold);
   }
-  .tabbar__item .rail__badge { inset-inline-end: calc(50% - 24px); inset-block-start: 6px; border-color: var(--surface); }
+  .tabbar__item .rail__badge { inset-inline-end: calc(50% - 26px); inset-block-start: 5px; border-color: var(--surface); }
+  /* Inside an open conversation the composer owns the bottom edge. */
+  .shell:has(.cw[data-view='thread']) .tabbar { display: none; }
   .topbar .topbar__menu { display: none; }
 }
 
@@ -794,7 +796,9 @@ html[lang='ar'] .table { font-size: var(--fs-sm); }
 a.ledger__cell:hover, button.ledger__cell:hover { background: var(--surface-hover); }
 .ledger__cell[aria-pressed='true'], .ledger__cell[aria-current='true'], .ledger__cell[aria-selected='true'] { box-shadow: inset 0 2px 0 var(--teal); }
 .ledger__label { font-size: 12.5px; color: var(--ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ledger__value { font-family: var(--display); font-size: var(--fs-kpi); font-weight: 600; line-height: 1.15; font-variant-numeric: tabular-nums lining-nums; color: var(--ink); unicode-bidi: plaintext; text-align: start; }
+.ledger__value { font-family: var(--display); font-size: var(--fs-kpi); font-weight: 600; line-height: 1.15; font-variant-numeric: tabular-nums lining-nums; color: var(--ink); unicode-bidi: plaintext; text-align: left; }
+/* `plaintext` resolves `start` per paragraph, so the side is stated: under the label in both directions. */
+[dir='rtl'] .ledger__value { text-align: right; }
 .ledger__unit { margin-inline-start: 5px; font-family: var(--font); font-size: var(--fs-xs); font-weight: 400; color: var(--ink-muted); }
 .ledger__note { font-size: var(--fs-xs); color: var(--ink-muted); }
 .ledger__cell--late .ledger__value, .ledger__cell--late .ledger__note { color: var(--terracotta); }
@@ -1066,4 +1070,16 @@ html[lang='ar'] .auth .login__title { font-weight: 700; line-height: 1.4; }
   :root:not([data-theme='light']) .sidebar .brand-logo--light { display: none; }
   :root:not([data-theme='light']) .sidebar .brand-logo--dark { display: block; }
   :root:not([data-theme='light']) .auth__brand { background: var(--paper-dark); }
+}
+
+/* A cell whose text sets its own direction (a Latin name in an Arabic page) still
+   lines up with its column: alignment follows the page, never the content. */
+[dir='rtl'] :is(td, th, dd, dt, .entity__name, .entity__sub)[dir='auto'] { text-align: right; }
+[dir='ltr'] :is(td, th, dd, dt, .entity__name, .entity__sub)[dir='auto'] { text-align: left; }
+
+/* Narrow screens: every chip and menu row is a full touch target. */
+@media (max-width: 767px) {
+  .chip { min-block-size: 40px; padding-inline: 12px; }
+  .menu__item { min-block-size: 44px; }
+  .topbar__lang, .topbar .nc-bell, .topbar__me { min-inline-size: 44px; min-block-size: 44px; }
 }

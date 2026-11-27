@@ -290,7 +290,8 @@ export function TodayPage() {
                     <span className={e.read ? 'today__dot' : 'today__dot today__dot--new'} aria-hidden="true" />
                     <span className="today__line-text">
                       <strong>{e.title}</strong>
-                      {e.body && <span> {e.body}</span>}
+                      {e.body && !e.body.startsWith(e.title) && <span> {e.body}</span>}
+                      {e.body && e.body.startsWith(e.title) && e.body.length > e.title.length && <span>{e.body.slice(e.title.length)}</span>}
                     </span>
                     <time className="today__line-time" dateTime={e.at}>
                       {relativeTime(e.at, locale)}

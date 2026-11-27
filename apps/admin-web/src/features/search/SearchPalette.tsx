@@ -265,8 +265,13 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
             spellCheck={false}
           />
           {loading && <span className="spinner palette__spinner" aria-hidden="true" />}
-          <button type="button" className="kbd palette__esc" onClick={onClose} aria-label={tx(S.close)}>
-            Esc
+          <button type="button" className="palette__close" onClick={onClose} aria-label={tx(S.close)}>
+            <span className="kbd palette__esc" aria-hidden="true">
+              Esc
+            </span>
+            <span className="palette__x">
+              <Icon name="close" size={20} />
+            </span>
           </button>
         </div>
 

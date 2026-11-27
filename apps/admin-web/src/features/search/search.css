@@ -46,7 +46,9 @@
 .palette__input:focus { outline: none; }
 .palette__input::placeholder { color: var(--ink-muted); }
 .palette__spinner { inline-size: 16px; block-size: 16px; border-width: 2px; }
-.palette__esc { cursor: pointer; block-size: 22px; }
+.palette__close { display: grid; place-items: center; min-inline-size: 32px; min-block-size: 32px; padding: 0; border: 0; border-radius: var(--radius); background: none; color: var(--ink-muted); cursor: pointer; }
+.palette__esc { block-size: 22px; }
+.palette__x { display: none; }
 .palette__body { flex: 1; min-block-size: 0; overflow-y: auto; padding: 6px 6px 8px; }
 .palette__group + .palette__group { margin-block-start: 4px; padding-block-start: 4px; border-block-start: 1px solid var(--hairline-soft); }
 .palette__heading { margin: 0; padding: 8px 10px 3px; font-size: 12.5px; color: var(--ink-muted); }
@@ -87,6 +89,9 @@
   .palette-backdrop { padding: 0; }
   .palette { inline-size: 100%; max-block-size: none; block-size: 100dvh; border: 0; border-radius: 0; }
   .palette__foot { display: none; }
+  .palette__close { min-inline-size: 44px; min-block-size: 44px; }
+  .palette__esc { display: none; }
+  .palette__x { display: grid; }
   .palette__row { min-block-size: 44px; }
 }
 @media (prefers-reduced-motion: reduce) {
