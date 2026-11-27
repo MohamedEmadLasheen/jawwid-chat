@@ -51,7 +51,7 @@
 .tsx-group--ok .tsx-ghead__label { color: var(--done); }
 .tsx-ghead__link { margin-inline-start: auto; font-family: var(--font); font-weight: 500; }
 .tsx-dot { flex: none; inline-size: 8px; block-size: 8px; border-radius: 50%; }
-.tsx-dot--urgent { background: var(--urgent); }
+.tsx-dot--urgent { background: var(--urgent-solid); }
 .tsx-dot--watch { background: var(--waiting); }
 .tsx-dot--ok { background: var(--done); }
 
@@ -211,7 +211,7 @@
 .tsx-bar__label { color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tsx-bar__track { display: block; block-size: 8px; border-radius: 4px; background: var(--line-2); overflow: hidden; }
 .tsx-bar__fill { display: block; min-inline-size: 8px; block-size: 100%; border-radius: 4px; background: var(--ink-muted); }
-.tsx-bar--alarm .tsx-bar__fill { background: var(--urgent); }
+.tsx-bar--alarm .tsx-bar__fill { background: var(--urgent-solid); }
 .tsx-bar__n { text-align: end; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums lining-nums; }
 .tsx-bar--alarm .tsx-bar__n { color: var(--urgent); }
 .tsx-quiet { margin: 0; font-size: var(--fs-sm); color: var(--ink-muted); }

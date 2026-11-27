@@ -200,7 +200,7 @@ html[lang='ar'] .story-row__name { font-weight: 700; }
 
 /* How much of the audience has seen it: a thin line, not a pill. */
 .reach__bar { display: block; block-size: 4px; border-radius: 2px; background: var(--line-2); overflow: hidden; }
-.reach__fill { display: block; block-size: 100%; background: var(--teal); }
+.reach__fill { display: block; block-size: 100%; background: var(--teal-solid); }
 
 /* ---------------------------------------------------------------- composer */
 /* `.composer` is also the chat's message box (app.css): the studio's is two panes,
@@ -490,7 +490,7 @@ html[lang='ar'] .compose-step__title { font-weight: 700; }
 .funnel__step { display: grid; grid-template-columns: minmax(90px, 140px) 1fr auto; align-items: center; gap: var(--space-3); }
 .funnel__label { font-size: var(--fs-sm); color: var(--ink-muted); }
 .funnel__track { block-size: 8px; border-radius: 4px; background: var(--line-2); overflow: hidden; }
-.funnel__fill { display: block; block-size: 100%; background: var(--teal); }
+.funnel__fill { display: block; block-size: 100%; background: var(--teal-solid); }
 /* One hue, stepping lighter as the funnel narrows: no gold, no second colour. */
 .funnel__step:nth-child(2) .funnel__fill { background: var(--brand-500); }
 .funnel__step:nth-child(3) .funnel__fill { background: var(--brand-200); }
@@ -500,7 +500,7 @@ html[lang='ar'] .compose-step__title { font-weight: 700; }
 .daily { display: grid; gap: var(--space-2); }
 .daily__legend { display: flex; gap: var(--space-4); font-size: var(--fs-xs); color: var(--ink-muted); }
 .daily__key { display: inline-flex; align-items: center; gap: 6px; }
-.daily__key::before { content: ''; inline-size: 10px; block-size: 10px; background: var(--teal); }
+.daily__key::before { content: ''; inline-size: 10px; block-size: 10px; background: var(--teal-solid); }
 .daily__key--taps::before { background: var(--brand-200); }
 .daily__bars {
   display: grid; gap: 4px; align-items: end;
@@ -508,7 +508,7 @@ html[lang='ar'] .compose-step__title { font-weight: 700; }
   border-block-end: 1px solid var(--hairline);
 }
 .daily__day { display: flex; align-items: flex-end; justify-content: center; gap: 2px; block-size: 100%; }
-.daily__bar { flex: 1; max-inline-size: 10px; min-block-size: 0; background: var(--teal); }
+.daily__bar { flex: 1; max-inline-size: 10px; min-block-size: 0; background: var(--teal-solid); }
 .daily__bar--taps { background: var(--brand-200); }
 .daily__axis { display: flex; justify-content: space-between; font-size: var(--fs-xs); color: var(--ink-muted); font-variant-numeric: tabular-nums; }
 

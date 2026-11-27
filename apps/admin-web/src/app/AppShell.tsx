@@ -26,6 +26,7 @@ import { Avatar } from '@/shared/components/Avatar'
 import { BrandLogo, BrandMark } from '@/shared/components/BrandLogo'
 import { Icon } from '@/shared/components/Icon'
 import { Menu } from '@/shared/components/Menu'
+import { ThemeSwitch } from '@/shared/components/ThemeSwitch'
 import { useMediaQuery } from '@/shared/hooks/useMediaQuery'
 import {
   AREA_PATH,
@@ -669,17 +670,18 @@ function AccountBlock({ folded }: { folded: boolean }) {
           </span>
         }
         triggerClassName="side__me-button"
-        // Folded, the rail shows only the avatar: the menu says whose account it is.
-        header={
-          folded
-            ? () => (
-                <p className="menu__who">
-                  <bdi className="menu__who-name">{staff.name}</bdi>
-                  <span className="menu__who-role">{superAdmin ? t('role.super_admin') : tx(TEXT.operations)}</span>
-                </p>
-              )
-            : undefined
-        }
+        // Folded, the rail shows only the avatar: the menu says whose account it is. Then the theme.
+        header={() => (
+          <>
+            {folded && (
+              <p className="menu__who">
+                <bdi className="menu__who-name">{staff.name}</bdi>
+                <span className="menu__who-role">{superAdmin ? t('role.super_admin') : tx(TEXT.operations)}</span>
+              </p>
+            )}
+            <ThemeSwitch />
+          </>
+        )}
         items={[
           { key: 'profile', label: t('nav.profile'), icon: 'staff', onSelect: () => navigate('/profile') },
           { key: 'language', label: t('shell.switchLanguage'), icon: 'language', onSelect: () => setLocale(locale === 'ar' ? 'en' : 'ar') },
@@ -836,10 +838,13 @@ function Topbar({
           className="topbar__account"
           trigger={<Avatar name={staff.name} seed={staff.id} size="sm" />}
           header={() => (
-            <p className="menu__who">
-              <bdi className="menu__who-name">{staff.name}</bdi>
-              <span className="menu__who-role">{isSuperAdmin(staff.role) ? t('role.super_admin') : tx(TEXT.operations)}</span>
-            </p>
+            <>
+              <p className="menu__who">
+                <bdi className="menu__who-name">{staff.name}</bdi>
+                <span className="menu__who-role">{isSuperAdmin(staff.role) ? t('role.super_admin') : tx(TEXT.operations)}</span>
+              </p>
+              <ThemeSwitch />
+            </>
           )}
           triggerClassName="btn btn--ghost btn--icon topbar__me"
           items={[

@@ -12,6 +12,7 @@
     --trial-bg: #3b2a6b;
   }
 }
+
 :root[data-theme='dark'] {
   --trial-fg: #ddd6fe;
   --trial-bg: #3b2a6b;

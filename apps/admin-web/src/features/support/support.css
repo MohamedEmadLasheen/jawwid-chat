@@ -161,7 +161,7 @@ html[lang='ar'] .support .mast .page-header__title .badge { font-family: var(--f
 .support-composer__input { flex: 1; min-inline-size: 0; min-block-size: 36px; max-block-size: 160px; padding: 7px 8px; border: 0; background: transparent; color: var(--ink); font: inherit; font-size: var(--fs-md); line-height: 1.45; resize: none; field-sizing: content; }
 .support-composer__input:focus { outline: none; }
 .support-composer__input::placeholder { color: var(--ink-muted); }
-.support-send { display: grid; place-items: center; flex: none; inline-size: 36px; block-size: 36px; border: 0; border-radius: var(--radius); background: var(--teal); color: var(--text-inverse); cursor: pointer; transition: background var(--dur-fast) var(--ease-out); }
+.support-send { display: grid; place-items: center; flex: none; inline-size: 36px; block-size: 36px; border: 0; border-radius: var(--radius); background: var(--teal-solid); color: var(--text-inverse); cursor: pointer; transition: background var(--dur-fast) var(--ease-out); }
 .support-send:hover:not(:disabled) { background: var(--teal-dark); }
 .support-send:disabled { background: none; color: var(--border-control); cursor: default; }
 

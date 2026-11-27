@@ -126,7 +126,7 @@
 .rv-row:focus-visible { outline-offset: -2px; }
 /* The receipt being read: tinted, with a teal edge drawn inside its padding so nothing moves. */
 .rv-row[aria-current='true'] { background: var(--teal-tint); }
-.rv-row[aria-current='true']::before { content: ''; position: absolute; inset-block: 10px; inset-inline-start: 0; inline-size: 3px; border-start-end-radius: 3px; border-end-end-radius: 3px; background: var(--teal); }
+.rv-row[aria-current='true']::before { content: ''; position: absolute; inset-block: 10px; inset-inline-start: 0; inline-size: 3px; border-start-end-radius: 3px; border-end-end-radius: 3px; background: var(--teal-solid); }
 .rv-row__who { display: grid; gap: 2px; min-inline-size: 0; }
 .rv-row__name { font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rv-row__for { display: flex; align-items: baseline; gap: var(--space-3); min-inline-size: 0; font-size: var(--fs-sm); color: var(--ink-muted); overflow: hidden; white-space: nowrap; }
@@ -348,7 +348,7 @@
 .set__item[aria-current='true'] .icon { color: var(--teal); }
 .set__item-name { flex: 0 1 auto; min-inline-size: 0; }
 /* Edited and not saved: waiting. */
-.set__edited-dot { display: block; inline-size: 8px; block-size: 8px; border-radius: 50%; background: var(--teal); }
+.set__edited-dot { display: block; inline-size: 8px; block-size: 8px; border-radius: 50%; background: var(--teal-solid); }
 
 .set__sheet fieldset { min-inline-size: 0; margin: 0; padding: 0; border: 0; }
 .set__lock { padding: 10px var(--space-4); border-block-end: 1px solid var(--line-2); }
@@ -377,7 +377,7 @@
 .set-reminder { position: relative; padding-block: 2px; padding-inline-start: var(--space-5); }
 /* The stop is not a control: a small mark on the line, filled when that reminder is on. */
 .set-reminder::before { content: ''; position: absolute; inset-block-start: 17px; inset-inline-start: -5px; inline-size: 8px; block-size: 8px; border-radius: 50%; background: var(--line-strong); }
-.set-reminder:has(input:checked)::before { background: var(--teal); }
+.set-reminder:has(input:checked)::before { background: var(--teal-solid); }
 .set-reminder--due::before { inset-block-start: 15px; inset-inline-start: -7px; inline-size: 12px; block-size: 12px; }
 .set-reminder label { display: inline-flex; align-items: center; gap: var(--space-3); min-block-size: 40px; font-size: var(--fs-md); cursor: pointer; }
 .set-reminder input { flex: none; inline-size: 18px; block-size: 18px; margin: 0; accent-color: var(--teal); }

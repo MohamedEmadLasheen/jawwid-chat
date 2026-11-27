@@ -278,8 +278,8 @@ a.pp-row__name:hover { color: var(--teal-dark); text-decoration: underline; text
 
 /* A thin line for how much of something is used. */
 .pp-meter { display: block; inline-size: 100%; block-size: 3px; background: var(--line); overflow: hidden; }
-.pp-meter > span { display: block; block-size: 100%; background: var(--teal); }
-.pp-meter--late > span { background: var(--urgent); }
+.pp-meter > span { display: block; block-size: 100%; background: var(--teal-solid); }
+.pp-meter--late > span { background: var(--urgent-solid); }
 .pp-meter--warn > span { background: var(--gold-line); }
 
 /* -------------------------------------------------------------- timeline */
@@ -313,7 +313,7 @@ a.pp-row__name:hover { color: var(--teal-dark); text-decoration: underline; text
   border: 1.5px solid var(--border-control);
   background: var(--canvas);
 }
-.pp-tl--newest-first > li:first-child::after, .pp-tl--oldest-first > li:last-child::after { border-color: var(--teal); background: var(--teal); }
+.pp-tl--newest-first > li:first-child::after, .pp-tl--oldest-first > li:last-child::after { border-color: var(--teal); background: var(--teal-solid); }
 .pp-tl strong, .pp-tl a { font-weight: 600; }
 .pp-tl a { color: var(--teal-dark); text-decoration: none; }
 .pp-tl a:hover { text-decoration: underline; text-underline-offset: 3px; }

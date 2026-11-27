@@ -53,9 +53,9 @@
 .adm-block .dist__label { color: var(--ink); }
 .adm-block .dist__value { font-weight: 600; font-variant-numeric: tabular-nums; unicode-bidi: isolate; }
 .adm-block .dist__bar { block-size: 2px; border-radius: 0; background: var(--hairline); }
-.adm-block .dist__fill { border-radius: 0; background: var(--teal); }
+.adm-block .dist__fill { border-radius: 0; background: var(--teal-solid); }
 .adm-block .dist__fill--warn { background: var(--waiting); }
-.adm-block .dist__fill--danger { background: var(--urgent); }
+.adm-block .dist__fill--danger { background: var(--urgent-solid); }
 .adm-block .dist__fill--muted, .adm-block .dist__fill--neutral { background: var(--border-control); }
 .adm-block .dist__dot { inline-size: 7px; block-size: 7px; background: none; border: 1.5px solid var(--ink-muted); }
 .adm-block .dist__dot--warn { border-color: var(--waiting); background: var(--waiting); }

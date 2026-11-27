@@ -7,7 +7,7 @@
   min-inline-size: 18px;
   padding-inline: var(--space-1);
   border-radius: 9px;
-  background: var(--urgent);
+  background: var(--urgent-solid);
   color: #fff;
   font-size: 12px;
   font-weight: 600;
@@ -71,7 +71,7 @@
   inline-size: 9px;
   block-size: 9px;
   border-radius: 50%;
-  background: var(--teal);
+  background: var(--teal-solid);
   box-shadow: 0 0 0 2px var(--surface);
 }
 .nc-item__text { display: grid; gap: 2px; min-inline-size: 0; padding-block-start: 6px; }

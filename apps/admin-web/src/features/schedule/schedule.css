@@ -172,7 +172,7 @@
 .sc-filter--on .icon { color: var(--teal); }
 .sc-filter__value { color: var(--ink); font-weight: 600; }
 /* How many are chosen: a figure, not a pill. */
-.sc-filter__count { min-inline-size: 18px; padding-inline: 5px; border-radius: 6px; background: var(--teal); color: #fff; font-size: 12px; font-weight: 600; line-height: 18px; text-align: center; font-variant-numeric: tabular-nums; }
+.sc-filter__count { min-inline-size: 18px; padding-inline: 5px; border-radius: 6px; background: var(--teal-solid); color: #fff; font-size: 12px; font-weight: 600; line-height: 18px; text-align: center; font-variant-numeric: tabular-nums; }
 .sc-filter__panel {
   position: absolute;
   z-index: 30;
@@ -475,7 +475,7 @@ html[lang='ar'] .sc-row__name { font-size: 15px; }
 .sc-cell__bar > span { display: block; block-size: 100%; border-radius: 2px; background: color-mix(in srgb, var(--teal) 55%, var(--surface)); }
 /* A mark: the word in ink, its dot in the state's colour (red is the dot, never the reason). */
 .sc-mark { display: inline-flex; flex: none; align-items: center; gap: 4px; font-size: 13px; font-weight: 600; line-height: 1; color: var(--ink-2); white-space: nowrap; }
-.sc-mark::before { content: ''; inline-size: 7px; block-size: 7px; border-radius: 50%; background: var(--urgent); }
+.sc-mark::before { content: ''; inline-size: 7px; block-size: 7px; border-radius: 50%; background: var(--urgent-solid); }
 .sc-mark--outside::before { background: var(--waiting); }
 .sc-row__sub .sc-mark { font-weight: 500; }
 
@@ -516,7 +516,7 @@ button.sc-heat--off { cursor: pointer; }
 .sc-heat--leave { background: var(--sc-hatch); background-color: var(--surface); color: var(--ink); }
 .sc-heat--outside::after { content: ''; inline-size: 8px; block-size: 8px; box-sizing: border-box; border-radius: 50%; border: 2px solid var(--waiting); background: var(--surface); }
 .sc-heat--4.sc-heat--outside::after { box-shadow: 0 0 0 1.5px var(--surface); }
-.sc-heat--uncovered::after { content: ''; inline-size: 8px; block-size: 8px; border-radius: 50%; background: var(--urgent); box-shadow: 0 0 0 1.5px var(--surface); }
+.sc-heat--uncovered::after { content: ''; inline-size: 8px; block-size: 8px; border-radius: 50%; background: var(--urgent-solid); box-shadow: 0 0 0 1.5px var(--surface); }
 .sc-heat--match { box-shadow: inset 0 0 0 2px var(--teal); }
 
 /* ------------------------------------------------- needs your attention */
@@ -530,7 +530,7 @@ button.sc-heat--off { cursor: pointer; }
 .sc-attn__item:last-child { border-block-end: 0; }
 .sc-attn__item:hover, .sc-attn__item:focus-within { background: var(--surface-hover); }
 /* What kind: urgent red, or amber for a lesson outside working hours. */
-.sc-attn__item::before { content: ''; position: absolute; inset-inline-start: 12px; inset-block-start: 23px; inline-size: 7px; block-size: 7px; border-radius: 50%; background: var(--urgent); }
+.sc-attn__item::before { content: ''; position: absolute; inset-inline-start: 12px; inset-block-start: 23px; inline-size: 7px; block-size: 7px; border-radius: 50%; background: var(--urgent-solid); }
 .sc-attn__item--outside::before { background: var(--waiting); }
 .sc-attn__text { display: grid; gap: 2px; padding: 0; border: 0; border-radius: 4px; background: none; color: var(--ink); font: inherit; text-align: start; cursor: pointer; }
 .sc-attn__day { margin: 0; padding: 10px var(--space-4) 2px; font-family: var(--font-head); font-size: var(--fs-sm); font-weight: 600; color: var(--ink-2); }
@@ -563,7 +563,7 @@ button.sc-heat--off { cursor: pointer; }
 .sc-details__notes .sc-note { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 8px; background: var(--surface-2); font-size: var(--fs-sm); }
 .sc-details__notes .sc-note::before { content: ''; flex: none; inline-size: 7px; block-size: 7px; border-radius: 50%; background: var(--waiting); }
 .sc-details__notes .sc-note--urgent { font-weight: 600; }
-.sc-details__notes .sc-note--urgent::before { background: var(--urgent); }
+.sc-details__notes .sc-note--urgent::before { background: var(--urgent-solid); }
 
 /* Supervisor dots (filters, legend). */
 .sc-legend__sup {
@@ -638,7 +638,7 @@ button.sc-heat--off { cursor: pointer; }
 }
 .sc-strip__n { font-family: var(--font-head); font-size: var(--fs-lg); font-weight: 600; color: var(--ink); font-variant-numeric: lining-nums; }
 .sc-strip__day--today { border-color: var(--gold); }
-.sc-strip__day[aria-pressed='true'] { background: var(--teal); border-color: var(--teal); color: #fff; }
+.sc-strip__day[aria-pressed='true'] { background: var(--teal-solid); border-color: var(--teal); color: #fff; }
 .sc-strip__day[aria-pressed='true'] .sc-strip__n { color: #fff; }
 /* Today and chosen: the fill says chosen, a short gold bar says today. */
 .sc-strip__day--today[aria-pressed='true'] { position: relative; border-color: var(--teal); }

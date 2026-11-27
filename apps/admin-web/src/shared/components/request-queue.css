@@ -359,9 +359,9 @@ a.rq-open { text-decoration: none; }
 }
 html[lang='ar'] .rq-step__dot { margin-block-start: 8px; }
 html[lang='ar'] .rq-step::before { inset-block-start: 22px; }
-.rq-step--done .rq-step__dot { border-color: var(--teal); background: var(--teal); }
+.rq-step--done .rq-step__dot { border-color: var(--teal); background: var(--teal-solid); }
 .rq-step--current .rq-step__dot { border: 3px solid var(--teal); background: var(--surface); box-shadow: 0 0 0 3px var(--teal-tint); }
-.rq-step--problem .rq-step__dot { border-color: var(--urgent); background: var(--urgent); }
+.rq-step--problem .rq-step__dot { border-color: var(--urgent); background: var(--urgent-solid); }
 .rq-step--skipped .rq-step__dot { border-style: dashed; }
 .rq-step__text { min-inline-size: 0; }
 .rq-step__label { display: block; font-size: var(--fs-sm); font-weight: 500; color: var(--ink); }

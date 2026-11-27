@@ -110,6 +110,10 @@ html[lang='ar'] .nav__group-toggle, html[lang='ar'] .nav__group-label { text-tra
   :root:not([data-theme='light']) .brand-logo--light { display: none; }
   :root:not([data-theme='light']) .brand-logo--dark { display: block; }
 }
+/* The same, when the person chose Dark (the theme switch; data-theme on <html>). */
+:root[data-theme='dark'] .brand-logo--light { display: none; }
+:root[data-theme='dark'] .brand-logo--dark { display: block; }
+
 /* ...except on the sidebar's white tile, which always takes the teal lockup. */
 :root .sidebar .brand-logo--light { display: block; }
 :root .sidebar .brand-logo--dark { display: none; }
@@ -376,6 +380,11 @@ html[lang='ar'] .rail__menu-heading { text-transform: none; letter-spacing: 0; f
   /* The dark accent is lighter: a faded count drops to 3.8:1, so it stays solid. */
   :root:not([data-theme='light']) .chip[aria-pressed='true'] .chip__count { color: #ffffff; }
 }
+/* The same, when the person chose Dark (the theme switch; data-theme on <html>). */
+:root[data-theme='dark'] .chip[aria-pressed='true'] { background: var(--accent); border-color: var(--accent); }
+/* The dark accent is lighter: a faded count drops to 3.8:1, so it stays solid. */
+:root[data-theme='dark'] .chip[aria-pressed='true'] .chip__count { color: #ffffff; }
+
 
 .toolbar { gap: var(--space-3); margin-block-end: var(--space-4); }
 

@@ -380,7 +380,7 @@ html[lang='ar'] .rec :is(.rec-history, .rec-main) .tf-section__title { font-fami
 .rec .rec-main .sub-ledger__row .btn { margin-inline-start: auto; }
 .rec .pp-activity .pf-people { margin-block: var(--space-4) 4px; padding: 0; }
 .rec .pp-activity .pf-people > li::after { background: var(--surface); }
-.rec .pp-activity .pf-people > li:last-child::after { background: var(--teal); }
+.rec .pp-activity .pf-people > li:last-child::after { background: var(--teal-solid); }
 .rec .rec-sheet .tf-entries { margin: 0; }
 .rec .rec-sheet .tf-entry { padding: 13px var(--space-4); }
 .rec .rec-sheet .tf-entry:last-child { border-block-end: 0; }

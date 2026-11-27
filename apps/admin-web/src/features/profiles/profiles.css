@@ -77,7 +77,7 @@
   border: 1.5px solid var(--border-control);
   background: var(--canvas);
 }
-.pp-activity .pf-people > li:last-child::after { border-color: var(--teal); background: var(--teal); }
+.pp-activity .pf-people > li:last-child::after { border-color: var(--teal); background: var(--teal-solid); }
 .pp-activity .pf-people .tf-muted { font-size: var(--fs-xs); }.pp-activity .pf-people p { margin: 2px 0 0; }
 
 /* ------------------------------------------------- people in a short list */

@@ -28,6 +28,12 @@
   --ink: #12333b;
   --ink-2: #2f4950;
   --ink-muted: #4c5e62; /* secondary text: 6.9:1 on white, read comfortably (owner, 2026-11-28) */
+  /* Solid fills under white text (buttons, counts, the selected chip). In light they are the text colours;
+     in dark the text colours turn light, so the fills get their own, deeper values. */
+  --teal-solid: var(--teal);
+  --teal-solid-hover: var(--teal-dark);
+  --urgent-solid: var(--urgent);
+  --avatar-bg: #ece7dc;
   --canvas: #fbf8f1;
   --surface: #ffffff;
   --surface-2: #f7f4ec;
@@ -238,8 +244,57 @@ html[lang='ar'] {
     --lilac-tint: #2a2638;
     --lilac-text: #c6bce4;
     --overlay: rgba(0, 0, 0, 0.55);
+    --teal-solid: #2a7f8c;
+    --teal-solid-hover: #31909e;
+    --urgent-solid: #c4463a;
+    --avatar-bg: #23383c;
+    color-scheme: dark;
   }
 }
+/* The same, when the person chose Dark (the theme switch; data-theme on <html>). */
+:root[data-theme='dark'] {
+  --ink: #e7eeee;
+  --ink-2: #c9d6d7;
+  --ink-muted: #b2c1c3;
+  --canvas: #0f191b;
+  --surface: #152225;
+  --surface-2: #1a2a2d;
+  --surface-hover: #1d2f33;
+  --line: #26393d;
+  --line-2: #1f3236;
+  --line-strong: #345054;
+  --teal: #7cc0c9;
+  --teal-dark: #9bd0d7;
+  --teal-tint: #173a40;
+  --teal-tint-2: #1d474e;
+  --gold-tint: #3a2e12;
+  --gold-text: #e9c27c;
+  --urgent: #f2867a;
+  --urgent-tint: #3d1e1b;
+  --urgent-line: #6a2d27;
+  --waiting: #e6b25f;
+  --waiting-tint: #3a2b10;
+  --done: #74c79a;
+  --done-tint: #163326;
+  --paper-dark: #122023;
+  --chat-bg: #111d20;
+  --sidebar-bg: #132326;
+  --sidebar-active: #1c3236;
+  --sidebar-line: #24393d;
+  --sidebar-hover: rgba(255, 255, 255, 0.05);
+  --border-control: #5d7072;
+  --text-inverse: #0f191b;
+  --accent: #2b8796;
+  --lilac-tint: #2a2638;
+  --lilac-text: #c6bce4;
+  --overlay: rgba(0, 0, 0, 0.55);
+  --teal-solid: #2a7f8c;
+  --teal-solid-hover: #31909e;
+  --urgent-solid: #c4463a;
+  --avatar-bg: #23383c;
+  color-scheme: dark;
+}
+
 
 /* ================================================================== base */
 
@@ -296,6 +351,10 @@ a { color: var(--teal); }
   :root:not([data-theme='light']) .side__brand .brand-logo--light { display: none; }
   :root:not([data-theme='light']) .side__brand .brand-logo--dark { display: block; }
 }
+/* The same, when the person chose Dark (the theme switch; data-theme on <html>). */
+:root[data-theme='dark'] .side__brand .brand-logo--light { display: none; }
+:root[data-theme='dark'] .side__brand .brand-logo--dark { display: block; }
+
 .side__search {
   display: flex;
   align-items: center;
@@ -372,7 +431,7 @@ html[lang='ar'] .side__item { font-size: 14.5px; }
 }
 .side__label { flex: 1; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .side__count { min-inline-size: 22px; padding: 0 6px; border-radius: 6px; background: rgba(18, 51, 59, 0.08); color: var(--ink-2); font-family: var(--font); font-size: 12px; font-weight: 600; text-align: center; font-variant-numeric: tabular-nums; }
-.side__count--urgent { background: var(--urgent); color: #fff; }
+.side__count--urgent { background: var(--urgent-solid); color: #fff; }
 .side__caret { color: var(--ink-muted); transition: transform var(--dur-fast) var(--ease); }
 .side__item[aria-expanded='true'] .side__caret { transform: rotate(180deg); }
 .side__sub { list-style: none; margin: 2px 0 6px; padding: 0; padding-inline-start: 22px; }
@@ -393,7 +452,7 @@ html[lang='ar'] .side__item { font-size: 14.5px; }
 .side__tool { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-block-size: 34px; min-inline-size: 34px; padding: 0 8px; border: 0; border-radius: 8px; background: none; color: var(--ink-2); font: inherit; font-size: var(--fs-sm); cursor: pointer; text-decoration: none; position: relative; }
 .side__tool:hover { background: var(--sidebar-hover); color: var(--ink); }
 .side__tool--grow { flex: 1; justify-content: flex-start; }
-.side__tool .nc-bell__count, .side__badge { position: absolute; inset-block-start: 2px; inset-inline-end: 2px; min-inline-size: 16px; block-size: 16px; padding: 0 4px; border-radius: 8px; background: var(--urgent); color: #fff; font-size: 10.5px; font-weight: 600; line-height: 16px; text-align: center; }
+.side__tool .nc-bell__count, .side__badge { position: absolute; inset-block-start: 2px; inset-inline-end: 2px; min-inline-size: 16px; block-size: 16px; padding: 0 4px; border-radius: 8px; background: var(--urgent-solid); color: #fff; font-size: 10.5px; font-weight: 600; line-height: 16px; text-align: center; }
 
 .side__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-inline-end: 8px; }
 .side__close { color: var(--ink-2); }
@@ -445,7 +504,7 @@ html[lang='ar'] .side__item { font-size: 14.5px; }
 .side__tools .nc-bell { position: relative; display: inline-flex; align-items: center; justify-content: center; min-inline-size: 34px; min-block-size: 34px; border-radius: 8px; color: var(--ink-2); border: 0; background: none; }
 .side__tools .nc-bell:hover { background: var(--sidebar-hover); color: var(--ink); }
 .side__tools .topbar__lang { margin-inline-end: auto; }
-:root .nc-bell .nc-bell__count { position: absolute; inset-block-start: 1px; inset-inline-end: 0; min-inline-size: 16px; block-size: 16px; padding: 0 4px; border-radius: 8px; background: var(--urgent); color: #fff; font-size: 10.5px; font-weight: 600; line-height: 16px; text-align: center; box-shadow: 0 0 0 2px var(--sidebar-bg); }
+:root .nc-bell .nc-bell__count { position: absolute; inset-block-start: 1px; inset-inline-end: 0; min-inline-size: 16px; block-size: 16px; padding: 0 4px; border-radius: 8px; background: var(--urgent-solid); color: #fff; font-size: 10.5px; font-weight: 600; line-height: 16px; text-align: center; box-shadow: 0 0 0 2px var(--sidebar-bg); }
 .topbar .nc-bell, .topbar__me { color: var(--ink-2); }
 
 /* The page's own bar on narrow screens only: menu, where you are, search. */
@@ -666,12 +725,12 @@ html[lang='ar'] .side__item { font-size: 14.5px; }
 .btn:active:not(:disabled) { background: var(--surface-2); }
 .btn:disabled, .btn[aria-disabled='true'] { opacity: 0.5; cursor: not-allowed; }
 .btn[aria-busy='true'] { cursor: progress; opacity: 0.75; }
-.btn--primary { background: var(--teal); border-color: var(--teal); color: #fff; }
-.btn--primary:hover:not(:disabled) { background: var(--teal-dark); border-color: var(--teal-dark); }
+.btn--primary { background: var(--teal-solid); border-color: var(--teal-solid); color: #fff; }
+.btn--primary:hover:not(:disabled) { background: var(--teal-solid-hover); border-color: var(--teal-solid-hover); }
 .btn--primary:active:not(:disabled) { background: var(--teal-deep); }
 .btn--primary .icon { color: inherit; }
 .btn--danger { background: var(--surface); border-color: var(--urgent-line); color: var(--urgent); }
-.btn--danger:hover:not(:disabled) { background: var(--urgent); border-color: var(--urgent); color: #fff; filter: none; }
+.btn--danger:hover:not(:disabled) { background: var(--urgent-solid); border-color: var(--urgent); color: #fff; filter: none; }
 .btn--ghost { border-color: transparent; background: transparent; color: var(--ink-2); }
 .btn--ghost:hover:not(:disabled) { background: var(--surface-hover); border-color: transparent; color: var(--ink); }
 .btn--sm { min-block-size: var(--control-h-sm); padding: 0 11px; font-size: var(--fs-sm); }
@@ -812,7 +871,7 @@ html[lang='ar'] .side__item { font-size: 14.5px; }
 
 /* Counts: plain where they inform, solid where they ask. */
 .count { display: inline-grid; place-items: center; min-inline-size: 22px; block-size: 20px; padding-inline: 6px; border-radius: 6px; background: var(--surface-2); color: var(--ink-2); font-family: var(--font); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1; }
-.count--urgent { background: var(--urgent); color: #fff; }
+.count--urgent { background: var(--urgent-solid); color: #fff; }
 .count--quiet { background: transparent; color: var(--ink-muted); }
 
 /* People: one neutral tint, a photo when there is one. */
@@ -834,7 +893,7 @@ html[lang='ar'] .side__item { font-size: 14.5px; }
 }
 .avatar--sm { inline-size: 28px; block-size: 28px; border-radius: 8px; font-size: 12px; }
 .avatar--lg { inline-size: 56px; block-size: 56px; border-radius: 14px; font-size: 20px; }
-.avatar--t1, .avatar--t2, .avatar--t3, .avatar--t4, .avatar--t5 { background: #ece7dc; color: var(--ink-2); }
+.avatar--t1, .avatar--t2, .avatar--t3, .avatar--t4, .avatar--t5 { background: var(--avatar-bg); color: var(--ink-2); }
 .avatar--photo { overflow: hidden; background: var(--surface-2); }
 .avatar--photo img { inline-size: 100%; block-size: 100%; object-fit: cover; display: block; }
 
@@ -973,7 +1032,7 @@ a.ledger__cell:hover, button.ledger__cell:hover { background: var(--surface-hove
   font: inherit;
 }
 .page button:not([class]):not(.switch > *) { min-block-size: var(--control-h-sm); padding: 0 12px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--surface); color: var(--ink); font: inherit; font-size: var(--fs-sm); font-weight: 600; cursor: pointer; }
-.page button[type='submit']:not([class]) { background: var(--teal); border-color: var(--teal); color: #fff; }
+.page button[type='submit']:not([class]) { background: var(--teal-solid); border-color: var(--teal); color: #fff; }
 
 /* ================================================================== auth */
 
@@ -1240,3 +1299,28 @@ button.side__item.is-current::before { content: none; }
 :is(tr, li, .rowx):is(:hover, :focus-within) .row-actions2__open, .row-actions2__open:focus-within { opacity: 1; }
 :is(tr, li, .rowx):has(.row-actions2--reveal) :is(a, button, input, select, textarea, label, summary, .menu):not(.row-actions2__open > a) { position: relative; z-index: 1; }
 @media (hover: none) { .row-actions2__open { opacity: 1; } }
+
+/* The theme switch (account menu): Light, Dark, Auto as one segmented control. */
+.theme-switch { display: grid; gap: 6px; margin: 0 0 4px; padding: 8px 10px 10px; border-block-end: 1px solid var(--line-2); }
+.theme-switch__title { font-size: var(--fs-xs); color: var(--ink-muted); }
+.theme-switch__group { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px; padding: 2px; border-radius: 9px; background: var(--surface-2); }
+.theme-switch__option { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-block-size: 32px; padding: 0 8px; border: 0; border-radius: 7px; background: none; color: var(--ink-muted); font: inherit; font-size: var(--fs-sm); cursor: pointer; white-space: nowrap; }
+.theme-switch__option:hover { color: var(--ink); }
+.theme-switch__option[aria-checked='true'] { background: var(--surface); color: var(--ink); font-weight: 600; box-shadow: 0 0 0 1px var(--line), var(--shadow-xs, 0 1px 2px rgba(0, 0, 0, 0.08)); }
+.theme-switch__option[aria-checked='true'] .icon { color: var(--teal); }
+.theme-switch__option:focus-visible { outline-offset: -2px; }
+/* The account menus are wide enough for the three words. */
+:is(.side__account, .topbar__account) .menu__popover { min-inline-size: 250px; }
+
+/* The wordmark on a dark surface: the logo's own colours on the light plate they were drawn for
+   (not recoloured, not swapped for a lighter variant). The folded rail's gold book reads on dark as it is. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .brand { display: inline-flex; padding: 5px 9px; border-radius: 9px; background: #fbf8f1; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06); }
+  :root:not([data-theme='light']) .brand > .brand-logo--light { display: block; }
+  :root:not([data-theme='light']) .brand > .brand-logo--dark { display: none; }
+}
+
+/* The same, when the person chose Dark (the theme switch; data-theme on <html>). */
+:root[data-theme='dark'] .brand { display: inline-flex; padding: 5px 9px; border-radius: 9px; background: #fbf8f1; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06); }
+:root[data-theme='dark'] .brand > .brand-logo--light { display: block; }
+:root[data-theme='dark'] .brand > .brand-logo--dark { display: none; }

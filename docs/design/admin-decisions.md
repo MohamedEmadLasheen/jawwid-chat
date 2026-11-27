@@ -118,6 +118,30 @@ This replaces the earlier "labelled navigation" instruction.
 - **SVG.** The SVG wraps the exact PNG. Tracing it into vectors would be a redraw, which the brief rules out.
 - **Provenance:** `docs/design/brand-mark/README.md`.
 
+### Owner review, 2026-11-28: calmer, clearer pages
+- **Folded sidebar.**
+  - Icons are 22px with a 2px stroke (1.85px when the sidebar is open).
+  - The rail has four sections set off by quiet rules: tools (search, bell); the day's work (Today, Conversations, Dashboard); the academy (People, Sales, Schedule & lessons); what the academy hands out and takes in (Certificates & materials, Finance, Communication); then Admin & Settings.
+  - There are nine places instead of eleven. Needs action, Lesson audio and the Teachers department's Trial lessons are now the "Lesson follow-up" group of **Schedule & lessons**. Educational materials joined **Certificates & materials**. Every page stays one click away in its place's menu; the Marketing designer's single page is still a direct link.
+- **Secondary text.** `--ink-muted` is now #4c5e62 (6.9:1 on white; dark theme #b2c1c3). The small sizes are half a step larger (English 13.5/14px, Arabic 14/14.5px). The line under a name and a row's facts use the next size up.
+- **A row's repeated "Open" link.**
+  - When a row's one action is a link to its own page, it appears only on hover and keyboard focus. Touch screens always show it.
+  - The whole row opens it: the link's hit area covers the row, and the row's other controls sit above that area. Real actions (Approve, Record payment, …) are buttons and stay visible. This lives in `RowActions` (`reveal` overrides the default).
+- **Dashboard.** A section's figures at zero fold into one quiet "N more at zero" that a reader may open.
+- **Schedule.** A week cell with nothing booked and nothing to flag is a quiet blank. It still opens the day, and its facts stay in its name and tooltip. Idle teachers no longer say "0 h booked".
+
+### Dark theme and the theme switch (owner's instruction, 2026-11-28)
+- **Three modes:** Light, Dark and Auto. Auto is the default and follows the device.
+  - The switch is in the account menu (the sidebar foot on desktop, the face in the top bar on phones) as a radio group, beside the language.
+  - The choice is kept per device in `localStorage` under `jawwid.theme`. Light or Dark sets `data-theme` on `<html>`; Auto removes it.
+  - `public/theme-init.js` applies the choice before the first paint, so there is no flash. It is a same-origin file loaded synchronously from `index.html`, because the CSP allows `script-src 'self'` only, never inline script.
+- **Forced dark.** Every Auto-dark rule (`@media (prefers-color-scheme: dark)` with `:root:not([data-theme='light'])`) now has its forced twin under `:root[data-theme='dark']`. The twins were added to `system.css`, `tokens.css`, `design-system.css` and `slot-picker.css`; chat and the trial badge already had theirs. `core/theme/darkTwins.test.ts` fails if a twin is missing or differs.
+- **Solid fills.** The text colours `--teal` and `--urgent` turn light in dark, so fills under white text use new tokens: `--teal-solid` (#2a7f8c in dark, 4.6:1 with white), `--teal-solid-hover` and `--urgent-solid` (#c4463a, 5.1:1). This covers primary buttons, counts, the selected chip and badges; light mode is unchanged. Avatars use `--avatar-bg` (#23383c in dark). Dark sets `color-scheme: dark`, so native controls (date pickers, scrollbars) are dark too.
+- **Brand.**
+  - On dark surfaces (the opened sidebar, the phone top bar, sign-in), the wordmark is the original lockup on a small cream plate (#fbf8f1), its own colours on the surface they were drawn for. The lighter "dark" lockup variant reads dim on dark, and using it would be a recolour.
+  - The folded rail's gold book mark reads well on dark and has no plate.
+- **Review.** Every page was shot in dark, folded and opened, in Arabic and English, plus phones, and the menus, tooltip, dialog, search, schedule day and month views and row hover. Auto, forced Light on a dark device, and forced Dark on a light device were each verified.
+
 ## Lead decisions while integrating
 - Shared fixes the builders reported went into `system.css` (outline tags without dashes, table row headers, neutral dots visible on white, stacked-sheet spacing, Arabic count size, switch buttons, one-letter Arabic avatars, a neutral note under an urgent figure); the teachers stylesheet's global `.sheet + .sheet` rule moved into the system.
 - "Teacher profiles" in Arabic reads "مؤهلات المعلمين" (credentials review): it shared its name with Teacher files.
