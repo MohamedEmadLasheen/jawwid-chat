@@ -658,6 +658,10 @@ html[lang='ar'] .field__label { font-size: 13.5px; }
 .badge--now:not(:has(.badge__dot))::before, .badge--danger:not(:has(.badge__dot))::before,
 .badge--now .badge__dot, .badge--danger .badge__dot { background: var(--terracotta); }
 .badge--outline { border: 0; color: var(--ink-muted); }
+/* PD-32: the Trial label keeps its own violet pair, the same as the app's. It is a
+   small square tag with its own glyph, so it takes no status dot. */
+.badge.badge--trial { background: var(--trial-bg) !important; color: var(--trial-fg); padding: 1px 7px; border-radius: var(--radius-sm); font-size: var(--fs-xs); gap: 4px; }
+.badge.badge--trial::before { display: none; }
 /* A badge that only counts is a number, not a status. */
 .badge--count::before { display: none; }
 
