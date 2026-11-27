@@ -1,20 +1,9 @@
 /* PD-52: the teacher-records pages. Tokens only; logical properties (the pages are Arabic-first). */
-.tr-toolbar { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: flex-end; margin-block: var(--space-4) var(--space-3); }
-.tr-picker { inline-size: min(100%, 18rem); margin: 0; }
-
-/* One teacher's record in a ruled line: the name, then each fact after a hairline. */
-.tr-strip { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 0; padding: 10px 2px; border: 0; border-block: 1px solid var(--hairline); border-radius: 0; background: none; font-size: var(--fs-sm); color: var(--ink-muted); }
-.tr-strip > * { padding-inline-end: var(--space-4); }
-.tr-strip > * + * { padding-inline-start: var(--space-4); border-inline-start: 1px solid var(--hairline); }
-.tr-strip__name { font-family: var(--display); font-size: var(--fs-lg); font-weight: 600; color: var(--ink); }
-.tr-strip .badge { align-self: center; }
-.tr-strip__file { margin-inline-start: auto; padding-inline-end: 0; border-inline-start: 0 !important; color: var(--teal); font-weight: 600; text-decoration: none; }
-.tr-strip__file:hover { color: var(--teal-dark); text-decoration: underline; text-underline-offset: 3px; }
-@media (max-width: 767px) {
-  .tr-strip { display: grid; gap: 4px; justify-items: start; }
-  .tr-strip > * + * { padding-inline-start: 0; border-inline-start: 0; }
-  .tr-strip__file { margin-inline-start: 0; min-block-size: 44px; display: inline-flex; align-items: center; }
-}
+.tr-toolbar { margin-block-end: var(--space-5); }
+.tr-toolbar .sheet-bar { align-items: flex-end; border-block-end: 0; }
+.tr-picker { inline-size: min(100%, 20rem); margin: 0; }
+/* Who is chosen, beside the page's title. */
+.tr-chosen { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px var(--space-2); }
 
 /* Not this reader's page: one line and a lock. */
 .tr-denied { display: flex; align-items: center; gap: 10px; margin: 0; padding: var(--space-4) 2px; border-block-start: 1px solid var(--hairline); color: var(--ink); font-size: var(--fs-md); }

@@ -173,7 +173,10 @@ describe('a teacher file', () => {
   it('records a complaint resolution against the complaint it resolves', async () => {
     on('POST', /\/teacher-files\/t-1\/entries$/, () => json({ id: 'r-1', kind: 'complaint_resolution', createdAt: '2026-10-18T10:00:00Z' }, 201))
     renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/files/t-1?tab=records' })
-    await userEvent.click(await screen.findByRole('button', { name: 'Resolve' }))
+    // A complaint states its next step; Resolve is behind its menu.
+    const complaints = await screen.findByRole('region', { name: 'Complaints' })
+    await userEvent.click(await within(complaints).findByRole('button', { name: /^More actions/ }))
+    await userEvent.click(await within(complaints).findByRole('menuitem', { name: 'Resolve' }))
     const dialog = await screen.findByRole('dialog')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
     expect(within(dialog).getByText('Required.')).toBeInTheDocument()

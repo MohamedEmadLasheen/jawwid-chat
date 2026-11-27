@@ -3,6 +3,7 @@ import { useI18n } from '@/core/i18n/I18nProvider'
 import { LESSONS, countLabel } from '@/core/i18n/counts'
 import '@/features/teachers/stack-table.css'
 import { Badge, type Tone } from '@/shared/components/Badge'
+import { RowActions } from '@/shared/components/RowActions'
 import { FilterChips } from '@/shared/components/FilterChips'
 import { PageHeader } from '@/shared/components/PageHeader'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
@@ -68,7 +69,7 @@ export function LeaveRequestsList({ basePath }: { basePath: string }) {
         <EmptyState icon="lock" title={describeError(list.error, locale)} />
       ) : (
         <>
-          <div className="toolbar">
+          <div className="sheet-bar">
             <FilterChips<Filter>
               label={tx(S.leaveTitle)}
               value={filter}
@@ -138,29 +139,31 @@ export function LeaveRequestsList({ basePath }: { basePath: string }) {
                               )}
                             </div>
                           </td>
-                          <td className="stack-wide">
+                          <td className="stack-wide cell-actions">
                             <div className="sv-actions">
-                              {r.state === 'requested' ? (
-                                <>
-                                  <button type="button" className="btn btn--primary btn--sm" onClick={() => setApproving(r)}>
-                                    {tx(S.approve)}
-                                  </button>
-                                  <button type="button" className="btn btn--ghost btn--sm" onClick={() => setDeclining(r)}>
-                                    {tx(S.decline)}
-                                  </button>
-                                </>
-                              ) : (
-                                <>
-                                  <Badge tone={state.tone} dot>
-                                    {tx(state.label)}
-                                  </Badge>
-                                  {r.state === 'approved' && (
-                                    <button type="button" className="btn btn--ghost btn--sm" onClick={() => setCancelling(r)}>
-                                      {tx(S.cancelLeave)}
-                                    </button>
-                                  )}
-                                </>
+                              {r.state !== 'requested' && (
+                                <Badge tone={state.tone} dot>
+                                  {tx(state.label)}
+                                </Badge>
                               )}
+                              {/* One decision is stated; the other is behind the menu. */}
+                              <RowActions
+                                primary={
+                                  r.state === 'requested' ? (
+                                    <button type="button" className="btn btn--primary btn--sm" onClick={() => setApproving(r)}>
+                                      {tx(S.approve)}
+                                    </button>
+                                  ) : undefined
+                                }
+                                more={
+                                  r.state === 'requested'
+                                    ? [{ key: 'decline', label: tx(S.decline), icon: 'xCircle', danger: true, onSelect: () => setDeclining(r) }]
+                                    : r.state === 'approved'
+                                      ? [{ key: 'cancel', label: tx(S.cancelLeave), icon: 'calendarX', danger: true, onSelect: () => setCancelling(r) }]
+                                      : []
+                                }
+                                label={tx(S.moreFor, { name: r.teacher.name ?? '' })}
+                              />
                             </div>
                           </td>
                         </tr>

@@ -177,7 +177,9 @@ describe('leave requests', () => {
     await screen.findByText('No leave requests here.')
     await userEvent.click(screen.getByRole('button', { name: 'Approved' }))
     const row = (await screen.findByText('Family wedding')).closest('tr')!
-    await userEvent.click(within(row).getByRole('button', { name: 'Cancel leave' }))
+    // Cancelling is behind the row's menu.
+    await userEvent.click(within(row).getByRole('button', { name: /^More actions/ }))
+    await userEvent.click(await within(row).findByRole('menuitem', { name: 'Cancel leave' }))
     const dialog = await screen.findByRole('dialog')
     await userEvent.type(within(dialog).getByLabelText('Reason (the teacher sees it)'), 'Plans changed')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel leave' }))

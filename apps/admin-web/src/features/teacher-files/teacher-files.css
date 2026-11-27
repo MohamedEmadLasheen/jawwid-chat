@@ -68,6 +68,7 @@
 .tf-entry__head { display: flex; flex-wrap: wrap; gap: 2px var(--space-3); align-items: baseline; }
 .tf-entry__head > strong { font-size: var(--fs-md); font-weight: 600; }
 .tf-entry__actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-block-start: 4px; }
+.tf-entry:last-child { border-block-end: 0; }
 .tf-entry__body { margin: 0; max-inline-size: 76ch; font-size: var(--fs-md); white-space: pre-wrap; overflow-wrap: anywhere; }
 .tf-followup { padding-inline-start: var(--space-3); border-inline-start: 2px solid var(--hairline); display: grid; gap: 2px; }
 .tf-followup .tf-entry__body { font-size: var(--fs-sm); }

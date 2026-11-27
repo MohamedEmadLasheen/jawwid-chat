@@ -7,7 +7,7 @@ import { ParentFeedbackSection } from '@/features/teacher-supervision/ParentFeed
 import { ComplaintsSection } from '@/features/teacher-supervision/RewardsAndComplaints'
 import { R, useCopy } from './copy'
 import { useTeacherRecordsAccess } from './hooks'
-import { Denied, TeacherPicker, TeacherStrip } from './TeacherStrip'
+import { Denied, TeacherPicker, useTeacherFacts } from './TeacherStrip'
 import './teacher-records.css'
 
 export type AttendanceSection = 'leave' | 'lateness' | 'excuses' | 'complaints'
@@ -53,6 +53,7 @@ export function TeacherAttendancePage({ basePath, eyebrow }: { basePath: string;
     complaints: tx(R.complaints),
   }
 
+  const facts = useTeacherFacts(teacher || null, basePath)
   const a = access.data
   if (access.isLoading) return <LoadingState />
   if (!a || !a.attendance.view) {
@@ -70,7 +71,14 @@ export function TeacherAttendancePage({ basePath, eyebrow }: { basePath: string;
   return (
     <div className="page">
       <div className="page__inner">
-        <PageHeader eyebrow={eyebrow ?? tx(R.group)} title={tx(R.attendanceTitle)} subtitle={tx(R.attendanceSubtitle)} />
+        <PageHeader
+          eyebrow={eyebrow ?? tx(R.group)}
+          title={tx(R.attendanceTitle)}
+          status={facts.status}
+          subtitle={tx(R.attendanceSubtitle)}
+          figures={facts.figures}
+          actions={facts.action}
+          tabs={
         <FilterChips<AttendanceSection>
           variant="tabs"
           label={tx(R.sections)}
@@ -78,7 +86,10 @@ export function TeacherAttendancePage({ basePath, eyebrow }: { basePath: string;
           onChange={(next) => set({ section: next })}
           options={sections.map((s) => ({ value: s, label: label[s] }))}
         />
-        <div className="tr-toolbar">
+          }
+        />
+        <div className="sheet tr-toolbar">
+          <div className="sheet-bar">
           <TeacherPicker value={teacher} onChange={setTeacher} />
           {/* The parents' suggestions are answered by those who decide; not Sales'. */}
           {section === 'complaints' && !sales && (
@@ -92,8 +103,8 @@ export function TeacherAttendancePage({ basePath, eyebrow }: { basePath: string;
               ]}
             />
           )}
+          </div>
         </div>
-        <TeacherStrip teacherId={teacher || null} basePath={basePath} />
         <div className="th-body">
           {section === 'leave' && <LeaveSection basePath={basePath} />}
           {section === 'lateness' && <LatenessSection {...rights} trialsOnly={sales} />}

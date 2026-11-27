@@ -71,6 +71,12 @@ export const R = {
   yearGrants: { en: '{n} grants in {year}', ar: 'المنح في {year}: {n}' },
   yearTestimonials: { en: '{n} testimonials in {year}', ar: 'الشهادات الطيبة في {year}: {n}' },
   openFile: { en: 'Open the Teacher File', ar: 'فتح ملف المعلم' },
+  // The chosen teacher's figures, in the masthead
+  figLadder: { en: 'Counted this month', ar: 'المحسوبة هذا الشهر' },
+  figNext: { en: 'next step: {step}', ar: 'الخطوة التالية: {step}' },
+  figOpenComplaints: { en: 'Open complaints', ar: 'شكاوى مفتوحة' },
+  figGrants: { en: 'Grants in {year}', ar: 'المنح في {year}' },
+  figTestimonials: { en: 'Testimonials in {year}', ar: 'الشهادات الطيبة في {year}' },
   // PD-52 PR-5
   about: { en: 'Student or trial', ar: 'الطالب أو الحصة التجريبية' },
   trialOf: { en: '{name} (trial)', ar: '{name} (تجريبية)' },

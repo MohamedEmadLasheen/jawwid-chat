@@ -1,8 +1,10 @@
 import { useId } from 'react'
+import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Badge } from '@/shared/components/Badge'
 import { Icon } from '@/shared/components/Icon'
+import type { MastFigure } from '@/shared/components/PageHeader'
 import { SearchableSelect } from '@/shared/components/SearchableSelect'
 import { DECISION_LABEL } from '@/features/discipline/copy'
 import type { Decision } from '@/features/discipline/api'
@@ -12,7 +14,7 @@ import { useSupervisionDirectory } from '@/features/teacher-files/hooks'
 import { R, useCopy } from './copy'
 import { useTeacherSummary } from './hooks'
 
-/** The teachers the caller works on (the page's own directory), searchable. */
+/** The teachers the caller works on (the page's own directory), searchable: the control the sheets below answer to. */
 export function TeacherPicker({ value, onChange }: { value: string; onChange: (teacherId: string) => void }) {
   const tx = useCopy()
   const id = useId()
@@ -35,33 +37,42 @@ export function TeacherPicker({ value, onChange }: { value: string; onChange: (t
 }
 
 /**
- * PD-52 §5.5: one teacher's strip, computed by the server on read. Counts are
- * of what the caller may see, except the ladder, which is the teacher's.
+ * PD-52 §5.5: one teacher's facts, computed by the server on read, for the
+ * page's masthead: who is chosen and whether they are away, up to four
+ * figures, and the way into their file. Counts are of what the caller may
+ * see, except the ladder, which is the teacher's. A section the caller's key
+ * does not cover comes back null and is left out (review of #374).
  */
-export function TeacherStrip({ teacherId, basePath }: { teacherId: string | null; basePath: string }) {
+export function useTeacherFacts(teacherId: string | null, basePath: string): { status?: ReactNode; figures?: MastFigure[]; action?: ReactNode } {
   const tx = useCopy()
   const { number } = useI18n()
   const summary = useTeacherSummary(teacherId)
   const s = summary.data
-  if (!teacherId || !s) return null
-  // A section the caller's key does not cover comes back null and is left out (review of #374).
+  if (!teacherId || !s) return {}
   const ladder = s.ladder
   const step = ladder ? DECISION_LABEL[ladder.nextStep as Decision] : null
-  return (
-    <section className="tr-strip" aria-label={s.teacher.name}>
-      <strong className="tr-strip__name" dir="auto">{s.teacher.name}</strong>
-      {ladder && (s.away ? <AwayBadge away={s.away} /> : <Badge tone="ok">{tx(R.available)}</Badge>)}
-      {ladder && <span>{tx(R.ladder, { n: number(ladder.counted), step: step ? tx(step) : ladder.nextStep })}</span>}
-      {s.openComplaints !== null && <span>{tx(R.openComplaints, { n: number(s.openComplaints) })}</span>}
-      {s.grants !== null && <span>{tx(R.yearGrants, { n: number(s.grants), year: s.year })}</span>}
-      {s.testimonials !== null && <span>{tx(R.yearTestimonials, { n: number(s.testimonials), year: s.year })}</span>}
-      {s.opensFile && (
-        <Link className="tr-strip__file" to={teacherFilePath(basePath, s.teacher.id)}>
-          {tx(R.openFile)}
-        </Link>
-      )}
-    </section>
-  )
+  const figures: MastFigure[] = [
+    ...(ladder ? [{ key: 'ladder', label: tx(R.figLadder), value: number(ladder.counted), note: tx(R.figNext, { step: step ? tx(step) : ladder.nextStep }) }] : []),
+    ...(s.openComplaints !== null ? [{ key: 'complaints', label: tx(R.figOpenComplaints), value: number(s.openComplaints), tone: s.openComplaints > 0 ? ('urgent' as const) : ('quiet' as const) }] : []),
+    ...(s.grants !== null ? [{ key: 'grants', label: tx(R.figGrants, { year: s.year }), value: number(s.grants) }] : []),
+    ...(s.testimonials !== null ? [{ key: 'testimonials', label: tx(R.figTestimonials, { year: s.year }), value: number(s.testimonials) }] : []),
+  ]
+  return {
+    status: (
+      <span className="tr-chosen" role="group" aria-label={s.teacher.name}>
+        <Badge tone="info">
+          <bdi>{s.teacher.name}</bdi>
+        </Badge>
+        {ladder && (s.away ? <AwayBadge away={s.away} /> : <Badge tone="ok" dot>{tx(R.available)}</Badge>)}
+      </span>
+    ),
+    figures,
+    action: s.opensFile ? (
+      <Link className="btn" to={teacherFilePath(basePath, s.teacher.id)}>
+        {tx(R.openFile)}
+      </Link>
+    ) : undefined,
+  }
 }
 
 /** Not this reader's page: one calm line and a lock, never a red block. */
