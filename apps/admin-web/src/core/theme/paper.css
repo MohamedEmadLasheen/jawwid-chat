@@ -1058,3 +1058,10 @@ html[lang='ar'] .auth .login__title { font-weight: 700; line-height: 1.4; }
 .login:not(.auth) .login__title { font-family: var(--display); }
 /* A picker's list floats over the page. */
 .ss__popup { box-shadow: var(--shadow-pop); border-color: var(--hairline); border-radius: var(--radius-lg); }
+
+/* The rail is paper in both schemes, so its lockup follows the scheme like any other. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .sidebar .brand-logo--light { display: none; }
+  :root:not([data-theme='light']) .sidebar .brand-logo--dark { display: block; }
+  :root:not([data-theme='light']) .auth__brand { background: var(--paper-dark); }
+}
