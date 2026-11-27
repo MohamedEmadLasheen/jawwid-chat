@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { Fragment, useState, type ReactNode } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { journeyApi, journeyKeys, type CorrectionRequest } from '@/features/journey/api'
 import { LessonRecordDialog } from '@/features/journey/LessonRecordDialog'
@@ -6,7 +6,8 @@ import { J } from '@/features/journey/copy'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { relativeTime } from '@/features/admin/copy'
 import type { MenuItem } from '@/shared/components/Menu'
-import { PageHeader, type MastFigure } from '@/shared/components/PageHeader'
+import { PageHeader } from '@/shared/components/PageHeader'
+import { FilterChips } from '@/shared/components/FilterChips'
 import { RowActions } from '@/shared/components/RowActions'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
 import { ActionDialog, type FieldSpec, type FieldValue } from './ActionDialog'
@@ -76,15 +77,6 @@ export function NeedsActionPage() {
     : []
   const active = only && queues.some((f) => f.key === only) ? only : null
   const show = (key: QueueKey) => active === null || active === key
-  const figures: MastFigure[] = queues.slice(0, 4).map((f) => ({
-    key: f.key,
-    label: f.label,
-    value: number(f.count),
-    tone: f.late ? 'urgent' : undefined,
-    onClick: () => setOnly(active === f.key ? null : f.key),
-    pressed: active === f.key,
-  }))
-
   const recordStudentAbsent = (l: LessonDto) => run(tx(O.studentAbsent), [noteField(false)], (v) => opsApi.absence(l.id, v('note') || undefined))
   const noteField = (required: boolean, label: Pair = required ? O.note : O.noteOptional): FieldSpec => ({ key: 'note', label, type: 'textarea', required })
   /**
@@ -94,7 +86,7 @@ export function NeedsActionPage() {
    */
   const lessonActions = (l: LessonDto, late = false) => ({
     primary: late ? (
-      <button type="button" className="btn btn--sm btn--primary" onClick={() => setAskOf(l.id)}>
+      <button type="button" className="btn btn--sm" onClick={() => setAskOf(l.id)}>
         {tx(J.requestReport)}
       </button>
     ) : (
@@ -113,18 +105,31 @@ export function NeedsActionPage() {
   return (
     <div className="page">
       <div className="page__inner">
-        <PageHeader title={tx(O.needsTitle)} subtitle={tx(O.needsSubtitle)} figures={figures} tabs={<TeachersAreaTabs />} />
+        <PageHeader title={tx(O.needsTitle)} tabs={<TeachersAreaTabs />} />
         <QueryBoundary isLoading={q.isLoading} error={q.error} onRetry={() => void q.refetch()}>
           {empty && (
             <section className="sheet">
               <EmptyState title={tx(O.allClear)} hint={tx(O.allClearHint)} />
             </section>
           )}
-          {d && (
-            <>
+          {d && !empty && (
+            <div className="sheet ts-inbox">
+              {/* The inbox: every row says why it is here; the queues filter it. */}
+              <div className="sheet-bar">
+                <FilterChips<QueueKey | 'all'>
+                  label={tx(O.inboxShow)}
+                  value={active ?? 'all'}
+                  onChange={(k) => setOnly(k === 'all' ? null : k)}
+                  formatCount={number}
+                  options={[
+                    { value: 'all', label: tx(O.inboxAll), count: queues.reduce((n, f) => n + f.count, 0) },
+                    ...queues.map((f) => ({ value: f.key, label: f.label, count: f.count })),
+                  ]}
+                />
+              </div>
               <Section show={show('overdue')} late title={tx(O.overdue)} hint={tx(O.overdueHint)} count={d.overdue.length}>
                 {d.overdue.map((l) => (
-                  <LessonRow key={l.id} lesson={l} late {...lessonActions(l, true)} label={moreFor(l.learner.name)} />
+                  <LessonRow key={l.id} lesson={l} late why={O.whyOverdue} {...lessonActions(l, true)} label={moreFor(l.learner.name)} />
                 ))}
               </Section>
               <Section show={show('rulings')} title={tx(O.rulings)} hint={tx(O.rulingsHint)} count={d.rulings.length}>
@@ -132,13 +137,10 @@ export function NeedsActionPage() {
                   <LessonRow
                     key={r.id}
                     lesson={r.lesson}
-                    detail={
-                      <span>
-                        {tx(O.reason)}: <bdi>{r.reason}</bdi>
-                      </span>
-                    }
+                    why={O.whyRuling}
+                    reason={r.reason}
                     primary={
-                      <button type="button" className="btn btn--sm btn--primary" onClick={() => run(tx(O.excuse), [noteField(false)], (v) => opsApi.decideRuling(r.id, { decision: 'excused', note: v('note') || undefined }))}>
+                      <button type="button" className="btn btn--sm" onClick={() => run(tx(O.excuse), [noteField(false)], (v) => opsApi.decideRuling(r.id, { decision: 'excused', note: v('note') || undefined }))}>
                         {tx(O.excuse)}
                       </button>
                     }
@@ -155,10 +157,11 @@ export function NeedsActionPage() {
                     key={l.id}
                     lesson={l}
                     late
+                    why={O.whyMakeup}
                     primary={
                       <button
                         type="button"
-                        className="btn btn--sm btn--primary"
+                        className="btn btn--sm"
                         onClick={() =>
                           run(
                             tx(O.resolve),
@@ -200,7 +203,7 @@ export function NeedsActionPage() {
               </Section>
               <Section show={show('awaiting')} title={tx(O.awaiting)} count={d.awaitingClose.length}>
                 {d.awaitingClose.map((l) => (
-                  <LessonRow key={l.id} lesson={l} {...lessonActions(l)} label={moreFor(l.learner.name)} />
+                  <LessonRow key={l.id} lesson={l} why={O.whyAwaiting} {...lessonActions(l)} label={moreFor(l.learner.name)} />
                 ))}
               </Section>
               <Section show={show('blocked')} title={tx(O.blocked)} hint={tx(O.blockedHint)} count={blocked.length}>
@@ -212,7 +215,9 @@ export function NeedsActionPage() {
                           <bdi>{b.learner.name}</bdi>
                         </strong>
                         <span className="rw-sub">
-                          <bdi>{b.teacher.name}</bdi> · <bdi>{whenIn(b.startsAt, ACADEMY_ZONE, locale)}</bdi> · {formatMinutes(minutesBetween(b.startsAt, b.endsAt), locale)}
+                          {nodes(tx(O.withTeacher), { teacher: <bdi>{b.teacher.name}</bdi> })}{locale === 'ar' ? '، ' : ', '}
+                          <bdi>{whenIn(b.startsAt, ACADEMY_ZONE, locale)}</bdi>{locale === 'ar' ? '، ' : ', '}
+                          {formatMinutes(minutesBetween(b.startsAt, b.endsAt), locale)}
                         </span>
                       </span>
                     </div>
@@ -228,7 +233,7 @@ export function NeedsActionPage() {
                     <div className="cell-actions">
                       <RowActions
                         primary={
-                          <button type="button" className="btn btn--sm btn--primary" onClick={() => setScheduling(b)}>
+                          <button type="button" className="btn btn--sm" onClick={() => setScheduling(b)}>
                             {tx(O.scheduleElsewhere)}
                           </button>
                         }
@@ -261,9 +266,7 @@ export function NeedsActionPage() {
                         <strong className="rw-name">
                           <bdi>{r.learner.name}</bdi>
                         </strong>
-                        <span className="rw-sub">
-                          {tx(O.returnOn)}: {formatDay(r.returnOn, locale)}
-                        </span>
+                        <span className="rw-reason">{nodes(tx(O.whyReturning), { date: <bdi>{formatDay(r.returnOn, locale)}</bdi> })}</span>
                       </span>
                     </div>
                     <div className="cell-actions">
@@ -279,7 +282,7 @@ export function NeedsActionPage() {
                   </div>
                 ))}
               </Section>
-            </>
+            </div>
           )}
         </QueryBoundary>
         {dialog && (
@@ -329,7 +332,7 @@ function ScheduleRequestRow({ r, label, onApprove, onReject }: { r: ScheduleRequ
           {r.requestedBy && (
             <span className="rw-sub" dir="auto">
               {fill(tx(r.requestedBy.kind === 'teacher' ? O.requestedByTeacher : O.requestedByFamily), { name: r.requestedBy.name })}
-              {r.teacher ? ` · ${tx(O.teacher)}: ${r.teacher.name}` : ''}
+              {r.teacher ? <>{locale === 'ar' ? '، ' : ', '}{nodes(tx(O.withTeacher), { teacher: <bdi>{r.teacher.name}</bdi> })}</> : null}
             </span>
           )}
         </span>
@@ -338,7 +341,7 @@ function ScheduleRequestRow({ r, label, onApprove, onReject }: { r: ScheduleRequ
         {r.requested ? (
           <dl className="ts-diff">
             <dt>{tx(O.before)}</dt>
-            <dd>{r.current && r.current.length ? r.current.map((c) => weeklyLabel(c.nextStartsAt, locale)).join(' · ') : tx(O.none)}</dd>
+            <dd>{r.current && r.current.length ? r.current.map((c) => weeklyLabel(c.nextStartsAt, locale)).join(locale === 'ar' ? '، ' : ', ') : tx(O.none)}</dd>
             <dt>{tx(O.after)}</dt>
             <dd>
               <ul className="ts-diff__slots">
@@ -375,7 +378,7 @@ function ScheduleRequestRow({ r, label, onApprove, onReject }: { r: ScheduleRequ
       <div className="cell-actions">
         <RowActions
           primary={
-            <button type="button" className="btn btn--sm btn--primary" disabled={stale} aria-describedby={stale ? warnId : undefined} onClick={onApprove}>
+            <button type="button" className="btn btn--sm" disabled={stale} aria-describedby={stale ? warnId : undefined} onClick={onApprove}>
               {tx(O.approve)}
             </button>
           }
@@ -405,7 +408,7 @@ const BY_STAFF: Pair = { en: 'by staff', ar: 'من الإدارة' }
 
 function CorrectionRow({ r, onHistory, onWithdraw }: { r: CorrectionRequest; onHistory: () => void; onWithdraw: () => void }) {
   const tx = useTx()
-  const { dateTime } = useI18n()
+  const { dateTime, locale } = useI18n()
   return (
     <div className="rowx">
       <div className="rw-who">
@@ -414,7 +417,7 @@ function CorrectionRow({ r, onHistory, onWithdraw }: { r: CorrectionRequest; onH
             <bdi>{r.learner.name}</bdi>
           </strong>
           <span className="rw-sub">
-            <bdi>{r.teacher.name}</bdi> · <bdi>{dateTime(r.lessonStartsAt)}</bdi>
+            {nodes(tx(O.withTeacher), { teacher: <bdi>{r.teacher.name}</bdi> })}{locale === 'ar' ? '، ' : ', '}<bdi>{dateTime(r.lessonStartsAt)}</bdi>
           </span>
         </span>
       </div>
@@ -423,7 +426,7 @@ function CorrectionRow({ r, onHistory, onWithdraw }: { r: CorrectionRequest; onH
         <span className="rw-sub">
           {tx(CORRECTION_STATUS[r.status])}
           {r.resolvedByKind === 'staff' && r.status !== 'withdrawn' ? ` (${tx(BY_STAFF)})` : ''}
-          {r.askedVersion !== null && r.resolvedVersion !== null ? ` · v${r.askedVersion} → v${r.resolvedVersion}` : ''}
+          {r.askedVersion !== null && r.resolvedVersion !== null ? <bdi className="ltr">{` (v${r.askedVersion} > v${r.resolvedVersion})`}</bdi> : null}
         </span>
       </div>
       <div className="cell-actions">
@@ -446,15 +449,13 @@ function Section({ title, hint, count, late, show = true, children }: { title: s
   const { number } = useI18n()
   if (count === 0 || !show) return null
   return (
-    <section className="sheet ts-queue" aria-label={title}>
-      <header className="sheet__head">
-        <div className="sheet__heading">
-          <h2 className="sheet__title">
-            {title}
-            <span className={late ? 'count count--urgent' : 'count count--quiet'}>{number(count)}</span>
-          </h2>
-          {hint && <p className="sheet__hint">{hint}</p>}
-        </div>
+    <section className="ts-group" aria-label={title}>
+      <header className="ts-group__head">
+        <h2 className="ts-group__title">
+          {title}
+          <span className={late ? 'count count--urgent' : 'count'}>{number(count)}</span>
+        </h2>
+        {hint && <p className="ts-group__hint">{hint}</p>}
       </header>
       <div className="ts-rows">{children}</div>
     </section>
@@ -462,27 +463,40 @@ function Section({ title, hint, count, late, show = true, children }: { title: s
 }
 
 /** A lesson waiting on a decision: whose, with whom and when, how long ago, and the one thing to do. */
-function LessonRow({ lesson: l, detail, late, primary, more, label }: { lesson: LessonDto; detail?: ReactNode; late?: boolean; primary: ReactNode; more?: MenuItem[]; label: string }) {
-  const { dateTime, locale } = useI18n()
+function LessonRow({ lesson: l, why, reason, late, primary, more, label }: { lesson: LessonDto; why: Pair; reason?: string; late?: boolean; primary: ReactNode; more?: MenuItem[]; label: string }) {
+  const { locale } = useI18n()
+  const tx = useTx()
   return (
-    <div className="rowx" data-lesson={l.id}>
-      <div className="rw-who">
+    <div className="rowx ts-item" data-lesson={l.id}>
+      <div className="rw-who ts-item__who">
         <span className="rw-who__text">
           <strong className="rw-name">
             <bdi>{l.learner.name}</bdi>
           </strong>
-          <span className="rw-sub">
-            <bdi>{l.teacher.name}</bdi> · <bdi>{dateTime(l.startsAt)}</bdi> · {formatMinutes(l.durationMinutes, locale)}
+          <span className="rw-reason">
+            {nodes(tx(why), {
+              teacher: <bdi>{l.teacher.name}</bdi>,
+              when: <bdi>{whenIn(l.startsAt, ACADEMY_ZONE, locale)}</bdi>,
+              reason: <bdi>{reason ?? ''}</bdi>,
+            })}{' '}
+            <span className="rw-sub">({formatMinutes(l.durationMinutes, locale)})</span>
           </span>
         </span>
       </div>
-      <div className="rw-meta">{detail}</div>
       <div className={late ? 'rw-age rw-age--late' : 'rw-age'}>{relativeTime(l.startsAt, locale)}</div>
       <div className="cell-actions">
         <RowActions primary={primary} more={more} label={label} />
       </div>
     </div>
   )
+}
+
+/** A sentence with people, times and quotes set in as isolated pieces, so a Latin name never reorders an Arabic line. */
+function nodes(template: string, parts: Record<string, ReactNode>): ReactNode {
+  return template.split(/(\{\w+\})/).map((piece, i) => {
+    const key = /^\{(\w+)\}$/.exec(piece)?.[1]
+    return <Fragment key={i}>{key && key in parts ? parts[key] : piece}</Fragment>
+  })
 }
 
 function useTx() {

@@ -238,3 +238,14 @@
 .ts-hours .ts-window { flex-wrap: nowrap; }
 .ts-hours .ts-window .ss { flex: 1 1 6rem; min-inline-size: 0; }
 .ts-note { display: block; margin-block-start: 2px; color: var(--ink-muted); font-size: var(--fs-xs); }
+
+/* Needs action: one inbox. The queues are groups inside it, each named with its count and its rule. */
+.ts-inbox { overflow: hidden; }
+.ts-group + .ts-group { border-block-start: 1px solid var(--line); }
+.ts-group__head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px var(--space-3); padding: 14px var(--space-4) 6px; }
+.ts-group__title { display: flex; align-items: center; gap: 8px; margin: 0; font-family: var(--font-head); font-size: var(--fs-md); font-weight: 600; }
+.ts-group__hint { margin: 0; font-size: var(--fs-xs); color: var(--ink-muted); }
+.ts-item .ts-item__who { flex: 1 1 28rem; }
+.ts-inbox .rowx { border-block-end: 1px solid var(--line-2); }
+.ts-inbox .ts-rows > :last-child { border-block-end: 0; }
+.ts-inbox .ts-stale, .ts-inbox .ts-slot--busy { color: var(--urgent); }

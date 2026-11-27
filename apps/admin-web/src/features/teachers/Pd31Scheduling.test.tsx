@@ -442,8 +442,8 @@ describe('Needs action (PD-31)', () => {
     renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/teachers/needs-action' })
     const section = await screen.findByRole('region', { name: 'Regular-time requests' })
     const stale = within(section).getByText('Child Alpha').closest('[data-request]') as HTMLElement
-    expect(within(stale).getByText('Asked by the family (Parent Alpha) · Teacher: Teacher One')).toBeInTheDocument()
-    expect(within(stale).getByText('Mon 17:00 · Thu 17:00')).toBeInTheDocument()
+    expect(stale).toHaveTextContent('Asked by the family (Parent Alpha), with Teacher One')
+    expect(within(stale).getByText('Mon 17:00, Thu 17:00')).toBeInTheDocument()
     expect(within(stale).getByText('Tue 18:00').closest('li')).toHaveTextContent('Tue 18:00 (no longer free)')
     expect(within(stale).getByText('Thu 17:00', { selector: 'li' })).toHaveTextContent('(free)')
     expect(within(stale).getByText('3 Nov')).toBeInTheDocument()
@@ -456,7 +456,7 @@ describe('Needs action (PD-31)', () => {
     await waitFor(() => expect(sent('POST', /q-1\/decide$/)).toEqual([{ decision: 'rejected', note: 'that time is gone' }]))
 
     const fresh = within(section).getByText('Child Beta').closest('[data-request]') as HTMLElement
-    expect(within(fresh).getByText('Asked by the teacher (Teacher Two) · Teacher: Teacher Two')).toBeInTheDocument()
+    expect(fresh).toHaveTextContent('Asked by the teacher (Teacher Two), with Teacher Two')
     expect(within(fresh).getByRole('button', { name: 'Approve' })).toBeEnabled()
   })
 
@@ -467,7 +467,7 @@ describe('Needs action (PD-31)', () => {
     on('POST', /\/lessons\/blocked\/b-1\/dismiss$/, () => json({ ok: true }, 201))
     renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/teachers/needs-action' })
     const section = await screen.findByRole('region', { name: 'Weekly lessons not scheduled' })
-    expect(section).toHaveTextContent('Teacher One · Mon 9 Nov 17:00 · 30 min')
+    expect(section).toHaveTextContent('with Teacher One, Mon 9 Nov 17:00, 30 min')
     expect(section).toHaveTextContent('Blocked by a make-up lesson at 17:00–17:30')
 
     await userEvent.click(within(section).getByRole('button', { name: 'Schedule at another time' }))
