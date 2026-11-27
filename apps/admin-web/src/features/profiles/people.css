@@ -349,8 +349,8 @@ a.pp-row__name:hover { color: var(--teal-dark); text-decoration: underline; text
 }
 .pp-list .table td { vertical-align: middle; }
 .pp-cell-who { display: inline-flex; align-items: center; gap: 10px; min-block-size: 32px; color: var(--ink); text-decoration: none; }
-.pp-cell-who > span:last-child { font-weight: 600; }
-.pp-cell-who:hover > span:last-child { color: var(--teal-dark); text-decoration: underline; text-underline-offset: 3px; }
+.pp-cell-who > :last-child { font-weight: 600; }
+.pp-cell-who:hover > :last-child { color: var(--teal-dark); text-decoration: underline; text-underline-offset: 3px; }
 .pp-cell-sub { display: block; font-size: var(--fs-xs); color: var(--ink-muted); font-weight: 400; }
 /* A person and the line under their name (their family, their title). */
 .pp-cell-two { display: inline-flex; align-items: center; gap: 10px; min-inline-size: 0; }
