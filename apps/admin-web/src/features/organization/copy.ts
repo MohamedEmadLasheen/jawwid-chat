@@ -29,8 +29,8 @@ export function useCopy() {
 export const T = {
   title: { en: 'Organization', ar: 'الهيكل التنظيمي' },
   subtitle: {
-    en: 'Who supervises each child, and who covers whom. Every change is checked by the server and recorded with its reason.',
-    ar: 'من يشرف على كل طفل، ومن ينوب عن من. يتحقق الخادم من كل تغيير ويسجّله مع سببه.',
+    en: 'Who supervises each child, and who covers whom. Every change is checked and recorded with its reason.',
+    ar: 'من يشرف على كل طفل، ومن ينوب عن من. يُراجَع كل تغيير ويُسجَّل مع سببه.',
   },
   tabChildren: { en: 'Children & supervisors', ar: 'الأطفال والمشرفون' },
   tabStructure: { en: 'Departments & backups', ar: 'الأقسام والبدلاء' },

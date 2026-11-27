@@ -17,8 +17,8 @@ export const SA = {
 
   title: { ar: 'حسابات الموظفين', en: 'Staff accounts' },
   subtitle: {
-    ar: 'حسابات القسم وأدوارها. يتحقق الخادم من كل إجراء، ويتطلب كل إجراء سببًا ويُسجَّل.',
-    en: 'Department accounts and their roles. The server checks every action; each needs a reason and is recorded.',
+    ar: 'حسابات القسم وأدوارها. يُراجَع كل إجراء، ويتطلب سببًا ويُسجَّل.',
+    en: 'Department accounts and their roles. Every action is checked, needs a reason and is recorded.',
   },
   newAccount: { ar: 'حساب جديد', en: 'New account' },
   empty: { ar: 'لا توجد حسابات موظفين لعرضها.', en: 'No staff accounts to show.' },
