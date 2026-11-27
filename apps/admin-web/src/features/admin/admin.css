@@ -1,90 +1,94 @@
 /*
- * The super admin's section shells: Dashboard, Users and the unbuilt sections.
- * Ledgers and ruled lists on the paper; nothing here is a card.
+ * The super admin's sections: Dashboard, Users and the unbuilt sections.
+ * Work sits on sheets; the academy's totals and breakdowns are context on the
+ * canvas beside it.
  */
 
-.adm-label { margin: 0 0 6px; }
+/* ------------------------------------------------------------- dashboard */
 
-/* Dashboard: what is waiting (a short ledger) beside the academy's totals. */
-.adm-top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.7fr); gap: var(--space-6); align-items: start; margin-block: var(--space-5) var(--space-3); }
-@media (max-width: 1099px) { .adm-top { grid-template-columns: minmax(0, 1fr); gap: var(--space-2); } }
-.adm-ledger { margin-block-end: var(--space-5); }
-.adm-cell { position: relative; transition: background var(--dur-fast) var(--ease-out); }
-.adm-cell:focus-visible { outline-offset: -2px; }
-/* A waiting figure sits under a gold rule: it is where to look, not an error. */
-.adm-ledger--attn { border-block-start-color: var(--gold-line); }
-.adm-ledger--attn .adm-cell__label { white-space: normal; color: var(--ink); font-weight: 500; }
-.adm-cell__go { display: inline-flex; align-items: center; gap: 3px; margin-block-start: 6px; color: var(--teal); font-size: var(--fs-xs); font-weight: 600; }
-.adm-cell:hover .adm-cell__go { color: var(--teal-dark); text-decoration: underline; }
-.adm-clear { display: flex; align-items: center; gap: 8px; margin: 0 0 var(--space-5); padding: var(--space-4) 2px; border-block: 1px solid var(--hairline); color: var(--ink-muted); font-size: var(--fs-sm); }
-.adm-clear .icon { color: var(--success); }
+.adm-board { margin-block-start: var(--space-5); }
+.adm-board__main { display: grid; gap: var(--space-5); min-inline-size: 0; }
+.adm-board__main .sheet + .sheet { margin-block-start: 0; }
+.adm-board__side { min-inline-size: 0; }
 .adm-skeleton { display: grid; gap: var(--space-3); margin-block-end: var(--space-5); }
-.adm-stale { border-radius: 0; background: none; padding: 6px 0; padding-inline-start: var(--space-3); border-inline-start: 2px solid var(--gold-line); color: var(--gold-text); }
+.adm-stale { border-radius: var(--radius); }
 
-/* Below: recent conversations, and three short ruled lists beside them. */
-.dash .dash-main { gap: var(--space-7); }
-.dash .dash-side { gap: var(--space-6); }
-.adm-block { min-inline-size: 0; }
-.adm-block__head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); margin: 0; padding-block-end: 8px; border-block-end: 1px solid var(--hairline); }
-.adm-block__head .section-label { margin: 0; }
-.adm-block .card__link { font-size: var(--fs-xs); }
-.adm-block .dash-table th:first-child, .adm-block .dash-table td:first-child { padding-inline-start: 2px; }
-.adm-block .dash-table th:last-child, .adm-block .dash-table td:last-child { padding-inline-end: 2px; }
-.adm-block .dash-card__pad { padding: var(--space-3) 0; }
+/* What waits on us: each line is its count, what it is, and the way to it. */
+.adm-attn__head { display: flex; align-items: center; gap: 8px; }
+.adm-attn__row { color: inherit; text-decoration: none; }
+.adm-attn__n { flex: none; min-inline-size: 3.5rem; font-family: var(--display); font-size: var(--fs-2xl); font-weight: 600; line-height: 1.1; color: var(--terracotta); font-variant-numeric: tabular-nums lining-nums; unicode-bidi: isolate; }
+.adm-attn__row .rw-who { flex: 1 1 14rem; }
+.adm-attn__go { display: inline-flex; align-items: center; gap: 4px; flex: none; margin-inline-start: auto; color: var(--teal); font-size: var(--fs-sm); font-weight: 600; white-space: nowrap; }
+.adm-attn__row:hover .adm-attn__go { text-decoration: underline; text-underline-offset: 3px; }
+.adm-attn__row:focus-visible { outline-offset: -2px; }
+.adm-clear { display: flex; align-items: center; gap: 8px; margin: 0; padding: var(--space-4); color: var(--ink-muted); font-size: var(--fs-sm); }
+.adm-clear .icon { color: var(--success); }
+
+/* Recent conversations: a sheet with its own table. */
+.adm-recent .card__link { font-size: var(--fs-sm); font-weight: 600; color: var(--teal); }
+.adm-recent .dash-table th:first-child, .adm-recent .dash-table td:first-child { padding-inline-start: var(--space-4); }
+.adm-recent .dash-table th:last-child, .adm-recent .dash-table td:last-child { padding-inline-end: var(--space-4); }
+.adm-recent .dash-card__pad { padding: var(--space-3) var(--space-4); }
+
+/* The academy in numbers: plain lines on the canvas, each leading to its list. */
+.adm-totals__list { list-style: none; margin: 0; padding: 0; }
+.adm-total { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 0 var(--space-3); padding: 8px 0; border-block-end: 1px solid var(--hairline); color: inherit; text-decoration: none; }
+.adm-total__label { font-size: var(--fs-sm); color: var(--ink); }
+.adm-total__n { font-family: var(--display); font-size: var(--fs-xl); font-weight: 600; line-height: 1.2; font-variant-numeric: tabular-nums lining-nums; unicode-bidi: isolate; }
+.adm-total__sub { grid-column: 1 / -1; font-size: var(--fs-xs); color: var(--ink-muted); }
+.adm-total:hover .adm-total__label { color: var(--teal); text-decoration: underline; text-underline-offset: 3px; }
+
+.adm-block__head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); margin: 0 0 var(--space-2); }
+.adm-block__head .aside-group__title { margin: 0; }
+.adm-block .card__link { font-size: var(--fs-xs); font-weight: 600; color: var(--teal); }
 .adm-block .list-footnote { margin: 8px 0 0; font-size: var(--fs-xs); }
-
 /* A share of a whole: the row's own rule is inked as far as its share. */
 .adm-block .dist { gap: 0; }
-.adm-block .dist__row { gap: 7px var(--space-3); margin: 0; padding: 9px 2px 0; border-radius: 0; }
+.adm-block .dist__row { gap: 7px var(--space-3); margin: 0; padding: 8px 0 0; border-radius: 0; }
+.adm-block .dist__row:hover { background: none; }
+.adm-block .dist__row:hover .dist__label { color: var(--teal); }
 .adm-block .dist__label { color: var(--ink); }
-.adm-block .dist__value { font-family: var(--display); font-size: var(--fs-lg); font-weight: 600; direction: ltr; unicode-bidi: isolate; }
-.adm-block .dist__bar { block-size: 2px; border-radius: 0; background: var(--hairline-soft); }
+.adm-block .dist__value { font-weight: 600; font-variant-numeric: tabular-nums; unicode-bidi: isolate; }
+.adm-block .dist__bar { block-size: 2px; border-radius: 0; background: var(--hairline); }
 .adm-block .dist__fill { border-radius: 0; background: var(--teal); }
 .adm-block .dist__fill--warn { background: var(--gold-line); }
 .adm-block .dist__fill--danger { background: var(--terracotta); }
 .adm-block .dist__fill--muted, .adm-block .dist__fill--neutral { background: var(--border-control); }
 .adm-block .dist__dot { inline-size: 7px; block-size: 7px; background: none; border: 1.5px solid var(--ink-muted); }
-.adm-block .dist__dot--warn { border-color: var(--gold-line); }
+.adm-block .dist__dot--warn { border-color: var(--gold-line); background: var(--gold-line); }
 .adm-block .dist__dot--info { border-color: var(--teal); }
 .adm-block .dist__dot--ok { border-color: var(--success); }
 .adm-block .dist__dot--danger { border-color: var(--terracotta); }
+.adm-roles { list-style: none; margin: 0 0 var(--space-3); padding: 0; }
+.adm-roles__row { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); padding: 7px 0; border-block-end: 1px solid var(--hairline); font-size: var(--fs-sm); }
+.adm-roles__n { font-weight: 600; font-variant-numeric: tabular-nums; unicode-bidi: isolate; }
+.adm-block .table--compact th { position: static; background: none; }
+.adm-block .table--compact th, .adm-block .table--compact td { padding-inline: 0; }
 
-.adm-roles { list-style: none; margin: 0 0 var(--space-4); padding: 0; }
-.adm-roles__row { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); padding: 7px 2px; border-block-end: 1px solid var(--hairline-soft); font-size: var(--fs-sm); }
-.adm-roles__n { font-weight: 600; font-variant-numeric: tabular-nums; direction: ltr; unicode-bidi: isolate; }
-.adm-block .table--compact th { position: static; }
+/* ----------------------------------------------------------------- users */
 
-/* Users: four real counts as one ruled line of numerals. */
-.summary-strip.ledger { gap: 0; }
-.summary-strip.ledger dd { margin: 0; font-size: var(--fs-kpi); font-weight: 600; }
-.summary-strip.ledger dt { font-size: 12.5px; font-weight: 400; }
-
-/* An unbuilt section: its own line first, then quietly that it is not open yet. */
-.adm-soon { padding-block: 0 var(--space-2); }
-.adm-soon__line { margin: 0; max-inline-size: 44ch; font-family: var(--display); font-size: var(--fs-2xl); font-weight: 600; line-height: 1.35; color: var(--ink); }
-html[lang='ar'] .adm-soon__line { font-weight: 700; line-height: 1.6; }
-.adm-soon__note { margin: var(--space-3) 0 0; padding-inline-start: var(--space-3); border-inline-start: 2px solid var(--gold-line); font-size: var(--fs-sm); color: var(--ink-muted); }
-.adm-soon__status { color: var(--gold-text); font-weight: 600; }
-.adm-soon__legacy { margin-block-start: var(--space-3); font-size: var(--fs-sm); color: var(--ink-muted); }
-.adm-soon__legacy summary { display: flex; align-items: center; min-block-size: 32px; color: var(--teal); cursor: pointer; }
-.adm-soon__aside { margin-block-start: var(--space-7); }
-.adm-soon__aside .section-label { margin: 0; padding-block-end: 8px; border-block-end: 1px solid var(--hairline); }
-.adm-soon__list { list-style: none; margin: 0; padding: 0; }
-.adm-soon__link { display: grid; grid-template-columns: 20px minmax(120px, 14rem) minmax(0, 1fr) 14px; align-items: center; gap: var(--space-3); min-block-size: 44px; padding: 8px 2px; border-block-end: 1px solid var(--hairline-soft); color: inherit; text-decoration: none; font-size: var(--fs-sm); transition: background var(--dur-fast) var(--ease-out); }
-.adm-soon__link:hover { background: var(--surface-hover); }
-.adm-soon__link:focus-visible { outline-offset: -2px; }
-.adm-soon__link > .icon:first-child { color: var(--teal); }
-.adm-soon__link > .icon:last-child { color: var(--ink-muted); }
-.adm-soon__name { font-weight: 600; }
-.adm-soon__purpose { color: var(--ink-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-@media (max-width: 767px) {
-  .adm-soon__line { font-size: var(--fs-xl); }
-  .adm-soon__link { grid-template-columns: 20px minmax(0, 1fr) 14px; }
-  .adm-soon__purpose { display: none; }
-}
-
-/* Users: the type chips stay on one line and scroll on a phone, so none is left alone on a row. */
+.adm-users .rowlist tbody tr { cursor: pointer; }
+.adm-users .rowlist tbody tr[aria-selected='true'] { background: var(--teal-tint); box-shadow: inset 3px 0 0 var(--gold); }
+[dir='rtl'] .adm-users .rowlist tbody tr[aria-selected='true'] { box-shadow: inset -3px 0 0 var(--gold); }
+/* The type chips stay on one line and scroll on a phone, so none is left alone on a row. */
 @media (max-width: 767px) {
   .adm-users .chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; max-inline-size: 100%; }
   .adm-users .chips .chip { flex: none; }
 }
+
+/* -------------------------------------------------------- unbuilt sections */
+
+/* One sheet says what the section will hold; the sections open today are a quiet list beside it. */
+.adm-soon__line { margin: 0; max-inline-size: 40ch; font-family: var(--display); font-size: var(--fs-2xl); font-weight: 600; line-height: 1.35; color: var(--ink); }
+html[lang='ar'] .adm-soon__line { font-weight: 700; line-height: 1.6; }
+.adm-soon__note { margin: var(--space-4) 0 0; font-size: var(--fs-sm); color: var(--ink-muted); }
+.adm-soon__status { color: var(--gold-text); font-weight: 600; }
+.adm-soon__legacy { margin-block-start: var(--space-3); font-size: var(--fs-sm); color: var(--ink-muted); }
+.adm-soon__legacy summary { display: flex; align-items: center; min-block-size: 32px; color: var(--teal); cursor: pointer; }
+.adm-soon__list { list-style: none; margin: 0; padding: 0; }
+.adm-soon__link { display: grid; grid-template-columns: 20px minmax(0, 1fr) 14px; align-items: center; gap: var(--space-3); min-block-size: 44px; padding: 6px 0; border-block-end: 1px solid var(--hairline); color: inherit; text-decoration: none; font-size: var(--fs-sm); }
+.adm-soon__link:hover .adm-soon__name { color: var(--teal); text-decoration: underline; text-underline-offset: 3px; }
+.adm-soon__link > .icon:first-child { color: var(--teal); }
+.adm-soon__link > .icon:last-child { color: var(--ink-muted); }
+.adm-soon__name { font-weight: 600; }
+@media (max-width: 767px) { .adm-soon__line { font-size: var(--fs-xl); } }

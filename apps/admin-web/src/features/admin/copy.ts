@@ -76,6 +76,7 @@ export const TEXT = {
   people: { en: 'People', ar: 'الأشخاص' },
   needsAttention: { en: 'Needs attention', ar: 'يحتاج إلى متابعة' },
   totals: { en: 'In the academy', ar: 'في الأكاديمية' },
+  willHold: { en: 'What this section will hold', ar: 'ما سيضمه هذا القسم' },
   nothingNeedsAttention: { en: 'Nothing needs attention right now.', ar: 'لا شيء يحتاج إلى متابعة الآن.' },
   waitingOnUsItem: { en: 'Conversations waiting on a reply from us', ar: 'محادثات بانتظار ردّنا' },
   draftStoriesItem: { en: 'Stories still in draft', ar: 'حالات ما زالت مسودة' },

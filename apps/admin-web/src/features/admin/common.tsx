@@ -24,7 +24,7 @@ export function StatusBadge({ status }: { status: AdminSectionStatus }) {
   const tx = useText()
   if (status !== 'in_development') return null
   return (
-    <Badge tone="outline">{tx(TEXT.inDevelopment)}</Badge>
+    <Badge tone="warn">{tx(TEXT.inDevelopment)}</Badge>
   )
 }
 
