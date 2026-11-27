@@ -197,20 +197,56 @@ describe('the thread pane before a conversation is chosen', () => {
       conv('c3', { title: 'Waited longest', needsReply: true, lastActivityAt: '2026-10-12T08:00:00.000Z' }),
     ])
     renderChat()
-    const start = (await screen.findByRole('button', { name: 'Open conversation' })).closest('.cw-start') as HTMLElement
-    expect(within(start).getByRole('heading', { level: 2, name: 'Waited longest' })).toBeInTheDocument()
-    expect(within(start).getByText('Needs reply')).toBeInTheDocument()
-    expect(within(start).getByText('and 1 more waiting')).toBeInTheDocument()
+    // The reply queue: a heading with its count, then the waiting conversations as rows, the longest wait first.
+    const first = await screen.findByRole('button', { name: 'Open: Waited longest' })
+    const queue = first.closest('.cw-start') as HTMLElement
+    expect(within(queue).getByRole('heading', { level: 2, name: /^Needs a reply\s*2$/ })).toBeInTheDocument()
+    expect(within(queue).getAllByRole('heading', { level: 3 }).map((h) => h.textContent)).toEqual(['Waited longest', 'Wrote today'])
+    // One solid button on the pane: the conversation to take now.
+    expect(first).toHaveClass('btn--primary')
+    expect(within(queue).getByRole('button', { name: 'Open: Wrote today' })).not.toHaveClass('btn--primary')
+    expect(within(queue).queryByText('Read already')).not.toBeInTheDocument()
 
-    fireEvent.click(within(start).getByRole('button', { name: 'Open conversation' }))
+    fireEvent.click(first)
     expect(screen.getByTestId('where')).toHaveTextContent('/chat/c3')
   })
 
-  it('says so in one calm line when nothing waits', async () => {
+  it('says so in one calm line when nothing waits, and lists what is unread', async () => {
+    stubApi([conv('c1'), conv('c2', { title: 'Not read yet', unreadCount: 2 })])
+    renderChat()
+    expect(await screen.findByRole('heading', { level: 2, name: 'No conversation is waiting for a reply.' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Open: Not read yet' })).toBeInTheDocument()
+  })
+
+  it('with nothing waiting and nothing unread it is one calm line', async () => {
     stubApi([conv('c1')])
     renderChat()
     expect(await screen.findByText('No conversation is waiting for a reply.')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Open conversation' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Open:/ })).not.toBeInTheDocument()
+  })
+
+  it('the list is the same queue in sections: needs a reply, unread, everything else, each with its count', async () => {
+    stubApi([
+      conv('c1', { title: 'Read already' }),
+      conv('c2', { title: 'Wrote today', needsReply: true, lastActivityAt: '2026-10-14T09:00:00.000Z' }),
+      conv('c3', { title: 'Waited longest', needsReply: true, lastActivityAt: '2026-10-12T08:00:00.000Z' }),
+      conv('c4', { title: 'Not read yet', unreadCount: 2 }),
+      conv('c5', { title: 'Pinned and read', viewerState: { pinned: true, archived: false, mutedUntil: null } }),
+    ])
+    renderChat()
+    await screen.findByRole('button', { name: 'Open: Waited longest' })
+    const list = document.getElementById('chat-list')!
+    expect(within(list).getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toEqual(['Needs a reply2', 'Unread1', 'Everything else2'])
+    expect([...list.querySelectorAll('.conv-row__name')].map((n) => n.textContent)).toEqual([
+      'Waited longest', 'Wrote today', 'Not read yet', 'Pinned and read', 'Read already',
+    ])
+    // A row carries ONE state at its end: how long it has waited, or what is unread.
+    const waited = within(list).getByText('Waited longest').closest('.conv-row') as HTMLElement
+    expect(waited.querySelector('.cw-row__waited')).not.toBeNull()
+    expect(within(list).getByLabelText('2 unread')).toBeInTheDocument()
+    // The tabs filter within the grouping.
+    fireEvent.click(within(list).getByRole('button', { name: /^Unread/ }))
+    expect([...list.querySelectorAll('.conv-row__name')].map((n) => n.textContent)).toEqual(['Not read yet'])
   })
 })
 
@@ -263,7 +299,7 @@ describe('the list from the keyboard', () => {
     stubApi([WITH_PARENT])
     renderChat('/chat/c1')
     await screen.findByLabelText('Message')
-    fireEvent.click(screen.getByRole('button', { name: 'Conversation info' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Group info' }))
     const sheet = await screen.findByRole('dialog', { name: 'Group info' })
     fireEvent.keyDown(sheet, { key: 'Escape' })
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Group info' })).not.toBeInTheDocument())
@@ -280,39 +316,56 @@ describe('the family beside the conversation', () => {
   }
   const openInfo = async (title = 'Group info') => {
     await screen.findByLabelText('Message')
-    fireEvent.click(screen.getByRole('button', { name: 'Conversation info' }))
+    // The conversation's name in the header opens the panel.
+    fireEvent.click(screen.getByRole('button', { name: title }))
     return screen.findByRole('dialog', { name: title })
   }
 
-  it('shows the parent, the children with their teacher, the package, the last payment, what is due and the open request', async () => {
-    stubApi([DIRECT_WITH_PARENT], FAMILY_ROUTES)
+  it('Family tab: money first on its own sheet, then the children with teacher and next lesson, then the parent', async () => {
+    stubApi([DIRECT_WITH_PARENT], {
+      ...FAMILY_ROUTES,
+      '/learners/k1/profile': {
+        id: 'k1', name: 'Kid One', avatarUrl: null, age: null, course: null, teacher: { id: 't9', name: 'Teacher Nine' }, viewer: 'staff',
+        schedule: [{ weekday: 6, start: '14:00', durationMinutes: 30, timezone: 'Africa/Cairo', nextStartsAt: '2026-11-28T12:00:00.000Z' }],
+      },
+    })
     renderChat('/chat/c1')
     const sheet = await openInfo('Contact info')
-    const family = await within(sheet).findByRole('region', { name: 'Family' })
+    // The family leads: its tab is the one open.
+    expect(await within(sheet).findByRole('button', { name: 'Family', pressed: true })).toBeInTheDocument()
 
-    expect(within(family).getByRole('link', { name: 'Parent One' })).toHaveAttribute('href', '/parents/parent-1')
-    expect(within(family).getByText('+20 100 555 0101')).toHaveAttribute('dir', 'ltr')
-    // What is owed, in the display face; late money is marked late.
-    const figure = within(family).getByText('18,000.00')
+    const money = await within(sheet).findByRole('region', { name: 'Payments' })
+    const figure = within(money).getByText('18,000.00')
     expect(figure).toHaveClass('numeral')
     expect(figure.closest('.cw-fam__sum')).toHaveClass('cw-fam__sum--late')
     // The currency sits where the payments formatter puts it, the same side as every other amount here.
     expect(figure.closest('.cw-fam__figure')).toHaveTextContent(/^EGP\s?18,000\.00$/)
-    expect(within(family).getByText(/9,600\.00 overdue · 32 days late/)).toBeInTheDocument()
-    // Children link to their profiles; a teacher shows where the server answered, and is simply absent where it did not.
-    expect(within(family).getByRole('link', { name: 'Kid One' })).toHaveAttribute('href', '/students/k1')
-    expect(await within(family).findByText('Teacher Nine')).toBeInTheDocument()
-    expect(within(family).getByRole('link', { name: 'Kid Two' })).toBeInTheDocument()
-    expect(within(family).getByText('3-month plan')).toBeInTheDocument()
+    expect(within(money).getByText(/9,600\.00 overdue · 32 days late/)).toBeInTheDocument()
     // The newest payment, not the first in the list.
-    expect(within(family).getByText(/3,600\.00/)).toBeInTheDocument()
-    expect(within(family).queryByText(/1,000\.00/)).not.toBeInTheDocument()
-    expect(within(family).getByText('Package 2/3')).toBeInTheDocument()
-    expect(within(family).getByRole('link', { name: 'Parent profile' })).toHaveAttribute('href', '/parents/parent-1')
+    expect(within(money).getByText(/3,600\.00/)).toBeInTheDocument()
+    expect(within(money).queryByText(/1,000\.00/)).not.toBeInTheDocument()
+    expect(within(money).getByText('Package 2/3')).toBeInTheDocument()
+    expect(within(money).getByText('3-month plan')).toBeInTheDocument()
+    // ONE solid button; the rest are quiet.
+    expect(within(money).getByRole('button', { name: 'Record a payment' })).toHaveClass('btn--primary')
+    expect(within(money).getByRole('button', { name: 'Request payment' })).not.toHaveClass('btn--primary')
+    expect(within(money).getByRole('link', { name: 'Parent file' })).toHaveAttribute('href', '/parents/parent-1')
+
+    // Children link to their profiles; a teacher and the next lesson show where the server answered.
+    const children = within(sheet).getByRole('region', { name: 'Children' })
+    expect(within(children).getByRole('link', { name: 'Kid One' })).toHaveAttribute('href', '/students/k1')
+    expect(await within(children).findByText('Teacher Nine')).toBeInTheDocument()
+    // 12:00 UTC is 14:00 in Cairo.
+    expect(within(children).getByText(/^Next lesson: Sat 28 Nov, 2:00\sPM$/)).toBeInTheDocument()
+    expect(within(children).getByRole('link', { name: 'Kid Two' })).toBeInTheDocument()
+
+    const parent = within(sheet).getByRole('region', { name: 'Parent' })
+    expect(within(parent).getByRole('link', { name: 'Parent One' })).toHaveAttribute('href', '/parents/parent-1')
+    expect(within(parent).getByText('+20 100 555 0101')).toHaveAttribute('dir', 'ltr')
   })
 
-  it('in a lesson group the children are listed once, under the family, with one "Children" heading', async () => {
-    const calls = stubApi([WITH_PARENT], {
+  it('Conversation tab: members, notifications and, in a lesson group, its children in full', async () => {
+    stubApi([WITH_PARENT], {
       ...FAMILY_ROUTES,
       '/conversations/c1/learners': {
         learners: [{ id: 'k1', name: 'Kid One', age: 9, course: null, packageLessons: 24, teacher: { id: 't9', name: 'Teacher Nine' }, schedule: [], canEdit: false }],
@@ -320,49 +373,74 @@ describe('the family beside the conversation', () => {
     })
     renderChat('/chat/c1')
     const sheet = await openInfo()
-    const family = await within(sheet).findByRole('region', { name: 'Family' })
-    expect(await within(sheet).findByText('Teacher Nine')).toBeInTheDocument()
+    await within(sheet).findByRole('region', { name: 'Payments' })
+    // One screen, one "Children" heading: the Family tab's.
     expect(within(sheet).getAllByText('Children')).toHaveLength(1)
-    // The family block leaves the children to the group's own list, and reads no child's profile for it.
-    expect(within(family).queryByText('Kid One')).not.toBeInTheDocument()
-    expect(calls.some((path) => path.startsWith('/learners/'))).toBe(false)
-    // The group's children come right after the family, before the conversation's own details.
-    const order = family.compareDocumentPosition(within(sheet).getByText('Children'))
-    expect(order & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(within(sheet).getByText('Children').compareDocumentPosition(within(sheet).getByText('Notifications')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(within(sheet).queryByText('Members')).not.toBeInTheDocument()
+
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Conversation' }))
+    expect(await within(sheet).findByText('Members')).toBeInTheDocument()
+    expect(within(sheet).getByText('Notifications')).toBeInTheDocument()
+    expect(within(sheet).getByRole('button', { name: 'Add member' })).toBeInTheDocument()
+    expect(within(sheet).getAllByText('Children')).toHaveLength(1)
+    expect(within(sheet).queryByRole('region', { name: 'Payments' })).not.toBeInTheDocument()
   })
 
   it('opens the Parent Profile dialogs for recording and requesting a payment', async () => {
     stubApi([WITH_PARENT], FAMILY_ROUTES)
     renderChat('/chat/c1')
     const sheet = await openInfo()
-    const family = await within(sheet).findByRole('region', { name: 'Family' })
+    const money = await within(sheet).findByRole('region', { name: 'Payments' })
     const before = screen.getAllByRole('dialog').length
-    fireEvent.click(within(family).getByRole('button', { name: 'Record payment' }))
+    fireEvent.click(within(money).getByRole('button', { name: 'Record a payment' }))
     expect(screen.getAllByRole('dialog')).toHaveLength(before + 1)
   })
 
-  it('is money-blind when the server refuses the money: the parent stays, no figure, no zero, no payment buttons', async () => {
-    stubApi([WITH_PARENT], { ...FAMILY_ROUTES, '/families/fam-1/billing': refused(403) })
+  it('the thread header carries the one urgent fact: late money as a solid tag', async () => {
+    stubApi([WITH_PARENT], FAMILY_ROUTES)
     renderChat('/chat/c1')
-    const sheet = await openInfo()
-    const family = await within(sheet).findByRole('region', { name: 'Family' })
-    expect(within(family).getByRole('link', { name: 'Parent One' })).toBeInTheDocument()
-    expect(within(family).queryByText('Amount due')).not.toBeInTheDocument()
-    expect(within(family).queryByText(/0\.00/)).not.toBeInTheDocument()
-    expect(within(family).queryByRole('button', { name: 'Record payment' })).not.toBeInTheDocument()
-    expect(within(family).queryByRole('button', { name: 'Request payment' })).not.toBeInTheDocument()
+    const head = (await screen.findByRole('button', { name: 'Group info' })).closest('.thread-head') as HTMLElement
+    const fact = await within(head).findByText(/9,600\.00 late/)
+    expect(fact).toHaveClass('badge--danger')
+    // It opens the panel on the family.
+    fireEvent.click(fact.closest('button')!)
+    expect(await screen.findByRole('dialog', { name: 'Group info' })).toBeInTheDocument()
   })
 
-  it('is absent, without a word, when the server refuses the family (403 or 404)', async () => {
+  it('money merely due is said in ink, not as a problem; nothing due says nothing', async () => {
+    const calm = { ...BILLING, totals: [{ currency: 'EGP', paidMinor: 360000, outstandingMinor: 360000, overdueMinor: 0 }] }
+    stubApi([WITH_PARENT], { ...FAMILY_ROUTES, '/families/fam-1/billing': calm })
+    renderChat('/chat/c1')
+    const head = (await screen.findByRole('button', { name: 'Group info' })).closest('.thread-head') as HTMLElement
+    const due = await within(head).findByText(/3,600\.00 due/)
+    expect(due).not.toHaveClass('badge--danger')
+    expect(within(head).queryByText(/late/)).not.toBeInTheDocument()
+  })
+
+  it('is money-blind when the server refuses the money: the parent stays, no figure, no zero, no payment buttons', async () => {
+    stubApi([DIRECT_WITH_PARENT], { ...FAMILY_ROUTES, '/families/fam-1/billing': refused(403) })
+    renderChat('/chat/c1')
+    const sheet = await openInfo('Contact info')
+    const parent = await within(sheet).findByRole('region', { name: 'Parent' })
+    expect(within(parent).getByRole('link', { name: 'Parent One' })).toBeInTheDocument()
+    expect(within(sheet).queryByRole('region', { name: 'Payments' })).not.toBeInTheDocument()
+    expect(within(sheet).queryByText('Amount due')).not.toBeInTheDocument()
+    expect(within(sheet).queryByText(/0\.00/)).not.toBeInTheDocument()
+    expect(within(sheet).queryByRole('button', { name: 'Record a payment' })).not.toBeInTheDocument()
+    expect(within(sheet).queryByRole('button', { name: 'Request payment' })).not.toBeInTheDocument()
+    // Nothing about money in the header either.
+    expect(document.querySelector('.cw-head__fact')).toBeNull()
+  })
+
+  it('has no Family tab at all, without a word, when the server refuses the family (403 or 404)', async () => {
     stubApi([WITH_PARENT], { ...FAMILY_ROUTES, '/parent-profiles/parent-1': refused(403), '/families/fam-1/billing': refused(404) })
     renderChat('/chat/c1')
     const sheet = await openInfo()
     await within(sheet).findByText('Members')
-    await waitFor(() => expect(within(sheet).queryByRole('region', { name: 'Family' })).not.toBeInTheDocument())
+    await waitFor(() => expect(within(sheet).queryByRole('button', { name: 'Family' })).not.toBeInTheDocument())
     // Nothing of it is left behind: no heading, no figure, no action.
     expect(within(sheet).queryByText('Amount due')).not.toBeInTheDocument()
-    expect(within(sheet).queryByRole('link', { name: 'Parent profile' })).not.toBeInTheDocument()
+    expect(within(sheet).queryByRole('link', { name: 'Parent file' })).not.toBeInTheDocument()
   })
 
   it('does not ask for a family at all when the profile is not offered to this viewer', async () => {
@@ -370,6 +448,7 @@ describe('the family beside the conversation', () => {
     renderChat('/chat/c1')
     const sheet = await openInfo()
     await within(sheet).findByText('Members')
+    expect(within(sheet).queryByRole('button', { name: 'Family' })).not.toBeInTheDocument()
     expect(calls.some((p) => p.startsWith('/parent-profiles') || p.startsWith('/families'))).toBe(false)
   })
 })

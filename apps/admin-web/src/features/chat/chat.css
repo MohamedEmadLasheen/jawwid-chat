@@ -1091,3 +1091,255 @@ mark.cw-hit { background: var(--gold-tint); color: inherit; border-radius: 2px; 
 @media (prefers-reduced-motion: reduce) {
   .cw .conv-row, .cw-composer, .cw-composer__bar, .cw-send, .cw-msg__menu { transition: none; }
 }
+
+/* ===================================================== second pass: recomposed */
+
+/*
+ * The workspace recomposed. The list is a white pane and a work queue: what
+ * is owed an answer, what is unread, everything else. The thread is a canvas
+ * between two white bars: who this is (with the family's one urgent fact and
+ * one primary control) above, a composer sheet below. The panel is two tabs.
+ * Emphasis is rationed: solid terracotta is a wait or late money, solid teal
+ * is unread or the one thing to press, gold is what stays inside Jawwid.
+ */
+
+/* ------------------------------------------------------------ the list pane */
+
+.cw.workspace { background: var(--paper); }
+.cw .workspace__list { background: var(--surface); }
+.cw .workspace__head { gap: 10px; padding-block-start: 14px; }
+.cw .workspace__title { font-size: 24px; }
+html[lang='ar'] .cw .workspace__title { font-size: 26px; }
+.cw .workspace__head .search .input { background-color: var(--paper); border-color: transparent; }
+.cw .workspace__head .search .input:hover { border-color: var(--border-strong); }
+.cw .workspace__head .search .input:focus { background-color: var(--surface); }
+
+/* A section of the queue: a small heading with a solid counter, stuck to the top while its rows pass. */
+.cw .cw-sec__title {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 12px var(--cw-pad) 6px;
+  border: 0;
+  background: var(--surface);
+  color: var(--ink-muted);
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+.cw-sec--needs .cw-sec__title { color: var(--terracotta); }
+.cw-sec--unread .cw-sec__title { color: var(--teal); }
+.cw-sec + .cw-sec { margin-block-start: 6px; border-block-start: 1px solid var(--hairline); }
+.cw-sec .count { min-inline-size: 19px; block-size: 19px; }
+
+.cw .conv-row__name { font-weight: 500; }
+.cw-sec--needs .conv-row__name, .cw-row__main--unread .conv-row__name { font-weight: 700; }
+.cw .conv-row__bottom { gap: 8px; }
+/* What this viewer set on the chat: quiet glyphs after the preview. */
+.cw-row__marks { display: inline-flex; align-items: center; gap: 6px; flex: none; color: var(--ink-muted); }
+.cw-row__marks:empty { display: none; }
+.cw-row__mark--cover { color: var(--teal); }
+.cw-row__word { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); }
+.cw-row__label { inline-size: 8px; block-size: 8px; border-radius: 50%; background: var(--cw-tone); }
+/* The one state at the row's end. */
+.cw-row__waited {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex: none;
+  color: var(--terracotta);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.cw-unread { min-inline-size: 20px; block-size: 20px; padding: 0 6px; border-radius: 10px; background: var(--teal); color: #fff; }
+.cw .conv-row .badge { font-size: 11.5px; padding-block: 1px; }
+
+/* ------------------------------------------------------------ thread header */
+
+.cw .thread-head { min-block-size: 64px; gap: 8px; padding-inline: 14px 12px; background: var(--surface); }
+.cw .thread-head__sub { display: inline-flex; align-items: center; gap: 0 6px; }
+.cw .thread-head__sub .cw-row__mark { margin-inline-start: 2px; }
+.cw-head__actions { gap: 8px; flex: none; }
+/* The family's one urgent fact: late money is a solid tag; money merely due is ink. */
+.cw-head__fact { display: inline-flex; align-items: center; padding: 3px; border: 0; border-radius: var(--radius); background: none; font: inherit; }
+button.cw-head__fact { cursor: pointer; }
+button.cw-head__fact:hover { background: var(--surface-hover); }
+.cw-head__fact .badge { padding: 4px 10px; font-size: var(--fs-sm); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.cw-head__due { padding-inline: 6px; color: var(--ink); font-size: var(--fs-sm); font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* The one primary control. */
+.cw-head__call { gap: 8px; min-block-size: 38px; padding-inline: 14px; }
+.cw .thread-head .cw-head__call { color: #fff; }
+.cw-calls__list { list-style: none; margin: 0; padding: 0; }
+.cw-calls__none { margin: 0; color: var(--ink-muted); }
+
+/* ------------------------------------------------------------------ thread */
+
+/* Where the viewer had read up to: a solid teal rule with a small "New". */
+.cw .athread__new { align-self: stretch; display: flex; align-items: center; gap: 10px; margin-block: 12px 6px; }
+.cw .athread__new::after { content: ''; flex: 1; border-block-start: 2px solid var(--teal); }
+.cw .athread__new span { padding: 1px 8px; border-radius: var(--radius-sm); background: var(--teal); color: #fff; font-size: 11.5px; font-weight: 600; }
+
+/* A reference card is a white sheet. Its start edge says what it is: teal for
+   what is simply so, gold for what asks someone to act, terracotta for a problem. */
+.cw .bubble-row.cw-msg.cw-msg--card .bubble {
+  padding: 12px 14px 8px;
+  border: 1px solid var(--hairline);
+  border-inline-start: 3px solid var(--teal);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+.cw .bubble-row.cw-msg.cw-msg--card-act .bubble { border-inline-start-color: var(--gold); }
+.cw .bubble-row.cw-msg.cw-msg--card-problem .bubble { border-inline-start-color: var(--terracotta); }
+.cw-card__title, .cw .cw-msg--card :is(.cp-card__heading, .jr-moved__title) { font-family: var(--font); font-size: var(--fs-md); font-weight: 600; }
+html[lang='ar'] .cw-card__title { font-family: var(--font-ar, var(--font)); font-weight: 600; }
+
+/* ---------------------------------------------------------------- composer */
+
+/* A white sheet docked at the foot of the canvas. On its top edge a segmented
+   switch: Message, or Internal note; the note turns the whole sheet gold paper. */
+.cw-composer {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+  margin: 0 var(--cw-pad) 14px;
+  padding: 0;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+.cw-composer:focus-within { border-color: var(--teal); box-shadow: 0 0 0 1px var(--teal); }
+.cw-composer__top { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; padding: 6px 8px; border-block-end: 1px solid var(--hairline-soft); }
+.cw-composer__modes { display: inline-flex; gap: 2px; padding: 2px; border-radius: var(--radius); background: var(--paper); }
+.cw-mode {
+  min-block-size: 30px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--ink-muted);
+  font-weight: 500;
+}
+.cw-mode:hover { color: var(--ink); }
+.cw-mode[aria-pressed='true'] { border: 0; background: var(--teal); color: #fff; font-weight: 600; }
+.cw-mode--internal[aria-pressed='true'] { background: var(--gold-text); color: #fff; }
+.cw-composer__flag { display: inline-flex; align-items: center; gap: 6px; margin-inline-start: auto; color: var(--gold-text); font-size: var(--fs-xs); font-weight: 600; }
+.cw-composer--internal { border-color: var(--gold-line); background: var(--gold-tint); }
+.cw-composer--internal:focus-within { border-color: var(--gold-text); box-shadow: 0 0 0 1px var(--gold-text); }
+.cw-composer--internal .cw-composer__top { border-block-end-color: color-mix(in srgb, var(--gold-line) 35%, transparent); }
+.cw-composer--internal .cw-composer__modes { background: color-mix(in srgb, var(--gold-line) 20%, transparent); }
+.cw-composer__bar, .cw-composer--internal .cw-composer__bar { gap: 2px; padding: 6px 8px; border: 0; border-radius: 0; background: none; }
+.cw-composer__bar:focus-within, .cw-composer--internal .cw-composer__bar:focus-within { border: 0; outline: none; }
+.cw-composer > :is(.cw-reply-banner, .cw-files, .cw-suggest, .cw-composer__over) { margin: 8px 8px 0; }
+/* Attach, quick replies and voice are quiet; Send is the one solid button. */
+.cw-composer__quick { inline-size: 36px; min-block-size: 36px; block-size: 36px; color: var(--teal); }
+.cw-send { inline-size: 40px; block-size: 36px; background: var(--teal); color: #fff; }
+.cw-send:disabled { background: var(--surface-sunken); color: var(--border-control); }
+.cw-composer--internal .cw-send:disabled { background: color-mix(in srgb, var(--gold-line) 20%, transparent); }
+.cw-select-bar { margin: 0 var(--cw-pad) 14px; border: 1px solid var(--hairline); border-radius: var(--radius-lg); background: var(--surface); padding: 8px 10px; }
+.cw .thread-readonly { margin: 0 var(--cw-pad) 14px; padding: 8px 14px; border: 1px solid var(--hairline); border-radius: var(--radius-lg); background: var(--surface); }
+
+/* ------------------------------------------------------------ context panel */
+
+.cw .workspace__panel { padding: 0 var(--cw-pad) 24px; background: var(--paper); }
+/* The tabs name the panel; its title stays for assistive technology. */
+.cw .workspace__panel-title { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); }
+.cw-info__tabs { position: sticky; inset-block-start: 0; z-index: 2; margin-inline: calc(-1 * var(--cw-pad)); padding-inline: var(--cw-pad); background: inherit; }
+.cw .workspace__panel .cw-info__tabs { background: var(--paper); }
+.cw-info__tabs .seg { gap: 20px; }
+.cw-info__tabs .seg__item { min-block-size: 44px; }
+.cw-info > .dp-section:first-of-type, .cw-info__tabs + .dp-section { border-block-start: 0; }
+
+/* Money first, on its own sheet, with the one solid button. */
+.cw-fam { margin-block: 14px 0; }
+.cw-money { padding: 14px 16px 14px; }
+.cw-money .cw-fam__due { padding: 0 0 12px; border: 0; }
+.cw-money .cw-fam__figure .numeral { font-size: 32px; }
+.cw-money .cw-fam__rows > .cw-fam__row:first-child { border-block-start-color: var(--hairline-soft); }
+.cw-money__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding-block-start: 14px; border-block-start: 1px solid var(--hairline-soft); }
+.cw-money__actions .btn--primary { flex: 1 1 100%; margin-block-end: 4px; }
+.cw-money__actions .btn--ghost { padding-inline: 8px; text-decoration: none; }
+.cw-fam .aside-group { margin-block-start: 20px; padding-block-start: 0; border: 0; }
+.cw-fam__children { gap: 0; }
+.cw-fam__children li { display: grid; gap: 0; padding-block: 8px; border-block-start: 1px solid var(--hairline); }
+.cw-fam__child { color: var(--ink); font-size: var(--fs-sm); font-weight: 600; text-decoration: none; }
+.cw-fam__child:hover { color: var(--teal); text-decoration: underline; text-underline-offset: 4px; }
+.cw-fam__next { font-size: var(--fs-xs); color: var(--teal); }
+.cw-fam .cw-fam__who { padding-block: 4px 8px; }
+.cw-fam__phone-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 0; padding-block: 8px; border-block-start: 1px solid var(--hairline); font-size: var(--fs-sm); }
+.cw-fam__phone { font-weight: 600; }
+.cw-fam__file { margin-inline-start: -8px; text-decoration: none; }
+.cw-fam__none { margin: 16px 0; color: var(--ink-muted); font-size: var(--fs-sm); }
+
+/* --------------------------------------------------- nothing selected: queue */
+
+.cw-start { padding: clamp(28px, 9vh, 96px) clamp(20px, 5vw, 72px) 20px; }
+.cw-queue { inline-size: 100%; max-inline-size: 760px; }
+.cw-queue__head { margin-block-end: 16px; }
+.cw-queue__title { display: flex; align-items: center; gap: 12px; margin: 0; font-family: var(--display); font-size: 28px; font-weight: 600; line-height: 1.25; }
+html[lang='ar'] .cw-queue__title { font-weight: 700; line-height: 1.5; }
+.cw-queue__title .count { min-inline-size: 26px; block-size: 26px; border-radius: 13px; font-family: var(--font); font-size: 13px; }
+.cw-queue__title--calm { font-size: var(--fs-xl); }
+.cw-queue__sub { display: flex; align-items: center; gap: 8px; margin: 8px 0 0; color: var(--ink-muted); font-size: var(--fs-sm); }
+.cw-queue__list { list-style: none; margin: 0; padding: 0; overflow: hidden; }
+.cw-queue__row { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-block-end: 1px solid var(--hairline-soft); }
+.cw-queue__row:last-child { border-block-end: 0; }
+.cw-queue__row .avatar { inline-size: 44px; block-size: 44px; font-size: 15px; }
+.cw-queue__who { flex: 1; min-inline-size: 0; display: grid; gap: 2px; }
+.cw-queue__name { margin: 0; font-size: var(--fs-lg); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cw-queue__said { display: flex; gap: 4px; min-inline-size: 0; margin: 0; color: var(--ink-muted); font-size: var(--fs-sm); }
+.cw-queue__said > span { flex: none; }
+.cw-queue__waited { flex: none; color: var(--terracotta); font-size: var(--fs-sm); font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.cw-queue__more { margin: 10px 2px 0; color: var(--ink-muted); font-size: var(--fs-sm); }
+
+/* ----------------------------------------------------- the read-only view */
+
+.cw-admin { flex: 1; display: flex; flex-direction: column; min-block-size: 0; min-inline-size: 0; overflow-x: clip; }
+.cw-admin__mast { flex: none; padding-inline: var(--space-5); }
+.cw-admin .page-header.mast { margin: 0; padding-block: 14px 0; }
+.cw-admin .figures { margin-block-start: 10px; }
+.cw-admin .figure { padding-block: 8px 10px; }
+.cw-admin .figure__n { font-size: 22px; }
+.cw-admin .workspace { border-block-start: 0; }
+/* The list's bar: search and order on one line, the kinds of conversation under them. */
+.cw-admin .workspace__head { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'search sort' 'bar bar'; gap: 10px 8px; padding-block-end: 0; }
+.cw-admin .workspace__head > .search { grid-area: search; }
+.cw-admin__sort { grid-area: sort; }
+.cw-admin__sort .select { min-block-size: 36px; }
+.cw-admin__bar { grid-area: bar; display: flex; min-inline-size: 0; }
+.cw-admin__bar .cw-filters { flex: 1; }
+
+/* ------------------------------------------------------------------ narrow */
+
+/* A phone shows the list, the thread and the panel as three full screens,
+   each under its own bar; the composer keeps clear of the home indicator. */
+@media (max-width: 767px) {
+  .cw .thread-head { min-block-size: 60px; padding-inline: 2px 8px; flex-wrap: wrap; row-gap: 0; }
+  .cw-head__who { flex: 1 1 0; }
+  .cw-head__actions { gap: 4px; }
+  /* The urgent fact takes its own line under the name, so the name keeps its room. */
+  .cw-head__fact { order: 9; flex: 1 1 100%; padding: 0 0 8px; padding-inline-start: 50px; }
+  .cw-head__call { inline-size: 44px; min-block-size: 44px; padding: 0; justify-content: center; }
+  .cw-head__call-word { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); }
+  .cw-head__fact .badge { padding: 3px 7px; font-size: var(--fs-xs); }
+  .cw-composer { margin: 0 8px calc(8px + env(safe-area-inset-bottom)); }
+  .cw-composer__flag { flex-basis: 100%; margin-inline-start: 4px; }
+  .cw-mode { min-block-size: 40px; }
+  .cw-select-bar, .cw .thread-readonly { margin: 0 8px calc(8px + env(safe-area-inset-bottom)); }
+  .cw .dialog--sheet { inline-size: 100%; padding-block-start: 0; }
+  .cw .dialog--sheet .dialog__header { position: sticky; inset-block-start: 0; z-index: 3; margin-inline: calc(-1 * var(--space-5)); padding: 10px var(--space-5); background: var(--surface); border-block-end: 1px solid var(--hairline); }
+  .cw-queue__row { flex-wrap: wrap; }
+  .cw-admin__mast { padding-inline: var(--space-4); }
+  .cw-admin[data-view='thread'] .cw-admin__mast { display: none; }
+  .cw-admin .page-header__actions .btn { min-block-size: 40px; }
+  .cw-admin .page-header.mast .mast__row { flex-wrap: nowrap; align-items: center; }
+  .cw-admin .page-header__title { font-size: 24px; }
+}
+@media (max-width: 767px), (pointer: coarse) {
+  .cw-composer__quick { inline-size: 44px; min-block-size: 44px; block-size: 44px; }
+  .cw-send { inline-size: 48px; }
+  .cw-money__actions .btn { min-block-size: 44px; }
+}

@@ -257,6 +257,8 @@ export function ChatComposer({
         </div>
       )}
       {!editing && (
+        <div className="cw-composer__top">
+        {/* A segmented switch on the sheet's top edge: what is sent to the family, or kept inside Jawwid. */}
         <div className="cw-composer__modes" role="group" aria-label={copy.sendAs}>
           <button
             type="button"
@@ -272,12 +274,14 @@ export function ChatComposer({
             aria-pressed={isInternal}
             onClick={() => setVisibility('internal')}
           >
-            <Icon name="lockNote" size={16} />
+            <Icon name="lock" size={16} />
             {copy.internal}
           </button>
-          {/* Said in words too, beside the tabs: the tint alone must not carry it. */}
+        </div>
+          {/* Said in words too, beside the switch: the gold paper alone must not carry it. */}
           {isInternal && (
             <span className="cw-composer__flag">
+              <Icon name="lock" size={14} />
               {copy.staffOnly}
             </span>
           )}
@@ -408,7 +412,6 @@ export function ChatComposer({
                 icon: 'paperclip',
                 onSelect: () => doc.current?.click(),
               },
-              { key: 'quick', label: copy.quickReplies, icon: 'bolt', onSelect: () => setQuickOpen(true) },
               ...extraItems,
             ]}
           />
@@ -524,6 +527,17 @@ export function ChatComposer({
             }
           }}
         />
+        {!editing && (
+          <button
+            type="button"
+            className="btn btn--ghost btn--icon cw-composer__quick"
+            aria-label={copy.quickReplies}
+            title={copy.quickReplies}
+            onClick={() => setQuickOpen(true)}
+          >
+            <Icon name="bolt" size={20} />
+          </button>
+        )}
         {!editing && (
           <VoiceRecorder
             conversationId={conversationId}
