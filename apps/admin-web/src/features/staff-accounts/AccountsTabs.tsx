@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { NavLink } from 'react-router-dom'
 import { useSession } from '@/core/auth/SessionProvider'
 import { holdsAny } from '@/core/permissions/capabilities'
@@ -27,8 +28,11 @@ const TABS: AccountsTab[] = [
   { key: 'roles', path: '/accounts/roles', label: SA.tabRoles, keys: ROLE_PAGE_KEYS },
 ]
 
-/** Links, not buttons: every tab is a real URL. One tab needs no strip. */
-export function AccountsTabs() {
+/**
+ * Links, not buttons: every tab is a real URL. One tab needs no strip, so the
+ * hook answers null and the masthead is drawn without a tab row.
+ */
+export function useAccountsTabs(): ReactNode | null {
   const tx = useCopy()
   const { staff } = useSession()
   const tabs = TABS.filter((t) => t.keys === null || holdsAny(staff, t.keys))
@@ -47,4 +51,9 @@ export function AccountsTabs() {
       ))}
     </nav>
   )
+}
+
+/** The same strip for a page that sets it outside a masthead. */
+export function AccountsTabs() {
+  return <>{useAccountsTabs()}</>
 }

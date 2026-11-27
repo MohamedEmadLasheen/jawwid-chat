@@ -1,4 +1,5 @@
 import { ApiError } from '@/core/api/errors'
+import type { CountForms } from '@/features/instalments/copy'
 import type { Pair } from '@/features/organization/copy'
 import type { AccountKind, AccountStatus } from './api'
 
@@ -22,6 +23,7 @@ export const A = {
   status: { en: 'Status', ar: 'الحالة' },
   lastLogin: { en: 'Last sign-in', ar: 'آخر تسجيل دخول' },
   actions: { en: 'Actions', ar: 'الإجراءات' },
+  more: { en: 'More actions: {name}', ar: 'إجراءات أخرى: {name}' },
   never: { en: 'Never', ar: 'لم يسجّل الدخول' },
   noLogin: { en: 'No password yet', ar: 'لا توجد كلمة مرور بعد' },
   locked: { en: 'Locked', ar: 'مقفل مؤقتًا' },
@@ -82,6 +84,8 @@ export const A = {
     ar: 'سيتمكن {name} من تسجيل الدخول مجددًا. تبقى الجلسات السابقة منتهية، فيسجّل الدخول من جديد.',
   },
 } satisfies Record<string, Pair>
+
+export const ACCOUNTS_COUNT: CountForms = { en: ['{n} account', '{n} accounts'], ar: ['حساب واحد', 'حسابان', '{n} حسابات', '{n} حسابًا'] }
 
 export const KIND: Record<AccountKind, Pair> = {
   family: { en: 'Parent', ar: 'ولي أمر' },

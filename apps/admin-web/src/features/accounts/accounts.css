@@ -1,40 +1,64 @@
-/* PD-21 account administration: a hairline table, quiet actions, the records as ruled lists. */
-@import '../profiles/people.css';
+/*
+ * PD-21 account administration.
+ *
+ * One sheet of people with one action each, then two records on sheets of
+ * their own. The sheet, its bar and its rows are the directory's (.dir-*); the
+ * records are a record's headed sheets (.rec-sheet, .rec-list). What is here
+ * is only what an account row adds to them.
+ *
+ *   .acct-table      a directory table whose rows act where they stand (no record to open)
+ *   .acct-state      the tags that say where an account stands
+ *   .acct-session    one support session: whose account, why, by whom and when
+ *   .acct-grants     the record of exceptional access
+ *   .acct-check, .acct-code   the reset dialog's choice and the one-time code
+ */
+@import '../profiles/record.css';
+@import '../profiles/directory.css';
 
-.acct-who { display: block; }
-.acct-who strong { font-weight: 600; }
-.acct-kind { font-size: var(--fs-xs); color: var(--ink-muted); font-weight: 400; margin-inline-start: 4px; }
-.acct-page .table td .badge + .badge { margin-inline-start: var(--space-2); }
+.acct-page .dir-sheet + .rec-sheet, .acct-page .rec-sheet + .rec-sheet { margin-block-start: var(--space-5); }
 
-/* What can be done to an account: quiet teal words on one line, graded by weight.
-   Resetting a password is the everyday act (semibold); devices and temporary access are
-   plain; setting an account inactive is terracotta; acting as the person is the one boxed
-   action, because it is the one that must never be pressed by mistake. */
-.acct-cell-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 2px; }
-.acct-actions { display: contents; }
-.acct-act.btn { white-space: nowrap; }
-.acct-act.btn--ghost { padding-inline: 8px; color: var(--teal); font-weight: 500; }
-.acct-act.btn--ghost:hover:not(:disabled) { color: var(--teal-dark); }
-.acct-cell-actions > .acct-act.btn--ghost:first-child { margin-inline-start: -8px; }
-.acct-act--main.btn--ghost { font-weight: 600; }
-.acct-danger.btn--ghost { color: var(--terracotta); }
-.acct-danger.btn--ghost:hover:not(:disabled) { color: var(--terracotta); background: var(--terracotta-tint); }
-.acct-as.btn { margin-inline: 6px; border-color: var(--gold-line); color: var(--gold-text); background: transparent; }
-.acct-as.btn:hover:not(:disabled) { background: var(--gold-tint); border-color: var(--gold-line); }
-@media (min-width: 768px) {
-  /* The account keeps to its column so the actions have theirs. */
-  .acct-page .table th:first-child { inline-size: 28%; }
-  .acct-page .table th:nth-child(4) { inline-size: 52%; }
-}
+/* A row here opens nothing: its actions are its end. */
+.acct-table .dir-row { cursor: default; }
+.acct-table .dir-row:hover .dir-name { color: var(--ink); }
+.acct-table strong.dir-name:hover { text-decoration: none; }
+.acct-table .dir-cell-who { inline-size: 46%; }
+/* The line under the name runs as text, so a long list of children wraps inside itself
+   and never leaves the family alone on a line. The dot trails the fact before it and
+   carries the place a line may break. */
+.acct-sub { display: block; font-size: var(--fs-xs); line-height: 1.55; color: var(--ink-muted); overflow-wrap: anywhere; }
+.acct-sub > :not(:last-child)::after { content: '·\200B'; margin-inline: 8px; color: var(--border-control); }
+.acct-state { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.acct-table time { font-variant-numeric: tabular-nums; }
+/* The stated action is plain until the row is under the pointer, as in every directory. */
+.acct-table .dir-row .row-actions2 > .btn { white-space: nowrap; }
+
+/* A support session: whose account, why it was opened, then by whom and when. */
+.acct-session__why { font-size: var(--fs-sm); line-height: 1.5; color: var(--ink); overflow-wrap: anywhere; }
+.acct-session .rec-attn__sub time, .acct-session .rec-attn__sub .ltr { font-variant-numeric: tabular-nums; }
+/* A live session is the one to see first: a terracotta edge, as a problem row carries everywhere. */
+.acct-session--live::before { content: ''; position: absolute; inset-block: 0; inset-inline-start: 0; inline-size: 3px; background: var(--terracotta); }
+.acct-session--live:last-child::before { border-end-start-radius: var(--radius-lg); }
+.acct-session > .rec-attn__act { grid-column: 2 / -1; }
+
+/* Exceptional access: a grant that is over is said, not stressed. */
+.acct-grants { margin-block-start: 8px; border-block-start: 1px solid var(--hairline-soft); }
+.acct-grant--over .dir-name { font-weight: 500; color: var(--ink-muted); }
+.acct-cell-person { color: var(--ink); font-weight: 500; }
+/* Ending someone's access is plain at rest and terracotta under the pointer. */
+.acct-revoke.btn:hover:not(:disabled), .acct-revoke.btn:focus-visible { border-color: var(--terracotta); background: var(--surface); color: var(--terracotta); }
+.acct-table .dir-row:hover .row-actions2 > .acct-revoke.btn { border-color: var(--terracotta); color: var(--terracotta); }
+
 @media (max-width: 767px) {
-  /* On a phone the words keep one line and the boxed action takes the next, the same on every row. */
-  .acct-cell-actions .acct-as { order: 5; margin-inline: 0; }
-  .acct-cell-actions .acct-act.btn--ghost { padding-inline: 6px; }
-  .acct-cell-actions > .acct-act.btn--ghost:first-child, .acct-actions > .acct-act.btn--ghost:first-child { margin-inline-start: -6px; }
+  /* On a phone the row keeps its actions: the stated one takes the width, "more" its own square. */
+  .acct-table .dir-cell-who { inline-size: auto; }
+  .acct-table.dir-table .dir-row > td.cell-actions:last-child { display: block; grid-column: 1 / -1; inline-size: auto; padding-block-start: 8px; white-space: normal; }
+  .acct-table.dir-table .dir-row > td.cell-actions:last-child:empty { display: none; }
+  .acct-table .row-actions2 { display: flex; }
+  .acct-table .row-actions2 > .btn { flex: 1; justify-content: center; border-color: var(--border-strong); color: var(--ink); }
+  .acct-state { justify-content: flex-end; }
+  .acct-session > .rec-attn__act { grid-column: 1 / -1; }
+  .acct-session .row-actions2, .acct-session .row-actions2 > .btn { inline-size: 100%; justify-content: center; }
 }
-/* A family's children are a short list: lines of even length, never one name alone. */
-.acct-page .pp-cell-sub { text-wrap: balance; }
-.acct-never { color: var(--ink-muted); }
 
 .acct-check { display: flex; gap: var(--space-2); align-items: flex-start; margin-block: var(--space-3); font-size: var(--fs-sm); }
 .acct-check input { margin-block-start: 3px; accent-color: var(--teal); }
@@ -50,21 +74,4 @@
   letter-spacing: 0.28em;
   text-align: center;
   user-select: all;
-}
-
-/* The records under the table: exceptional access and support sessions. */
-.acct-record { margin-block-start: var(--space-7); }
-.acct-record__title { margin: 0; padding-block-end: 8px; border-block-end: 1px solid var(--hairline); font-family: var(--display); font-size: var(--fs-xl); font-weight: 600; line-height: 1.3; }
-html[lang='ar'] .acct-record__title { font-weight: 700; line-height: 1.5; }
-.acct-record > .field__hint { display: block; margin: 8px 0 0; font-size: var(--fs-xs); max-inline-size: 76ch; }
-.acct-record .table-wrap { border-block-start: 0; }
-
-/* A support session is a sentence: whose account, who opened it and why, then when. */
-.acct-session { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(0, 1.6fr) auto; align-items: baseline; gap: 2px var(--space-5); padding: 11px 2px; border-block-end: 1px solid var(--hairline-soft); font-size: var(--fs-sm); }
-.acct-session__who strong { font-weight: 600; }
-.acct-session__why { margin: 0; color: var(--ink); overflow-wrap: anywhere; }
-.acct-session__when { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: flex-end; gap: 2px var(--space-4); font-size: var(--fs-xs); color: var(--ink-muted); font-variant-numeric: tabular-nums; }
-@media (max-width: 900px) {
-  .acct-session { grid-template-columns: minmax(0, 1fr); }
-  .acct-session__when { justify-content: flex-start; }
 }

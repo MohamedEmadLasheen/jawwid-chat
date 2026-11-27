@@ -1,4 +1,5 @@
 import { ApiError } from '@/core/api/errors'
+import type { CountForms } from '@/features/instalments/copy'
 import type { Pair } from '@/features/organization/copy'
 
 export { useCopy, type Pair } from '@/features/organization/copy'
@@ -59,8 +60,12 @@ export const S = {
   recordEnded: { en: 'Ended', ar: 'النهاية' },
   recordActions: { en: 'Requests', ar: 'الطلبات' },
   recordLive: { en: 'Live', ar: 'جارية' },
+  recordTimedOut: { en: 'Timed out', ar: 'انتهت مدتها' },
+  openSession: { en: 'Open session', ar: 'فتح الجلسة' },
   noRecord: { en: 'No support sessions yet.', ar: 'لا توجد جلسات دعم بعد.' },
 } satisfies Record<string, Pair>
+
+export const SESSIONS_COUNT: CountForms = { en: ['{n} session', '{n} sessions'], ar: ['جلسة واحدة', 'جلستان', '{n} جلسات', '{n} جلسة'] }
 
 export const KIND_LABEL: Record<'family' | 'teacher', Pair> = {
   family: { en: 'parent', ar: 'ولي أمر' },

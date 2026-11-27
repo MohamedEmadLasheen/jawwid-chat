@@ -103,7 +103,8 @@ describe('PD-21: support sessions in Admin Web', () => {
     on('POST', /\/admin\/impersonations\/imp-1\/end$/, () => json({ ...token().session, endedAt: '2026-10-22T10:05:00Z', endedReason: 'ended by the administrator' }))
 
     renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/accounts' })
-    await userEvent.click(await screen.findByRole('button', { name: 'Open as Parent Alpha' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'More actions: Parent Alpha' }))
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Open as Parent Alpha' }))
     const dialog = screen.getByRole('dialog', { name: "Open Parent Alpha's account" })
     expect(within(dialog).getByRole('button', { name: 'Open the account' })).toBeDisabled()
     await userEvent.type(within(dialog).getByRole('textbox'), 'cannot find the card')
