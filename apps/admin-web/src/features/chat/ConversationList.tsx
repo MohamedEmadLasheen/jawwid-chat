@@ -17,6 +17,7 @@ import { chatCopyFor } from './copy'
 import { LabelChip, LabelsDialog } from './LabelsDialog'
 import { ConversationAvatar, conversationName, isGroup, isMuted, previewParts, toneOfKind } from './chatView'
 import { useConversationPreferences } from './useChatActions'
+import { groupQueue, waitedFor } from './queue'
 import { TrialBadge, isTrialGroup } from '@/shared/components/TrialBadge'
 
 export type View = 'all' | 'unread' | 'favorites' | 'groups' | 'joined' | 'archived' | 'waiting'
@@ -108,7 +109,12 @@ export function ConversationList({
   // PD-36: a chat that has asked the viewer in, not yet opened, leads -- above
   // pinned. Then pinned; otherwise the server's order (most recent activity first).
   const rank = (c: ChatConversation) => (isUnseenSummons(c) ? 2 : c.viewerState?.pinned ? 1 : 0)
-  const rows = [...inView(view)].sort((a, b) => rank(b) - rank(a))
+  // A work queue, not a flat inbox: owed an answer (longest wait first), then
+  // unread, then the rest by recency. The tabs filter within this grouping.
+  const sections = groupQueue(inView(view), rank)
+  const rows = sections.flatMap((s) => s.rows)
+  // One quiet section alone needs no heading: it is simply the list.
+  const headed = sections.length > 1 || (sections.length === 1 && sections[0]!.key !== 'rest')
 
   const options = [
     { value: 'all' as const, label: copy.filterAll, count: inView('all').length },
@@ -168,19 +174,31 @@ export function ConversationList({
         ) : rows.length === 0 ? (
           !textSearch && <EmptyState compact icon="search" title={copy.noMatches} />
         ) : (
-          <ul className="conv-list" aria-label={copy.title}>
-            {rows.map((c) => (
-              <ConversationRow
-                key={c.id}
-                c={c}
-                selected={c.id === selectedId}
-                onSelect={() => onSelect(c.id)}
-                selfId={staff?.id}
-                locale={locale}
-                onLabel={() => setLabelling(c.id)}
-              />
-            ))}
-          </ul>
+          sections.map((s) => (
+            <section key={s.key} className={`cw-sec cw-sec--${s.key}`}>
+              {headed && (
+                <h2 className="cw-sec__title">
+                  {copy.section[s.key]}
+                  <span className={s.key === 'needs' ? 'count count--urgent' : s.key === 'unread' ? 'count' : 'count count--quiet'}>
+                    {number(s.rows.length)}
+                  </span>
+                </h2>
+              )}
+              <ul className="conv-list" aria-label={headed ? copy.section[s.key] : copy.title}>
+                {s.rows.map((c) => (
+                  <ConversationRow
+                    key={c.id}
+                    c={c}
+                    selected={c.id === selectedId}
+                    onSelect={() => onSelect(c.id)}
+                    selfId={staff?.id}
+                    locale={locale}
+                    onLabel={() => setLabelling(c.id)}
+                  />
+                ))}
+              </ul>
+            </section>
+          ))
         )}
         {textSearch && (
           <section className="cw-hits" aria-label={copy.searchMessages}>
@@ -269,6 +287,8 @@ function ConversationRow({
   const preview = said.text || (copy.kind[c.type] ?? c.type)
   const mention = c.viewerState?.mention ?? null
   const summoned = mention?.kind === 'summons' && mention.state === 'pending'
+  const covering = c.cover && c.cover.coverId === selfId ? copy.coveringFor(c.cover.supervisorName) : null
+  const age = c.needsReply ? waitedFor(c.lastActivityAt, locale) : ''
 
   return (
     <li className={isUnseenSummons(c) ? 'cw-row cw-row--summoned' : 'cw-row'}>
@@ -295,51 +315,56 @@ function ConversationRow({
               {said.who && <span className="cw-row__who">{said.who}:</span>}
               <bdi className="cw-line">{preview}</bdi>
             </span>
-            {c.needsReply && <Badge tone="now">{copy.needsReply}</Badge>}
-            {/* PD-36: asked in and not yet answered; the dot keeps it from being colour-only. */}
-            {summoned && (
+            {/* Marks are quiet glyphs: what this viewer set on the chat, never its state. */}
+            <span className="cw-row__marks">
+              {mention?.kind === 'member' && !mention.seen && (
+                <span className="cw-row__mark cw-row__mark--mention" title={copy.mentionedMark} aria-label={copy.mentionedMark}>
+                  <Icon name="at" size={14} />
+                </span>
+              )}
+              {covering && (
+                <span className="cw-row__mark cw-row__mark--cover" title={covering} aria-label={covering}>
+                  <Icon name="swap" size={14} />
+                  <span className="cw-row__word">{copy.covering}</span>
+                </span>
+              )}
+              {(c.labels ?? []).map((l) => (
+                <span key={l.id} className={`cw-row__label cw-tone--${l.color}`} role="img" title={l.name} aria-label={l.name} />
+              ))}
+              {favorite && (
+                <span className="cw-row__mark cw-row__mark--favorite" title={copy.favoriteMark} aria-label={copy.favoriteMark}>
+                  <Icon name="heart" size={14} />
+                </span>
+              )}
+              {muted && (
+                <span className="cw-row__mark" title={copy.mutedMark} aria-label={copy.mutedMark}>
+                  <Icon name="bellOff" size={14} />
+                </span>
+              )}
+              {pinned && (
+                <span className="cw-row__mark" title={copy.pinnedMark} aria-label={copy.pinnedMark}>
+                  <Icon name="pin" size={14} />
+                </span>
+              )}
+            </span>
+            {/* The ONE state that matters most, at the row's end: asked in, else how long it has waited, else what is unread. */}
+            {summoned ? (
               <Badge tone="gold" dot>
                 {copy.mentionedBadge}
               </Badge>
-            )}
-            {mention?.kind === 'member' && !mention.seen && (
-              <span className="cw-row__mark cw-row__mark--mention" title={copy.mentionedMark} aria-label={copy.mentionedMark}>
-                <Icon name="at" size={14} />
+            ) : c.needsReply ? (
+              <span className="cw-row__waited" title={dateTime(c.lastActivityAt)} aria-label={copy.waitedLabel(age)}>
+                <Icon name="hourglass" size={13} />
+                {age}
               </span>
-            )}
-            {c.cover && c.cover.coverId === selfId && (
-              <span title={copy.coveringFor(c.cover.supervisorName)} aria-label={copy.coveringFor(c.cover.supervisorName)}>
-                <Badge tone="coverage">{copy.covering}</Badge>
-              </span>
-            )}
-            {favorite && (
-              <span className="cw-row__mark cw-row__mark--favorite" title={copy.favoriteMark} aria-label={copy.favoriteMark}>
-                <Icon name="heart" size={14} />
-              </span>
-            )}
-            {muted && (
-              <span className="cw-row__mark" title={copy.mutedMark} aria-label={copy.mutedMark}>
-                <Icon name="bellOff" size={14} />
-              </span>
-            )}
-            {pinned && (
-              <span className="cw-row__mark" title={copy.pinnedMark} aria-label={copy.pinnedMark}>
-                <Icon name="pin" size={14} />
-              </span>
-            )}
-            {unread > 0 && (
-              <span className="cw-unread" aria-label={copy.unread(unread)}>
-                {unread}
-              </span>
+            ) : (
+              unread > 0 && (
+                <span className="cw-unread" aria-label={copy.unread(unread)}>
+                  {unread}
+                </span>
+              )
             )}
           </span>
-          {(c.labels ?? []).length > 0 && (
-            <span className="cw-row__labels" aria-label={copy.labels}>
-              {c.labels!.map((l) => (
-                <LabelChip key={l.id} label={l} />
-              ))}
-            </span>
-          )}
         </span>
       </button>
       <Menu

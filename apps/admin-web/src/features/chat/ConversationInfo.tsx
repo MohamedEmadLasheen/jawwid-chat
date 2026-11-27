@@ -13,7 +13,7 @@ import { Icon } from '@/shared/components/Icon'
 import { QueryBoundary } from '@/shared/components/States'
 import { chatApi, chatKeys, type ChatConversation } from './chatApi'
 import { chatCopyFor } from './copy'
-import { ConversationAvatar, conversationName, isGroup, isMuted, toneOfKind } from './chatView'
+import { conversationName, isGroup, isMuted, toneOfKind } from './chatView'
 import { useConversationPreferences } from './useChatActions'
 import { GroupChildren } from '@/features/journey/GroupChildren'
 import { journeyKeys } from '@/features/journey/api'
@@ -23,9 +23,10 @@ import { useMayChangeTeacher } from '@/features/teachers/hooks'
 import { Link } from 'react-router-dom'
 import { parentPath } from '@/features/profiles/api'
 import { useMayOpenParentProfiles } from '@/features/profiles/hooks'
-import { TrialBadge, isTrialGroup } from '@/shared/components/TrialBadge'
 import { ROLE_LABEL } from '@/features/profile/copy'
-import { FamilyContext } from './FamilyContext'
+import { FamilyTab, useFamily } from './FamilyContext'
+import { FilterChips } from '@/shared/components/FilterChips'
+import { LabelChip } from './LabelsDialog'
 
 /**
  * Contact info / group info: who is in the conversation, and this viewer's
@@ -45,46 +46,34 @@ export function ConversationInfo({ c }: { c: ChatConversation }) {
   const members = c.members ?? []
   const lessonGroup = c.type === 'student_group' || c.type === 'family_group'
 
+  // Two tabs: the family (money, children, the parent), which leads when this
+  // viewer is offered it, and the conversation itself. Where the server
+  // refuses the family there is no Family tab at all.
+  const family = useFamily(c)
+  const hasFamily = family.offered && (family.pending || !!family.parent || !!family.billing)
+  const [chosen, setChosen] = useState<'family' | 'conversation' | null>(null)
+  const tab = hasFamily ? chosen ?? 'family' : 'conversation'
+
   return (
     <div className="cw-info">
-      {/* The family first: who they are and where their payments stand (hidden when the server refuses). */}
-      {c.familyId && <FamilyContext c={c} showChildren={!lessonGroup} />}
-      {/* A lesson group lists its own children, with their teachers, once: here, under the family. */}
-      {lessonGroup && <GroupChildren conversationId={c.id} />}
-
-      <div className="dp-hero">
-        <ConversationAvatar c={c} name={name} size="lg" selfId={staff?.id} />
-        <div className="dp-hero__text">
-          <span className="dp-hero__name" dir="auto">{name}</span>
-          {isTrialGroup(c) && <TrialBadge />}
-          <span className="thread-head__sub">
-            {copy.kind[c.type] ?? c.type} · {copy.membersCount(members.length)}
-          </span>
+      {hasFamily && (
+        <div className="cw-info__tabs">
+          <FilterChips
+            variant="tabs"
+            label={copy.panelTabs}
+            value={tab}
+            onChange={setChosen}
+            options={[
+              { value: 'family' as const, label: copy.panelFamily },
+              { value: 'conversation' as const, label: copy.panelConversation },
+            ]}
+          />
         </div>
-      </div>
+      )}
 
-      <section className="dp-section">
-        <h3 className="dp-section__title">{copy.notifications}</h3>
-        <div className="cw-info__actions">
-          <label className="cw-switch">
-            <input type="checkbox" role="switch" checked={muted} onChange={() => prefs.mute(c.id, !muted)} />
-            <Icon name="bellOff" size={16} />
-            <span>{copy.mute}</span>
-          </label>
-          <button type="button" className="btn btn--sm" onClick={() => prefs.pin(c.id, !c.viewerState?.pinned)}>
-            <Icon name="pin" size={14} />
-            {c.viewerState?.pinned ? copy.unpin : copy.pin}
-          </button>
-          <button type="button" className="btn btn--sm" onClick={() => prefs.archive(c.id, !c.viewerState?.archived)}>
-            <Icon name="archive" size={14} />
-            {c.viewerState?.archived ? copy.unarchive : copy.archive}
-          </button>
-        </div>
-      </section>
+      {tab === 'family' && !family.pending && <FamilyTab parent={family.parent} billing={family.billing} />}
 
-      {lessonGroup && <GroupSupervisor c={c} name={name} />}
-      {lessonGroup && <GroupTeacher c={c} name={name} />}
-
+      {tab === 'conversation' && <>
       <section className="dp-section">
         <div className="cw-info__members-head">
           <h3 className="dp-section__title">{copy.members}</h3>
@@ -135,6 +124,42 @@ export function ConversationInfo({ c }: { c: ChatConversation }) {
           ))}
         </ul>
       </section>
+
+      <section className="dp-section">
+        <h3 className="dp-section__title">{copy.notifications}</h3>
+        <div className="cw-info__actions">
+          <label className="cw-switch">
+            <input type="checkbox" role="switch" checked={muted} onChange={() => prefs.mute(c.id, !muted)} />
+            <Icon name="bellOff" size={16} />
+            <span>{copy.mute}</span>
+          </label>
+          <button type="button" className="btn btn--sm" onClick={() => prefs.pin(c.id, !c.viewerState?.pinned)}>
+            <Icon name="pin" size={14} />
+            {c.viewerState?.pinned ? copy.unpin : copy.pin}
+          </button>
+          <button type="button" className="btn btn--sm" onClick={() => prefs.archive(c.id, !c.viewerState?.archived)}>
+            <Icon name="archive" size={14} />
+            {c.viewerState?.archived ? copy.unarchive : copy.archive}
+          </button>
+        </div>
+      </section>
+
+      {(c.labels ?? []).length > 0 && (
+        <section className="dp-section">
+          <h3 className="dp-section__title">{copy.labels}</h3>
+          <span className="cw-row__labels">
+            {c.labels!.map((l) => (
+              <LabelChip key={l.id} label={l} />
+            ))}
+          </span>
+        </section>
+      )}
+
+      {/* A lesson group's children in full: course, weekly times, package, teacher; edited here. */}
+      {lessonGroup && <GroupChildren conversationId={c.id} />}
+      {lessonGroup && <GroupSupervisor c={c} name={name} />}
+      {lessonGroup && <GroupTeacher c={c} name={name} />}
+      </>}
 
       {adding && c.familyId && <AddMemberDialog c={c} familyId={c.familyId} onClose={() => setAdding(false)} />}
     </div>
