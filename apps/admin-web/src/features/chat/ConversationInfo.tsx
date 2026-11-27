@@ -13,7 +13,7 @@ import { Icon } from '@/shared/components/Icon'
 import { QueryBoundary } from '@/shared/components/States'
 import { chatApi, chatKeys, type ChatConversation } from './chatApi'
 import { chatCopyFor } from './copy'
-import { ConversationAvatar, conversationName, isGroup, isMuted } from './chatView'
+import { ConversationAvatar, conversationName, isGroup, isMuted, toneOfKind } from './chatView'
 import { useConversationPreferences } from './useChatActions'
 import { GroupChildren } from '@/features/journey/GroupChildren'
 import { journeyKeys } from '@/features/journey/api'
@@ -25,6 +25,7 @@ import { parentPath } from '@/features/profiles/api'
 import { useMayOpenParentProfiles } from '@/features/profiles/hooks'
 import { TrialBadge, isTrialGroup } from '@/shared/components/TrialBadge'
 import { ROLE_LABEL } from '@/features/profile/copy'
+import { FamilyContext } from './FamilyContext'
 
 /**
  * Contact info / group info: who is in the conversation, and this viewer's
@@ -45,6 +46,9 @@ export function ConversationInfo({ c }: { c: ChatConversation }) {
 
   return (
     <div className="cw-info">
+      {/* The family first: who they are and where their payments stand (hidden when the server refuses). */}
+      {c.familyId && <FamilyContext c={c} />}
+
       <div className="dp-hero">
         <ConversationAvatar c={c} name={name} size="lg" selfId={staff?.id} />
         <div className="dp-hero__text">
@@ -93,7 +97,9 @@ export function ConversationInfo({ c }: { c: ChatConversation }) {
           {/* PD-36: asked in, not (yet) a member -- at the top, highlighted, with who asked and when. */}
           {(c.summoned ?? []).map((x) => (
             <li key={`summoned-${x.actorId}`} className="cw-member cw-member--summoned">
-              <Avatar name={x.displayName || '?'} seed={x.actorId} size="sm" />
+              <span className="cw-who cw-who--staff">
+                <Avatar name={x.displayName || '?'} seed={x.actorId} size="sm" />
+              </span>
               <span className="cw-member__name">
                 <span dir="auto">{x.displayName}</span>
                 <span className="cw-member__note">
@@ -109,7 +115,9 @@ export function ConversationInfo({ c }: { c: ChatConversation }) {
           ))}
           {members.map((m) => (
             <li key={m.actorId} className="cw-member">
-              <Avatar name={m.displayName || '?'} seed={m.actorId} size="sm" src={m.avatarUrl} />
+              <span className={`cw-who cw-who--${toneOfKind(m.actorKind)}`}>
+                <Avatar name={m.displayName || '?'} seed={m.actorId} size="sm" src={m.avatarUrl} />
+              </span>
               <span className="cw-member__name" dir="auto">
                 {m.actorKind === 'contact' && mayOpenParents ? (
                   // PD-17: a parent opens their Parent Profile -- offered only to the administration.
@@ -290,7 +298,9 @@ function AddMemberDialog({ c, familyId, onClose }: { c: ChatConversation; family
                 onClick={() => add.mutate(p)}
               >
                 <span className="cw-member">
-                  <Avatar name={p.name} seed={p.id} size="sm" />
+                  <span className={`cw-who cw-who--${toneOfKind(p.kind)}`}>
+                    <Avatar name={p.name} seed={p.id} size="sm" />
+                  </span>
                   <span dir="auto" className="dc-person__name">{p.name}</span>
                 </span>
                 <span className="dc-person__kind">{add.isPending ? copy.adding : copy.role[p.kind]}</span>

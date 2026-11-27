@@ -183,7 +183,8 @@ describe('Admin chat workspace', () => {
     renderChat()
 
     expect(await screen.findByText('Group c1')).toBeInTheDocument()
-    expect(screen.getByText('Second')).toBeInTheDocument()
+    // In the list: the unread one is also named in the thread pane, as the conversation to answer first.
+    expect(within(document.getElementById('chat-list')!).getByText('Second')).toBeInTheDocument()
     expect(screen.getByLabelText('3 unread')).toBeInTheDocument()
 
     await waitFor(() => {
@@ -208,7 +209,8 @@ describe('Admin chat workspace', () => {
 
     const chip = await screen.findByRole('button', { name: /Waiting for a reply/ })
     expect(chip).toHaveAttribute('aria-pressed', 'true')
-    expect(await screen.findByText('Parent wrote last')).toBeInTheDocument()
+    // In the list: the thread pane also names the conversation to answer first.
+    expect(await within(document.getElementById('chat-list')!).findByText('Parent wrote last')).toBeInTheDocument()
     expect(screen.getByText('Put away by me')).toBeInTheDocument()
     expect(screen.queryByText('We answered')).not.toBeInTheDocument()
     expect(screen.queryByText('Resolved while waiting')).not.toBeInTheDocument()

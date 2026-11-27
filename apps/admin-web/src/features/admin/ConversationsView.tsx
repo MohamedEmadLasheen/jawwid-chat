@@ -14,6 +14,9 @@ import { Splitter, useResizableWidth } from '@/shared/components/Splitter'
 import { EmptyState, LoadingState, QueryBoundary } from '@/shared/components/States'
 import { useMediaQuery } from '@/shared/hooks/useMediaQuery'
 import { chatCopyFor, systemText } from '@/features/chat/copy'
+import { conversationTone } from '@/features/chat/chatView'
+import { useWorkspaceKeys } from '@/features/chat/useWorkspaceKeys'
+import '@/features/chat/chat.css'
 import { ConversationStateBadge, conversationName, matches } from './common'
 import {
   AUTHOR_KIND,
@@ -79,6 +82,13 @@ const GROUP_LABEL: Record<DayGroup, 'groupToday' | 'groupYesterday' | 'groupWeek
   older: 'groupOlder',
 }
 
+/** A conversation type in words: this view's own table, else the chat workspace's; a raw key only as a last resort. */
+function useTypeLabel() {
+  const label = useLabel()
+  const { locale } = useI18n()
+  return (type: string) => (CONVERSATION_TYPE[type] ? label(CONVERSATION_TYPE, type) : chatCopyFor(locale).kind[type] ?? type)
+}
+
 function readPanelPref(): boolean {
   try {
     return localStorage.getItem(PANEL_KEY) !== 'closed'
@@ -99,10 +109,11 @@ function readPanelPref(): boolean {
 export function ConversationsView({ section }: { section: AdminSection }) {
   const tx = useText()
   const label = useLabel()
+  const typeLabel = useTypeLabel()
   const { number, locale } = useI18n()
   const [params, setParams] = useSearchParams()
   const [search, setSearch] = useState('')
-  const wide = useMediaQuery('(min-width: 1280px)')
+  const wide = useMediaQuery('(min-width: 1100px)')
   const resizable = useMediaQuery('(min-width: 1024px)')
   const listWidth = useResizableWidth(LIST_WIDTH_KEY, 360, 280, 520)
   const [panelPref, setPanelPref] = useState(readPanelPref)
@@ -151,7 +162,7 @@ export function ConversationsView({ section }: { section: AdminSection }) {
   if (!TYPE_VIEWS.includes(typeFilter as TypeView) && typeFilter !== 'all' && !otherTypes.includes(typeFilter)) {
     otherTypes.push(typeFilter)
   }
-  const viewLabel = (v: string) => (v === 'groups' ? tx(TEXT.groups) : label(CONVERSATION_TYPE, v))
+  const viewLabel = (v: string) => (v === 'groups' ? tx(TEXT.groups) : typeLabel(v))
   const typeOptions = [
     { value: 'all', label: tx(TEXT.all), count: inState.length },
     ...[...TYPE_VIEWS.filter((v) => v === typeFilter || all.some((c) => typeMatches(c.type, v))), ...otherTypes].map(
@@ -207,9 +218,11 @@ export function ConversationsView({ section }: { section: AdminSection }) {
   }
 
   const style = resizable ? ({ '--list-w': `${listWidth.width}px` } as CSSProperties) : undefined
+  // The same keys as the chat workspace: J / K walk the list, Enter opens, Escape goes back.
+  useWorkspaceKeys({ listId: 'conversation-list', onBack: selectedId ? () => setParams(new URLSearchParams(backTo().search), { replace: false }) : null })
 
   return (
-    <div className="workspace" data-view={selectedId ? 'thread' : 'list'} style={style}>
+    <div className="workspace cw cw--read" data-view={selectedId ? 'thread' : 'list'} style={style}>
       <section className="workspace__list" id="conversation-list" aria-labelledby="conversations-title">
         <div className="workspace__head">
           <div className="workspace__title-row">
@@ -234,20 +247,23 @@ export function ConversationsView({ section }: { section: AdminSection }) {
             label={tx(TEXT.searchByName)}
             clearLabel={tx(TEXT.clearSearch)}
           />
+          {/* The kind of conversation is the list's main view: text tabs, as in the chat workspace. */}
           {query.data && showTypeFilter && (
-            <FilterChips
-              options={typeOptions}
-              value={typeFilter}
-              onChange={(v) => setParam('type', v)}
-              label={tx(TEXT.filterByType)}
-              formatCount={number}
-            />
+            <div className="cw-filters">
+              <FilterChips
+                variant="tabs"
+                options={typeOptions}
+                value={typeFilter}
+                onChange={(v) => setParam('type', v)}
+                label={tx(TEXT.filterByType)}
+                formatCount={number}
+              />
+            </div>
           )}
         </div>
         {query.data && (
-          <div className="workspace__filters">
+          <div className="workspace__filters cw-substrip">
             <FilterChips
-              variant="tabs"
               options={stateOptions}
               value={stateFilter}
               onChange={(v) => setParam('state', v)}
@@ -368,7 +384,7 @@ function countBy<T>(rows: readonly T[], key: (row: T) => string): Record<string,
 function TypedAvatar({ c, name, size }: { c: AdminConversation; name: string; size?: 'md' | 'lg' }) {
   const glyph = TYPE_GLYPH[c.type]
   return (
-    <span className="typed-avatar">
+    <span className={`typed-avatar cw-who cw-who--${conversationTone(c)}`}>
       <Avatar name={name} seed={c.id} size={size} />
       {glyph && (
         <span className="typed-avatar__glyph" aria-hidden="true">
@@ -389,7 +405,7 @@ function ConversationRow({
   selected: boolean
 }) {
   const tx = useText()
-  const label = useLabel()
+  const typeLabel = useTypeLabel()
   const plural = usePlural()
   const { locale, dateTime } = useI18n()
   const name = conversationName(c, tx(TEXT.untitled))
@@ -403,7 +419,7 @@ function ConversationRow({
         <TypedAvatar c={c} name={name} />
         <span className="conv-row__body">
           <span className="conv-row__top">
-            <span className="conv-row__name">{name}</span>
+            <span className="conv-row__name" dir="auto">{name}</span>
             {isTrialGroup(c) && <TrialBadge />}
             <time className="conv-row__time" dateTime={c.lastActivityAt} title={dateTime(c.lastActivityAt)}>
               {listTime(c.lastActivityAt, locale)}
@@ -411,7 +427,7 @@ function ConversationRow({
           </span>
           <span className="conv-row__bottom">
             <span className="conv-row__sub">
-              {label(CONVERSATION_TYPE, c.type)} · {plural(PLURAL.members, c.liveMembers)}
+              {typeLabel(c.type)} · {plural(PLURAL.members, c.liveMembers)}
             </span>
             <ConversationStateBadge state={c.state} />
           </span>
@@ -443,7 +459,7 @@ function Thread({
   onToggleDetails: () => void
 }) {
   const tx = useText()
-  const label = useLabel()
+  const typeLabel = useTypeLabel()
   const plural = usePlural()
   const { locale, number } = useI18n()
   const name = conversationName(c, tx(TEXT.untitled))
@@ -468,11 +484,11 @@ function Thread({
         </Link>
         <TypedAvatar c={c} name={name} />
         <div className="thread-head__text">
-          <h2 className="thread-head__name">
+          <h2 className="thread-head__name" dir="auto">
             {name} {isTrialGroup(c) && <TrialBadge />}
           </h2>
           <span className="thread-head__sub">
-            {label(CONVERSATION_TYPE, c.type)} · {plural(PLURAL.members, c.liveMembers)} ·{' '}
+            {typeLabel(c.type)} · {plural(PLURAL.members, c.liveMembers)} ·{' '}
             {fill(tx(TEXT.lastActive), { age: relativeTime(c.lastActivityAt, locale) })}
           </span>
         </div>
@@ -552,6 +568,8 @@ function MessageItem({ m, side, showAuthor }: { m: AdminMessage; side: Side; sho
   const { time, locale } = useI18n()
   const typeLabel = MESSAGE_TYPE[m.type] ? label(MESSAGE_TYPE, m.type) : null
   const hasAttachment = !m.deleted && (m.attachments > 0 || typeLabel !== null)
+  // A card (a scheduled call, a moved lesson) is a reference: ruled, with a gold start edge, as in the chat workspace.
+  const isCard = m.type === 'card' && !m.deleted
 
   if (side === 'system') {
     return (
@@ -566,17 +584,17 @@ function MessageItem({ m, side, showAuthor }: { m: AdminMessage; side: Side; sho
   }
 
   return (
-    <li className={`bubble-row bubble-row--${side}`}>
+    <li className={`bubble-row bubble-row--${side}${isCard ? ' cw-msg cw-msg--card' : ''}`}>
       {showAuthor && (
         <div className="bubble-author">
-          <span className="bubble-author__name">{m.authorName ?? tx(TEXT.unknownAuthor)}</span>
+          <span className="bubble-author__name" dir="auto">{m.authorName ?? tx(TEXT.unknownAuthor)}</span>
           <span className={`kind-chip kind-chip--${m.authorKind}`}>{label(AUTHOR_KIND, m.authorKind)}</span>
         </div>
       )}
       <div className="bubble">
         {side === 'internal' && (
           <span className="bubble__flag">
-            <Icon name="lock" size={12} />
+            <Icon name="lockNote" size={14} />
             {tx(TEXT.internal)}
           </span>
         )}
@@ -591,7 +609,12 @@ function MessageItem({ m, side, showAuthor }: { m: AdminMessage; side: Side; sho
                 {typeLabel && m.attachments > 1 && <> · {plural(PLURAL.attachments, m.attachments)}</>}
               </span>
             )}
-            {m.body && <span className="bubble__text">{m.body}</span>}
+            {/* This view reads what was sent, word for word. */}
+            {m.body && (
+              <span className="bubble__text" dir="auto">
+                {m.body}
+              </span>
+            )}
           </>
         )}
         <span className="bubble__meta">
@@ -611,7 +634,7 @@ function MessageItem({ m, side, showAuthor }: { m: AdminMessage; side: Side; sho
 
 function ConversationDetails({ c }: { c: AdminConversation }) {
   const tx = useText()
-  const label = useLabel()
+  const typeLabel = useTypeLabel()
   const plural = usePlural()
   const { dateTime, locale } = useI18n()
   const [copied, setCopied] = useState(false)
@@ -640,7 +663,7 @@ function ConversationDetails({ c }: { c: AdminConversation }) {
         <dl className="dp-list">
           <div>
             <dt>{tx(TEXT.type)}</dt>
-            <dd>{label(CONVERSATION_TYPE, c.type)}</dd>
+            <dd>{typeLabel(c.type)}</dd>
           </div>
           <div>
             <dt>{tx(TEXT.membersLabel)}</dt>

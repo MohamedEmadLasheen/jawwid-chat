@@ -42,8 +42,9 @@ const MAX_LINES_PX = 160
 /**
  * The message box: one bar -- attach, the text, send -- like every messaging
  * app, with the Message / Internal note choice above it. Internal is staff-only
- * by construction (the server refuses it for parents and teachers), and the bar
- * is tinted while it is on so a note is never sent to a family by mistake.
+ * by construction (the server refuses it for parents and teachers), and while
+ * it is on the whole composer turns gold paper, under the lock-note mark and
+ * its words, so a note is never sent to a family by mistake.
  */
 export function ChatComposer({
   onSend,
@@ -256,9 +257,15 @@ export function ChatComposer({
             aria-pressed={isInternal}
             onClick={() => setVisibility('internal')}
           >
-            <Icon name="lock" size={14} />
+            <Icon name="lockNote" size={16} />
             {copy.internal}
           </button>
+          {/* Said in words too, beside the tabs: the tint alone must not carry it. */}
+          {isInternal && (
+            <span className="cw-composer__flag">
+              {copy.staffOnly}
+            </span>
+          )}
         </div>
       )}
 

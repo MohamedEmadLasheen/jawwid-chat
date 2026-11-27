@@ -27,10 +27,10 @@ import { ExportDialog } from './ExportDialog'
 import { ThemeDialog } from './ThemeDialog'
 import { ThreadSearch } from './ThreadSearch'
 import { Highlighted, searchable } from './search'
-import { ConversationAvatar, conversationName, isGroup, isMuted } from './chatView'
+import { ConversationAvatar, cardFallbackText, conversationName, isGroup, isMuted, toneOfKind } from './chatView'
 import { useConversationPreferences } from './useChatActions'
 import { VoiceNotePlayer } from './VoiceRecorder'
-import { ConversationCallControls } from '@/features/calls/ConversationCallControls'
+import { ThreadCalls } from './ThreadCalls'
 import { useCallCapability } from '@/features/calls/useCallCapability'
 import { ScheduleCallDialog } from '@/features/calls-page/ScheduleCallDialog'
 import { TrialCardDialog, TrialGroupBar } from '@/features/trials/TrialCardDialog'
@@ -78,10 +78,10 @@ type Side = 'in' | 'out' | 'internal' | 'system'
  */
 function sideOf(m: ChatMessage, selfId: string | undefined): Side {
   if (m.visibility === 'internal') return 'internal'
-  // A lesson card Jawwid posted itself (a teacher's absence, an accepted late
-  // apology, a card recorded by staff outside the group) is still a card to
-  // draw -- the reason, the make-up's time -- not a one-line system note.
-  if (m.authorKind === 'system' && m.type === 'card' && m.card && readLessonExcuseCard(m.card.kind, m.card.payload)) return 'in'
+  // A card Jawwid posted itself (a teacher's absence, an accepted late apology,
+  // a case escalated to a department's room, a booked trial, "lessons are
+  // paused") is still a card to draw, not a one-line system note.
+  if (m.authorKind === 'system' && m.type === 'card') return 'in'
   if (m.authorKind === 'system' || m.type === 'system') return 'system'
   return m.authorId === selfId ? 'out' : 'in'
 }
@@ -94,13 +94,6 @@ function sideOf(m: ChatMessage, selfId: string | undefined): Side {
  * other person is the header.
  */
 type Identity = 'lead' | 'follow' | 'none'
-
-/** One of eight name colours, stable per sender (as WhatsApp colours names in a group). */
-function nameTone(seed: string): number {
-  let h = 0
-  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) | 0
-  return (Math.abs(h) % 8) + 1
-}
 
 const SIDE_CLASS: Record<Side, string> = {
   in: 'bubble-row--contact',
@@ -218,6 +211,17 @@ export function ChatThread({
     setSelecting(false)
     setSelected([])
   }
+  // Escape leaves select mode first; only then does it go back to the list (useWorkspaceKeys).
+  useEffect(() => {
+    if (!selecting) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || document.querySelector('[role="dialog"], [role="alertdialog"], [role="menu"]')) return
+      setSelecting(false)
+      setSelected([])
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [selecting])
   const flash = (text: string) => {
     setNotice(text)
     setTimeout(() => setNotice(null), 2500)
@@ -509,7 +513,7 @@ export function ChatThread({
                   {typingNow}
                 </span>
               ) : (
-                <span className="thread-head__sub">
+                <span className={peerState?.online ? 'thread-head__sub thread-head__sub--online' : 'thread-head__sub'}>
                   {peerPresence ?? (
                     <>
                       {copy.kind[conv.type] ?? conv.type}
@@ -534,7 +538,7 @@ export function ChatThread({
           </button>
         )}
         <div className="cw-head__actions">
-          {conv && <ConversationCallControls conversationId={conversationId} peerLabel={name} isGroup={group} />}
+          {conv && <ThreadCalls conversationId={conversationId} peerLabel={name} isGroup={group} />}
           {favorite && (
             <span className="cw-row__mark cw-row__mark--favorite" title={copy.favoriteMark} aria-label={copy.favoriteMark}>
               <Icon name="heart" size={16} />
@@ -634,8 +638,9 @@ export function ChatThread({
               const side = sideOf(m, staff?.id)
               const runStart =
                 newDay || !prev || prev.authorId !== m.authorId || sideOf(prev, staff?.id) !== side
+              // A card Jawwid posted itself has no sender to picture or name.
               const identity: Identity =
-                side === 'out' || side === 'system' || !showsSenders ? 'none' : runStart ? 'lead' : 'follow'
+                side === 'out' || side === 'system' || !showsSenders || m.authorKind === 'system' ? 'none' : runStart ? 'lead' : 'follow'
               return (
                 <Fragment key={m.id}>
                   {newDay && (
@@ -983,6 +988,14 @@ function MessageItem({
   // PD-35 B6: a case escalated to this department, linked to Escalations.
   const caseCard = live && m.type === 'card' && m.card?.kind === 'case_escalated' ? readCaseEscalatedCard(m.card.payload) : null
   const reactions = summarize(m.reactions ?? [], selfId)
+  // A card is a reference, not something somebody typed: it is drawn as a ruled card, not a bubble.
+  const isCard = live && m.type === 'card'
+  const tone = toneOfKind(m.authorKind)
+  // What used to be a one-line system note is drawn as a card now, and stays
+  // what it was: a notice. It offers no message actions and is not selectable.
+  // (A lesson's excuse card always was a message, and keeps its menu.)
+  const notice = m.authorKind === 'system' && m.type === 'card' && !excuseCard
+  const selectable = selectMode && !notice
   // A lesson report's card is changed only from its lesson record (PD-15).
   const reportCard = m.type === 'card' && m.card?.kind === 'lesson_report'
   const items: MenuItem[] = live
@@ -1019,13 +1032,13 @@ function MessageItem({
 
   return (
     <li
-      className={`bubble-row ${SIDE_CLASS[side]} cw-msg${runStart ? ' cw-msg--run-start' : ''}${identity !== 'none' ? ' cw-msg--with-sender' : ''}${selectMode ? ' cw-msg--selectable' : ''}${isSelected ? ' cw-msg--selected' : ''}${m.mentionsViewer && !m.deletedForAll ? ' cw-msg--mentions-me' : ''}`}
+      className={`bubble-row ${SIDE_CLASS[side]} cw-msg${runStart ? ' cw-msg--run-start' : ''}${identity !== 'none' ? ' cw-msg--with-sender' : ''}${selectable ? ' cw-msg--selectable' : ''}${isSelected ? ' cw-msg--selected' : ''}${m.mentionsViewer && !m.deletedForAll ? ' cw-msg--mentions-me' : ''}${isCard ? ' cw-msg--card' : ''}`}
       data-seq={m.seq ?? undefined}
       data-msg-id={m.id}
-      onClick={selectMode ? onToggleSelect : undefined}
+      onClick={selectable ? onToggleSelect : undefined}
     >
       <div className="cw-msg__line">
-        {selectMode && (
+        {selectable && (
           <input
             type="checkbox"
             className="cw-msg__check"
@@ -1036,7 +1049,7 @@ function MessageItem({
           />
         )}
         {identity === 'lead' && (
-          <span className={`cw-msg__avatar cw-tone--${nameTone(m.authorId ?? m.authorKind)}`} title={authorName(m, copy)}>
+          <span className={`cw-msg__avatar cw-who cw-who--${tone}`} title={authorName(m, copy)}>
             <Avatar name={authorName(m, copy)} seed={m.authorId ?? m.authorKind} src={m.authorAvatarUrl} />
           </span>
         )}
@@ -1044,7 +1057,7 @@ function MessageItem({
         <div className="bubble">
           {identity === 'lead' && (
             <span className="cw-sender">
-              <span className={`cw-sender__name cw-sender__name--${nameTone(m.authorId ?? m.authorKind)}`} dir="auto">
+              <span className={`cw-sender__name cw-sender__name--${tone}`} dir="auto">
                 {authorName(m, copy)}
               </span>
               <span className={`kind-chip kind-chip--${m.authorKind}`}>{copy.role[m.authorKind] ?? m.authorKind}</span>
@@ -1065,7 +1078,7 @@ function MessageItem({
           )}
           {side === 'internal' && (
             <span className="bubble__flag">
-              <Icon name="lock" size={12} />
+              <Icon name="lockNote" size={14} />
               {copy.internal}
             </span>
           )}
@@ -1092,11 +1105,15 @@ function MessageItem({
               {m.attachments.map((a) => (
                 <AttachmentView key={a.id} a={a} copy={copy} />
               ))}
-              {m.body && (
-                <span dir="auto">
-                  {highlight ? <Highlighted text={m.body} query={highlight} /> : <MentionText body={m.body} mentions={m.mentions} selfId={selfId} />}
-                </span>
-              )}
+              {m.body &&
+                (isCard ? (
+                  // A card this client cannot draw: the server's own words for it, its first line as the card's title.
+                  <FallbackCard text={cardFallbackText(m.body)} highlight={highlight} />
+                ) : (
+                  <span dir="auto">
+                    {highlight ? <Highlighted text={m.body} query={highlight} /> : <MentionText body={m.body} mentions={m.mentions} selfId={selfId} />}
+                  </span>
+                ))}
             </>
           )}
           {nowCard && m.conversationId && (
@@ -1124,7 +1141,7 @@ function MessageItem({
             {mine && <Ticks status={m.status} />}
           </span>
         </div>
-        {!selectMode && <Menu
+        {!selectMode && !notice && <Menu
           label={copy.messageActions}
           className="cw-msg__menu"
           align={side === 'out' ? 'end' : 'start'}
@@ -1171,6 +1188,24 @@ function MessageItem({
         </div>
       )}
     </li>
+  )
+}
+
+/** A card drawn from its plain words: the first line is its title, the rest its facts. */
+function FallbackCard({ text, highlight }: { text: string; highlight?: string }) {
+  const [title = '', ...lines] = text.split('\n').filter((line) => line.trim() !== '')
+  const show = (line: string) => (highlight ? <Highlighted text={line} query={highlight} /> : line)
+  return (
+    <span className="cw-card">
+      <strong className="cw-card__title" dir="auto">
+        {show(title)}
+      </strong>
+      {lines.map((line, i) => (
+        <span key={i} className="cw-card__line" dir="auto">
+          {show(line)}
+        </span>
+      ))}
+    </span>
   )
 }
 

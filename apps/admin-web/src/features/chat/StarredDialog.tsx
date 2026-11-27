@@ -8,7 +8,7 @@ import { Icon } from '@/shared/components/Icon'
 import { QueryBoundary } from '@/shared/components/States'
 import { chatApi, chatKeys, type ChatConversation } from './chatApi'
 import { chatCopyFor } from './copy'
-import { conversationName } from './chatView'
+import { conversationName, toneOfKind } from './chatView'
 
 /**
  * "Starred messages": the viewer's own bookmarks, newest star first, across
@@ -59,7 +59,9 @@ export function StarredDialog({ onClose, onOpen }: { onClose: () => void; onOpen
             return (
               <li key={m.id}>
                 <button type="button" className="cw-starred__item" onClick={() => onOpen(it.conversationId, m.id)}>
-                  <Avatar name={author || '?'} seed={m.authorId ?? m.authorKind} size="sm" src={m.authorAvatarUrl} />
+                  <span className={`cw-who cw-who--${toneOfKind(m.authorKind)}`}>
+                    <Avatar name={author || '?'} seed={m.authorId ?? m.authorKind} size="sm" src={m.authorAvatarUrl} />
+                  </span>
                   <span className="cw-starred__main">
                     <span className="cw-starred__top">
                       <span className="cw-starred__who" dir="auto">{author}</span>

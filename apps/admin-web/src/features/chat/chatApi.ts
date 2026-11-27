@@ -108,6 +108,8 @@ export interface ChatLastMessage {
   type: string
   text: string | null
   systemKind: string | null
+  /** A card's kind ('call_scheduled', 'lesson_moved', ...); absent on other messages and from older servers. */
+  cardKind?: string | null
   authorKind: string
   authorId: string | null
   deleted: boolean
