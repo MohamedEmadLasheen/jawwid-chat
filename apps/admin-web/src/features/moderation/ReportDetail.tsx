@@ -99,11 +99,12 @@ export function ReportDetailBody({ id, canAct, onClose, onGone }: { id: string; 
 /** The reported person: name and a localized kind. Tolerates a row without `subject`. */
 export function SubjectView({ subject, targetKind, testId }: { subject?: ReportSubject | null; targetKind: Detail['targetKind']; testId: string }) {
   const tx = useCopy()
+  const { locale } = useI18n()
   return (
     <span data-testid={testId}>
-      {subject?.name && <span dir="auto">{subject.name}</span>}
+      {subject?.name && <bdi dir="auto">{subject.name}</bdi>}
       {subject?.kind && SUBJECT_KIND[subject.kind] && <> ({tx(SUBJECT_KIND[subject.kind])})</>}
-      {' · '}
+      {locale === 'ar' ? '، ' : ', '}
       <span>{tx(targetKind === 'message' ? MOD.targetMessage : MOD.targetPerson)}</span>
     </span>
   )

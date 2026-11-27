@@ -133,8 +133,9 @@ describe.each([['en'], ['ar']] as const)('The moderation queue (%s)', (locale) =
   it('badges only the child-safety report', async () => {
     renderWithProviders(<ReportsPage />, { locale, staff: MANAGER })
     const els = await rows()
-    expect(within(els[0]!).getByText(L(MOD.childSafetyBadge))).toBeInTheDocument()
-    for (const i of [1, 2, 3]) expect(within(els[i]!).queryByText(L(MOD.childSafetyBadge))).toBeNull()
+    // Round 3: beside the reason "A child's safety" the tag says only "Urgent".
+    expect(within(els[0]!).getByText(L(MOD.urgentTag))).toBeInTheDocument()
+    for (const i of [1, 2, 3]) expect(within(els[i]!).queryByText(L(MOD.urgentTag))).toBeNull()
   })
 
   it('sends the status, child-safety (priority=urgent) and overdue filters to the contract', async () => {

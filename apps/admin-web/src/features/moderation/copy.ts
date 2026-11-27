@@ -83,7 +83,10 @@ export const MOD = {
   targetMessage: { ar: 'رسالة', en: 'Message' },
   targetPerson: { ar: 'شخص', en: 'Person' },
   childSafetyBadge: { ar: 'سلامة طفل: عاجل', en: 'Child safety: urgent' },
+  /** Beside a report whose reason already says "a child's safety": the tag adds only the urgency. */
+  urgentTag: { ar: 'عاجل', en: 'Urgent' },
   overdueBadge: { ar: 'متأخر', en: 'Overdue' },
+  // Shorthand units on purpose: "{h} ساعة و{m} دقيقة" would need Arabic number agreement (4 دقائق, 11 دقيقة).
   left: { ar: 'متبقّي {h} س {m} د', en: '{h} h {m} min left' },
   past: { ar: 'متأخر {h} س {m} د', en: '{h} h {m} min overdue' },
   closed: { ar: 'مغلق', en: 'Closed' },
