@@ -404,6 +404,8 @@ function RailItem({
   // pages listed whole pushes the places after it out of sight. The rest are in its menu.
   const groupHere = d.groups.find((g) => g.entries.some((e) => e.key === hereEntry))
   const pagesHere = groupHere && d.groups.length > 1 ? groupHere.entries : entriesOf(d)
+  // A list of one page would repeat the place's own name: the place carries "here" itself.
+  const alone = current && pagesHere.length <= 1
   return (
     <li
       className={itemClass}
@@ -417,7 +419,7 @@ function RailItem({
     >
       <button
         type="button"
-        className={current ? 'side__item is-current' : 'side__item'}
+        className={current ? (alone ? 'side__item is-current is-alone' : 'side__item is-current') : 'side__item'}
         data-destination={d.key}
         // A long name is said in full to assistive technology and shortened on screen.
         aria-label={SHORT_LABEL[d.key] ? tx(d.label) : undefined}
@@ -439,7 +441,7 @@ function RailItem({
           <Icon name="chevronForward" size={16} />
         </span>
       </button>
-      {current && (
+      {current && !alone && (
         // Where you are: the current place's pages, one click apart, under its name.
         <ul className="ruled side__sub" aria-label={tx(d.label)}>
           {pagesHere.map((e) => (
@@ -517,6 +519,10 @@ function RailNav() {
     const el = navRef.current
     if (!el) return
     const update = () => {
+      // When the current place's pages would push other places out of view, only your own page
+      // is listed. Measured with the full list in the same frame, so it never flickers or loops.
+      delete el.dataset.tight
+      if (el.scrollHeight > el.clientHeight + 2 && el.querySelector('.side__sub')) el.dataset.tight = ''
       el.dataset.more = el.scrollHeight - el.scrollTop - el.clientHeight > 2 ? 'end' : ''
     }
     update()

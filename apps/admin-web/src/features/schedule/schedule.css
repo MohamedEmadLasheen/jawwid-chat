@@ -770,3 +770,10 @@ button.sc-heat--off { cursor: pointer; }
 @container (max-width: 62px) {
   .sc-lesson__marks { display: none; }
 }
+/* The week in a narrow board (a 1024px window with the sidebar open): the teacher column and the
+   days narrow so all seven days are in view rather than the week's start scrolled away. */
+.sc-sheet { container: sc-board / inline-size; }
+@container sc-board (max-width: 780px) and (min-width: 560px) {
+  .sc-grid--week { --sc-head-w: 150px; --sc-day-min: 62px; }
+  .sc-grid--week .sc-cell__of { display: none; }
+}

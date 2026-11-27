@@ -259,5 +259,18 @@ Every page below is on the design system (`core/theme/system.css`), built on rea
 | Moderation, Materials, Lesson audio | 3 | `admin-screens/moderation-round3.png`, `materials-round3.png`, `lesson-audio-round3.png` |
 | Calls, call window, Stories | 3 | `admin-screens/calls-round3.png`, `call-window-round3.png`, `stories-round3.png` |
 | Admin dashboard, unbuilt sections, All conversations | 3 | `admin-screens/admin-dashboard-round3.png`, `admin-placeholder-round3.png`, `admin-conversations-round3.png` |
+| Student schedules desk | 3 | `admin-screens/student-schedules-round3.png`, `student-schedules-phone-round3.png` |
+| Paused and stopped students (`/teachers/students`) | 3 | `admin-screens/teacher-students-round3.png` |
+| Teacher boards, board viewer | 3 | `admin-screens/teacher-boards-round3.png`, `teacher-board-viewer-round3.png` |
+| Collapsible rail (shell, every page) | see below | `admin-screens/rail-*.png` |
 
-Below the three-round bar: the Student schedules desk (`/schedule/students`), the teacher's Students page and Teacher boards had two critic rounds in the teachers pass (screenshots `admin-screens/*-round2.png`); listed as an open item.
+Every page has now had at least three critic rounds.
+
+**Collapsible rail (2026-11-27).** The desktop sidebar is folded to icons by default and opens to icon and label from its foot (see `admin-decisions.md`).
+- **Final run:** every page (73 routes) in both states, in Arabic and English. Folded (the default) at 1440x900, 1024x768 and 390x844; opened at 1440x900 and 1024x768. 730 shots.
+- **Automatic check:** it looks for content that spills past the page or is cut off by a box that hides overflow.
+- **What it caught, now fixed:**
+  - The pages that broke at 1024 with the rail open, when a page gets about 764px: Instalments, Teacher statistics, the payments ledger, the chat reply queue, and Attendance.
+  - The All conversations order picker on phones.
+- **What it still flags:** a supervisor's 404 on a student profile they may not open (a permission, in both states), and the payments row action that the stacked ledger hides on purpose (the row opens the payment).
+- **Critic rounds on the rail:** 2. Pairs per page type are `admin-screens/rail-<page>-folded.png` and `rail-<page>-open.png`, plus `rail-tooltip`, `rail-menu`, `rail-account`, `rail-keyboard-focus` and `rail-short-1366x768-open`. The gallery's `rail.html` pairs every page.

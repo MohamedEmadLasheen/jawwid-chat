@@ -65,8 +65,9 @@ export function ThreadStart({ conversations, onOpen }: { conversations: ChatConv
                 <li key={c.id} className="cw-queue__row">
                   <ConversationAvatar c={c} name={name} selfId={staff?.id} />
                   <div className="cw-queue__who">
-                    <h3 className="cw-queue__name">
-                      <bdi>{name}</bdi>
+                    {/* The name's own direction, so an overlong Latin name is cut at its end; it still aligns with the column. */}
+                    <h3 className="cw-queue__name" dir="auto">
+                      {name}
                     </h3>
                     <p className="cw-queue__said">
                       {said.who && (

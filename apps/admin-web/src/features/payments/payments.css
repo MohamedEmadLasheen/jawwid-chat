@@ -506,10 +506,10 @@ fieldset:disabled .set-reminder label { cursor: default; }
 .pay-mode label { display: inline-flex; align-items: center; gap: var(--space-1); }
 
 /* A ledger beside an open sidebar on a 1024px window has a phone's room, not a desk's: below
-   ~820px of its own width it takes the phone's short blocks (the same rules as the phone's, by width
+   ~960px of its own width it takes the phone's short blocks (the same rules as the phone's, by width
    of the ledger rather than of the window), so names are never squeezed to nothing. */
 .sheet:has(.tx-table) { container: ledger / inline-size; }
-@container ledger (max-width: 820px) {
+@container ledger (max-width: 960px) {
   .tx-table, .tx-table tbody { display: block; }
   .tx-table thead { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip: rect(0 0 0 0); }
   .table.tx-table tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 6px var(--space-3); padding: 14px var(--space-4); border-block-end: 1px solid var(--line-2); }

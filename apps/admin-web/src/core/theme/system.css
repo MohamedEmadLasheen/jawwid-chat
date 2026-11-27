@@ -1174,7 +1174,7 @@ button.side__item.is-current::before { content: none; }
 /* A strip of figures sized by its own room (the sidebar may be folded or open): when four
    large amounts would collide, the numbers step down and a unit may wrap under its figure. */
 .figures { container: figures / inline-size; }
-@container figures (max-width: 760px) {
+@container figures (max-width: 940px) {
   .figure { padding-inline: 12px; }
   .figure__value { flex-wrap: wrap; column-gap: 4px; }
   .figure__n { font-size: 24px; }
@@ -1197,6 +1197,16 @@ button.side__item.is-current::before { content: none; }
   .sidebar .side__today { margin-block-end: 2px; }
   .sidebar .side__foot { padding-block: 6px; gap: 2px; }
   .sidebar .side__sub-link { padding-block: 4px; }
-  /* Under its place only your page is listed; the others are in the place's menu and the page's tabs. */
-  .sidebar .side__sub > li:not(:has([aria-current])) { display: none; }
+}
+
+@media (min-width: 1024px) {
+  /* When the list would overflow, under its place only your page is listed; the others are one
+     click away in the place's menu and the page's tabs (data-tight is measured in RailNav). */
+  .side__nav[data-tight] .side__sub > li:not(:has([aria-current])) { display: none; }
+  /* A long page name ends in an ellipsis inside its highlight. */
+  .side__sub { grid-template-columns: minmax(0, 1fr); }
+  .side__sub > li { min-inline-size: 0; }
+  /* A place whose list would be its one page carries "here" itself. */
+  .sidebar button.side__item.is-current.is-alone { background: var(--sidebar-active); box-shadow: 0 0 0 1px var(--sidebar-line); }
+  .sidebar button.side__item.is-current.is-alone::before { content: ''; }
 }

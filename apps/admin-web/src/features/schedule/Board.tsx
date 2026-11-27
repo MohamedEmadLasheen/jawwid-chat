@@ -66,7 +66,8 @@ export function WeekBoard({
     () => week.map((d) => data.days.some((x) => x.day === d && x.shift.length + x.work.length > 0) || data.lessons.some((l) => dayOfLesson(l) === d)),
     [week, data.days, data.lessons],
   )
-  const columns = { '--sc-cols': working.map((w) => (w ? 'minmax(86px, 1fr)' : '64px')).join(' ') } as CSSProperties
+  // Widths come from the board's own room (schedule.css: --sc-day-min, --sc-off-w), so a board beside an open sidebar still shows the whole week.
+  const columns = { '--sc-cols': working.map((w) => (w ? 'minmax(var(--sc-day-min, 86px), 1fr)' : 'var(--sc-off-w, 64px)')).join(' ') } as CSSProperties
   const h = (m: number) => hoursOf(m, locale)
   // Where the board is wider than its room (a narrow window, the sidebar open), today stays in view.
   const grid = useRef<HTMLDivElement>(null)
