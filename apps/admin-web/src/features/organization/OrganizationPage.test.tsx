@@ -81,7 +81,11 @@ describe('children and their supervisors', () => {
     const table = await screen.findByRole('table')
     expect(within(table).getByText('Child Alpha')).toBeInTheDocument()
     const beta = within(table).getByText('Child Beta').closest('tr')!
-    expect(within(beta).getByText('Unassigned')).toBeInTheDocument()
+    // Children are set out under their supervisor: the unassigned ones under an "Unassigned" heading of their own.
+    const unassigned = beta.closest('tbody')!
+    expect(within(unassigned).getByText('Unassigned')).toBeInTheDocument()
+    expect(within(unassigned).queryByText('Child Alpha')).not.toBeInTheDocument()
+    expect(within(within(table).getByText('Child Alpha').closest('tbody')!).queryByText('Unassigned')).not.toBeInTheDocument()
     expect(within(beta).getByRole('button', { name: 'Assign — Child Beta' })).toBeInTheDocument()
   })
 
@@ -257,7 +261,10 @@ describe('teachers and their supervisors', () => {
     const select = await screen.findByRole('combobox', { name: 'Supervisor for Teacher V' })
     expect(select).toHaveAttribute('data-value', '')
     const row = select.closest('tr') as HTMLElement
-    expect(within(row).getByText('Unassigned')).toBeInTheDocument()
+    // Teachers are set out under their supervisor: this one sits under the "Unassigned" heading.
+    const unassigned = row.closest('tbody') as HTMLElement
+    expect(within(unassigned).getByText('Unassigned')).toBeInTheDocument()
+    expect(within(unassigned).queryByText('Teacher T')).not.toBeInTheDocument()
     expect(within(row).getByText(/Former supervisor: Old Sup/)).toBeInTheDocument()
   })
 

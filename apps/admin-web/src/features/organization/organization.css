@@ -1,32 +1,121 @@
-/* PD-8 organization page: who supervises whom, as hairline tables and ruled lists. */
-@import '../profiles/people.css';
+/*
+ * PD-8 organization page: who supervises whom, set out as groups.
+ *
+ * The sheets, their bars and their rows are the directory's (.dir-*) and a
+ * record's (.rec-sheet); what is here is what the structure adds to them.
+ *
+ *   .org-tabs / .org-tab     the three views, set on the masthead; a solid count where someone still waits
+ *   .org-sheet / .org-table  a sheet of grouped rows that act where they stand
+ *   .org-group               a group's head: who it belongs to, how many, what applies to them
+ *   .org-dept / .org-part    a department's sheet and its parts (team, backup links, schedule colors)
+ *   .cover-*, .handover*     PD-33: hand over to backup (also on the chat workspace)
+ */
+@import '../profiles/record.css';
+@import '../profiles/directory.css';
 
 .org-tabs { display: flex; gap: var(--space-5); flex-wrap: wrap; border-block-end: 1px solid var(--hairline); margin-block: 0 var(--space-4); }
 .org-tab { font: inherit; font-size: var(--fs-sm); font-weight: 500; min-block-size: 40px; background: transparent; border: none; border-block-end: 2px solid transparent; margin-block-end: -1px; padding: 0; color: var(--ink-muted); cursor: pointer; }
 .org-tab:hover { color: var(--ink); }
 /* The label in --text-link and the underline in --accent: the pair the theme tests hold to 4.5:1 and 3:1. */
 .org-tab[aria-selected='true'] { color: var(--text-link); border-block-end-color: var(--accent); font-weight: 600; }
-
-/* A department: a ruled section, never a box. */
-.org-page .org-dept { margin: 0 0 var(--space-6); padding: 0; border: 0; background: none; }
-.org-dept__head { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; justify-content: space-between; min-block-size: 40px; padding-block-end: 6px; border-block-end: 1px solid var(--hairline); }
-.org-dept__title { margin: 0; font-family: var(--display); font-size: var(--fs-xl); font-weight: 600; line-height: 1.3; }
-html[lang='ar'] .org-dept__title { font-weight: 700; line-height: 1.5; }
-.org-muted { color: var(--ink-muted); font-size: var(--fs-sm); }
-.org-backups { list-style: none; margin: 0; padding: 0; display: block; }
-.org-backup { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; justify-content: space-between; padding: 9px 2px; border: 0; border-block-end: 1px solid var(--hairline-soft); border-radius: 0; font-size: var(--fs-sm); }
-.org-backup__actions { display: flex; gap: var(--space-2); flex-wrap: wrap; }
-.org-table-wrap { overflow-x: auto; }
-@media (min-width: 900px) {
-  .org-page .org-table-wrap { overflow: visible; }
+/* Set as the masthead's tabs, the strip sits on the band's lower edge and scrolls on one line when it must. */
+.mast__tabs .org-tabs { margin-block: 0; border-block-end: 0; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+.mast__tabs .org-tabs::-webkit-scrollbar { display: none; }
+.mast__tabs .org-tab { flex: none; display: inline-flex; align-items: center; gap: 7px; margin-block-end: 0; white-space: nowrap; }
+.mast__tabs .org-tab .count { min-inline-size: 18px; block-size: 18px; padding-inline: 5px; font-size: 11px; }
+@media (max-width: 767px) {
+  .mast__tabs .org-tabs { margin-inline: calc(-1 * var(--space-4)); padding-inline: var(--space-4); gap: var(--space-4); }
+  .mast__tabs .org-tab { min-block-size: 44px; }
 }
+
+.org-muted { color: var(--ink-muted); font-size: var(--fs-sm); }
+.org-panel { display: grid; gap: var(--space-5); min-inline-size: 0; }
+
+/* ------------------------------------------------------- sheets of groups */
+
+.org-sheet { min-inline-size: 0; }
+.org-sheet > .state { padding: var(--space-5) var(--space-4); }
 .org-filter { display: flex; align-items: center; gap: var(--space-2); }
-.org-filter .field__label { margin: 0; white-space: nowrap; }
-.org-filter .ss { inline-size: auto; min-inline-size: 12rem; }
-.org-page .table a { color: var(--ink); font-weight: 600; text-decoration: none; }
-.org-page .table a:hover { color: var(--teal-dark); text-decoration: underline; text-underline-offset: 3px; }
-.org-page .banner { margin-block-end: var(--space-3); padding: 6px var(--space-3); border: 0; border-inline-start: 2px solid var(--teal); background: none; color: var(--ink-muted); font-size: var(--fs-sm); }
-.org-page .banner--warn { border-inline-start-color: var(--gold-line); color: var(--gold-text); }
+.org-filter .field__label { margin: 0; white-space: nowrap; font-size: var(--fs-sm); color: var(--ink-muted); }
+.org-filter .ss { inline-size: auto; min-inline-size: 13rem; }
+/* The rule a view works under: one quiet line at the head of its sheet, gold while someone still waits. */
+.org-rule { flex: 1 1 320px; margin: 0; padding-inline-start: var(--space-3); border-inline-start: 3px solid var(--teal); max-inline-size: 96ch; font-size: var(--fs-sm); line-height: 1.5; color: var(--ink-muted); }
+.org-rule--waiting { border-inline-start-color: var(--gold-line); color: var(--ink); }
+.org-error { margin: 0; padding: 8px var(--space-4); }
+
+/* A row here opens nothing by itself: the name is a link and the action is its end. */
+.org-table .dir-row { cursor: default; }
+.org-table .dir-row:hover .dir-name { color: var(--ink); }
+.org-table .dir-row:hover a.dir-name, .org-table a.dir-name:hover { color: var(--teal); }
+.org-table strong.dir-name:hover { text-decoration: none; }
+.org-table .dir-cell-who { inline-size: 44%; }
+.org-name { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; }
+.org-sub { font-size: var(--fs-xs); line-height: 1.55; color: var(--ink-muted); overflow-wrap: anywhere; }
+.org-person { font-weight: 600; color: var(--ink); text-decoration: none; }
+.org-person:hover { color: var(--teal); text-decoration: underline; text-underline-offset: 3px; }
+.org-cell-pick { inline-size: 36%; min-inline-size: 13rem; }
+.org-cell-pick .ss { max-inline-size: 22rem; }
+.org-cell-num { inline-size: 1%; text-align: end; white-space: nowrap; }
+.org-table th.org-cell-num, .org-table td.org-cell-num { text-align: end; }
+.org-num { font-family: var(--display); font-size: var(--fs-lg); font-weight: 600; font-variant-numeric: tabular-nums lining-nums; color: var(--ink); }
+.org-num--none { color: var(--border-control); }
+.org-control { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 4px 8px; }
+
+/* A group's head: the supervisor and their count on the start side, their cover and what applies to them at the end. */
+.org-group { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px var(--space-3); min-block-size: 28px; }
+.org-group__cover { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.org-group .dir-group__title { flex-wrap: wrap; }
+.org-group .row-actions2__more .menu__button { background: none; }
+
+/* ------------------------------------------------------------ departments */
+
+.org-dept { min-inline-size: 0; }
+.org-dept__manager { font-size: var(--fs-sm); color: var(--ink-muted); }
+.org-table--team .dir-cell-who { inline-size: 38%; }
+.org-cell-cover { min-inline-size: 0; }
+.org-part { padding: var(--space-4) var(--space-4) var(--space-5); border-block-start: 1px solid var(--hairline-soft); }
+.org-part__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); min-block-size: 32px; }
+.org-part__title { margin: 0; font-size: var(--fs-md); font-weight: 600; line-height: 1.5; }
+.org-part__rule, .org-part__none { margin: 2px 0 0; max-inline-size: 78ch; font-size: var(--fs-xs); line-height: 1.5; color: var(--ink-muted); }
+.org-part__none { margin-block-start: var(--space-3); font-size: var(--fs-sm); }
+.org-backups { list-style: none; margin: var(--space-3) 0 0; padding: 0; display: block; border-block-start: 1px solid var(--hairline-soft); }
+.org-backup { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px var(--space-3); min-block-size: 52px; padding-block: 9px; border-block-end: 1px solid var(--hairline-soft); }
+.org-backup:last-child { border-block-end: 0; padding-block-end: 0; }
+.org-backup__what { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; min-inline-size: 0; }
+.org-backup__who { font-weight: 600; overflow-wrap: anywhere; }
+.org-backup--over .org-backup__who { font-weight: 500; color: var(--ink-muted); }
+/* The schedule colors bring their own heading: here it is a part's heading. */
+.org-part--colors:empty { display: none; }
+.org-part--colors .sc-colors { margin-block-start: 0; }
+.org-part--colors .sc-colors > h3 { margin: 0; font-size: var(--fs-md); font-weight: 600; line-height: 1.5; }
+.org-part--colors .sc-colors > .field__hint { margin: 0; font-size: var(--fs-xs); }
+
+@media (max-width: 767px) {
+  .org-bar .org-filter { flex: 1 1 100%; }
+  .org-bar .org-filter .ss { flex: 1; min-inline-size: 0; }
+  .org-bar .sheet-bar__end { margin-inline-start: 0; }
+  .org-table .dir-cell-who, .org-table--team .dir-cell-who { inline-size: auto; }
+  /* On a phone the row keeps its action. A child's is one short word: it sits at the row's end. */
+  .org-table.dir-table .dir-row > td.cell-actions:last-child { display: block; grid-column: 2; grid-row: 1 / span 2; align-self: center; inline-size: auto; padding: 0; white-space: normal; }
+  .org-table.dir-table .dir-row > td.cell-actions:last-child:empty { display: none; }
+  .org-table.dir-table .dir-row > td.dir-cell-quiet { grid-column: 1; }
+  .org-table .dir-row .row-actions2 > .btn { border-color: var(--border-strong); color: var(--ink); }
+  /* A team member's is a phrase: stated across the row, "more" on its own square. */
+  .org-table--team.dir-table .dir-row > td.cell-actions:last-child { grid-column: 1 / -1; grid-row: auto; padding-block-start: 8px; }
+  .org-table--team .dir-row .row-actions2 { display: flex; flex: 1; }
+  .org-table--team .dir-row .row-actions2 > .btn { flex: 1; justify-content: center; }
+  .org-table--team .org-control { display: flex; }
+  .org-table--team.dir-table .dir-row > td.org-cell-num::after { content: ' ' attr(data-label); font-size: var(--fs-xs); color: var(--ink-muted); }
+  /* The supervisor's picker takes the row's width under the teacher. */
+  .org-table.dir-table .dir-row > td.org-cell-pick { grid-column: 1 / -1; inline-size: auto; min-inline-size: 0; padding-block-start: 8px; }
+  .org-cell-pick .ss { max-inline-size: none; }
+  /* The team: the count beside the name, the cover under it. */
+  .org-table.dir-table .dir-row > td.org-cell-num { grid-column: 2; grid-row: 1; inline-size: auto; }
+  .org-table.dir-table .dir-row > td.org-cell-cover { grid-column: 1 / -1; padding-inline-start: 48px; }
+  .org-table.dir-table .dir-row > td.org-cell-cover:empty { display: none; }
+  .org-backup .row-actions2 { flex: 1 1 100%; display: flex; }
+  .org-backup .row-actions2 > .btn { flex: 1; justify-content: center; }
+}
 
 /* PD-33: hand over to backup. */
 .cover-cell { display: inline-flex; flex-wrap: wrap; gap: var(--space-1) var(--space-2); align-items: center; }

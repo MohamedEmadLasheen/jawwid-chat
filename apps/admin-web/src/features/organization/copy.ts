@@ -3,6 +3,9 @@ import { ApiError } from '@/core/api/errors'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import type { BackupStatus, DepartmentKind, Position } from './api'
 
+/** Count wording, the shape `countWords` (features/instalments/copy) reads: en [one, other], ar [one, two, few, many]. */
+type CountForms = { en: [string, string]; ar: [string, string, string, string] }
+
 /**
  * Organization-structure copy, Arabic and English side by side (the {en, ar}
  * pattern of features/admin and features/profile). Wording rule: a label never
@@ -71,6 +74,7 @@ export const T = {
     ar: 'يُسند الأطفال من قسم العمليات. لا يوجد في قسمك أطفال لإدارتهم.',
   },
   count: { en: '{n} children', ar: '{n} طفلًا' },
+  more: { en: 'More actions: {name}', ar: 'إجراءات أخرى: {name}' },
 
   assignTitle: { en: 'Supervisor for {name}', ar: 'المشرف على {name}' },
   assignTo: { en: 'New supervisor', ar: 'المشرف الجديد' },
@@ -180,6 +184,16 @@ export const T = {
   required: { en: 'Required.', ar: 'مطلوب.' },
   save: { en: 'Save', ar: 'حفظ' },
   saving: { en: 'Saving…', ar: 'جارٍ الحفظ…' },
+}
+
+/** How many still wait for a supervisor, said on the tab that settles it and at the head of its sheet. */
+export const CHILDREN_WAITING: CountForms = {
+  en: ['{n} child has no supervisor', '{n} children have no supervisor'],
+  ar: ['طفل واحد بلا مشرف', 'طفلان بلا مشرف', '{n} أطفال بلا مشرف', '{n} طفلًا بلا مشرف'],
+}
+export const TEACHERS_WAITING: CountForms = {
+  en: ['{n} teacher has no supervisor', '{n} teachers have no supervisor'],
+  ar: ['معلم واحد بلا مشرف', 'معلمان بلا مشرف', '{n} معلمين بلا مشرف', '{n} معلمًا بلا مشرف'],
 }
 
 export const DEPARTMENT_LABEL: Record<DepartmentKind, Pair> = {
