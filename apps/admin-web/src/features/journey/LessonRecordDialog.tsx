@@ -1,6 +1,7 @@
 import { useId, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
+import { Menu, type MenuItem } from '@/shared/components/Menu'
 import { QueryBoundary } from '@/shared/components/States'
 import { describeError } from '@/features/organization/copy'
 import { chatKeys } from '@/features/chat/chatApi'
@@ -101,20 +102,32 @@ function RecordView({ l, onClose, onMode }: { l: LessonRecord; onClose: () => vo
   const correctable = l.outcome !== null && !['voided', 'rescheduled', 'suspended'].includes(l.outcome)
   // PD-35: a report the teacher should file -- the lesson started and has none yet.
   const reportOwed = (l.outcome === null || l.outcome === 'held') && !liveReport && Date.parse(l.startsAt) <= Date.now()
+  // One stated action, by what the record needs: its report edited, its missing
+  // report asked for, or its outcome corrected. Everything else is behind the menu.
+  const primary: { mode: Mode; label: string } | null = liveReport
+    ? { mode: 'edit', label: tx(J.editReport) }
+    : reportOwed
+      ? { mode: 'request', label: tx(J.requestReport) }
+      : correctable
+        ? { mode: 'correct', label: tx(J.correct) }
+        : null
+  const more: MenuItem[] = [
+    { key: 'history', label: tx(J.history), icon: 'clock', onSelect: () => onMode('history') },
+    ...(correctable && primary?.mode !== 'correct' ? [{ key: 'correct', label: tx(J.correct), icon: 'pencil' as const, onSelect: () => onMode('correct') }] : []),
+    ...(liveReport ? [{ key: 'request', label: tx(J.requestCorrection), icon: 'send' as const, onSelect: () => onMode('request') }] : []),
+    ...(liveReport ? [{ key: 'delete', label: tx(J.deleteReport), icon: 'close' as const, danger: true, onSelect: () => onMode('delete') }] : []),
+  ]
   return (
     <Dialog
       title={`${tx(J.recordTitle)} — ${l.learner.name}`}
       onClose={onClose}
       footer={
         <>
-          <button type="button" className="btn" onClick={() => onMode('history')}>{tx(J.history)}</button>
-          {correctable && <button type="button" className="btn" onClick={() => onMode('correct')}>{tx(J.correct)}</button>}
-          {(liveReport || reportOwed) && (
-            <button type="button" className="btn" onClick={() => onMode('request')}>{tx(liveReport ? J.requestCorrection : J.requestReport)}</button>
-          )}
-          {liveReport && <button type="button" className="btn" onClick={() => onMode('edit')}>{tx(J.editReport)}</button>}
-          {liveReport && <button type="button" className="btn btn--danger" onClick={() => onMode('delete')}>{tx(J.deleteReport)}</button>}
           <DialogCancelButton onClick={onClose} />
+          <Menu label={tx(J.moreActions)} items={more} className="jr-more" />
+          {primary && (
+            <button type="button" className="btn btn--primary" onClick={() => onMode(primary.mode)}>{primary.label}</button>
+          )}
         </>
       }
     >

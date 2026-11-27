@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { journeyApi, journeyKeys, type CorrectionRequest } from '@/features/journey/api'
 import { LessonRecordDialog } from '@/features/journey/LessonRecordDialog'
+import { J } from '@/features/journey/copy'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { relativeTime } from '@/features/admin/copy'
 import type { MenuItem } from '@/shared/components/Menu'
@@ -51,6 +52,7 @@ export function NeedsActionPage() {
   const correctionRows = (corrections.data?.requests ?? []).slice(0, 50)
   const openCorrections = correctionRows.filter((r) => r.status === 'open').length
   const [historyOf, setHistoryOf] = useState<string | null>(null)
+  const [askOf, setAskOf] = useState<string | null>(null)
 
   const d = q.data
   const blocked = d?.blockedOccurrences ?? []
@@ -83,15 +85,25 @@ export function NeedsActionPage() {
     pressed: active === f.key,
   }))
 
+  const recordStudentAbsent = (l: LessonDto) => run(tx(O.studentAbsent), [noteField(false)], (v) => opsApi.absence(l.id, v('note') || undefined))
   const noteField = (required: boolean, label: Pair = required ? O.note : O.noteOptional): FieldSpec => ({ key: 'note', label, type: 'textarea', required })
-  /** A lesson with no outcome: the one most often recorded is stated; the other two are behind "⋯". */
-  const lessonActions = (l: LessonDto) => ({
-    primary: (
-      <button type="button" className="btn btn--sm" onClick={() => run(tx(O.studentAbsent), [noteField(false)], (v) => opsApi.absence(l.id, v('note') || undefined))}>
+  /**
+   * A lesson with no outcome. One that ended over a day ago states "Ask for the
+   * report" (the teacher is reminded, with a reason); one that just ended states
+   * the outcome most often recorded. The rest is behind the menu.
+   */
+  const lessonActions = (l: LessonDto, late = false) => ({
+    primary: late ? (
+      <button type="button" className="btn btn--sm btn--primary" onClick={() => setAskOf(l.id)}>
+        {tx(J.requestReport)}
+      </button>
+    ) : (
+      <button type="button" className="btn btn--sm" onClick={() => recordStudentAbsent(l)}>
         {tx(O.studentAbsent)}
       </button>
     ),
     more: [
+      ...(late ? [{ key: 'student', label: tx(O.studentAbsent), icon: 'userCheck' as const, onSelect: () => recordStudentAbsent(l) }] : []),
       { key: 'teacher', label: tx(O.teacherAbsent), icon: 'userMinus', onSelect: () => run(tx(O.teacherAbsent), [noteField(true)], (v) => opsApi.teacherNoShow(l.id, v('note'))) },
       { key: 'cancel', label: tx(O.cancel), icon: 'calendarX', danger: true, onSelect: () => run(tx(O.cancel), [{ key: 'reason', label: O.reason, type: 'textarea', required: true }], (v) => opsApi.cancel(l.id, v('reason'))) },
     ] satisfies MenuItem[],
@@ -112,7 +124,7 @@ export function NeedsActionPage() {
             <>
               <Section show={show('overdue')} late title={tx(O.overdue)} hint={tx(O.overdueHint)} count={d.overdue.length}>
                 {d.overdue.map((l) => (
-                  <LessonRow key={l.id} lesson={l} late {...lessonActions(l)} label={moreFor(l.learner.name)} />
+                  <LessonRow key={l.id} lesson={l} late {...lessonActions(l, true)} label={moreFor(l.learner.name)} />
                 ))}
               </Section>
               <Section show={show('rulings')} title={tx(O.rulings)} hint={tx(O.rulingsHint)} count={d.rulings.length}>
@@ -274,6 +286,7 @@ export function NeedsActionPage() {
           <ActionDialog title={dialog.title} intro={dialog.intro} fields={dialog.fields} onSubmit={dialog.submit} onClose={() => setDialog(null)} />
         )}
         {scheduling && <BlockedScheduleDialog item={scheduling} onClose={() => setScheduling(null)} />}
+        {askOf && <LessonRecordDialog lessonId={askOf} conversationId="" initialMode="request" onClose={() => setAskOf(null)} />}
         {historyOf && <LessonRecordDialog lessonId={historyOf} conversationId="" initialMode="history" onClose={() => setHistoryOf(null)} />}
       </div>
     </div>

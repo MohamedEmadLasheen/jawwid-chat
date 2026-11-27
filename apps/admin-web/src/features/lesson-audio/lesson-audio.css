@@ -14,6 +14,7 @@
 .lesson-audio__mark { grid-column: 1 / -1; font-size: 11.5px; font-weight: 600; color: var(--gold-text); }
 .lesson-audio__mark--decide { color: var(--terracotta); }
 .lesson-audio__unit { min-inline-size: 0; }
+.lesson-audio__split .sheet + .sheet { margin-block-start: 0; }
 .lesson-audio__unit .sheet__head .btn { flex: none; }
 .lesson-audio__bar { display: flex; gap: var(--space-2); }
 .lesson-audio__strings { list-style: none; margin: 0; padding: 0; }

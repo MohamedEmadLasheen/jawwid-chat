@@ -72,6 +72,12 @@ afterEach(() => {
   tokenStore.clear()
 })
 
+/** The record states one action (Edit report here); the others are behind its menu. */
+async function viaMenu(dialog: HTMLElement, name: string) {
+  await userEvent.click(within(dialog).getByRole('button', { name: 'More actions' }))
+  await userEvent.click(await within(dialog).findByRole('menuitem', { name }))
+}
+
 describe('the supervisor\'s Student excuse card', () => {
   it('after the start: a category and the note are required and sent to late-excuse; before the start: the category only', async () => {
     on('POST', /\/lessons\/l-2\/late-excuse$/, () => json(record({ id: 'l-2', outcome: 'student_apology', apologyTiming: 'after_start' })))
@@ -159,7 +165,7 @@ describe('the lesson record', () => {
     on('GET', /\/lessons\/l-9$/, () => json(record()))
     on('POST', /\/lessons\/l-9\/correction-requests$/, () => json({ id: 'q-1' }))
     renderWithProviders(<LessonRecordDialog lessonId="l-9" conversationId="c-1" onClose={() => {}} />, { staff })
-    await userEvent.click(within(await screen.findByRole('dialog', { name: /Lesson record — Child Alpha/ })).getByRole('button', { name: 'Request correction' }))
+    await viaMenu(await screen.findByRole('dialog', { name: /Lesson record — Child Alpha/ }), 'Request correction')
     const ask = await screen.findByRole('dialog', { name: /Request correction — Child Alpha/ })
     await userEvent.click(within(ask).getByRole('button', { name: 'Save' }))
     expect(sent('POST', /correction-requests$/)).toEqual([])
@@ -183,7 +189,7 @@ describe('the lesson record', () => {
     const view = await screen.findByRole('dialog', { name: /Lesson record — Child Alpha/ })
     expect(within(view).getByText('Al-Mulk 1-10', { exact: false })).toBeInTheDocument()
     expect(within(view).getByText('tired')).toBeInTheDocument()
-    await userEvent.click(within(view).getByRole('button', { name: 'Delete report' }))
+    await viaMenu(view, 'Delete report')
     const del = await screen.findByRole('dialog', { name: /Delete report/ })
     await userEvent.click(within(del).getByRole('button', { name: 'Save' }))
     expect(sent('POST', /report\/delete$/)).toEqual([])

@@ -27,7 +27,8 @@
 .ts-denied .icon { color: var(--teal); flex: none; }
 .ts-label { margin: var(--space-6) 0 0; padding-block-end: 8px; border-block-end: 1px solid var(--hairline); }
 .ts-subtitle { margin: var(--space-5) 0 var(--space-2); font-size: 12.5px; font-weight: 500; color: var(--ink-muted); }
-.ts-inline { max-inline-size: 18rem; }
+.ts-inline { display: grid; gap: 6px; max-inline-size: 18rem; }
+.ts-inline .field__label { margin: 0; }
 .ts-narrow { max-inline-size: 6rem; }
 .ts-badge-gap { margin-inline-start: var(--space-2); }
 .ts-link { font: inherit; font-weight: 600; background: none; border: none; padding: 0; color: var(--teal-dark); cursor: pointer; text-align: start; }
