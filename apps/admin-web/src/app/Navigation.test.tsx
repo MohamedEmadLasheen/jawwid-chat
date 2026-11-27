@@ -545,6 +545,41 @@ describe('The desktop rail', () => {
       unmount()
     }
   })
+
+  it('is folded to its icons by default; the toggle opens it and the choice is remembered', async () => {
+    vi.stubGlobal('fetch', routeFetch({}))
+    const { unmount } = renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/admin/stories' })
+    const sidebar = await waitFor(() => document.getElementById('app-sidebar')!)
+    expect(sidebar).toHaveAttribute('data-rail', 'collapsed')
+    // Folded, every place keeps its name for assistive technology.
+    const nav = within(sidebar).getByRole('navigation', { name: 'Admin Portal' })
+    expect(within(nav).getByRole('button', { name: 'Finance' })).toBeInTheDocument()
+
+    await userEvent.click(within(sidebar).getByRole('button', { name: 'Expand sidebar' }))
+    expect(sidebar).toHaveAttribute('data-rail', 'expanded')
+    expect(sidebar.closest('.shell')).toHaveClass('shell--rail-open')
+    expect(localStorage.getItem('jawwid.sidebar.expanded')).toBe('1')
+    unmount()
+
+    // A new visit opens as it was left, and folding again is remembered too.
+    renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/admin/stories' })
+    const again = await waitFor(() => document.getElementById('app-sidebar')!)
+    expect(again).toHaveAttribute('data-rail', 'expanded')
+    await userEvent.click(within(again).getByRole('button', { name: 'Collapse sidebar' }))
+    expect(again).toHaveAttribute('data-rail', 'collapsed')
+    expect(localStorage.getItem('jawwid.sidebar.expanded')).toBe('0')
+  })
+
+  it('names a folded icon in a tooltip on hover', async () => {
+    vi.stubGlobal('fetch', routeFetch({}))
+    renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/admin/stories' })
+    const nav = await screen.findByRole('navigation', { name: 'Admin Portal' })
+    await userEvent.hover(within(nav).getByRole('button', { name: 'Finance' }))
+    expect(document.querySelector('.side__tip')).toHaveTextContent('Finance')
+    await userEvent.unhover(within(nav).getByRole('button', { name: 'Finance' }))
+    await userEvent.hover(document.querySelector('.shell__content')!)
+    expect(document.querySelector('.side__tip')).toBeNull()
+  })
 })
 
 describe('The retired Inbox', () => {

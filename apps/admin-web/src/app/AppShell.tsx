@@ -45,6 +45,133 @@ import { useDestinations, useEntryLabel } from './useDestinations'
 const RAIL_QUERY = '(min-width: 1024px)'
 /** Below this the five most used destinations sit along the bottom edge. */
 const TABBAR_QUERY = '(max-width: 767px)'
+/**
+ * The desktop rail is folded to its icons unless the person opened it; their
+ * choice is kept on this device. '1' = opened (icon and word), anything else = folded.
+ */
+export const RAIL_EXPANDED_KEY = 'jawwid.sidebar.expanded'
+const RAIL_TOGGLE = {
+  expand: { en: 'Expand sidebar', ar: 'توسيع القائمة' },
+  collapse: { en: 'Collapse sidebar', ar: 'طي القائمة' },
+}
+
+function readRailExpanded(): boolean {
+  try {
+    return window.localStorage.getItem(RAIL_EXPANDED_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+/** Whether the desktop rail shows its words; read once before the first paint, so nothing moves on load. */
+function useRailExpanded(): [boolean, () => void] {
+  const [expanded, setExpanded] = useState(readRailExpanded)
+  const toggle = useCallback(() => {
+    setExpanded((was) => {
+      const next = !was
+      try {
+        window.localStorage.setItem(RAIL_EXPANDED_KEY, next ? '1' : '0')
+      } catch {
+        // A private window keeps the choice for this visit only.
+      }
+      return next
+    })
+  }, [])
+  return [expanded, toggle]
+}
+
+/** What the folded rail's tooltip names: the control's own title, its name, or its word. */
+function tipText(el: HTMLElement): string {
+  return (
+    el.title ||
+    el.getAttribute('aria-label') ||
+    el.querySelector('.side__label')?.textContent ||
+    ''
+  ).trim()
+}
+const TIP_TARGETS = '.side__item, .side__search, .nc-bell, .side__me-button, .side__brand'
+
+/**
+ * The folded rail names each icon beside it on hover and on keyboard focus. The
+ * words stay in the controls for assistive technology, so the tip is only drawn.
+ */
+function RailTip({ sidebar }: { sidebar: RefObject<HTMLElement> }) {
+  const [tip, setTip] = useState<{ text: string; top: number } | null>(null)
+  useEffect(() => {
+    const aside = sidebar.current
+    if (!aside) return
+    let shown: HTMLElement | null = null
+    const hide = () => {
+      // A control with a native title lends it to the tip while shown, so the two never stack.
+      if (shown?.dataset.tipTitle !== undefined) {
+        shown.title = shown.dataset.tipTitle
+        delete shown.dataset.tipTitle
+      }
+      shown = null
+      setTip(null)
+    }
+    const show = (el: HTMLElement) => {
+      if (el === shown) return
+      hide()
+      // An open place menu already names itself.
+      if (el.getAttribute('aria-expanded') === 'true') return
+      const text = tipText(el)
+      if (!text) return
+      if (el.title) {
+        el.dataset.tipTitle = el.title
+        el.removeAttribute('title')
+      }
+      shown = el
+      const r = el.getBoundingClientRect()
+      setTip({ text, top: r.top + r.height / 2 })
+    }
+    const targetOf = (e: Event): HTMLElement | null => {
+      const el = (e.target as Element | null)?.closest?.<HTMLElement>(TIP_TARGETS) ?? null
+      return el && !el.closest('.side__menu, .menu__popover') ? el : null
+    }
+    const onOver = (e: PointerEvent) => {
+      const el = targetOf(e)
+      if (el) show(el)
+      else hide()
+    }
+    const onFocus = (e: globalThis.FocusEvent) => {
+      const el = targetOf(e)
+      let keyboard = true
+      try {
+        keyboard = !!el?.matches(':focus-visible')
+      } catch {
+        // An engine without :focus-visible names every focused control.
+      }
+      if (el && keyboard) show(el)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') hide()
+    }
+    aside.addEventListener('pointerover', onOver)
+    aside.addEventListener('pointerleave', hide)
+    aside.addEventListener('focusin', onFocus)
+    aside.addEventListener('focusout', hide)
+    aside.addEventListener('pointerdown', hide)
+    aside.addEventListener('scroll', hide, true)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      aside.removeEventListener('pointerover', onOver)
+      aside.removeEventListener('pointerleave', hide)
+      aside.removeEventListener('focusin', onFocus)
+      aside.removeEventListener('focusout', hide)
+      aside.removeEventListener('pointerdown', hide)
+      aside.removeEventListener('scroll', hide, true)
+      document.removeEventListener('keydown', onKey)
+      hide()
+    }
+  }, [sidebar])
+  if (!tip) return null
+  return (
+    <div className="side__tip" aria-hidden="true" style={{ insetBlockStart: tip.top }}>
+      {tip.text}
+    </div>
+  )
+}
 
 /** The Today page: where the logo goes. */
 export const TODAY_PATH = '/today'
@@ -391,19 +518,26 @@ function Sidebar({
   onClose,
   closeRef,
   onSearch,
+  expanded,
+  onToggleRail,
 }: {
   onClose: () => void
   closeRef: RefObject<HTMLButtonElement>
   onSearch: () => void
+  expanded: boolean
+  onToggleRail: () => void
 }) {
   const { t } = useI18n()
   const tx = useText()
   const { staff } = useSession()
   const rail = useMediaQuery(RAIL_QUERY)
   const mac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform ?? '')
+  const aside = useRef<HTMLElement>(null)
+  const folded = rail && !expanded
+  const toggleLabel = tx(expanded ? RAIL_TOGGLE.collapse : RAIL_TOGGLE.expand)
 
   return (
-    <aside className="sidebar" id="app-sidebar">
+    <aside className="sidebar" id="app-sidebar" ref={aside} data-rail={rail ? (expanded ? 'expanded' : 'collapsed') : undefined}>
       <div className="side__head">
         {/* The logo goes to Today. It sits outside the navigation landmark: it is not one of its destinations. */}
         <Link to={TODAY_PATH} className="side__brand" aria-label={`Jawwid — ${tx(TODAY_LABEL)}`} title={tx(TODAY_LABEL)}>
@@ -443,13 +577,23 @@ function Sidebar({
         </NavLink>
       )}
       {rail ? <RailNav /> : <DrawerNav />}
-      {staff && rail && <AccountBlock />}
+      {rail && (
+        <div className="side__foot">
+          {/* The fold: icons only, or icon and word. */}
+          <button type="button" className="side__item side__toggle" onClick={onToggleRail}>
+            <Icon name={expanded ? 'railCollapse' : 'railExpand'} size={20} />
+            <span className="side__label">{toggleLabel}</span>
+          </button>
+          {staff && <AccountBlock folded={folded} />}
+        </div>
+      )}
+      {folded && <RailTip sidebar={aside} />}
     </aside>
   )
 }
 
 /** The foot of the sidebar: who is signed in, the language, the notifications, and the way out. */
-function AccountBlock() {
+function AccountBlock({ folded }: { folded: boolean }) {
   const { t, locale, setLocale } = useI18n()
   const tx = useText()
   const navigate = useNavigate()
@@ -457,7 +601,7 @@ function AccountBlock() {
   if (!staff) return null
   const superAdmin = isSuperAdmin(staff.role)
   return (
-    <div className="side__foot">
+    <>
       <Menu
         label={tx(ACCOUNT_LABEL)}
         className="side__account"
@@ -473,13 +617,24 @@ function AccountBlock() {
           </span>
         }
         triggerClassName="side__me-button"
+        // Folded, the rail shows only the avatar: the menu says whose account it is.
+        header={
+          folded
+            ? () => (
+                <p className="menu__who">
+                  <bdi className="menu__who-name">{staff.name}</bdi>
+                  <span className="menu__who-role">{superAdmin ? t('role.super_admin') : tx(TEXT.operations)}</span>
+                </p>
+              )
+            : undefined
+        }
         items={[
           { key: 'profile', label: t('nav.profile'), icon: 'staff', onSelect: () => navigate('/profile') },
           { key: 'language', label: t('shell.switchLanguage'), icon: 'language', onSelect: () => setLocale(locale === 'ar' ? 'en' : 'ar') },
           { key: 'signOut', label: t('common.signOut'), icon: 'signOut', onSelect: () => void signOut() },
         ]}
       />
-    </div>
+    </>
   )
 }
 
@@ -705,6 +860,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const destinations = useDestinations()
   const { staff } = useSession()
   const tabbar = useMediaQuery(TABBAR_QUERY)
+  const [railExpanded, toggleRail] = useRailExpanded()
   const openSearch = useCallback(() => setSearching(true), [])
   useSearchShortcut(openSearch)
 
@@ -727,8 +883,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, [navOpen, closeNav])
 
   return (
-    <div className={navOpen ? 'shell shell--nav-open' : 'shell'}>
-      <Sidebar onClose={closeNav} closeRef={closeRef} onSearch={openSearch} />
+    <div className={['shell', navOpen && 'shell--nav-open', railExpanded && 'shell--rail-open'].filter(Boolean).join(' ')}>
+      <Sidebar onClose={closeNav} closeRef={closeRef} onSearch={openSearch} expanded={railExpanded} onToggleRail={toggleRail} />
       <div className="sidebar-backdrop" onClick={closeNav} aria-hidden="true" />
       <div className="shell__main">
         <Topbar navOpen={navOpen} onOpenNav={() => setNavOpen(true)} onSearch={openSearch} menuRef={menuRef} destinations={destinations} />

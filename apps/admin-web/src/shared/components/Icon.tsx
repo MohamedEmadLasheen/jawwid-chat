@@ -123,6 +123,8 @@ import {
   Notebook,
   NotebookPen,
   OctagonAlert,
+  PanelLeftClose,
+  PanelLeftOpen,
   PanelRight,
   Paperclip,
   Pause,
@@ -327,6 +329,9 @@ const ICONS = {
   operations: SlidersHorizontal,
   organization: Network,
   panel: PanelRight,
+  // The sidebar's fold: drawn for a left-hand rail and mirrored for Arabic, where the rail is on the right.
+  railCollapse: PanelLeftClose,
+  railExpand: PanelLeftOpen,
   paperclip: Paperclip,
   parents: Users,
   password: RectangleEllipsis,
@@ -410,6 +415,8 @@ export type IconName = keyof typeof ICONS
 const DIRECTIONAL: ReadonlySet<IconName> = new Set<IconName>([
   'chevronForward',
   'caretLeft',
+  'railCollapse',
+  'railExpand',
   'arrowBack',
   'arrowForward',
   'signOut',

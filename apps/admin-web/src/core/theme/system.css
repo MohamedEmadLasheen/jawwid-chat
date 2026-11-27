@@ -1111,3 +1111,63 @@ button.side__item.is-current::before { content: none; }
   .ts-tabs, .page-tabs { -webkit-mask-image: linear-gradient(to var(--fade-to, left), transparent 0, #000 28px); mask-image: linear-gradient(to var(--fade-to, left), transparent 0, #000 28px); }
   [dir='ltr'] .ts-tabs, [dir='ltr'] .page-tabs { --fade-to: right; }
 }
+
+/* ===================================================== the rail folds
+   On desktop the sidebar is folded to its icons by default; the toggle at its foot opens it to
+   icon and word, and the choice is kept on the device (RAIL_EXPANDED_KEY in AppShell). The width
+   animates and the page's column follows it, so nothing jumps; the icons never move. Folded, each
+   control keeps its word for assistive technology and names itself in a tooltip on hover/focus. */
+@media (min-width: 1024px) {
+  .shell { --sidebar-w: 60px; transition: grid-template-columns 200ms var(--ease); }
+  .shell--rail-open { --sidebar-w: 260px; }
+  .sidebar { overflow-x: clip; }
+  .side__toggle { color: var(--ink-muted); }
+  .side__foot { gap: 4px; }
+
+  .sidebar[data-rail='collapsed'] .side__head { justify-content: center; padding: 0; }
+  .sidebar[data-rail='collapsed'] .side__brand { gap: 0; padding: 16px 0 10px; }
+  .sidebar[data-rail='collapsed'] .side__product { display: none; }
+  /* The lockup has no separate mark: the folded rail shows its middle, the W under the open book. */
+  .sidebar[data-rail='collapsed'] .side__brand .brand-logo { inline-size: 32px; block-size: 34px; object-fit: cover; object-position: 50% 30%; }
+  .sidebar[data-rail='collapsed'] .side__searchrow { flex-direction: column; gap: 2px; margin: 2px 10px 8px; }
+  .sidebar[data-rail='collapsed'] .side__search { flex: none; justify-content: center; inline-size: 40px; block-size: 40px; padding: 0; border-color: transparent; background: none; color: var(--ink-2); }
+  .sidebar[data-rail='collapsed'] .side__search:hover { background: var(--sidebar-hover); }
+  .sidebar[data-rail='collapsed'] .side__search > span { display: none; }
+  .sidebar[data-rail='collapsed'] .side__searchrow .nc-bell { inline-size: 40px; block-size: 40px; }
+  .sidebar[data-rail='collapsed'] .side__nav { scrollbar-width: none; }
+  .sidebar[data-rail='collapsed'] .side__item { justify-content: center; gap: 0; padding: 0; min-block-size: 40px; }
+  .sidebar[data-rail='collapsed'] :not(.side__menu-link) > .side__label { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .sidebar[data-rail='collapsed'] :is(.side__caret, .side__sub, .side__item > .status-ring) { display: none; }
+  /* Counts ride on the icon's corner. */
+  .sidebar[data-rail='collapsed'] .side__count { position: absolute; inset-block-start: 1px; inset-inline-end: -1px; min-inline-size: 18px; padding: 0 4px; border-radius: 9px; font-size: 11px; line-height: 17px; box-shadow: 0 0 0 2px var(--sidebar-bg); }
+  /* Folded, the place you are in carries the pill and the gold mark itself (its pages are not listed). */
+  .sidebar[data-rail='collapsed'] button.side__item.is-current { background: var(--sidebar-active); box-shadow: 0 0 0 1px var(--sidebar-line); }
+  .sidebar[data-rail='collapsed'] button.side__item.is-current::before { content: ''; }
+  .sidebar[data-rail='collapsed'] .side__entry--rule::after { inset-inline: 6px; }
+  .sidebar[data-rail='collapsed'] .side__foot { justify-items: center; }
+  .sidebar[data-rail='collapsed'] .side__me { justify-content: center; gap: 0; padding: 6px; }
+  .sidebar[data-rail='collapsed'] .side__me > :not(.avatar) { display: none; }
+  /* The account menu opens beside the folded rail, not inside it. */
+  :root .sidebar[data-rail='collapsed'] .side__foot .menu__popover { position: fixed; inset-block: auto 12px; inset-inline: calc(var(--sidebar-w) + 8px) auto; inline-size: 240px; }
+
+  .side__tip {
+    position: fixed;
+    z-index: 60;
+    inset-inline-start: calc(var(--sidebar-w) + 8px);
+    transform: translateY(-50%);
+    padding: 5px 10px;
+    border-radius: 7px;
+    background: var(--ink);
+    color: var(--surface);
+    font-family: var(--font-head);
+    font-size: var(--fs-sm);
+    font-weight: 500;
+    white-space: nowrap;
+    pointer-events: none;
+    box-shadow: var(--shadow-pop);
+    animation: fade 120ms var(--ease);
+  }
+}
+@media (min-width: 1024px) and (prefers-reduced-motion: reduce) {
+  .shell { transition: none; }
+}
