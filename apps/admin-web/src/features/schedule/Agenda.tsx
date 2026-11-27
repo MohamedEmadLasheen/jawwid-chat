@@ -69,12 +69,12 @@ export function AgendaView({
           <section key={day} className="sc-agenda__day" aria-labelledby={headingId}>
             <h3 id={headingId} className="sc-agenda__date">
               {dayLabel(day, locale, { weekday: 'long', day: 'numeric', month: 'long' })}
+              {day === today && (
+                <span className="sc-agenda__now">
+                  {tx(S.nowLine)} <bdi>{clock12In(now, ACADEMY_ZONE, locale)}</bdi>
+                </span>
+              )}
             </h3>
-            {day === today && (
-              <p className="sc-agenda__now">
-                {tx(S.nowLine)} <bdi>{clock12In(now, ACADEMY_ZONE, locale)}</bdi>
-              </p>
-            )}
             {teachers.length === 0 && <p className="sc-muted sc-agenda__none">{tx(S.noLessonsDay)}</p>}
             {teachers.map(({ t, rows: all }) => {
               const key = `${t.id}|${day}`

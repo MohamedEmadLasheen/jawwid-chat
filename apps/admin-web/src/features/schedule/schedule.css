@@ -15,8 +15,8 @@
 .sc-colors {
   --sc-head-w: 188px;
   --sc-row-h: 58px;
-  --sc-band: var(--teal-tint);
-  --sc-off: var(--surface-2);
+  --sc-band: color-mix(in srgb, var(--teal) 11%, var(--surface));
+  --sc-off: var(--paper-dark);
   --sc-hatch: repeating-linear-gradient(135deg, transparent 0 5px, var(--line-strong) 5px 6px);
 }
 .sc-page > .page__inner.sc-inner { max-inline-size: none; }
@@ -121,7 +121,8 @@
 .sc-sample--past { background: var(--surface-2); border-color: var(--line); border-inline-start-color: var(--line-strong); }
 .sc-sample--outside::after { content: ''; position: absolute; inset-block-start: 2px; inset-inline-end: 2px; inline-size: 6px; block-size: 6px; border-radius: 50%; background: var(--waiting); }
 .sc-sample--clash { box-shadow: 0 0 0 1.5px var(--urgent); }
-.sc-sample--ghost { background: var(--surface); border: 1px solid var(--line-strong); border-inline-start: 3px solid var(--urgent); }
+.sc-sample--ghost { background: var(--surface); border: 1.5px dashed var(--ink-muted); }
+.sc-sample--plain { --sc-fill: var(--surface); --sc-border: var(--teal); }
 .sc-sample--band { background: var(--sc-band); border: 0; box-shadow: inset 0 0 0 1px var(--line); }
 .sc-sample--leave { background: var(--sc-hatch); border: 0; }
 .sc-sample--now { background: none; border: 0; }
@@ -212,6 +213,8 @@
   .sc-work { transition: grid-template-columns var(--dur) var(--ease-out); }
 }
 .sc-sheet { display: flex; flex-direction: column; min-inline-size: 0; overflow: hidden; }
+/* The sheet is as tall as its rows (up to the window); the panel beside it likewise. */
+.sc-work > .sc-sheet, .sc-work > .sc-attn { align-self: start; max-block-size: 100%; }
 .sc-sheet > .state { padding: var(--space-6) var(--space-5); }
 .sc-scrollbox { position: relative; flex: 1; min-block-size: 0; display: flex; flex-direction: column; }
 .sc-scroll { flex: 1; min-block-size: 0; max-block-size: 72vh; overflow: auto; scrollbar-width: thin; overscroll-behavior: contain; }
@@ -219,11 +222,12 @@
 .sc-edge {
   position: absolute;
   z-index: 6;
-  inset-block-start: calc(50% - 28px);
+  /* In the hour row, never over a lesson. */
+  inset-block-start: 6px;
   display: grid;
   place-items: center;
   inline-size: 28px;
-  block-size: 56px;
+  block-size: 36px;
   padding: 0;
   border: 1px solid var(--line);
   background: var(--surface);
@@ -252,7 +256,8 @@
 .sc-row:last-child { border-block-end: 0; }
 .sc-grid--day .sc-row { grid-template-columns: var(--sc-head-w) minmax(var(--sc-day-w, 960px), 1fr); }
 .sc-grid--day { min-inline-size: calc(var(--sc-head-w) + var(--sc-day-w, 960px)); inline-size: 100%; }
-.sc-grid--week, .sc-grid--month { inline-size: 100%; }
+/* Rows contain their paint (content-visibility), so a board as wide as its columns, never clipped. */
+.sc-grid--week, .sc-grid--month { inline-size: max-content; min-inline-size: 100%; }
 .sc-grid--week .sc-row, .sc-grid--month .sc-row { grid-template-columns: var(--sc-head-w) var(--sc-cols); }
 .sc-row--axis {
   position: sticky;
@@ -283,7 +288,7 @@
 html[lang='ar'] .sc-row__name { font-size: 15px; }
 [dir='rtl'] .sc-row__name[dir='auto'] { text-align: right; }
 [dir='ltr'] .sc-row__name[dir='auto'] { text-align: left; }
-.sc-row__sub { grid-area: 2 / 1; min-inline-size: 0; font-size: var(--fs-xs); color: var(--ink-muted); white-space: nowrap; }
+.sc-row__sub { grid-area: 2 / 1; display: flex; align-items: center; gap: 6px; min-inline-size: 0; overflow: hidden; font-size: var(--fs-xs); color: var(--ink-muted); white-space: nowrap; }
 .sc-row__sub .badge { font-size: 12.5px; padding-block: 0; }
 .sc-row__figure { grid-area: 1 / 2 / span 2 / 3; align-self: center; font-family: var(--font-head); font-size: var(--fs-sm); font-weight: 600; color: var(--ink-2); font-variant-numeric: tabular-nums lining-nums; unicode-bidi: isolate; }
 .sc-cat { font-size: var(--fs-xs); color: var(--ink-muted); }
@@ -295,7 +300,7 @@ html[lang='ar'] .sc-row__name { font-size: 15px; }
 /* The hour axis, sticky at the top; a clock time is one unit. */
 .sc-axis-cell { position: relative; }
 .sc-axis { position: relative; block-size: 48px; }
-.sc-axis__tick { position: absolute; inset-block-start: 5px; transform: translateX(-50%); font-size: 13px; color: var(--ink-muted); font-variant-numeric: tabular-nums; white-space: nowrap; unicode-bidi: isolate; }
+.sc-axis__tick { position: absolute; inset-block-start: 5px; transform: translateX(-50%); font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; unicode-bidi: isolate; }
 [dir='rtl'] .sc-axis__tick { transform: translateX(50%); }
 .sc-axis__tick:first-child { transform: none; padding-inline-start: 8px; }
 .sc-anchor { position: absolute; inset-block: 0; inline-size: 1px; pointer-events: none; }
@@ -346,8 +351,8 @@ html[lang='ar'] .sc-row__name { font-size: 15px; }
   justify-content: center;
   gap: 0;
   min-inline-size: 0;
-  padding: 0 4px 0 6px;
-  padding-inline: 6px 4px;
+  padding: 0 3px 0 5px;
+  padding-inline: 5px 3px;
   overflow: hidden;
   background: var(--sc-fill);
   color: var(--sc-text);
@@ -366,7 +371,7 @@ html[lang='ar'] .sc-row__name { font-size: 15px; }
 .sc-lesson__short { display: none; }
 .sc-lesson__name .icon { flex: none; }
 .sc-lesson__mark { display: inline-flex; flex: none; color: var(--sc-border); }
-.sc-lesson__time { font-size: 13px; font-weight: 400; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; unicode-bidi: isolate; text-align: start; }
+.sc-lesson__time { font-size: 13px; font-weight: 400; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: clip; font-variant-numeric: tabular-nums; unicode-bidi: isolate; text-align: start; }
 /* How much fits: the whole time, its start, or only the name (the tooltip says it all). */
 .sc-lesson__time--range { display: none; }
 @container (min-width: 150px) {
@@ -396,10 +401,11 @@ html[lang='ar'] .sc-row__name { font-size: 15px; }
 .sc-lesson--moved .sc-lesson__time, .sc-lesson--not-taught .sc-lesson__time { text-decoration: line-through; }
 .sc-lesson.sc-lesson--past { --sc-fill: var(--surface-2); color: var(--ink-muted); }
 .sc-lesson--held { border-inline-start: 4px solid var(--urgent); }
-.sc-lesson--outside::after { content: ''; position: absolute; inset-block-start: 4px; inset-inline-end: 4px; inline-size: 7px; block-size: 7px; border-radius: 50%; background: var(--waiting); }
+.sc-lesson--outside::after { content: ''; position: absolute; inset-block-start: 3px; inset-inline-end: 3px; inline-size: 7px; block-size: 7px; border-radius: 50%; background: var(--waiting); box-shadow: 0 0 0 1.5px var(--surface); }
 .sc-lesson--clash { box-shadow: 0 0 0 1.5px var(--urgent); }
 .sc-lesson--clash:hover { box-shadow: 0 0 0 1.5px var(--urgent), var(--shadow-lift); }
-.sc-lesson--ghost { background: var(--surface); color: var(--ink); border: 1px solid var(--line-strong); border-inline-start: 3px solid var(--urgent); }
+/* Needs a substitute: a hollow block over the hatched leave; the red is the one count on the teacher. */
+.sc-lesson--ghost { background: var(--surface); color: var(--ink); border: 1.5px dashed var(--ink-muted); }
 .sc-lesson.sc-lesson--other { --sc-fill: var(--surface-2); --sc-border: var(--line-strong); --sc-text: var(--ink-muted); }
 /* What an attention item points at: lifted, ringed in teal. */
 .sc-lesson.is-hl { z-index: 3; box-shadow: 0 0 0 2px var(--teal), var(--shadow-lift); }
@@ -460,9 +466,11 @@ html[lang='ar'] .sc-row__name { font-size: 15px; }
 .sc-cell__foot { display: flex; align-items: center; gap: 6px; min-block-size: 16px; }
 .sc-cell__bar { flex: 1; min-inline-size: 16px; block-size: 4px; border-radius: 2px; background: var(--line-2); overflow: hidden; }
 .sc-cell__bar > span { display: block; block-size: 100%; border-radius: 2px; background: var(--brand-200); }
-.sc-mark { display: inline-flex; flex: none; align-items: center; gap: 4px; font-size: 13px; font-weight: 600; line-height: 1; color: var(--urgent); white-space: nowrap; }
-.sc-mark::before { content: ''; inline-size: 6px; block-size: 6px; border-radius: 50%; background: currentColor; }
-.sc-mark--outside { color: var(--waiting); }
+/* A mark: the word in ink, its dot in the state's colour (red is the dot, never the reason). */
+.sc-mark { display: inline-flex; flex: none; align-items: center; gap: 4px; font-size: 13px; font-weight: 600; line-height: 1; color: var(--ink-2); white-space: nowrap; }
+.sc-mark::before { content: ''; inline-size: 7px; block-size: 7px; border-radius: 50%; background: var(--urgent); }
+.sc-mark--outside::before { background: var(--waiting); }
+.sc-row__sub .sc-mark { font-weight: 500; }
 
 /* ------------------------------------------------------------ month heat */
 .sc-grid--month { --sc-row-h: 46px; }
@@ -507,15 +515,22 @@ button.sc-heat--off { cursor: pointer; }
 .sc-attn__head { flex: none; display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: 10px 8px 10px var(--space-4); padding-inline: var(--space-4) 8px; border-block-end: 1px solid var(--line-2); }
 .sc-attn__title { display: flex; align-items: center; gap: var(--space-2); margin: 0; font-family: var(--font-head); font-size: var(--fs-md); font-weight: 600; }
 .sc-attn__list { flex: 1; min-block-size: 0; margin: 0; padding: 0; list-style: none; overflow-y: auto; }
-.sc-attn__item { position: relative; display: grid; gap: var(--space-2); padding: 12px var(--space-4) 14px; padding-inline: 26px var(--space-4); border-block-end: 1px solid var(--line-2); }
+.sc-attn__group + .sc-attn__group { border-block-start: 1px solid var(--line); }
+.sc-attn__items { margin: 0; padding: 0; list-style: none; }
+.sc-attn__item { position: relative; display: grid; gap: 4px; padding: 12px var(--space-4) 10px; padding-inline: 26px var(--space-4); border-block-end: 1px solid var(--line-2); }
 .sc-attn__item:last-child { border-block-end: 0; }
 .sc-attn__item:hover, .sc-attn__item:focus-within { background: var(--surface-hover); }
 /* What kind: urgent red, or amber for a lesson outside working hours. */
-.sc-attn__item::before { content: ''; position: absolute; inset-inline-start: 12px; inset-block-start: 21px; inline-size: 7px; block-size: 7px; border-radius: 50%; background: var(--urgent); }
+.sc-attn__item::before { content: ''; position: absolute; inset-inline-start: 12px; inset-block-start: 23px; inline-size: 7px; block-size: 7px; border-radius: 50%; background: var(--urgent); }
 .sc-attn__item--outside::before { background: var(--waiting); }
 .sc-attn__text { display: grid; gap: 2px; padding: 0; border: 0; border-radius: 4px; background: none; color: var(--ink); font: inherit; text-align: start; cursor: pointer; }
-.sc-attn__day { font-size: var(--fs-xs); font-weight: 600; color: var(--ink-muted); }
-.sc-attn__sentence { font-size: var(--fs-sm); line-height: 1.6; text-wrap: pretty; }
+.sc-attn__day { margin: 0; padding: 10px var(--space-4) 2px; font-family: var(--font-head); font-size: var(--fs-sm); font-weight: 600; color: var(--ink-2); }
+.sc-attn__sentence { font-size: var(--fs-md); line-height: 1.6; text-wrap: pretty; }
+/* One light action per item: a word that says what it does. */
+.sc-attn__act { margin-inline-start: -6px; }
+.sc-attn__action { display: inline-flex; align-items: center; min-block-size: 32px; padding: 0 6px; border: 0; border-radius: 6px; background: none; color: var(--text-link); font: inherit; font-size: var(--fs-sm); font-weight: 600; text-decoration: none; cursor: pointer; }
+.sc-attn__action:hover { background: var(--teal-tint); }
+.sc-attn__none-action { margin-block-start: var(--space-3); }
 .sc-attn__name { font-weight: 600; white-space: nowrap; }
 .sc-attn__time { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .sc-attn__act { display: flex; }
@@ -532,7 +547,8 @@ button.sc-heat--off { cursor: pointer; }
 
 /* ----------------------------------------------------------- lesson details */
 .sc-details { margin: 0; }
-.sc-details .kv { display: flex; justify-content: space-between; gap: var(--space-3); }
+.sc-details .kv { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: var(--space-3); }
+.sc-details .kv__v { text-align: start; }
 .sc-details dd { margin: 0; }
 .sc-details__notes { display: grid; gap: 6px; margin: 0 0 var(--space-3); padding: 0; list-style: none; }
 .sc-details__notes .sc-note { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 8px; background: var(--surface-2); font-size: var(--fs-sm); }
@@ -633,8 +649,8 @@ button.sc-heat--off { cursor: pointer; }
   font-weight: 600;
 }
 .sc-agenda__none { padding: var(--space-3); margin: 0; }
-.sc-agenda__now { display: flex; align-items: center; gap: 8px; margin: 0; padding: 8px var(--space-3) 0; color: var(--gold-text); font-size: var(--fs-sm); font-weight: 600; }
-.sc-agenda__now::after { content: ''; flex: 1; block-size: 2px; background: var(--gold); }
+.sc-agenda__date { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.sc-agenda__now { padding: 0 7px; border: 1.5px solid var(--gold); border-radius: 6px; background: var(--surface); color: var(--gold-text); font-family: var(--font); font-size: var(--fs-xs); font-weight: 600; line-height: 1.6; }
 .sc-agenda__more { display: block; inline-size: 100%; min-block-size: 40px; margin-block-end: 6px; padding: 0 var(--space-3); border: 1px dashed var(--line-strong); border-radius: 8px; background: none; color: var(--ink-2); font: inherit; font-size: var(--fs-sm); text-align: start; cursor: pointer; }
 .sc-agenda__more:hover { background: var(--surface-hover); }
 .sc-agenda__teacher { padding: var(--space-3); border-block-end: 1px solid var(--line-2); }
@@ -669,7 +685,7 @@ button.sc-heat--off { cursor: pointer; }
 .sc-agenda__item--held { border-inline-start-color: var(--urgent); }
 .sc-agenda__item--outside::after { content: ''; position: absolute; inset-block-start: 6px; inset-inline-end: 6px; inline-size: 7px; block-size: 7px; border-radius: 50%; background: var(--waiting); }
 .sc-agenda__item--clash { box-shadow: 0 0 0 1.5px var(--urgent); }
-.sc-agenda__item--ghost { background: var(--surface); color: var(--ink); border: 1px solid var(--line-strong); border-inline-start: 4px solid var(--urgent); }
+.sc-agenda__item--ghost { background: var(--surface); color: var(--ink); border: 1.5px dashed var(--ink-muted); }
 .sc-agenda__time { grid-row: span 2; font-variant-numeric: tabular-nums; font-size: var(--fs-sm); font-weight: 600; white-space: nowrap; unicode-bidi: isolate; }
 .sc-agenda__name { display: flex; align-items: center; gap: 4px; min-inline-size: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sc-agenda__status { font-size: var(--fs-xs); }
@@ -730,3 +746,10 @@ button.sc-heat--off { cursor: pointer; }
 }
 
 .sc-lesson--anon.sc-lesson--half .sc-lesson__time--start { display: block; }
+
+/* The month's key, under its grid. */
+.sc-heatkey { display: flex; flex-wrap: wrap; align-items: center; gap: 6px var(--space-2); padding: 10px var(--space-4); border-block-start: 1px solid var(--line-2); font-size: var(--fs-xs); color: var(--ink-muted); }
+.sc-heatkey__step { display: inline-block; inline-size: 18px; block-size: 12px; border-radius: 3px; box-shadow: inset 0 0 0 1px var(--line); }
+.sc-heatkey__mark { display: inline-flex; align-items: center; gap: 6px; margin-inline-start: var(--space-3); }
+.sc-heatkey__dot { inline-size: 7px; block-size: 7px; border-radius: 50%; background: var(--waiting); }
+.sc-dayhead--off .sc-dayhead__n { font-size: 11.5px; color: var(--ink-muted); }

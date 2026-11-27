@@ -308,6 +308,9 @@ describe('owner 2026-10-28: filters, the 12-hour clock, a readable day', () => {
 })
 
 describe('third pass: what needs a person, the week board, the keys', () => {
+  // The panel starts folded on a narrow window (jsdom's is 1024 px): these open it as a person would have.
+  beforeEach(() => localStorage.setItem('jawwid.schedule.attention-folded', '0'))
+
   // Teacher One: a second lesson over Child Alpha's (a double booking); Teacher Two on leave over the 4 PM lesson.
   const busy = (): CalendarWindow => ({
     ...WINDOW,
@@ -346,7 +349,7 @@ describe('third pass: what needs a person, the week board, the keys', () => {
       expect.stringContaining('The lesson of Child Gamma with Teacher Two at 4:00 PM is suspended until the family pays.'),
     ])
     // The leave: the desk where a student's teacher is changed (the manager opens it).
-    expect(within(items[1]!).getByRole('link', { name: 'Open the teacher\'s schedule' })).toHaveAttribute('href', '/teachers/schedules?teacher=t-2')
+    expect(within(items[1]!).getByRole('link', { name: 'Change teacher' })).toHaveAttribute('href', '/teachers/schedules?teacher=t-2')
     expect(within(items[2]!).getByRole('link', { name: 'Open student profile' })).toHaveAttribute('href', '/students/k-10')
     // Pointing at an item lights its teacher's row and its lessons.
     await userEvent.hover(within(items[0]!).getByText(/has two lessons/))
@@ -354,8 +357,8 @@ describe('third pass: what needs a person, the week board, the keys', () => {
     expect(within(row).getByRole('button', { name: /Child Beta/ })).toHaveClass('is-hl')
     await userEvent.unhover(within(items[0]!).getByText(/has two lessons/))
     expect(row).not.toHaveClass('is-hl')
-    // One action: open the lesson, whose details say what is wrong.
-    await userEvent.click(within(items[0]!).getByRole('button', { name: 'Open the lesson' }))
+    // One action: review the lessons, whose details say what is wrong.
+    await userEvent.click(within(items[0]!).getByRole('button', { name: 'Review the lessons' }))
     expect(await screen.findByRole('dialog', { name: 'Child Alpha' })).toHaveTextContent('Two lessons at once')
   })
 

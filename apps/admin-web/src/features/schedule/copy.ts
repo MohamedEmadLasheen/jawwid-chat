@@ -87,7 +87,7 @@ export const S = {
     en: 'Shift, empty and leave count every lesson of the teachers shown; booked hours and students count only the matching lessons.',
     ar: 'الشيفت والفارغ والإجازة تحتسب كل حصص المعلمين المعروضين؛ الساعات المحجوزة والطلاب تحتسب الحصص المطابقة فقط.',
   },
-  byTeacher: { en: 'By teacher', ar: 'حسب المعلم' },
+  byTeacher: { en: 'Table by teacher', ar: 'جدول حسب المعلم' },
   colShift: { en: 'Shift', ar: 'الشيفت' },
   colBooked: { en: 'Booked', ar: 'محجوز' },
   colUsed: { en: 'Used', ar: 'الإشغال' },
@@ -144,6 +144,16 @@ export const S = {
   close: { en: 'Close', ar: 'إغلاق' },
   openDesk: { en: 'Open the teacher\'s schedule', ar: 'افتح جدول المعلم' },
   openLesson: { en: 'Open the lesson', ar: 'افتح الحصة' },
+  reviewLesson: { en: 'Review the lesson', ar: 'راجع الحصة' },
+  reviewLessons: { en: 'Review the lessons', ar: 'راجع الحصتين' },
+  changeTeacher: { en: 'Change teacher', ar: 'تغيير المعلم' },
+  changeTeacherHint: { en: 'In the Teachers\' schedules desk, where a student\'s teacher is changed', ar: 'في مكتب جداول المعلمين، حيث يُغيَّر معلم الطالب' },
+  openWeek: { en: 'Open this week', ar: 'افتح هذا الأسبوع' },
+  withoutTeacher: { en: '{n} without a teacher', ar: '{n} بلا معلم' },
+  outsideDays: { en: 'After hours, {n} days', ar: 'خارج الدوام {n} أيام' },
+  noColorLesson: { en: 'Booked, supervisor has no colour', ar: 'محجوزة، بلا لون مشرف' },
+  heatLess: { en: 'Less booked', ar: 'أقل إشغالًا' },
+  heatMore: { en: 'More booked', ar: 'أكثر إشغالًا' },
   showOnGrid: { en: 'Show on the schedule', ar: 'أظهرها في الجدول' },
 
   // Needs your attention
@@ -173,8 +183,8 @@ export const S = {
   noWorkingHours: { en: 'No working hours', ar: 'بلا ساعات عمل' },
   markConflict: { en: 'Clash', ar: 'تعارض' },
   markAbsent: { en: 'Leave', ar: 'إجازة' },
-  markPayment: { en: 'Payment', ar: 'الدفع' },
-  markOutside: { en: 'Outside', ar: 'خارج' },
+  markPayment: { en: 'On hold', ar: 'معلّقة' },
+  markOutside: { en: 'After hours', ar: 'خارج الدوام' },
   todayMark: { en: 'Today', ar: 'اليوم' },
 
   // Shift (Teacher File)

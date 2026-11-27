@@ -18,7 +18,7 @@ import { FilterBar } from './FilterBar'
 import { useCalendarOptions, useCalendarStats, useCalendarSummary, useCalendarWindow, useNow, useStoredFlag, useWeekStart } from './hooks'
 import { findIssues, type Findings } from './issues'
 import { PaletteStyle } from './palette'
-import { ByTeacherTable, Figures, LegendHelp, LessonDetails } from './Panels'
+import { ByTeacherTable, Figures, HeatKey, LegendHelp, LessonDetails } from './Panels'
 import { DayView } from './Timeline'
 import { VIEWS, academyToday, activeFilterCount, addDays, clearFilters, apiQuery, daysOf, isoWeekday, parseViewState, rangeFor, step, toParams, weekStart, type View, type ViewState } from './viewState'
 import './schedule.css'
@@ -62,7 +62,7 @@ export function SchedulePage() {
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [byTeacher, setByTeacher] = useState(false)
   const [more, setMore] = useStoredFlag('jawwid.schedule.filters-open')
-  const [attnFolded, setAttnFolded] = useStoredFlag('jawwid.schedule.attention-folded', false)
+  const [attnFolded, setAttnFolded] = useStoredFlag('jawwid.schedule.attention-folded', typeof window !== 'undefined' && window.innerWidth < 1366 && window.innerWidth > 720)
   const [attnFoldedNarrow, setAttnFoldedNarrow] = useState(true)
   // What an attention item points at: while hovered, and after it is chosen.
   const [hover, setHover] = useState<Highlight | null>(null)
@@ -145,7 +145,7 @@ export function SchedulePage() {
     state.view === 'day'
       ? dayLabel(range.from, locale, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
       : state.view === 'week'
-        ? `${dayLabel(range.from, locale, { day: 'numeric', month: 'long' })} – ${dayLabel(addDays(range.to, -1), locale, { day: 'numeric', month: 'long', year: 'numeric' })}`
+        ? `${dayLabel(range.from, locale, { day: 'numeric', month: 'short' })} – ${dayLabel(addDays(range.to, -1), locale, { day: 'numeric', month: 'short', year: 'numeric' })}`
         : dayLabel(range.from, locale, { month: 'long', year: 'numeric' })
   const isCurrent = range.from <= today && today < range.to
 
@@ -175,6 +175,7 @@ export function SchedulePage() {
       deskAccess={deskAccess}
       inline={inline}
       note={month ? tx(S.attnMonth) : undefined}
+      onOpenWeek={month ? () => update({ ...state, view: 'week', date: state.date.slice(0, 7) === today.slice(0, 7) ? today : state.date }) : undefined}
     />
   )
 
@@ -210,10 +211,11 @@ export function SchedulePage() {
             <div className="sc-mast__title">
               <h1 className="page-header__title">{tx(S.title)}</h1>
               <DateJump title={title} date={state.date} label={tx(S.range)} onPick={(date) => update({ ...state, date })} />
+              {!narrow && steps}
               <span className="sc-zone">{zoneLabel(options.data?.zone ?? ACADEMY_ZONE, locale)}</span>
             </div>
             <div className="page-header__actions sc-mast__actions">
-              {steps}
+              {narrow && steps}
               {views}
               {!narrow && (stats.data?.teachers.length ?? 0) > 0 && (
                 <button type="button" className="btn btn--sm sc-byteacher-toggle" aria-expanded={byTeacher} onClick={() => setByTeacher((v) => !v)}>
@@ -303,6 +305,7 @@ export function SchedulePage() {
                     </>
                   )}
                 </ScrollBox>
+                {month && !narrow && (teachers?.length ?? 0) > 0 && <HeatKey />}
               </QueryBoundary>
             </div>
             {showPanel && !narrow && panel(false)}

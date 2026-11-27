@@ -173,7 +173,12 @@ export function Track({
       {band(intervals?.work, 'sc-band sc-band--work')}
       {band(intervals?.leave, 'sc-band sc-band--leave')}
       {/* The server's empty stretches: the lane's plain band, named for a pointer. */}
-      {band(intervals?.empty, 'sc-empty')}
+      {(intervals?.empty ?? []).map(([a, b]) => {
+        const style = place(a, b, day, lo, hi)
+        return style ? (
+          <span key={`e-${a}`} className="sc-empty" style={style} title={`${tx(S.availableSlot)}, ${lessonTime({ startsAt: a, endsAt: b }, locale)}`} />
+        ) : null
+      })}
       {lessons.map((l) => {
         const style = place(l.startsAt, l.endsAt, day, lo, hi)
         if (!style) return null
@@ -219,15 +224,36 @@ export function Track({
   )
 }
 
-export function TeacherHead({ t, absent, onLeave }: { t: CalendarTeacher; absent?: boolean; onLeave?: boolean }) {
+export function TeacherHead({
+  t,
+  absent,
+  onLeave,
+  uncovered = 0,
+  outsideDays = 0,
+}: {
+  t: CalendarTeacher
+  absent?: boolean
+  onLeave?: boolean
+  /** Lessons in the teacher's leave that need a substitute: one red count, here. */
+  uncovered?: number
+  /** The week: days with lessons outside working hours, said once for the teacher. */
+  outsideDays?: number
+}) {
   const tx = useScheduleText()
-  const { locale } = useI18n()
+  const { locale, number } = useI18n()
   const shift = t.category === 'full_shift' || t.category === 'part_shift'
   return (
     <div className="sc-row__head" role="rowheader">
       <span className="sc-row__name" dir="auto">{t.name}</span>
       <span className="sc-row__sub">
-        {absent || onLeave ? <Badge tone="neutral">{tx(S.onLeave)}</Badge> : tx(CATEGORY_LABEL[t.category])}
+        {absent || onLeave ? <Badge tone="neutral">{tx(S.onLeave)}</Badge> : outsideDays > 0 ? null : tx(CATEGORY_LABEL[t.category])}
+        {uncovered > 0 && (
+          <span className="count count--urgent" title={tx(S.withoutTeacher, { n: number(uncovered) })}>
+            {number(uncovered)}
+            <span className="sr-only"> {tx(S.withoutTeacher, { n: '' })}</span>
+          </span>
+        )}
+        {outsideDays > 0 && <span className="sc-mark sc-mark--outside">{tx(S.outsideDays, { n: number(outsideDays) })}</span>}
       </span>
       <span className="sc-row__figure" title={shift ? tx(S.utilization) : tx(S.colBooked)}>
         {shift ? percentOf(t.utilization, locale) : tx(S.hours, { h: hoursOf(t.totals.bookedMinutes, locale) })}
@@ -245,7 +271,7 @@ function HourAxis({ lo, hi, now, nowMin }: { lo: number; hi: number; now: string
   return (
     <div className="sc-axis">
       {hours.map((m) => (
-        <span key={m} className="sc-axis__tick" style={{ insetInlineStart: at(m) }} aria-hidden="true">
+        <span key={m} className="sc-axis__tick" style={{ insetInlineStart: at(m) }} aria-hidden="true" data-hour={m}>
           <bdi>{hour12Label(m / 60, locale)}</bdi>
         </span>
       ))}
@@ -340,6 +366,7 @@ export function DayView({
         const k = `${t.id}|${day}`
         const absent = findings.absent.has(k)
         const onLeave = (days.get(k)?.leave.length ?? 0) > 0
+        const uncovered = (lessons.get(k) ?? []).filter((l) => findings.uncovered.has(l.id)).length
         return (
           <div
             key={t.id}
@@ -348,7 +375,7 @@ export function DayView({
             aria-label={t.name}
             data-teacher={t.id}
           >
-            <TeacherHead t={t} absent={absent} onLeave={onLeave} />
+            <TeacherHead t={t} absent={absent} onLeave={onLeave} uncovered={uncovered} />
             <div role="cell" className="sc-lane">
               <Track
                 day={day}

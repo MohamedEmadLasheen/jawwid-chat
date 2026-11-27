@@ -33,6 +33,14 @@ function sentence(template: string, vars: Record<string, ReactNode>): ReactNode 
 
 const URGENT = new Set(['conflict', 'absent', 'payment'])
 
+/** The week reads by day (each day under its own heading); a day reads by kind. */
+function groups(issues: Issue[], byDay: boolean): Array<[string | null, Issue[]]> {
+  if (!byDay) return [[null, issues]]
+  const out = new Map<string, Issue[]>()
+  for (const i of [...issues].sort((a, b) => a.day.localeCompare(b.day))) out.set(i.day, [...(out.get(i.day) ?? []), i])
+  return [...out]
+}
+
 export function AttentionPanel({
   issues,
   teacherName,
@@ -45,6 +53,7 @@ export function AttentionPanel({
   deskAccess,
   inline = false,
   note,
+  onOpenWeek,
 }: {
   issues: Issue[]
   teacherName: (id: string) => string
@@ -61,6 +70,8 @@ export function AttentionPanel({
   inline?: boolean
   /** In place of the list (the month, which loads no lessons). */
   note?: string
+  /** With the note: the way to a view that lists them. */
+  onOpenWeek?: () => void
 }) {
   const tx = useScheduleText()
   const { locale, number } = useI18n()
@@ -73,7 +84,7 @@ export function AttentionPanel({
     return (
       <aside className={`sc-attn sc-attn--folded${inline ? ' sc-attn--inline' : ''}`} aria-label={tx(S.attnTitle)}>
         <button type="button" className="sc-attn__unfold" aria-expanded="false" title={tx(S.attnOpen)} onClick={() => onFold(false)}>
-          <Icon name="panel" size={18} />
+          <Icon name={inline ? 'alert' : 'panel'} size={18} />
           <span className={inline ? 'sc-attn__unfold-label' : 'sr-only'}>{tx(S.attnTitle)}</span>
           {issues.length > 0 && count}
         </button>
@@ -101,6 +112,11 @@ export function AttentionPanel({
       {note ? (
         <div className="sc-attn__none">
           <p className="sc-attn__none-hint">{note}</p>
+          {onOpenWeek && (
+            <button type="button" className="btn btn--sm sc-attn__none-action" onClick={onOpenWeek}>
+              {tx(S.openWeek)}
+            </button>
+          )}
         </div>
       ) : issues.length === 0 ? (
         <div className="sc-attn__none">
@@ -108,16 +124,20 @@ export function AttentionPanel({
           <p className="sc-attn__none-hint">{tx(S.attnNoneHint)}</p>
         </div>
       ) : (
-        <ul className="sc-attn__list">
-          {issues.map((issue) => {
+        <div className="sc-attn__list">
+          {groups(issues, showDay).map(([day, list]) => (
+          <section key={day ?? 'all'} className="sc-attn__group" aria-label={day ? dayLabel(day, locale, { weekday: 'long', day: 'numeric', month: 'long' }) : undefined}>
+          {day && <h3 className="sc-attn__day">{dayLabel(day, locale, { weekday: 'long', day: 'numeric', month: 'long' })}</h3>}
+          <ul className="sc-attn__items">
+          {list.map((issue) => {
             const [first, second] = issue.lessons as [CalendarLesson, CalendarLesson | undefined]
             const teacher = name(teacherName(issue.teacherId))
             const h: Highlight = { teacherId: issue.teacherId, lessonIds: issue.lessons.map((l) => l.id) }
             let text: ReactNode
             let action: ReactNode
             const openFirst = (
-              <button type="button" className="btn btn--sm" onClick={() => onOpenLesson(first)}>
-                {tx(S.openLesson)}
+              <button type="button" className="sc-attn__action" onClick={() => onOpenLesson(first)}>
+                {tx(issue.kind === 'conflict' ? S.reviewLessons : S.reviewLesson)}
               </button>
             )
             if (issue.kind === 'conflict') {
@@ -134,11 +154,11 @@ export function AttentionPanel({
                   ? line(S.attnAbsentOne, { teacher, time: time(first) })
                   : line(S.attnAbsent, { teacher, time: time(first), n: lessonsCount(issue.lessons.length, locale) })
               action = deskAccess ? (
-                <Link className="btn btn--sm" to={`/teachers/schedules?teacher=${encodeURIComponent(issue.teacherId)}`}>
-                  {tx(S.openDesk)}
+                <Link className="sc-attn__action" title={tx(S.changeTeacherHint)} to={`/teachers/schedules?teacher=${encodeURIComponent(issue.teacherId)}`}>
+                  {tx(S.changeTeacher)}
                 </Link>
               ) : (
-                <button type="button" className="btn btn--sm" onClick={() => onReveal(h)}>
+                <button type="button" className="sc-attn__action" onClick={() => onReveal(h)}>
                   {tx(S.showOnGrid)}
                 </button>
               )
@@ -146,7 +166,7 @@ export function AttentionPanel({
               text = line(S.attnPayment, { student: name(lessonName(first, tx)), time: time(first), teacher })
               action =
                 !first.anonymous && first.learner ? (
-                  <Link className="btn btn--sm" to={studentPath(first.learner.id)}>
+                  <Link className="sc-attn__action" to={studentPath(first.learner.id)}>
                     {tx(S.openStudent)}
                   </Link>
                 ) : (
@@ -171,16 +191,16 @@ export function AttentionPanel({
                 }}
               >
                 <button type="button" className="sc-attn__text" title={tx(S.showOnGrid)} onClick={() => onReveal(h)}>
-                  {showDay && (
-                    <span className="sc-attn__day">{dayLabel(issue.day, locale, { weekday: 'long', day: 'numeric', month: 'long' })}</span>
-                  )}
                   <span className="sc-attn__sentence">{text}</span>
                 </button>
                 <div className="sc-attn__act">{action}</div>
               </li>
             )
           })}
-        </ul>
+          </ul>
+          </section>
+          ))}
+        </div>
       )}
     </aside>
   )

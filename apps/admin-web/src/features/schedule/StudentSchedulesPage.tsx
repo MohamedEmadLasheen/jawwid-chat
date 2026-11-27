@@ -111,7 +111,7 @@ export function StudentSchedulesPage() {
                 onClick={() => set('teacher', teacherId === NONE ? '' : NONE)}
               >
                 {tx(COPY.noTeacher)}
-                <span className={unassigned > 0 ? 'count count--urgent' : 'count'}>{number(unassigned)}</span>
+                {unassigned > 0 && <span className="count count--urgent">{number(unassigned)}</span>}
               </button>
             )}
             <div className="stu-toolbar__end">

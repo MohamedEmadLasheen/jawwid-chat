@@ -159,6 +159,7 @@ export function LegendHelp({
           <h3 className="sc-help__title">{tx(S.legendLessons)}</h3>
           <ul className="sc-help__list">
             <li><Sample cls="sc-c-sky" />{tx(S.scheduled)}</li>
+            <li><Sample cls="sc-sample--plain" />{tx(S.noColorLesson)}</li>
             <li><Sample cls="sc-c-sky sc-sample--trial" />{tx(STATUS_LABEL.trial)}</li>
             <li><span className="sc-sample sc-c-sky sc-sample--icon" aria-hidden="true"><Icon name="history" size={13} /></span>{tx(KIND_LABEL.makeup)}</li>
             <li><span className="sc-sample sc-sample--paused sc-sample--icon" aria-hidden="true"><Icon name="pause" size={13} /></span>{tx(STATUS_LABEL.paused)}</li>
@@ -272,5 +273,21 @@ export function LessonDetails({
         ))}
       </dl>
     </Dialog>
+  )
+}
+
+/** The month's key, under its grid: how full a day is, and its two marks. */
+export function HeatKey() {
+  const tx = useScheduleText()
+  return (
+    <div className="sc-heatkey" aria-hidden="true">
+      <span>{tx(S.heatLess)}</span>
+      {[0, 1, 2, 3, 4].map((n) => (
+        <span key={n} className={`sc-heatkey__step sc-heat--${n}`} />
+      ))}
+      <span>{tx(S.heatMore)}</span>
+      <span className="sc-heatkey__mark"><span className="sc-heatkey__dot" />{tx(S.outsideShift)}</span>
+      <span className="sc-heatkey__mark"><span className="sc-heatkey__step sc-heat--leave" />{tx(S.leaveBand)}</span>
+    </div>
   )
 }

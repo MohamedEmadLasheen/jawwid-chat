@@ -1,4 +1,4 @@
-import { useMemo, type CSSProperties } from 'react'
+import { useLayoutEffect, useMemo, useRef, type CSSProperties } from 'react'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import type { CalendarLesson, CalendarSummary, CalendarWindow } from './api'
 import { S, WEEKDAYS, dayLabel, hoursOf, joinList, lessonsCount, percentOf, useScheduleText, type Pair } from './copy'
@@ -65,7 +65,7 @@ export function WeekBoard({
     () => week.map((d) => data.days.some((x) => x.day === d && x.shift.length + x.work.length > 0) || data.lessons.some((l) => dayOfLesson(l) === d)),
     [week, data.days, data.lessons],
   )
-  const columns = { '--sc-cols': working.map((w) => (w ? 'minmax(100px, 1fr)' : '60px')).join(' ') } as CSSProperties
+  const columns = { '--sc-cols': working.map((w) => (w ? 'minmax(86px, 1fr)' : '56px')).join(' ') } as CSSProperties
   const h = (m: number) => hoursOf(m, locale)
 
   return (
@@ -79,9 +79,13 @@ export function WeekBoard({
           <DayHead key={d} day={d} today={today} narrow={!working[i]} onOpen={() => onOpenDay(d)} />
         ))}
       </div>
-      {data.teachers.map((t, row) => (
+      {data.teachers.map((t, row) => {
+        // Lessons outside working hours on most days are one fact about the teacher, said once.
+        const outsideDays = week.filter((d) => findings.byCell.get(`${t.id}|${d}`)?.has('outside')).length
+        const chronic = outsideDays >= 3
+        return (
         <div key={t.id} className={`sc-row${highlightTeacher === t.id ? ' is-hl' : ''}`} role="row" aria-label={t.name} data-teacher={t.id}>
-          <TeacherHead t={t} />
+          <TeacherHead t={t} outsideDays={chronic ? outsideDays : 0} />
           {week.map((d, i) => {
             const k = `${t.id}|${d}`
             const iv = intervals.get(k)
@@ -92,7 +96,7 @@ export function WeekBoard({
             // Booked: time reserved for a student, whatever happened later (PD-38); moved and paused lessons hold none.
             const booked = mine.filter((l) => l.status !== 'moved' && l.status !== 'paused').reduce((n, l) => n + minutesBetween(l.startsAt, l.endsAt), 0)
             const marks = findings.byCell.get(k)
-            const mark = ISSUE_ORDER.find((kind) => marks?.has(kind))
+            const mark = ISSUE_ORDER.find((kind) => marks?.has(kind) && !(chronic && kind === 'outside'))
             const fullLeave = leave > 0 && leave >= work
             if (work === 0 && mine.length === 0) {
               return <div key={d} role="cell" className={`sc-cell sc-cell--off${!working[i] ? ' sc-cell--narrow' : ''}`} />
@@ -133,7 +137,8 @@ export function WeekBoard({
             )
           })}
         </div>
-      ))}
+        )
+      })}
     </div>
   )
 }
@@ -148,25 +153,34 @@ function heat(cell: { utilization: number | null; shiftMinutes: number; bookedMi
 export function MonthView({ data, today, onOpenDay }: { data: CalendarSummary; today: string; onOpenDay: (day: string, teacherId: string) => void }) {
   const tx = useScheduleText()
   const { locale } = useI18n()
+  // The month opens with today in view.
+  const todayHead = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    todayHead.current?.scrollIntoView?.({ inline: 'center', block: 'nearest' })
+  }, [data.from])
   const month = daysOf(data.from, data.to)
   const cells = useMemo(() => new Map(data.cells.map((c) => [`${c.teacherId}|${c.day}`, c])), [data.cells])
   const working = useMemo(
     () => month.map((d) => data.cells.some((c) => c.day === d && (c.shiftMinutes > 0 || c.workMinutes > 0 || c.lessons > 0))),
     [month, data.cells],
   )
-  const columns = { '--sc-cols': working.map((w) => (w ? 'minmax(30px, 1fr)' : '14px')).join(' ') } as CSSProperties
+  const columns = { '--sc-cols': working.map((w) => (w ? 'minmax(30px, 1fr)' : '22px')).join(' ') } as CSSProperties
   return (
     <div className="sc-grid sc-grid--month" role="table" aria-label={tx(S.title)} style={columns}>
       <div className="sc-row sc-row--axis" role="row">
-        <div className="sc-row__head" role="columnheader">{tx(S.teacher)}</div>
+        <div className="sc-row__head" role="columnheader">
+          <span>{tx(S.teacher)}</span>
+          <span className="sc-row__head-end">{tx(S.colUsed)}</span>
+        </div>
         {month.map((d, i) => (
           <div
             key={d}
             role="columnheader"
+            ref={d === today ? todayHead : undefined}
             className={`sc-dayhead sc-dayhead--month${d === today ? ' sc-dayhead--today' : ''}${working[i] ? '' : ' sc-dayhead--off'}`}
             title={dayLabel(d, locale, { weekday: 'long', day: 'numeric', month: 'long' })}
           >
-            {working[i] && <span className="sc-dayhead__n">{Number(d.slice(8))}</span>}
+            <span className="sc-dayhead__n">{Number(d.slice(8))}</span>
           </div>
         ))}
       </div>
