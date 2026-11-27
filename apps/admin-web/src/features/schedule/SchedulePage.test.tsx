@@ -200,15 +200,14 @@ describe('the academy schedule', () => {
     expect(await screen.findByText(/Showing your students/)).toBeInTheDocument()
   })
 
-  it('in Arabic the page is right to left and the time axis stays left to right, in its own ltr wrapper', async () => {
+  it('in Arabic the page is right to left and the time axis follows it', async () => {
     renderWithProviders(<AppRoutes />, { staff: manager, route: '/schedule?view=day&date=2026-10-26', locale: 'ar' })
     const row = await screen.findByRole('row', { name: 'Teacher One' })
     expect(document.documentElement.dir).toBe('rtl')
     const band = row.querySelector<HTMLElement>('.sc-band--shift')!
-    // Logical, never left/right; the grid's own wrapper fixes the axis left to right (a time axis is never mirrored).
+    // Logical, never left/right: under rtl it starts from the right.
     expect(band.style.insetInlineStart).not.toBe('')
     expect(band.style.left).toBe('')
-    expect(band.closest('[dir]')).toHaveAttribute('dir', 'ltr')
     expect(screen.getByRole('heading', { level: 1, name: 'الجدول' })).toBeInTheDocument()
   })
 })

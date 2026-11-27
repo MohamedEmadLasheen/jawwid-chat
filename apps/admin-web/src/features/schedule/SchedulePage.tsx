@@ -100,7 +100,7 @@ export function SchedulePage() {
   return (
     <div className={`page sc-page${narrow ? ' sc-page--narrow' : ''}`}>
       <PaletteStyle />
-      <div className="page__inner page__inner--wide">
+      <div className="page__inner">
         <PageHeader
           title={tx(S.title)}
           subtitle={tx(S.zoneNote, { zone: zoneLabel(options.data?.zone ?? ACADEMY_ZONE, locale) })}
@@ -110,13 +110,13 @@ export function SchedulePage() {
           <div className="sc-toolbar">
             <div className="sc-nav">
               <h2 className="sc-range" aria-live="polite">{title}</h2>
-              {/* Earlier is to the left and later to the right, as on the grid's own axis, in both languages. */}
-              <div className="sc-nav__step" dir="ltr">
-                <button type="button" className="btn btn--sm btn--icon" aria-label={tx(S.previous)} onClick={() => update({ ...state, date: step(state.view, state.date, -1) })}>
+              {/* The steps follow the reading direction, as the grid's axis does. */}
+              <div className="sc-nav__step">
+                <button type="button" className="btn btn--sm btn--icon" aria-label={tx(S.previous)} title={tx(S.previous)} onClick={() => update({ ...state, date: step(state.view, state.date, -1) })}>
                   <span aria-hidden="true" className="sc-chev sc-chev--earlier" />
                 </button>
                 <button type="button" className="btn btn--sm" onClick={() => update({ ...state, date: today })}>{tx(S.today)}</button>
-                <button type="button" className="btn btn--sm btn--icon" aria-label={tx(S.next)} onClick={() => update({ ...state, date: step(state.view, state.date, 1) })}>
+                <button type="button" className="btn btn--sm btn--icon" aria-label={tx(S.next)} title={tx(S.next)} onClick={() => update({ ...state, date: step(state.view, state.date, 1) })}>
                   <span aria-hidden="true" className="sc-chev sc-chev--later" />
                 </button>
               </div>
@@ -174,8 +174,7 @@ export function SchedulePage() {
 
           <QueryBoundary isLoading={active.isLoading} error={active.error} onRetry={() => void active.refetch()}>
             {teachers && teachers.length === 0 && <EmptyState title={tx(S.noTeachers)} hint={tx(S.noTeachersHint)} />}
-            {/* A time axis reads left to right in both languages: the grids sit in an ltr wrapper. */}
-            <div className={narrow ? 'sc-agenda-wrap' : 'sc-scroll'} dir={narrow ? undefined : 'ltr'} aria-busy={active.isFetching}>
+            <div className={narrow ? 'sc-agenda-wrap' : 'sc-scroll'} aria-busy={active.isFetching}>
               {teachers && teachers.length > 0 && narrow && (
                 <>
                   {!month && win.data && <AgendaView data={win.data} onLesson={setLesson} />}
