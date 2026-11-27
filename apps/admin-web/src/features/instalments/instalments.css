@@ -61,7 +61,7 @@
 .in-row .entity__name { font-size: var(--fs-md); }
 .in-row .entity__sub { font-size: var(--fs-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .in-sub { display: block; font-size: var(--fs-xs); color: var(--ink-muted); }
-.in-unset { color: var(--ink-muted); }
+.in-unset, .in-row__sup .in-unset { color: var(--ink-muted); }
 .in-row__sup { min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); }
 .in-row__sup .in-sub { overflow: hidden; text-overflow: ellipsis; }
 
@@ -116,6 +116,8 @@
   .in-row__when { grid-area: when; padding-inline-start: 38px; }
   .in-row__plan { grid-area: plan; justify-self: end; }
   .in-row__plan .plan { justify-items: end; }
+  /* Three lines: who and how much; how late and the plan; who follows it and the action. */
+  .in-row__when .in-sub, .in-row__sup .in-sub { display: none; }
   .in-row__sup { grid-area: sup; display: flex; flex-wrap: wrap; align-items: baseline; align-self: center; gap: 0 8px; padding-inline-start: 38px; white-space: normal; }
   .in-row__act { grid-area: act; justify-self: end; }
   .in-group__sum { padding-inline-end: 0; inline-size: auto; }

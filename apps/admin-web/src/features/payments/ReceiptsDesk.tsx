@@ -235,7 +235,9 @@ function ReceiptImage({ receipt: r }: { receipt: Receipt }) {
       {failed === r.fileUrl ? (
         <p className="rv__failed">{tx(PAY.imageFailed)}</p>
       ) : (
-        <img src={r.fileUrl} alt={tx(PAY.receiptImage, { label: r.label })} onError={() => setFailed(r.fileUrl)} />
+        <a className="rv__zoom" href={r.fileUrl} target="_blank" rel="noopener noreferrer" title={tx(PAY.openFile)}>
+          <img src={r.fileUrl} alt={tx(PAY.receiptImage, { label: r.label })} onError={() => setFailed(r.fileUrl)} />
+        </a>
       )}
     </div>
   )

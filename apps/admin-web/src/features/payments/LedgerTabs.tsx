@@ -1077,7 +1077,7 @@ export function AttemptsTab() {
  */
 function AttemptRow({ a, onOpenPayment }: { a: CardAttemptRow; onOpenPayment: (paymentId: string) => void }) {
   const tx = useCopy()
-  const { time, number } = useI18n()
+  const { time, number, locale } = useI18n()
   const paymentId = a.paymentId
   return (
     <tr>
@@ -1096,7 +1096,10 @@ function AttemptRow({ a, onOpenPayment }: { a: CardAttemptRow; onOpenPayment: (p
               <bdi>{a.request.label}</bdi>
               {/* The purpose, unless the label already says it ("Renewal, 1 month"). */}
               {!a.request.label.toLocaleLowerCase().includes(tx(PURPOSE_LABEL[a.request.purpose] ?? raw(a.request.purpose)).toLocaleLowerCase()) && (
-                <span className="pay-purpose">{tx(PURPOSE_LABEL[a.request.purpose] ?? raw(a.request.purpose))}</span>
+                <span className="pay-purpose">
+                  {locale === 'ar' ? '، ' : ', '}
+                  {tx(PURPOSE_LABEL[a.request.purpose] ?? raw(a.request.purpose))}
+                </span>
               )}
             </span>
           </div>

@@ -22,7 +22,7 @@
 .pay-count { font-family: var(--font-head); font-weight: 600; font-variant-numeric: tabular-nums lining-nums; color: var(--ink); }
 .pay-invoice { font-size: var(--fs-xs); font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--ink-2); }
 .pay-why { display: grid; gap: 2px; }
-.pay-purpose { margin-inline-start: var(--space-2); }
+.pay-purpose { margin: 0; }
 
 /* The ledger's rules, kept under the lists they protect: a quiet foot, not a band. */
 .pay-rules { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px var(--space-5); margin-block-start: var(--space-5); padding-inline: var(--space-1); }
@@ -85,8 +85,10 @@
   .rq-page .rv-desk .rv__said .rv__note { font-size: var(--fs-sm); }
   .rq-page .rv-desk .rv__file { grid-area: file; }
   .rq-page .rv-desk .rv__image { position: relative; grid-area: image; min-block-size: 0; max-block-size: none; place-items: start center; overflow: auto; scrollbar-width: thin; }
-  /* The receipt reads at its width; where it runs on below the frame, the frame's foot fades to say so. */
-  .rq-page .rv-desk .rv__image::after { content: ''; position: sticky; inset-block-end: 0; grid-row: 2; justify-self: stretch; block-size: 28px; margin-block-start: -28px; background: linear-gradient(to bottom, transparent, var(--surface-2)); pointer-events: none; }
+  /* The whole receipt is in view, fitted to its frame (a tall phone screenshot included); the image opens full size. */
+  .rq-page .rv-desk .rv__image:not(.rv__image--file) { overflow: hidden; }
+  .rq-page .rv-desk .rv__zoom { position: absolute; inset: 8px; display: block; cursor: zoom-in; }
+  .rq-page .rv-desk .rv__zoom img { inline-size: 100%; block-size: 100%; max-inline-size: none; object-fit: contain; }
   .rq-page .rv-desk .rv__image img { inline-size: 100%; max-inline-size: 640px; max-block-size: none; }
   .rq-page .rv-desk .rv__image--file { place-items: center; }
   .rq-page .rv-desk .rv > .rq-foot { grid-area: foot; }
@@ -269,7 +271,8 @@
 .tx-totals__lines { margin: 0; padding: 0; list-style: none; }
 .pay-sum__line { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: flex-end; gap: 0 var(--space-3); padding-block: 3px; }
 .pay-sum__line + .pay-sum__line { border-block-start: 1px solid var(--line-2); }
-.pay-sum__currency { margin-inline-end: auto; font-size: var(--fs-sm); font-weight: 600; color: var(--ink-2); }
+/* The line's currency is said once, beside its net; the line keeps its name for assistive technology. */
+.pay-sum__currency { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 .pay-sum__term { display: inline-flex; align-items: baseline; gap: 6px; }
 .pay-sum__k { font-size: var(--fs-xs); color: var(--ink-muted); }
 .pay-sum__v { font-family: var(--font-head); font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums lining-nums; }
@@ -448,6 +451,8 @@ fieldset:disabled .set-reminder label { cursor: default; }
   .table.tx-table--payments .tx-c-amount { grid-row: 1 / span 3; }
   /* One money edge down the ledger: the amount block has one width, its tags wrap inside it. */
   .table.tx-table--payments tr:not(.tx-day) { grid-template-columns: minmax(0, 1fr) 9.5rem; }
+  .table.tx-table--payments .tx-c-amount { justify-self: stretch; text-align: right; }
+  [dir='rtl'] .table.tx-table--payments .tx-states { align-items: flex-start; }
   .table.tx-table--payments .tx-states .badge { white-space: normal; text-align: right; }
   .tx-table--payments .tx-end { inline-size: auto; }
   .tx-table .tx-c-who { grid-column: 1; grid-row: 1; }
