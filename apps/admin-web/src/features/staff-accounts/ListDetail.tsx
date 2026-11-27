@@ -65,13 +65,20 @@ export function ListDetail({
   const back = useRef<HTMLButtonElement>(null)
   const wide = useWidePane()
   const before = useRef(openId)
-  // On one pane, opening an item is a change of screen: start at its top, with the way back in hand.
   useEffect(() => {
     if (before.current === openId) return
     before.current = openId
-    if (wide || openId === null) return
-    root.current?.scrollIntoView?.({ block: 'start' })
-    back.current?.focus({ preventScroll: true })
+    const el = root.current
+    if (openId === null || !el) return
+    if (!wide) {
+      // On one pane, opening an item is a change of screen: start at its top, with the way back in hand.
+      el.scrollIntoView?.({ block: 'start' })
+      back.current?.focus({ preventScroll: true })
+      return
+    }
+    // Beside the list, a sheet opened while the page was scrolled down is still read from its top.
+    const scroller = el.closest('.page')
+    if (scroller && el.getBoundingClientRect().top < scroller.getBoundingClientRect().top) el.scrollIntoView?.({ block: 'start' })
   }, [openId, wide])
 
   return (
