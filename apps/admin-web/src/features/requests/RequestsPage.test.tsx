@@ -6,10 +6,11 @@ import { makeStaff, renderWithProviders } from '@/test/utils'
 import { RequestsPage } from './RequestsPage'
 
 /**
- * The unified Requests page: one queue over Trial lessons, New students,
- * Certificates, Renewal requests and Receipts. It only reads, each list only
- * when the account has that list's page, and a list the server refuses is left
- * out. Each row leads to its own page. Synthetic people only.
+ * Requests, the hub over Trial lessons, New students, Certificates, Renewal
+ * requests and Receipts: the masthead counts each type and filters by it, the
+ * body is grouped by wait. It only reads, each list only when the account has
+ * that list's page, and a list the server refuses is left out. Each row opens
+ * on its own page with that request selected. Synthetic people only.
  */
 
 function json(body: unknown, status = 200) {
@@ -85,8 +86,12 @@ function everything() {
   )
 }
 
-const queue = () => screen.getAllByRole('row').slice(1)
-const whoOf = (row: HTMLElement) => within(row).getByRole('link')
+const queue = () => [...document.querySelectorAll<HTMLElement>('.rq-row')]
+const whoOf = (row: HTMLElement) => row.querySelector('.rq-row__title')?.textContent
+const openOf = (row: HTMLElement) => within(row).getByRole('link')
+/** The masthead's figures: one per type the account reaches. */
+const figures = () => [...document.querySelectorAll<HTMLElement>('.figures .figure')]
+const figure = (name: RegExp) => screen.getByRole('button', { name })
 
 beforeEach(() => {
   routes = []
@@ -104,30 +109,31 @@ afterEach(() => {
   tokenStore.clear()
 })
 
-describe('the Requests page', () => {
-  it('lists only what still waits, the late ones first and then the longest wait, each row leading to its own page', async () => {
+describe('the Requests hub', () => {
+  it('lists only what still waits, the longest wait first, each row saying what is asked and opening its own page on that request', async () => {
     everything()
     renderWithProviders(<RequestsPage />, { staff, route: '/requests' })
-    await screen.findByRole('link', { name: 'Family Golf' })
+    await screen.findByText('Family Golf')
     await waitFor(() => expect(queue()).toHaveLength(6))
-    // Left since before today, oldest first: the family, the trial, the renewal, the receipt.
-    // Then the certificates, which take days by nature and are never marked late.
-    expect(queue().map((r) => whoOf(r).textContent)).toEqual(['Parent Delta', 'Prospect Alpha', 'Child Renewing', 'Family Golf', 'Child Gamma', 'Child Omega'])
-    expect(queue().map((r) => whoOf(r).getAttribute('href'))).toEqual([
-      '/trials/new-students?filter=unassigned',
-      '/trials?filter=decision',
-      '/payments?tab=renewals',
-      '/payments',
+    expect(queue().map(whoOf)).toEqual(['Parent Delta', 'Prospect Alpha', 'Child Gamma', 'Child Omega', 'Child Renewing', 'Family Golf'])
+    // One stated action per row: "Open", on the request's own page with that request selected where the page can.
+    expect(queue().map((r) => openOf(r).getAttribute('href'))).toEqual([
+      '/trials/new-students?filter=unassigned&open=ns-1',
+      '/trials?filter=decision&open=tr-1',
       '/certificates?category=student&id=c-1',
       '/certificates?category=student&id=c%202',
+      '/payments?tab=renewals',
+      '/payments',
     ])
-    expect(queue().map((r) => r.querySelector('.rq-age--late') !== null)).toEqual([true, true, true, true, false, false])
-    // Type with its word, owner, status as a word.
-    const [familyRow, trialRow, renewalRow, receiptRow] = queue()
+    expect(openOf(queue()[0]!)).toHaveAccessibleName('Open Parent Delta')
+    expect(queue().every((r) => within(r).getAllByRole('link').length === 1 && within(r).queryByRole('button') === null)).toBe(true)
+    // Type with its word, what is being asked, who owns it.
+    const [familyRow, trialRow, certificateRow, , renewalRow, receiptRow] = queue()
     expect(within(trialRow!).getByText('Trial lesson')).toBeInTheDocument()
     expect(within(trialRow!).getByText('Teacher One')).toBeInTheDocument()
     expect(within(trialRow!).getByText('Needs an outcome')).toBeInTheDocument()
-    expect(within(familyRow!).getByText('Not assigned')).toBeInTheDocument()
+    expect(within(familyRow!).getByText('Needs a supervisor')).toBeInTheDocument()
+    expect(within(certificateRow!).getByText('Pending')).toBeInTheDocument()
     expect(within(renewalRow!).getByText('Parent Echo')).toBeInTheDocument()
     expect(within(receiptRow!).getByText('To confirm')).toBeInTheDocument()
     // What is settled is not a request any more.
@@ -135,21 +141,43 @@ describe('the Requests page', () => {
     expect(screen.queryAllByRole('alert')).toHaveLength(0)
   })
 
-  it('counts each type on the strip, and a click filters by type', async () => {
+  it('is grouped by wait: what has waited since before today first, counted in solid terracotta, then today', async () => {
+    everything()
+    // One receipt came in a moment ago; everything else has waited for days.
+    const fresh = { id: 'rc-2', status: 'pending', requestId: 'pr-2', label: 'Instalment 3', amountMinor: 90000, currency: 'EGP', transferredOn: '2026-10-23', note: null, uploadedAt: new Date().toISOString(), fileUrl: '', mimeType: 'image/png', rejectReason: null, paymentId: null, family: { id: 'f-8', name: 'Family Hotel' }, uploadedBy: { id: 'p-8', name: 'Parent Hotel' } }
+    on('GET', /\/payment-receipts\?/, () => json({ items: [fresh], counts: { pending: 1, approved: 0, rejected: 0 }, canDecide: true }))
+    renderWithProviders(<RequestsPage />, { staff, route: '/requests' })
+    await screen.findByText('Family Hotel')
+    await waitFor(() => expect(queue()).toHaveLength(6))
+    const groups = screen.getAllByRole('region')
+    expect(groups.map((g) => g.getAttribute('aria-label'))).toEqual(['Waiting since before today', 'Today'])
+    expect(groups[0]!.querySelector('.count')).toHaveClass('count--urgent')
+    expect(groups[0]!.querySelector('.count')).toHaveTextContent(/^5$/)
+    expect(groups[1]!.querySelector('.count')).not.toHaveClass('count--urgent')
+    expect([...groups[1]!.querySelectorAll<HTMLElement>('.rq-row')].map(whoOf)).toEqual(['Family Hotel'])
+    // Only what is late is drawn late.
+    expect(groups[0]!.querySelectorAll('.rq-age--late')).toHaveLength(5)
+    expect(groups[1]!.querySelector('.rq-age--late')).toBeNull()
+    // The masthead says how much of a type has waited since before today.
+    expect(figure(/^Receipts/)).toHaveTextContent(/^Receipts1$/)
+    expect(figure(/^Certificates/)).toHaveTextContent(/^Certificates22 since before today$/)
+  })
+
+  it('the masthead counts each type and is the type filter: a figure filters, and again shows every type', async () => {
     everything()
     renderWithProviders(<RequestsPage />, { staff, route: '/requests' })
     await waitFor(() => expect(queue()).toHaveLength(6))
-    const strip = screen.getByRole('group', { name: 'Requests by type' })
-    const count = (name: RegExp) => within(strip).getByRole('button', { name }).querySelector('.ledger__value')?.textContent
-    expect(count(/^All/)).toBe('6')
-    expect(count(/^Trial lessons/)).toBe('1')
-    expect(count(/^New students/)).toBe('1')
-    expect(count(/^Certificates/)).toBe('2')
-    expect(count(/^Renewal requests/)).toBe('1')
-    expect(count(/^Receipts/)).toBe('1')
-    await userEvent.click(within(strip).getByRole('button', { name: /^Certificates/ }))
-    expect(within(strip).getByRole('button', { name: /^Certificates/ })).toHaveAttribute('aria-pressed', 'true')
-    expect(queue().map((r) => whoOf(r).textContent)).toEqual(['Child Gamma', 'Child Omega'])
+    expect(figures().map((f) => `${f.querySelector('.figure__label')?.textContent} ${f.querySelector('.figure__n')?.textContent}`)).toEqual([
+      'Trial lessons 1', 'New students 1', 'Certificates 2', 'Renewal requests 1', 'Receipts 1',
+    ])
+    // No second strip of the same numbers under the masthead.
+    expect(screen.queryByRole('group', { name: 'Requests by type' })).not.toBeInTheDocument()
+    await userEvent.click(figure(/^Certificates/))
+    expect(figure(/^Certificates/)).toHaveAttribute('aria-pressed', 'true')
+    expect(queue().map(whoOf)).toEqual(['Child Gamma', 'Child Omega'])
+    await userEvent.click(figure(/^Certificates/))
+    expect(figure(/^Certificates/)).toHaveAttribute('aria-pressed', 'false')
+    expect(queue()).toHaveLength(6)
   })
 
   it('asks certificates only for the lists that still wait, in the categories the account reaches', async () => {
@@ -170,9 +198,8 @@ describe('the Requests page', () => {
     on('GET', /\/certificates\/access$/, refused)
     on('GET', /\/trials$/, () => json({ trials: [trial('tr-1', 'Prospect Alpha', 'awaiting')] }))
     renderWithProviders(<RequestsPage />, { staff, route: '/requests' })
-    await screen.findByRole('link', { name: 'Prospect Alpha' })
-    const strip = screen.getByRole('group', { name: 'Requests by type' })
-    expect(within(strip).getAllByRole('button').map((b) => b.querySelector('.ledger__label')?.textContent)).toEqual(['All', 'Trial lessons'])
+    await screen.findByText('Prospect Alpha')
+    expect(figures().map((f) => f.querySelector('.figure__label')?.textContent)).toEqual(['Trial lessons'])
     expect(calls(/\/trials\/new-students$/)).toHaveLength(0)
     expect(calls(/\/payment-receipts/)).toHaveLength(0)
     expect(calls(/\/subscriptions\/renewal-requests/)).toHaveLength(0)
@@ -185,8 +212,7 @@ describe('the Requests page', () => {
     on('GET', /\/trials\/new-students$/, refused)
     renderWithProviders(<RequestsPage />, { staff, route: '/requests' })
     await waitFor(() => expect(queue()).toHaveLength(4))
-    const strip = screen.getByRole('group', { name: 'Requests by type' })
-    expect(within(strip).getAllByRole('button').map((b) => b.querySelector('.ledger__label')?.textContent)).toEqual(['All', 'Trial lessons', 'Certificates', 'Receipts'])
+    expect(figures().map((f) => f.querySelector('.figure__label')?.textContent)).toEqual(['Trial lessons', 'Certificates', 'Receipts'])
     expect(screen.queryAllByRole('alert')).toHaveLength(0)
     expect(document.querySelector('.state--forbidden, .banner--danger')).toBeNull()
   })
@@ -199,9 +225,11 @@ describe('the Requests page', () => {
     on('GET', /\/trials\/new-students$/, () => json({ students: [family('ns-2', 'Parent Settled', true)] }))
     renderWithProviders(<RequestsPage />, { staff, route: '/requests?type=family' })
     expect(await screen.findByText('Nothing of this type is waiting.')).toBeInTheDocument()
-    const strip = screen.getByRole('group', { name: 'Requests by type' })
-    expect(within(strip).getByRole('button', { name: /^New students/ })).toHaveAttribute('aria-pressed', 'true')
-    await userEvent.click(within(strip).getByRole('button', { name: /^All/ }))
+    expect(figure(/^New students/)).toHaveAttribute('aria-pressed', 'true')
+    // A count that arrived as nothing is a zero; it is quiet, not an alarm.
+    expect(figure(/^New students/)).toHaveTextContent(/^New students0$/)
+    await userEvent.click(figure(/^New students/))
     expect(screen.getByText('Nothing is waiting.')).toBeInTheDocument()
+    expect(screen.queryAllByRole('region')).toHaveLength(0)
   })
 })
