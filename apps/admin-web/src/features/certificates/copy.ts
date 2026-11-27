@@ -30,11 +30,6 @@ export const C = {
   flowLabel: { en: 'Certificates by state', ar: 'الشهادات حسب الحالة' },
   kind: { en: 'Certificate', ar: 'شهادة' },
   panelLabel: { en: 'Certificate details', ar: 'تفاصيل الشهادة' },
-  pick: { en: 'Open a certificate', ar: 'افتح شهادة' },
-  pickLine: {
-    en: 'Its design, its review and its delivery appear here.',
-    ar: 'يظهر هنا تصميمها ومراجعتها وتسليمها.',
-  },
   steps: { en: 'Steps', ar: 'الخطوات' },
   theRequest: { en: 'On the certificate', ar: 'على الشهادة' },
   st_suggested: { en: 'Suggested', ar: 'الاقتراح' },

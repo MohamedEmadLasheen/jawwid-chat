@@ -3,7 +3,7 @@ import { useI18n } from '@/core/i18n/I18nProvider'
 import { Badge } from '@/shared/components/Badge'
 import { Icon } from '@/shared/components/Icon'
 import { PageHeader } from '@/shared/components/PageHeader'
-import { Age, FlowStrip, FlowStripCell, PanelHint, RequestQueue, RowOpen, rowOpener, type FlowCell } from '@/shared/components/RequestQueue'
+import { Age, FlowStrip, FlowStripCell, RequestQueue, RowOpen, rowOpener, type FlowCell } from '@/shared/components/RequestQueue'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
 import { STAGES, type ContactPresence, type LeadDetail, type LeadRow, type Stage } from './api'
 import { CreateLeadDialog } from './CreateLeadDialog'
@@ -36,7 +36,7 @@ function useDebounced<T>(value: T, ms = 300): T {
  * a trial prospect; Trial booked, Trial completed, Converted and a trial's Lost
  * come from the trial itself. A row says whether a channel is on file, never the
  * contact: that arrives with the lead's own panel, and is audited -- so the
- * panel opens only when a lead is opened, never by itself. The server decides
+ * panel is there only while a lead is open, never by itself. The server decides
  * who may open any of it.
  */
 export function SalesPipelinePage() {
@@ -66,8 +66,8 @@ export function SalesPipelinePage() {
   const counts = data?.counts
   const total = counts ? STAGES.reduce((n, s) => n + counts[s], 0) : null
   const cells: Array<FlowCell<StageFilter>> = [
-    { key: 'all', label: tx(P.all), count: total, apart: true },
-    ...STAGES.map((s) => ({ key: s as StageFilter, label: tx(STAGE[s].label), count: counts ? counts[s] : null, apart: s === 'lost' })),
+    { key: 'all', label: tx(P.all), count: total },
+    ...STAGES.map((s) => ({ key: s as StageFilter, label: tx(STAGE[s].label), count: counts ? counts[s] : null })),
   ]
   const rows = data?.leads ?? []
   const last = data ? Math.min(data.offset + rows.length, data.total) : 0
@@ -84,7 +84,7 @@ export function SalesPipelinePage() {
         <FlowStrip label={tx(P.filterLabel)} cells={cells} value={stage} onChange={setStage}>
           {/* Not a stage: the leads whose follow-up date has passed, across every stage. */}
           <FlowStripCell
-            cell={{ label: tx(P.followUpDue), count: data ? data.dueCount : null, late: (data?.dueCount ?? 0) > 0, apart: true }}
+            cell={{ label: tx(P.followUpDue), count: data ? data.dueCount : null, late: (data?.dueCount ?? 0) > 0 }}
             active={due}
             onClick={() => setDue((d) => !d)}
           />
@@ -102,12 +102,6 @@ export function SalesPipelinePage() {
                   body: <LeadPanel id={openId} onLead={setLoaded} />,
                 }
               : null
-          }
-          placeholder={
-            <PanelHint>
-              <p className="rq-hint__title">{tx(P.pick)}</p>
-              <p className="rq-hint__line">{tx(P.pickLine)}</p>
-            </PanelHint>
           }
         >
           <div className="rq-toolbar">
@@ -142,11 +136,14 @@ export function SalesPipelinePage() {
                     </tbody>
                   </table>
                 </div>
+                {/* One page needs no pager. */}
+                {data && data.total > rows.length && (
                 <div className="lead-pager">
                   <span className="ts-muted ltr">{number(data!.offset + 1)}–{number(last)} / {number(data!.total)}</span>
                   <button type="button" className="btn btn--sm" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}>{tx(P.previous)}</button>
                   <button type="button" className="btn btn--sm" disabled={!data || last >= data.total} onClick={() => setOffset(offset + PAGE_SIZE)}>{tx(P.next)}</button>
                 </div>
+                )}
                 {data?.truncated && <p className="field__hint">{tx(P.truncated)}</p>}
               </>
             )}

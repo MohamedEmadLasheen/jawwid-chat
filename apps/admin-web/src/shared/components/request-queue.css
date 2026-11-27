@@ -12,115 +12,107 @@
   .page.rq-page { display: flex; flex-direction: column; overflow: hidden; padding-block-end: 0; }
   .rq-page > .page__inner { flex: 1; min-block-size: 0; inline-size: 100%; display: flex; flex-direction: column; }
   .rq-page .rq { flex: 1; min-block-size: 0; grid-template-rows: minmax(0, 1fr); }
-  .rq-page .rq--split { align-items: stretch; }
+  .rq-page .rq--wide { align-items: stretch; }
   .rq-page .rq__queue, .rq-page .rq__panel { overflow-y: auto; max-block-size: none; padding-block-end: var(--space-6); }
   .rq-page .rq__panel { position: static; padding-block-end: 0; }
-  /* The table's header sticks to the queue, not to a wrapper that never scrolls. */
-  .rq-page .rq__queue .table-wrap { overflow: visible; }
+  /* The open row's marker sits in the gutter beside the queue; the scroller reaches out to hold it. */
+  .rq-page .rq__queue { padding-inline-start: var(--rq-gutter); margin-inline-start: calc(-1 * var(--rq-gutter)); }
 }
 
+.rq-page { --rq-gutter: 8px; }
 .rq-page .page-header { margin-block-end: var(--space-5); }
 .rq-page .page-header__subtitle { max-inline-size: 96ch; }
 
 /* ================================================================ strip */
 
-.rq-strip { margin-block-end: var(--space-4); }
-.rq-strip__cell { position: relative; justify-content: space-between; gap: 6px; min-block-size: 78px; cursor: pointer; transition: background var(--dur-fast) var(--ease-out); }
+/* The page's states on the shared ledger: one hairline system, every state on
+   screen at every width. The component says how many columns each width gets
+   (--rq-n in one row, --rq-m in two rows, --rq-p on a phone), so no cell is
+   hidden and no label is cut. */
+.rq-strip.ledger { grid-template-columns: repeat(var(--rq-n, 4), minmax(0, 1fr)); margin-block-end: var(--space-4); }
+/* Under a row of tabs the strip keeps its distance: two rules, not a doubled one. */
+.seg + .rq-strip.ledger { margin-block-start: var(--space-4); }
+.rq-strip__cell { justify-content: space-between; gap: 6px; min-block-size: 78px; cursor: pointer; transition: background var(--dur-fast) var(--ease-out); }
 .rq-strip__cell:focus-visible { outline-offset: -2px; }
-.rq-strip__cell[aria-selected='true'] { box-shadow: inset 0 2px 0 var(--teal); }
 .rq-strip__cell:is([aria-pressed='true'], [aria-selected='true']) .ledger__label { color: var(--teal-dark); font-weight: 600; }
+/* A long name takes a second line between its words; it is never cut. */
+.rq-strip .ledger__label { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.3; }
 .rq-strip__figure { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; }
 .rq-strip__more { margin-inline-start: 1px; font-size: 0.6em; color: var(--ink-muted); }
-.rq-strip .ledger__note { white-space: nowrap; }
 /* A cell with nothing in it steps back, so the eye lands on where the work is. */
 .rq-strip__cell--zero:not([aria-pressed='true'], [aria-selected='true']) .ledger__value { color: var(--border-control); }
+/* The empty cells that complete a last row: there only at the width that needs them. */
+.rq-strip .rq-strip__fill { display: none; }
 
-/* The steps of the flow are joined: a small notch on the rule points onward. */
-.rq-strip__cell--step + .rq-strip__cell--step::before {
-  content: '';
-  position: absolute;
-  inset-inline-start: -5px;
-  inset-block-start: calc(50% - 4px);
-  inline-size: 8px;
-  block-size: 8px;
-  background: var(--paper);
-  border-block-start: 1px solid var(--border-strong);
-  border-inline-end: 1px solid var(--border-strong);
-  transform: rotate(45deg);
-}
-[dir='rtl'] .rq-strip__cell--step + .rq-strip__cell--step::before { transform: rotate(-45deg); }
-/* A total, or a list outside the flow, stands apart behind a double rule, as a total does in a ledger. */
-.rq-strip__cell--apart + .rq-strip__cell--step, .rq-strip__cell--step + .rq-strip__cell--apart { border-inline-start: 3px double var(--hairline); }
-
-@media (max-width: 1099px) {
-  /* Without the room for every state side by side, the strip is one line that
-     scrolls sideways: each cell as wide as its words, none cut short, and the
-     queue still near the top of a phone. */
-  .rq-strip.ledger {
-    --rq-bleed: var(--space-6);
-    grid-auto-flow: column;
-    grid-template-columns: none;
-    grid-auto-columns: minmax(max-content, 1fr);
-    overflow-x: auto;
-    scrollbar-width: none;
-    scroll-snap-type: inline proximity;
-    scroll-padding-inline: var(--rq-bleed);
-    margin-inline: calc(-1 * var(--rq-bleed));
-    padding-inline: var(--rq-bleed);
-  }
-  .rq-strip.ledger::-webkit-scrollbar { display: none; }
-  .rq-strip.ledger .ledger__cell { min-inline-size: 92px; padding-inline: var(--space-3) var(--space-4); border-block-start: 0; border-inline-start: 1px solid var(--hairline); scroll-snap-align: start; }
-  .rq-strip.ledger .ledger__cell:first-child { border-inline-start: 0; padding-inline-start: 2px; }
-  .rq-strip.ledger .rq-strip__cell--apart + .rq-strip__cell--step, .rq-strip.ledger .rq-strip__cell--step + .rq-strip__cell--apart { border-inline-start: 3px double var(--hairline); }
-  .rq-strip .ledger__label { overflow: visible; }
+@media (min-width: 768px) and (max-width: 1099px) {
+  .rq-strip.ledger { grid-template-columns: repeat(var(--rq-m, 3), minmax(0, 1fr)); }
+  .rq-strip .rq-strip__fill--m { display: block; }
+  /* The first cell of each row starts at the frame's edge, as the first cell of the strip does. */
+  .rq-strip.ledger[data-m='3'] .ledger__cell:nth-child(3n + 1),
+  .rq-strip.ledger[data-m='4'] .ledger__cell:nth-child(4n + 1) { padding-inline-start: 3px; }
 }
 @media (max-width: 767px) {
-  .rq-strip.ledger { --rq-bleed: var(--space-4); }
-  .rq-strip.ledger .ledger__cell { min-block-size: 70px; padding-block: 10px 9px; }
+  .rq-strip.ledger { grid-template-columns: repeat(var(--rq-p, 2), minmax(0, 1fr)); }
+  .rq-strip .rq-strip__fill--p { display: block; }
+  .rq-strip.ledger .ledger__cell { min-block-size: 66px; padding-block: 10px 9px; padding-inline: var(--space-3) var(--space-2); }
+  .rq-strip.ledger[data-p='1'] .ledger__cell,
+  .rq-strip.ledger[data-p='2'] .ledger__cell:nth-child(2n + 1),
+  .rq-strip.ledger[data-p='3'] .ledger__cell:nth-child(3n + 1) { padding-inline-start: 3px; }
   .rq-strip .ledger__value { font-size: 24px; }
 }
 
 /* =============================================================== layout */
 
 .rq { display: grid; grid-template-columns: minmax(0, 1fr); min-inline-size: 0; }
-.rq--split { grid-template-columns: minmax(0, 1fr) var(--rq-panel, 380px); gap: var(--space-5); align-items: start; }
+/* Beside the queue the panel has its own track. It is closed until a row is
+   open, and opens over 200ms: the queue gives way from its far edge, so a row's
+   name stays where it was. */
+.rq--wide { grid-template-columns: minmax(0, 1fr) 0px; column-gap: 0; align-items: start; }
+.rq--wide.rq--split { grid-template-columns: minmax(0, 1fr) var(--rq-panel, 380px); column-gap: var(--space-5); }
+@media (prefers-reduced-motion: no-preference) {
+  .rq--wide { transition: grid-template-columns var(--dur) var(--ease-out), column-gap var(--dur) var(--ease-out); }
+}
 .rq__queue { min-inline-size: 0; container: rq-queue / inline-size; }
 .rq__panel {
   position: sticky;
   inset-block-start: 0;
   max-block-size: calc(100dvh - var(--topbar-h) - var(--space-5));
-  overflow-y: auto;
+  overflow: hidden auto;
   min-inline-size: 0;
   padding-inline-start: var(--space-5);
   border-inline-start: 1px solid var(--hairline);
   scrollbar-width: thin;
 }
+/* The detail keeps its full width while its track opens: it is uncovered, not re-wrapped. */
+.rq__panel > .rq-detail { inline-size: calc(var(--rq-panel, 380px) - var(--space-5) - 1px); }
 .rq-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); margin-block-end: var(--space-3); }
 .rq-toolbar .search { flex: 1 1 240px; max-inline-size: 360px; }
 .rq-toolbar__hint { font-size: var(--fs-xs); color: var(--ink-muted); }
-.rq-toolbar__end { margin-inline-start: auto; display: flex; align-items: center; gap: var(--space-2); }
 
 /* ================================================================ queue */
 
 .rq-table { inline-size: 100%; }
-/* A row's own header is a name, not a column head. */
-.rq-table tbody th {
-  position: static;
-  z-index: auto;
-  background: none;
-  color: var(--ink);
-  font-size: inherit;
-  font-weight: 400;
-  white-space: normal;
-  padding-block: 9px;
-  border-block-end: 1px solid var(--hairline-soft);
-}
+/* The queue's columns give way instead of scrolling sideways, so the open row's marker is never clipped. */
+.rq__queue .table-wrap { overflow: visible; }
+/* Straight under the strip the strip's own rule heads the queue: one rule, not a frame inside a frame. */
+.rq__queue > .table-wrap:first-child { border-block-start: 0; }
+.rq-table tbody th { font-weight: 400; white-space: normal; padding-block: 9px; }
 .rq-table td, .rq-table tbody th { vertical-align: top; }
 .rq-table tbody tr { cursor: pointer; }
-.rq-table tbody tr[data-selected='true'] { background: var(--teal-tint); box-shadow: inset 3px 0 0 var(--gold); }
-[dir='rtl'] .rq-table tbody tr[data-selected='true'] { box-shadow: inset -3px 0 0 var(--gold); }
-.rq-table tbody tr[data-selected='true'] :is(th, td):first-child { padding-inline-start: 10px; }
-.rq-table :is(th, td):first-child { transition: padding var(--dur-fast) var(--ease-out); }
+/* The open row: a teal tint, and a gold marker in the gutter beside it. The
+   marker is drawn outside the row, so opening a row moves nothing in it. */
+.rq-table tbody tr[data-selected='true'] { background: var(--teal-tint); }
+.rq-table tbody tr[data-selected='true'] > :first-child { position: relative; }
+.rq-table tbody tr[data-selected='true'] > :first-child::before {
+  content: '';
+  position: absolute;
+  inset-block: 0 -1px;
+  inset-inline-start: calc(-1 * var(--rq-gutter, 8px));
+  inline-size: var(--rq-gutter, 8px);
+  box-sizing: border-box;
+  background: var(--teal-tint);
+  border-inline-start: 3px solid var(--gold);
+}
 
 .rq-open {
   display: inline;
@@ -164,7 +156,7 @@ a.rq-open { text-decoration: none; }
 
 /* On a phone a row is two lines: who and its status, then the rest. */
 @media (max-width: 767px) {
-  .rq__queue .table-wrap { overflow: visible; border-block-start: 1px solid var(--hairline); }
+  .rq__queue .table-wrap { border-block-start: 1px solid var(--hairline); }
   .rq-table, .rq-table tbody { display: block; }
   .rq-table thead { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .rq-table tbody tr {
@@ -176,6 +168,9 @@ a.rq-open { text-decoration: none; }
     border-block-end: 1px solid var(--hairline-soft);
   }
   .rq-table.table tbody tr > :is(th, td) { display: block; padding: 0; border: 0; min-inline-size: 0; }
+  /* The sheet covers the list while a row is open: the list marks nothing. */
+  .rq-table tbody tr[data-selected='true'] { background: none; }
+  .rq-table tbody tr[data-selected='true'] > :first-child::before { display: none; }
   /* What only adds detail stays in the detail. */
   .rq-table.table tbody tr > .rq-c--extra, .rq-table :is(.rq-c-when, .rq-c-meta) > .rq-muted:only-child { display: none; }
   .rq-table .row-actions { opacity: 1; }
@@ -190,8 +185,14 @@ a.rq-open { text-decoration: none; }
   .rq-table .rq-c-when { grid-column: 2; grid-row: 2; justify-self: end; text-align: end; font-size: var(--fs-xs); color: var(--ink-muted); }
   .rq-table.table tbody tr > td.rq-c-act { grid-column: 1 / -1; inline-size: auto; padding-block-start: 8px; }
   .rq-table td.rq-c-act:empty { display: none; }
-  .rq-row-actions { justify-content: flex-start; flex-wrap: wrap; }
+  .rq-row-actions { justify-content: flex-start; flex-wrap: wrap; gap: var(--space-2); }
+  /* A row's icon-only action is a full touch target, and looks like one. */
+  .rq-row-actions .btn--icon { inline-size: var(--tap); block-size: var(--tap); min-block-size: var(--tap); border-color: var(--border-strong); }
+  .rq-row-actions .btn--icon .icon { inline-size: 22px; block-size: 22px; }
   .rq-open { display: inline-block; min-block-size: 28px; }
+}
+@media (pointer: coarse) {
+  .rq-row-actions .btn--icon { inline-size: var(--tap); block-size: var(--tap); min-block-size: var(--tap); }
 }
 
 /* ================================================================ panel */
@@ -217,11 +218,6 @@ a.rq-open { text-decoration: none; }
 html[lang='ar'] .rq-panel__title { font-size: 27px; font-weight: 700; line-height: 1.4; }
 .rq-lead { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px var(--space-3); margin-block-end: var(--space-4); }
 .rq-lead__status { display: flex; flex-wrap: wrap; align-items: center; gap: 4px var(--space-3); font-size: var(--fs-sm); color: var(--ink-muted); }
-
-.rq-hint { padding-block-start: 4px; color: var(--ink-muted); font-size: var(--fs-sm); }
-.rq-hint__title { margin: 0 0 6px; font-family: var(--display); font-size: var(--fs-xl); font-weight: 600; line-height: 1.3; color: var(--ink); }
-html[lang='ar'] .rq-hint__title { font-weight: 700; }
-.rq-hint__line { margin: 0 0 var(--space-5); max-inline-size: 34ch; }
 
 .rq-section { padding-block: var(--space-3) var(--space-4); border-block-start: 1px solid var(--hairline); }
 .rq-section__head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); margin-block-end: var(--space-2); }
@@ -302,5 +298,5 @@ html[lang='ar'] .rq-step::before { inset-block-start: 22px; }
 .rq-step__body { margin-block-start: 6px; display: grid; justify-items: start; gap: 6px; font-size: var(--fs-sm); }
 
 @media (prefers-reduced-motion: reduce) {
-  .rq-strip__cell, .rq-table :is(th, td):first-child { transition: none; }
+  .rq-strip__cell { transition: none; }
 }

@@ -214,6 +214,19 @@ describe('New students: the queue beside the family', () => {
     expect(screen.queryByRole('button', { name: 'Parent Delta' })).not.toBeInTheDocument()
   })
 
+  it('with nothing recorded the page says one thing: what will be here, and where to go', async () => {
+    on('GET', /\/trials\/new-students$/, () => json({ students: [], canAssign: true }))
+    on('GET', /\/family-intake\/entered$/, () => json({ viewer: 'operations_manager', canAssignSupervisor: true, families: [] }))
+    const { container } = renderWithProviders(<AppRoutes />, { staff, route: '/trials/new-students' })
+    expect(await screen.findByText('No subscriptions recorded yet.')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Open Trial lessons' })).toHaveAttribute('href', '/trials')
+    // No second empty section under it, and no strip of zeros over it.
+    await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([u]) => /\/family-intake\/entered$/.test(String(u)))).toBe(true))
+    expect(screen.queryByRole('region', { name: 'Families entered by hand' })).not.toBeInTheDocument()
+    expect(container.querySelectorAll('.state')).toHaveLength(1)
+    expect(container.querySelector('.rq-strip')).toBeNull()
+  })
+
   it('below 1100px every family\'s record is listed in full, with no panel', async () => {
     on('GET', /\/trials\/new-students$/, () => json({ students: [family('tr-1', 'Parent Delta'), family('tr-2', 'Parent Echo', WAITING)], canAssign: true }))
     renderWithProviders(<AppRoutes />, { staff, route: '/trials/new-students' })

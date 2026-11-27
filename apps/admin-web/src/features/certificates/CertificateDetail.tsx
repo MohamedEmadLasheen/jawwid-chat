@@ -65,11 +65,7 @@ export function CertificateStatus({ certificate: c }: { certificate: Certificate
 }
 
 /** The request's steps, from what the server recorded: who, when, and where it stands now. */
-export function certificateSteps(c: Certificate | null, tx: ReturnType<typeof useCopy>, when: (iso: string) => string): FlowStep[] {
-  if (!c) {
-    // No certificate open: the flow itself, as a legend.
-    return (['st_requested', 'st_design', 'st_review', 'st_send'] as const).map((k) => ({ key: k, label: tx(C[k]), state: 'todo' as StepState }))
-  }
+export function certificateSteps(c: Certificate, tx: ReturnType<typeof useCopy>, when: (iso: string) => string): FlowStep[] {
   const full = c.projection === 'full' ? c : null
   const closed = c.state === 'cancelled' || c.state === 'declined'
   // A closed request got as far as its own record shows.

@@ -130,7 +130,7 @@ export function TrialsPage() {
   const waiting = all.filter((t) => t.outcome === 'awaiting')
   const oldest = waiting.reduce<TrialDto | null>((a, t) => (a === null || t.endsAt < a.endsAt ? t : a), null)
   const cells: Array<FlowCell<Filter>> = [
-    { key: 'all', label: tx(TR.filterAll), count: q.data ? all.length : null, apart: true },
+    { key: 'all', label: tx(TR.filterAll), count: q.data ? all.length : null },
     { key: 'upcoming', label: tx(TR.filterUpcoming), count: countOf('upcoming') },
     {
       key: 'decision',
@@ -140,8 +140,8 @@ export function TrialsPage() {
       late: waiting.some(outcomeLate),
     },
     { key: 'subscribed', label: tx(TR.subscribed), count: countOf('subscribed') },
-    { key: 'not_subscribed', label: tx(TR.notSubscribed), count: countOf('not_subscribed'), apart: true },
-    { key: 'no_show', label: tx(TR.didNotAttend), count: countOf('no_show'), apart: true },
+    { key: 'not_subscribed', label: tx(TR.notSubscribed), count: countOf('not_subscribed') },
+    { key: 'no_show', label: tx(TR.didNotAttend), count: countOf('no_show') },
   ]
 
   const cancel = (t: TrialDto) =>
@@ -175,6 +175,7 @@ export function TrialsPage() {
         <QueryBoundary isLoading={q.isLoading} error={q.error} onRetry={() => void q.refetch()}>
           <RequestQueue
             label={tx(TR.panelLabel)}
+            reserve={wide && q.isLoading}
             detail={
               open && {
                 id: open.id,
@@ -213,7 +214,7 @@ export function TrialsPage() {
                       <th scope="col" className="rq-c--more">{tx(TR.teacher)}</th>
                       <th scope="col">{tx(TR.when)}</th>
                       <th scope="col">{tx(TR.status)}</th>
-                      <th scope="col"><span className="sr-only">{tx(TR.actions)}</span></th>
+                      <th scope="col" className="rq-c-act"><span className="sr-only">{tx(TR.actions)}</span></th>
                     </tr>
                   </thead>
                   <tbody>

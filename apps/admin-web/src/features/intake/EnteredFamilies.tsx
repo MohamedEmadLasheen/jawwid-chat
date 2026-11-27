@@ -41,7 +41,8 @@ function matches(f: EnteredFamily, filter: Filter, now: number): boolean {
  */
 export function EnteredFamilies() {
   const q = useEnteredFamilies()
-  if (!q.data) return null
+  // With none entered there is nothing to head: the page's own empty line says where families come from.
+  if (!q.data || q.data.families.length === 0) return null
   return <EnteredFamiliesList data={q.data} />
 }
 
@@ -62,14 +63,10 @@ function EnteredFamiliesList({ data }: { data: EnteredList }) {
     <section className="ns-entered" aria-labelledby="ns-entered-title">
       <h2 id="ns-entered-title" className="ns-entered__title">{tx(OP.enteredTitle)}</h2>
       <p className="field__hint">{tx(OP.enteredHint)}</p>
-      {data.families.length > 0 && (
-        <div className="ns-toolbar">
-          <FilterChips options={options} value={filter} onChange={setFilter} label={tx(OP.filterLabel)} formatCount={(n) => number(n)} />
-        </div>
-      )}
-      {data.families.length === 0 ? (
-        <p className="rq-note">{tx(OP.enteredNone)}</p>
-      ) : shown.length === 0 ? (
+      <div className="ns-toolbar">
+        <FilterChips options={options} value={filter} onChange={setFilter} label={tx(OP.filterLabel)} formatCount={(n) => number(n)} />
+      </div>
+      {shown.length === 0 ? (
         <EmptyState title={tx(OP.noneHere)} compact />
       ) : (
         <div className="ns-list">

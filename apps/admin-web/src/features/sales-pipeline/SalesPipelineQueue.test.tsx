@@ -101,12 +101,10 @@ afterEach(() => {
 })
 
 describe('the lead panel beside the queue', () => {
-  it('opens no lead by itself: no contact is read, and the panel says that opening one is recorded', async () => {
+  it('opens no lead by itself: there is no panel and no contact is read until a lead is opened', async () => {
     renderWithProviders(<AppRoutes />, { staff: sales, route: '/sales/pipeline' })
     await screen.findByText('Lead Alpha')
-    const panel = screen.getByRole('complementary', { name: 'Lead details' })
-    expect(within(panel).getByText('Open a lead')).toBeInTheDocument()
-    expect(within(panel).getByText(/Opening a lead is recorded in the audit log\./)).toBeInTheDocument()
+    expect(screen.queryByRole('complementary', { name: 'Lead details' })).not.toBeInTheDocument()
     await new Promise((r) => setTimeout(r, 50))
     expect(calls('GET', /\/sales-pipeline\/leads\/lead-[0-9]$/)).toHaveLength(0)
     expect(document.body.textContent).not.toContain(SECRET_PHONE)
@@ -120,6 +118,8 @@ describe('the lead panel beside the queue', () => {
     expect(await within(panel).findByText(SECRET_PHONE)).toBeInTheDocument()
     expect(open).toHaveAttribute('aria-current', 'true')
     expect(within(panel).getByRole('heading', { name: 'Lead Alpha' })).toBeInTheDocument()
+    // The read is said to be recorded where the contact is shown.
+    expect(within(panel).getByText('Opening these details is recorded in the audit log.')).toBeInTheDocument()
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(within(within(panel).getByRole('list', { name: 'Steps' })).getAllByRole('listitem').map((li) => li.querySelector('.rq-step__label')?.textContent)).toEqual([
       'New lead (done)', 'Contacted (now)', 'Trial booked (next)', 'Trial completed (next)', 'Converted (next)',
@@ -142,22 +142,38 @@ describe('the lead panel beside the queue', () => {
     await within(panel).findByText(SECRET_PHONE)
     await userEvent.click(within(panel).getByRole('button', { name: 'Close' }))
     expect(document.body.textContent).not.toContain(SECRET_PHONE)
-    expect(within(panel).getByText('Open a lead')).toBeInTheDocument()
+    expect(screen.queryByRole('complementary', { name: 'Lead details' })).not.toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: 'Open Lead Beta' }))
-    await within(panel).findByText('No contact details are on file.')
+    const again = screen.getByRole('complementary', { name: 'Lead details' })
+    await within(again).findByText('No contact details are on file.')
     // A lost lead got as far as its record shows, and ends in Lost with its reason.
-    const steps = within(within(panel).getByRole('list', { name: 'Steps' })).getAllByRole('listitem')
+    const steps = within(within(again).getByRole('list', { name: 'Steps' })).getAllByRole('listitem')
     expect(steps.map((li) => li.querySelector('.rq-step__label')?.textContent)).toEqual([
       'New lead (done)', 'Contacted (done)', 'Trial booked (skipped)', 'Trial completed (skipped)', 'Converted (skipped)', 'Lost (problem)',
     ])
     expect(steps.at(-1)).toHaveTextContent('Price')
-    expect(within(panel).getByRole('button', { name: 'Reopen' })).toBeInTheDocument()
+    expect(within(again).getByRole('button', { name: 'Reopen' })).toBeInTheDocument()
     expect(calls('GET', /\/sales-pipeline\/leads\/lead-2$/)).toHaveLength(1)
     expect(calls('GET', /\/sales-pipeline\/leads\/lead-1$/)).toHaveLength(1)
   })
 
-  it('the strip carries the stages and, apart from them, the follow-ups that are due', async () => {
+  it('one page of leads shows no pager; a second page brings it back', async () => {
+    renderWithProviders(<AppRoutes />, { staff: sales, route: '/sales/pipeline' })
+    await screen.findByText('Lead Alpha')
+    expect(screen.queryByRole('button', { name: 'Next' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Previous' })).not.toBeInTheDocument()
+  })
+
+  it('more leads than a page holds: the pager is there', async () => {
+    on('GET', /\/sales-pipeline\/leads(\?.*)?$/, () => json({ ...PAGE, total: 40 }))
+    renderWithProviders(<AppRoutes />, { staff: sales, route: '/sales/pipeline' })
+    await screen.findByText('Lead Alpha')
+    expect(screen.getByRole('button', { name: 'Next' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Previous' })).toBeDisabled()
+  })
+
+  it('the strip carries the stages and, after them, the follow-ups that are due', async () => {
     renderWithProviders(<AppRoutes />, { staff: sales, route: '/sales/pipeline' })
     await screen.findByText('Lead Alpha')
     const strip = screen.getByRole('group', { name: 'Stage' })

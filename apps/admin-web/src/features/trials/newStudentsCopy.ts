@@ -49,9 +49,10 @@ export const NS = {
   stepTrial: { en: 'Trial lesson', ar: 'الحصة التجريبية' },
   stepRecorded: { en: 'Subscription recorded', ar: 'تسجيل الاشتراك' },
   emptyHint: {
-    en: 'A family appears here when Sales records "The student subscribed" on a trial.',
-    ar: 'تظهر الأسرة هنا عندما يسجّل قسم المبيعات «الطالب اشترك» على حصة تجريبية.',
+    en: 'A family appears here when Sales records "The student subscribed" on a trial, or when its supervisor enters it by hand.',
+    ar: 'تظهر الأسرة هنا عندما يسجّل قسم المبيعات «الطالب اشترك» على حصة تجريبية، أو عندما يُدخلها مشرفها يدويًا.',
   },
+  openTrials: { en: 'Open Trial lessons', ar: 'فتح الحصص التجريبية' },
 } satisfies Record<string, Pair>
 
 export type NewStudentStatus = 'unassigned' | 'waiting' | 'locked' | 'signed_up'

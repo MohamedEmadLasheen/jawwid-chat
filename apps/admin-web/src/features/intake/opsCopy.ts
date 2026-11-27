@@ -8,8 +8,8 @@ import type { Pair } from '@/features/organization/copy'
 export const OP = {
   enteredTitle: { en: 'Families entered by hand', ar: 'الأسر المُدخلة يدويًا' },
   enteredHint: {
-    en: 'Families entered from Jawwid Core by their supervisors, without a trial.',
-    ar: 'أسر أدخلها مشرفوها من جوِّد كور، دون حصة تجريبية.',
+    en: 'Families their supervisors entered by hand, without a trial.',
+    ar: 'أسر أدخلها مشرفوها يدويًا، دون حصة تجريبية.',
   },
   filterLabel: { en: 'Show', ar: 'عرض' },
   all: { en: 'All', ar: 'الكل' },
@@ -18,7 +18,6 @@ export const OP = {
   signedUp: { en: 'Signed up', ar: 'أنشأ حسابه' },
   recent: { en: 'Recently entered', ar: 'أُدخلت مؤخرًا' },
   noneHere: { en: 'No family matches this filter.', ar: 'لا توجد أسرة تطابق هذا الفلتر.' },
-  enteredNone: { en: 'No family has been entered by hand yet.', ar: 'لم تُدخل أي أسرة يدويًا بعد.' },
   openGroup: { en: 'Open group', ar: 'فتح المجموعة' },
   enteredBy: { en: 'Entered by', ar: 'أدخلها' },
   childAdded: { en: 'Child added', ar: 'أُضيف طفل' },
