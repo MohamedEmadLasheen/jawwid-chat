@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { useSession } from '@/core/auth/SessionProvider'
@@ -159,7 +159,8 @@ export function SchedulePage() {
 
   const nFilters = activeFilterCount(state)
   const mine = options.data?.viewer.scope === 'supervisor' && state.lists.supervisorIds.includes(options.data.viewer.staffId)
-  const showPanel = !month && !!win.data && (teachers?.length ?? 0) > 0
+  // The month has no lessons loaded: the panel stays, and says where its items are seen.
+  const showPanel = (teachers?.length ?? 0) > 0 && (month || !!win.data)
 
   const panel = (inline: boolean) => (
     <AttentionPanel
@@ -173,6 +174,7 @@ export function SchedulePage() {
       onOpenLesson={setLesson}
       deskAccess={deskAccess}
       inline={inline}
+      note={month ? tx(S.attnMonth) : undefined}
     />
   )
 
@@ -192,7 +194,7 @@ export function SchedulePage() {
   const views = (
     <div className="switch sc-views" role="group" aria-label={tx(S.viewLabel)}>
       {VIEWS.map((v) => (
-        <button key={v} type="button" aria-pressed={state.view === v} onClick={() => setView(v)}>
+        <button key={v} type="button" className="sc-view" aria-pressed={state.view === v} onClick={() => setView(v)}>
           {tx(VIEW_LABEL[v])}
         </button>
       ))}
@@ -213,6 +215,12 @@ export function SchedulePage() {
             <div className="page-header__actions sc-mast__actions">
               {steps}
               {views}
+              {!narrow && (stats.data?.teachers.length ?? 0) > 0 && (
+                <button type="button" className="btn btn--sm sc-byteacher-toggle" aria-expanded={byTeacher} onClick={() => setByTeacher((v) => !v)}>
+                  <Icon name="rows" size={16} />
+                  {tx(S.byTeacher)}
+                </button>
+              )}
               {!narrow && <LegendHelp supervisors={supervisors} selected={state.lists.supervisorIds} onToggle={toggleSupervisor} />}
             </div>
           </div>
@@ -238,12 +246,6 @@ export function SchedulePage() {
           )}
           <div className="sc-toolbar__end">
             {!narrow && <Figures stats={stats.data} loading={stats.isFetching} />}
-            {!narrow && (stats.data?.teachers.length ?? 0) > 0 && (
-              <button type="button" className="btn btn--sm btn--ghost sc-byteacher-toggle" aria-expanded={byTeacher} onClick={() => setByTeacher((v) => !v)}>
-                <Icon name="rows" size={16} />
-                {tx(S.byTeacher)}
-              </button>
-            )}
           </div>
         </div>
         {(mine || stats.data?.lessonFilter) && (
@@ -273,11 +275,7 @@ export function SchedulePage() {
                     }
                   />
                 )}
-                <div
-                  className={narrow ? 'sc-agenda-wrap' : 'sc-scroll'}
-                  aria-busy={active.isFetching}
-                  onKeyDown={narrow ? undefined : moveBetweenBlocks}
-                >
+                <ScrollBox narrow={narrow} busy={active.isFetching} sideways={state.view === 'day'} watch={win.data}>
                   {teachers && teachers.length > 0 && narrow && (
                     <>
                       {!month && win.data && <AgendaView data={win.data} findings={findings} now={now} onLesson={setLesson} />}
@@ -291,7 +289,7 @@ export function SchedulePage() {
                           data={win.data}
                           day={range.from}
                           findings={findings}
-                          highlight={highlight ? new Set(highlight.lessonIds) : NOTHING}
+                          highlight={highlight && highlight.lessonIds.length > 0 ? new Set(highlight.lessonIds) : NOTHING}
                           highlightTeacher={highlight?.teacherId ?? null}
                           now={now}
                           isToday={range.from === today}
@@ -304,7 +302,7 @@ export function SchedulePage() {
                       {month && summary.data && <MonthView data={summary.data} today={today} onOpenDay={(d, t) => openDay(d, t)} />}
                     </>
                   )}
-                </div>
+                </ScrollBox>
               </QueryBoundary>
             </div>
             {showPanel && !narrow && panel(false)}
@@ -331,6 +329,65 @@ export function SchedulePage() {
         >
           <FilterBar state={state} options={options.data} onChange={update} layout="sheet" weekStart={weekStartsOn} onWeekStart={setWeekStart} />
         </Dialog>
+      )}
+    </div>
+  )
+}
+
+/**
+ * The grid's scroller. A day longer than the sheet scrolls sideways; then a
+ * quiet control at each edge says there are earlier or later hours, and moves
+ * three hours that way.
+ */
+function ScrollBox({ narrow, busy, sideways, watch, children }: { narrow: boolean; busy: boolean; sideways: boolean; watch: unknown; children: ReactNode }) {
+  const tx = useScheduleText()
+  const ref = useRef<HTMLDivElement>(null)
+  const [edges, setEdges] = useState({ earlier: false, later: false })
+  const measure = useCallback(() => {
+    const el = ref.current
+    if (!el || !sideways) return setEdges({ earlier: false, later: false })
+    const max = el.scrollWidth - el.clientWidth
+    const at = Math.abs(el.scrollLeft)
+    setEdges({ earlier: at > 4, later: at < max - 4 })
+  }, [sideways])
+  useEffect(() => {
+    measure()
+    const el = ref.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [measure, watch])
+  const move = (dir: -1 | 1) => {
+    const el = ref.current
+    if (!el) return
+    const hour = el.querySelector<HTMLElement>('.sc-grid--day')?.getBoundingClientRect().width ?? 0
+    const hours = Number(el.querySelector<HTMLElement>('.sc-grid--day')?.dataset.hours ?? 1)
+    const step = ((hour - (el.querySelector<HTMLElement>('.sc-row__head')?.offsetWidth ?? 0)) / Math.max(1, hours)) * 3
+    const rtl = getComputedStyle(el).direction === 'rtl'
+    el.scrollBy?.({ left: (rtl ? -dir : dir) * step, behavior: 'smooth' })
+  }
+  if (narrow) {
+    return (
+      <div className="sc-agenda-wrap" aria-busy={busy}>
+        {children}
+      </div>
+    )
+  }
+  return (
+    <div className="sc-scrollbox">
+      <div ref={ref} className="sc-scroll" aria-busy={busy} onKeyDown={moveBetweenBlocks} onScroll={measure}>
+        {children}
+      </div>
+      {edges.earlier && (
+        <button type="button" className="sc-edge sc-edge--earlier" aria-label={tx(S.earlier)} title={tx(S.earlier)} onClick={() => move(-1)}>
+          <Icon name="caretLeft" size={18} />
+        </button>
+      )}
+      {edges.later && (
+        <button type="button" className="sc-edge sc-edge--later" aria-label={tx(S.later)} title={tx(S.later)} onClick={() => move(1)}>
+          <Icon name="chevronForward" size={18} />
+        </button>
       )}
     </div>
   )
@@ -438,6 +495,7 @@ function DateStrip({ date, today, start, onPick }: { date: string; today: string
           key={d}
           type="button"
           className={d === today ? 'sc-strip__day sc-strip__day--today' : 'sc-strip__day'}
+          aria-current={d === today ? 'date' : undefined}
           aria-pressed={d === date}
           aria-label={dayLabel(d, locale, { weekday: 'long', day: 'numeric', month: 'long' })}
           onClick={() => onPick(d)}

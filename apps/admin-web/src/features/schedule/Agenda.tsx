@@ -1,10 +1,10 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { ACADEMY_ZONE, clock12In, isoToAcademyWallClock } from '@/core/time/academyTime'
 import type { CalendarDay, CalendarLesson, CalendarSummary, CalendarWindow } from './api'
 import { Badge } from '@/shared/components/Badge'
 import { Icon } from '@/shared/components/Icon'
-import { CATEGORY_LABEL, KIND_LABEL, S, dayLabel, hoursOf, joinList, statusOf, useScheduleText } from './copy'
+import { CATEGORY_LABEL, KIND_LABEL, S, STATUS_LABEL, dayLabel, hoursOf, joinList, lessonsCount, statusOf, useScheduleText } from './copy'
 import type { Findings } from './issues'
 import { lessonClasses, lessonLabel, lessonName, lessonTime } from './Timeline'
 import { daysOf } from './viewState'
@@ -52,6 +52,11 @@ export function AgendaView({
     }
     return { lessons, days: new Map(data.days.map((d) => [`${d.teacherId}|${d.day}`, d])) }
   }, [data])
+  // Today opens at now: what is already over folds behind one line per teacher.
+  const today = isoToAcademyWallClock(now).date
+  const nowMs = Date.parse(now)
+  const over = (r: Row) => (r.kind === 'lesson' ? Date.parse(r.lesson.endsAt) <= nowMs : r.kind === 'empty' ? Date.parse(r.to) <= nowMs : false)
+  const [unfolded, setUnfolded] = useState<ReadonlySet<string>>(new Set())
 
   return (
     <div className="sc-agenda">
@@ -65,17 +70,32 @@ export function AgendaView({
             <h3 id={headingId} className="sc-agenda__date">
               {dayLabel(day, locale, { weekday: 'long', day: 'numeric', month: 'long' })}
             </h3>
+            {day === today && (
+              <p className="sc-agenda__now">
+                {tx(S.nowLine)} <bdi>{clock12In(now, ACADEMY_ZONE, locale)}</bdi>
+              </p>
+            )}
             {teachers.length === 0 && <p className="sc-muted sc-agenda__none">{tx(S.noLessonsDay)}</p>}
-            {teachers.map(({ t, rows }) => (
+            {teachers.map(({ t, rows: all }) => {
+              const key = `${t.id}|${day}`
+              const fold = day === today && !unfolded.has(key)
+              const folded = fold ? all.filter(over).filter((r) => r.kind === 'lesson').length : 0
+              const rows = fold ? all.filter((r) => !over(r)) : all
+              return (
               <div key={t.id} className="sc-agenda__teacher">
                 <div className="sc-agenda__who">
                   <span className="sc-agenda__teacher-name"><bdi>{t.name}</bdi></span>
                   {findings.absent.has(`${t.id}|${day}`) ? (
-                    <Badge tone="danger">{tx(S.onLeave)}</Badge>
+                    <Badge tone="neutral">{tx(S.onLeave)}</Badge>
                   ) : (
                     <span className="sc-cat">{tx(CATEGORY_LABEL[t.category])}</span>
                   )}
                 </div>
+                {folded > 0 && (
+                  <button type="button" className="sc-agenda__more" onClick={() => setUnfolded(new Set([...unfolded, key]))}>
+                    {tx(S.pastLessons, { n: lessonsCount(folded, locale) })}
+                  </button>
+                )}
                 <ul className="sc-agenda__list">
                   {rows.map((r) =>
                     r.kind === 'lesson' ? (
@@ -86,8 +106,10 @@ export function AgendaView({
                           const clash = findings.clashing.has(l.id)
                           const uncovered = findings.uncovered.has(l.id)
                           const past = Date.parse(l.endsAt) <= Date.parse(now)
+                          // The ordinary booked lesson needs no word; every other state says itself.
+                          const plain = l.status === 'active' && statusOf(l) === STATUS_LABEL.active
                           const state = [
-                            tx(statusOf(l)),
+                            plain ? null : tx(statusOf(l)),
                             l.kind === 'makeup' ? tx(KIND_LABEL.makeup) : null,
                             !l.anonymous && l.suspendedFor === 'payment' ? tx(S.paymentHold) : null,
                             l.outsideShift ? tx(S.outsideMark) : null,
@@ -122,7 +144,8 @@ export function AgendaView({
                   )}
                 </ul>
               </div>
-            ))}
+              )
+            })}
           </section>
         )
       })}

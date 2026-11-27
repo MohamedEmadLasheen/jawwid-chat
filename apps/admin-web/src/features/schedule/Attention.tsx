@@ -44,6 +44,7 @@ export function AttentionPanel({
   onOpenLesson,
   deskAccess,
   inline = false,
+  note,
 }: {
   issues: Issue[]
   teacherName: (id: string) => string
@@ -58,6 +59,8 @@ export function AttentionPanel({
   deskAccess: boolean
   /** On a phone: a block above the agenda instead of a side panel. */
   inline?: boolean
+  /** In place of the list (the month, which loads no lessons). */
+  note?: string
 }) {
   const tx = useScheduleText()
   const { locale, number } = useI18n()
@@ -95,7 +98,11 @@ export function AttentionPanel({
           <Icon name="panel" size={18} />
         </button>
       </header>
-      {issues.length === 0 ? (
+      {note ? (
+        <div className="sc-attn__none">
+          <p className="sc-attn__none-hint">{note}</p>
+        </div>
+      ) : issues.length === 0 ? (
         <div className="sc-attn__none">
           <p className="sc-attn__none-title">{tx(S.attnNone)}</p>
           <p className="sc-attn__none-hint">{tx(S.attnNoneHint)}</p>
@@ -115,7 +122,9 @@ export function AttentionPanel({
             )
             if (issue.kind === 'conflict') {
               text =
-                issue.lessons.length === 2 && second
+                issue.lessons.length === 2 && second && (first.anonymous || second.anonymous)
+                  ? line(S.attnConflictAt, { teacher, time: time(first) })
+                  : issue.lessons.length === 2 && second
                   ? line(S.attnConflict, { teacher, time: time(first), a: name(lessonName(first, tx)), b: name(lessonName(second, tx)) })
                   : line(S.attnConflictMany, { teacher, time: time(first), n: lessonsCount(issue.lessons.length, locale) })
               action = openFirst

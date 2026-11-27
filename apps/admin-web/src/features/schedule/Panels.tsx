@@ -225,7 +225,9 @@ export function LessonDetails({
     [tx(S.when), joinList([dayLabel(isoToAcademyWallClock(lesson.startsAt).date, locale, { weekday: 'long', day: 'numeric', month: 'long' }), lessonTime(lesson, locale)], locale)],
   ]
   if (teacherName) rows.push([tx(S.teacher), teacherName])
-  rows.push([tx(S.status), tx(STATUS_LABEL[lesson.status])], [tx(S.fKind), tx(KIND_LABEL[lesson.kind])])
+  // The status says something only when it is not the ordinary booked lesson.
+  if (lesson.status !== 'active') rows.push([tx(S.status), tx(STATUS_LABEL[lesson.status])])
+  rows.push([tx(S.fKind), tx(KIND_LABEL[lesson.kind])])
   if (!lesson.anonymous && lesson.outcome) rows.push([tx(S.outcome), tx(OUTCOME_LABEL[lesson.outcome] ?? { en: lesson.outcome, ar: lesson.outcome })])
   if (supervisor) rows.push([tx(S.fSupervisor), supervisor.name])
   // What needs a person about this lesson, as sentences.
@@ -240,15 +242,16 @@ export function LessonDetails({
   return (
     <Dialog
       title={title}
+      variant="sheet"
       onClose={onClose}
       footer={
         <>
-          {uncovered && deskAccess && (
-            <Link className="btn btn--sm" to={`/teachers/schedules?teacher=${encodeURIComponent(lesson.teacherId)}`}>{tx(S.openDesk)}</Link>
-          )}
-          <button type="button" className="btn btn--sm" onClick={onClose}>{tx(S.close)}</button>
+          {/* One primary: the desk where a substitute is arranged when the lesson needs one, else the student. */}
           {student && (
-            <Link className="btn btn--sm btn--primary" to={studentPath(student.id)}>{tx(S.openStudent)}</Link>
+            <Link className={`btn btn--sm${uncovered && deskAccess ? '' : ' btn--primary'}`} to={studentPath(student.id)}>{tx(S.openStudent)}</Link>
+          )}
+          {uncovered && deskAccess && (
+            <Link className="btn btn--sm btn--primary" to={`/teachers/schedules?teacher=${encodeURIComponent(lesson.teacherId)}`}>{tx(S.openDesk)}</Link>
           )}
         </>
       }

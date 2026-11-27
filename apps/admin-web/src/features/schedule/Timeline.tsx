@@ -37,7 +37,7 @@ import { minuteOfDay } from './viewState'
  */
 
 /** The narrowest an hour may be: a half-hour lesson keeps room for its name and its start. */
-export const DAY_HOUR_PX = 120
+export const DAY_HOUR_PX = 96
 
 /** The hours shown: the earliest working hour (or lesson) to the latest end plus 30 minutes. */
 export function hourRange(days: CalendarDay[], lessons: CalendarLesson[]): { lo: number; hi: number } {
@@ -184,7 +184,7 @@ export function Track({
         const past = Date.parse(l.endsAt) <= nowMs
         const label = lessonLabel(l, tx, locale, miss, { clash, uncovered })
         const box: CSSProperties = { ...style, insetBlockStart: `calc(${(lane.lane / lane.of) * 100}% + 4px)`, blockSize: `calc(${100 / lane.of}% - 8px)` }
-        const cls = `${lessonClasses(l, { miss, past, clash, uncovered })}${lane.of > 1 ? ' sc-lesson--half' : ''}${highlight.has(l.id) ? ' is-hl' : ''}`
+        const cls = `${lessonClasses(l, { miss, past, clash, uncovered })}${lane.of > 1 ? ' sc-lesson--half' : ''}${l.anonymous ? ' sc-lesson--anon' : ''}${highlight.has(l.id) ? ' is-hl' : ''}`
         return (
           <button
             key={l.id}
@@ -198,12 +198,15 @@ export function Track({
             data-lesson={l.id}
             onClick={() => onLesson(l)}
           >
-            <span className="sc-lesson__name">
-              {l.status === 'paused' && <Icon name="pause" size={13} />}
-              <bdi className="sc-lesson__full">{lessonName(l, tx)}</bdi>
-              <bdi className="sc-lesson__short" aria-hidden="true">{shortName(lessonName(l, tx))}</bdi>
-              {l.kind === 'makeup' && <span className="sc-lesson__mark"><Icon name="history" size={13} /></span>}
-            </span>
+            {/* Another supervisor's child: time and colour only, never a name. */}
+            {!l.anonymous && (
+              <span className="sc-lesson__name">
+                {l.status === 'paused' && <Icon name="pause" size={13} />}
+                <bdi className="sc-lesson__full">{lessonName(l, tx)}</bdi>
+                <bdi className="sc-lesson__short" aria-hidden="true">{shortName(lessonName(l, tx))}</bdi>
+                {l.kind === 'makeup' && <span className="sc-lesson__mark"><Icon name="history" size={13} /></span>}
+              </span>
+            )}
             <span className="sc-lesson__time sc-lesson__time--range">{lessonTime(l, locale)}</span>
             <span className="sc-lesson__time sc-lesson__time--start" aria-hidden="true">{clockShort(l.startsAt)}</span>
           </button>
@@ -224,7 +227,7 @@ export function TeacherHead({ t, absent, onLeave }: { t: CalendarTeacher; absent
     <div className="sc-row__head" role="rowheader">
       <span className="sc-row__name" dir="auto">{t.name}</span>
       <span className="sc-row__sub">
-        {absent ? <Badge tone="danger">{tx(S.onLeave)}</Badge> : onLeave ? tx(S.onLeave) : tx(CATEGORY_LABEL[t.category])}
+        {absent || onLeave ? <Badge tone="neutral">{tx(S.onLeave)}</Badge> : tx(CATEGORY_LABEL[t.category])}
       </span>
       <span className="sc-row__figure" title={shift ? tx(S.utilization) : tx(S.colBooked)}>
         {shift ? percentOf(t.utilization, locale) : tx(S.hours, { h: hoursOf(t.totals.bookedMinutes, locale) })}
@@ -242,13 +245,7 @@ function HourAxis({ lo, hi, now, nowMin }: { lo: number; hi: number; now: string
   return (
     <div className="sc-axis">
       {hours.map((m) => (
-        <span
-          key={m}
-          // The now label takes the place of an hour it would sit on.
-          className={nowMin !== null && Math.abs(m - nowMin) < 28 ? 'sc-axis__tick sc-axis__tick--under-now' : 'sc-axis__tick'}
-          style={{ insetInlineStart: at(m) }}
-          aria-hidden="true"
-        >
+        <span key={m} className="sc-axis__tick" style={{ insetInlineStart: at(m) }} aria-hidden="true">
           <bdi>{hour12Label(m / 60, locale)}</bdi>
         </span>
       ))}
@@ -328,9 +325,12 @@ export function DayView({
   }, [day, lo, hi])
 
   return (
-    <div className="sc-grid sc-grid--day" role="table" aria-label={tx(S.title)} style={width} data-hours={(hi - lo) / 60}>
+    <div className={`sc-grid sc-grid--day${highlight.size > 0 ? ' has-hl' : ''}`} role="table" aria-label={tx(S.title)} style={width} data-hours={(hi - lo) / 60}>
       <div className="sc-row sc-row--axis" role="row">
-        <div className="sc-row__head" role="columnheader">{tx(S.teacher)}</div>
+        <div className="sc-row__head" role="columnheader">
+          <span>{tx(S.teacher)}</span>
+          <span className="sc-row__head-end">{tx(S.colUsed)}</span>
+        </div>
         <div role="columnheader" className="sc-axis-cell">
           <HourAxis lo={lo} hi={hi} now={now} nowMin={nowMin} />
           <span ref={anchor} className="sc-anchor" style={{ insetInlineStart: `${((anchorMin - lo) / (hi - lo)) * 100}%` }} aria-hidden="true" />

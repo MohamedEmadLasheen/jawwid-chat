@@ -35,7 +35,7 @@ function DayHead({ day, today, narrow, onOpen }: { day: string; today: string; n
         aria-label={`${tx(S.openDay, { teacher: tx(S.allTeachers), day: dayLabel(day, locale, { weekday: 'long', day: 'numeric', month: 'long' }) })}${isToday ? `, ${tx(S.todayMark)}` : ''}`}
         onClick={onOpen}
       >
-        <span className="sc-dayhead__name">{tx(narrow ? w.short : w.label)}</span>
+        <span className="sc-dayhead__name">{tx(w.short)}</span>
         <span className="sc-dayhead__n">{Number(day.slice(8))}</span>
       </button>
     </div>
@@ -65,13 +65,16 @@ export function WeekBoard({
     () => week.map((d) => data.days.some((x) => x.day === d && x.shift.length + x.work.length > 0) || data.lessons.some((l) => dayOfLesson(l) === d)),
     [week, data.days, data.lessons],
   )
-  const columns = { '--sc-cols': working.map((w) => (w ? 'minmax(92px, 1fr)' : '56px')).join(' ') } as CSSProperties
+  const columns = { '--sc-cols': working.map((w) => (w ? 'minmax(100px, 1fr)' : '60px')).join(' ') } as CSSProperties
   const h = (m: number) => hoursOf(m, locale)
 
   return (
     <div className="sc-grid sc-grid--week" role="table" aria-label={tx(S.title)} style={columns}>
       <div className="sc-row sc-row--axis" role="row">
-        <div className="sc-row__head" role="columnheader">{tx(S.teacher)}</div>
+        <div className="sc-row__head" role="columnheader">
+          <span>{tx(S.teacher)}</span>
+          <span className="sc-row__head-end">{tx(S.colUsed)}</span>
+        </div>
         {week.map((d, i) => (
           <DayHead key={d} day={d} today={today} narrow={!working[i]} onOpen={() => onOpenDay(d)} />
         ))}
@@ -207,7 +210,8 @@ export function MonthView({ data, today, onOpenDay }: { data: CalendarSummary; t
                   data-row={row}
                   onClick={() => onOpenDay(d, t.id)}
                 >
-                  {figure}
+                  {/* The heat is the reading; the figure is for a reader and the tooltip. */}
+                  <span className="sr-only">{figure}</span>
                 </button>
               </div>
             )

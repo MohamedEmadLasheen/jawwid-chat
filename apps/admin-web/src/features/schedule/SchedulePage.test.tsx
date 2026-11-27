@@ -258,8 +258,8 @@ describe('owner 2026-10-28: filters, the 12-hour clock, a readable day', () => {
     const row = await screen.findByRole('row', { name: 'Teacher One' })
     const grid = screen.getByRole('table', { name: 'Schedule' })
     // Third pass: from the earliest working hour (the 12 PM shift) to the latest end (the 8 PM
-    // working hours) plus half an hour, at least 120 px an hour: scrolled rather than squeezed.
-    expect(grid.style.getPropertyValue('--sc-day-w')).toBe('1020px')
+    // working hours) plus half an hour, at least 96 px an hour: scrolled rather than squeezed.
+    expect(grid.style.getPropertyValue('--sc-day-w')).toBe('816px')
     const axis = grid.querySelector('.sc-axis')!
     const labels = [...axis.querySelectorAll('.sc-axis__tick')].map((t) => t.textContent)
     expect(labels[0]).toBe('12 PM')
@@ -343,7 +343,7 @@ describe('third pass: what needs a person, the week board, the keys', () => {
     expect(items.map((i) => i.textContent)).toEqual([
       expect.stringContaining('Teacher One has two lessons at 1:00 PM: Child Alpha and Child Beta.'),
       expect.stringContaining('Teacher Two is on leave with a lesson at 4:00 PM that needs a substitute.'),
-      expect.stringContaining('Child Gamma\'s lesson at 4:00 PM with Teacher Two is suspended until the family pays.'),
+      expect.stringContaining('The lesson of Child Gamma with Teacher Two at 4:00 PM is suspended until the family pays.'),
     ])
     // The leave: the desk where a student's teacher is changed (the manager opens it).
     expect(within(items[1]!).getByRole('link', { name: 'Open the teacher\'s schedule' })).toHaveAttribute('href', '/teachers/schedules?teacher=t-2')
@@ -372,8 +372,8 @@ describe('third pass: what needs a person, the week board, the keys', () => {
   it('a week cell is load against working hours, marked only where something needs a person, and opens that day', async () => {
     on('GET', /\/calendar\?/, () => json(busy()))
     renderWithProviders(<AppRoutes />, { staff: manager, route: '/schedule?view=week&date=2026-10-26' })
-    const cell = await screen.findByRole('button', { name: /^Open Teacher One, Monday 26 October: 2 of 7 h, 3 lessons, Clash/ })
-    expect(cell).toHaveTextContent('2of 7 h')
+    const cell = await screen.findByRole('button', { name: /^Open Teacher One, Monday 26 October: 2 \/ 7 h, 3 lessons, Clash/ })
+    expect(cell).toHaveTextContent('2/ 7 h')
     expect(cell.querySelector('.sc-mark--conflict')).not.toBeNull()
     await userEvent.click(cell)
     await waitFor(() => expect(lastQuery(/\/calendar\?/).get('from')).toBe('2026-10-26'))
