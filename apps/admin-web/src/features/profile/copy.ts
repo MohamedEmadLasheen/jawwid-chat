@@ -188,7 +188,7 @@ export const T = {
   colAwaiting: { en: 'Awaiting reply', ar: 'بانتظار الرد' },
   colApprovals: { en: 'Approvals', ar: 'موافقات' },
   colActivity: { en: 'Last activity', ar: 'آخر نشاط' },
-  colProfile: { en: 'Profile', ar: 'الملف' },
+  colProfile: { en: 'Profile filled', ar: 'اكتمال الملف' },
   colManager: { en: 'Reports to', ar: 'يتبع' },
   canEditBadge: { en: 'You can edit', ar: 'يمكنك التعديل' },
   viewOnlyBadge: { en: 'View only', ar: 'عرض فقط' },
@@ -269,6 +269,7 @@ export const T = {
   recPrivacy: { en: 'Privacy', ar: 'الخصوصية' },
   more: { en: 'More actions: {name}', ar: 'إجراءات أخرى: {name}' },
   awaitingNote: { en: '{n} awaiting our reply', ar: '{n} بانتظار ردّنا' },
+  openOfNote: { en: 'of {n} open conversations', ar: 'من {n} محادثة مفتوحة' },
   // The record's head (V3)
   hlAwaiting: { en: 'Awaiting reply', ar: 'بانتظار الرد' },
   hlAwaitingOf: { en: 'of {n}', ar: 'من {n}' },
@@ -295,8 +296,6 @@ export const T = {
   teachersNote: { en: 'Teachers: {n}', ar: 'المعلمون: {n}' },
   inactiveNote: { en: 'Inactive: {n}', ar: 'غير نشط: {n}' },
   staffAccounts: { en: 'Staff accounts', ar: 'حسابات الموظفين' },
-  loadColumn: { en: 'Load', ar: 'العبء' },
-  loadColumnHint: { en: 'Assigned families against the heaviest load in the team. No capacity is recorded.', ar: 'الأسر المسندة مقارنةً بأعلى عبء في الفريق. لا تُسجَّل طاقة استيعابية.' },
 
   // The Team page
   teamTitle: { en: 'Team', ar: 'الفريق' },

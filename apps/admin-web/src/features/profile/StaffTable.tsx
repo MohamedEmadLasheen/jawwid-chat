@@ -23,8 +23,20 @@ interface Group {
 }
 
 const TEAM = '__team'
-/** The team a person's load is read against: their manager's, or the one team a manager lists. */
-const teamOf = (r: StaffSummary, grouped: boolean) => (grouped ? (r.reportingManager?.staffId ?? null) : TEAM)
+
+/**
+ * Who needs a manager first: the most conversations waiting for our reply, then
+ * the most families carried, then by name. Inactive accounts follow the active.
+ */
+function byNeed(rows: StaffSummary[], locale: string): StaffSummary[] {
+  return [...rows].sort(
+    (a, b) =>
+      Number(b.isActive) - Number(a.isActive) ||
+      b.workload.awaitingReply - a.workload.awaitingReply ||
+      b.workload.assignedFamilies - a.workload.assignedFamilies ||
+      a.displayName.localeCompare(b.displayName, locale),
+  )
+}
 
 /** What a directory says about itself, counted from the rows the server sent. */
 export function summarize(rows: StaffSummary[]) {
@@ -47,14 +59,15 @@ export function summarize(rows: StaffSummary[]) {
  * one "Filters" control.
  *
  * A row is who they are and the role they hold, the families they carry, the
- * conversations waiting for our reply (a solid count when there are any), a
- * thin bar of their load, and the way in. The bar's full length is the
- * heaviest load among the people who report to the same manager: the system
- * records no capacity, so nothing else would be honest. Everything else about
- * a person is on their profile, which the whole row opens.
+ * conversations waiting for our reply (a count only when there are any), how
+ * much of their profile is filled, and the way in. The rows lead with whoever
+ * has families waiting, then whoever carries the most: no capacity is
+ * recorded, so the families column is compared down the list rather than
+ * drawn against an invented limit. Everything else about a person is on their
+ * profile, which the whole row opens.
  *
  * `showManager` is the whole directory: it is set out under each reporting
- * manager, with whoever has no manager last under a gold tag.
+ * manager, with whoever has no manager last under an amber tag.
  */
 export function StaffTable({ rows, showManager, note }: { rows: StaffSummary[]; showManager: boolean; /** One quiet line at the foot. */ note?: string }) {
   const tx = useCopy()
@@ -77,19 +90,7 @@ export function StaffTable({ rows, showManager, note }: { rows: StaffSummary[]; 
     return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1], locale))
   }, [rows, locale])
 
-  // The heaviest load in each team, from every active row (a filter must not move the scale).
-  const heaviest = useMemo(() => {
-    const loads = new Map<string, { top: number; active: number }>()
-    for (const r of rows) {
-      const team = teamOf(r, showManager)
-      if (!team || !r.isActive) continue
-      const at = loads.get(team) ?? { top: 0, active: 0 }
-      loads.set(team, { top: Math.max(at.top, r.workload.assignedFamilies), active: at.active + 1 })
-    }
-    return loads
-  }, [rows, showManager])
-
-  const visible = rows.filter((r) => {
+  const visible = byNeed(rows, locale).filter((r) => {
     const q = query.trim().toLocaleLowerCase()
     if (q && !`${r.displayName} ${r.jobTitle ?? ''}`.toLocaleLowerCase().includes(q)) return false
     if (status === 'active' && !r.isActive) return false
@@ -108,14 +109,7 @@ export function StaffTable({ rows, showManager, note }: { rows: StaffSummary[]; 
     'staff',
     groups.flatMap((g) => g.rows.map((r) => ({ id: r.staffId, name: r.displayName }))),
   )
-  const columns = 6
-  // A bar only where there is a team to read it against (two or more active people), and a load in it.
-  const shareOf = (r: StaffSummary): number | null => {
-    const team = teamOf(r, showManager)
-    const scale = team ? heaviest.get(team) : undefined
-    return r.isActive && scale && scale.active >= 2 && scale.top > 0 ? Math.round((r.workload.assignedFamilies / scale.top) * 100) : null
-  }
-  const anyBar = visible.some((r) => shareOf(r) !== null)
+  const columns = 5
 
   return (
     <div className="sp-roster">
@@ -136,7 +130,7 @@ export function StaffTable({ rows, showManager, note }: { rows: StaffSummary[]; 
           <label className="sp-filter" htmlFor={ids.status}>
             <span className="sr-only">{tx(T.status)}</span>
             <SearchableSelect id={ids.status} className="select" value={status} onValueChange={(v) => setStatus(v as StatusFilter)}>
-              <option value="all">{tx(T.filterAll)}</option>
+              <option value="all">{tx(T.status)}: {tx(T.anyOption)}</option>
               <option value="active">{tx(T.filterActive)}</option>
               <option value="inactive">{tx(T.filterInactive)}</option>
               <option value="incomplete">{tx(T.filterIncomplete)}</option>
@@ -187,7 +181,6 @@ export function StaffTable({ rows, showManager, note }: { rows: StaffSummary[]; 
               <th scope="col">{tx(T.colPerson)}</th>
               <th scope="col" className="sp-cell-num">{tx(T.colFamilies)}</th>
               <th scope="col" className="sp-cell-await">{tx(T.colAwaiting)}</th>
-              <th scope="col" title={tx(T.loadColumnHint)}>{tx(T.loadColumn)}</th>
               <th scope="col">{tx(T.colProfile)}</th>
               <th scope="col" className="cell-actions" aria-hidden="true" />
             </tr>
@@ -206,7 +199,7 @@ export function StaffTable({ rows, showManager, note }: { rows: StaffSummary[]; 
                       ) : g.kind === 'lead' ? (
                         <span>{tx(labelFor(ROLE_LABEL, 'super_admin'))}</span>
                       ) : (
-                        <Badge tone="gold">{tx(T.unassignedOption)}</Badge>
+                        <Badge tone="waiting">{tx(T.unassignedOption)}</Badge>
                       )}
                       <span className="count count--quiet">{number(g.rows.length)}</span>
                     </span>
@@ -216,8 +209,7 @@ export function StaffTable({ rows, showManager, note }: { rows: StaffSummary[]; 
               {g.rows.map((r) => {
                 const roleText = tx(ROLE_LABEL[r.role] ?? { en: r.role, ar: r.role })
                 const to = `/profile/${r.staffId}`
-                const missing = r.completeness.missing.map((m) => tx(MISSING_LABEL[m])).join(' · ')
-                const share = shareOf(r)
+                const missing = r.completeness.missing.map((m) => tx(MISSING_LABEL[m])).join(locale === 'ar' ? '، ' : ', ')
                 const awaiting = r.workload.awaitingReply
                 return (
                   <tr
@@ -255,17 +247,11 @@ export function StaffTable({ rows, showManager, note }: { rows: StaffSummary[]; 
                       </span>
                     </td>
                     <td className="sp-cell-num" data-label={tx(T.colFamilies)}>
-                      <span className="sp-cell-num__n">{number(r.workload.assignedFamilies)}</span>
+                      <span className={r.workload.assignedFamilies > 0 ? 'sp-cell-num__n' : 'sp-cell-num__n sp-cell-num__n--none'}>{number(r.workload.assignedFamilies)}</span>
                     </td>
                     <td className={awaiting > 0 ? 'sp-cell-await' : 'sp-cell-await sp-cell-await--none'} data-label={tx(T.colAwaiting)}>
-                      {awaiting > 0 ? <span className="sp-await-n">{number(awaiting)}</span> : <span className="dir-none">{number(0)}</span>}
-                    </td>
-                    <td className="sp-cell-load">
-                      {share !== null && (
-                        <span className="sp-bar" role="img" aria-label={tx(T.loadShare, { pct: number(share) })} title={tx(T.loadShare, { pct: number(share) })}>
-                          <span style={{ inlineSize: `${share}%` }} />
-                        </span>
-                      )}
+                      {/* Nothing waiting is an empty cell; a count is drawn only where there is one. */}
+                      {awaiting > 0 ? <span className="sp-await-n">{number(awaiting)}</span> : <span className="sr-only">{number(0)}</span>}
                     </td>
                     <td className="dir-cell-quiet sp-cell-file" data-label={tx(T.colProfile)} title={missing || undefined}>
                       <bdi dir="ltr" className="sp-cell-file__n">{tx(T.completeOf, { done: r.completeness.complete, total: r.completeness.total })}</bdi>
@@ -288,11 +274,9 @@ export function StaffTable({ rows, showManager, note }: { rows: StaffSummary[]; 
           ))}
         </table>
       )}
-      {(note || anyBar) && (
+      {note && (
         <p className="dir-foot dir-foot--note sp-roster__foot">
-          {/* The bar's rule is said in words wherever a bar is drawn: a tooltip alone would not reach a phone. */}
-          {anyBar && <span>{tx(T.loadColumnHint)}</span>}
-          {note && <span>{note}</span>}
+          <span>{note}</span>
         </p>
       )}
     </div>

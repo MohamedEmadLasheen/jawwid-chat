@@ -47,7 +47,7 @@ export function TeamPage() {
   return (
     <div className="page dir sp-page sp-teampage">
       <div className="page__inner">
-        <PageHeader title={tx(T.teamTitle)} subtitle={whole ? tx(T.directoryHint) : mine ? tx(T.myTeamHint) : undefined} figures={figures} />
+        <PageHeader title={tx(T.teamTitle)} subtitle={whole ? tx(T.directoryHint) : undefined} figures={figures} />
         <QueryBoundary isLoading={me.isLoading} error={me.error} onRetry={() => void me.refetch()}>
           {whole ? (
             <QueryBoundary isLoading={organization.isLoading} error={organization.error} onRetry={() => void organization.refetch()}>
