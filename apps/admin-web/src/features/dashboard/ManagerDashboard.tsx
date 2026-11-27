@@ -98,18 +98,17 @@ export function DashboardSections({ shown }: { shown: Shown }) {
     .sort((x, y) => Number(y.late) - Number(x.late) || x.since - y.since || y.most - x.most)
   const calm = ranked.filter((r) => r.waiting.length === 0 && !r.failed)
   const kinds = needs.reduce((n, r) => n + r.waiting.length, 0)
-  const late = needs.reduce((n, r) => n + r.waiting.filter(isLate).length, 0)
+  // The late items themselves, not the rows: "11 late" is what a manager acts on.
+  const lateItems = needs.reduce((n, r) => n + r.waiting.filter(isLate).reduce((m, t) => m + t.count, 0), 0)
   const settled = shown.every(({ query }) => !query.isLoading)
 
   return (
     <div className={calm.length > 0 ? 'dash-board' : 'dash-board dash-board--one'}>
       <h2 className="dash-needs__head" id="dash-needs-title">
         <span className="dash-needs__title">{tx(D.needs)}</span>
-        {kinds > 0 && <span className="count count--urgent dash-needs__count">{number(kinds)}</span>}
-        {late > 0 && <span className="dash-needs__late">{fill(tx(D.lateCount), { n: number(late) })}</span>}
+        {lateItems > 0 && <span className="count count--urgent dash-needs__count">{fill(tx(D.lateCount), { n: number(lateItems) })}</span>}
         {kinds > 0 && (
           <span className="dash-needs__sort">
-            <Icon name="sort" size={16} />
             {tx(D.sortNeed)}
           </span>
         )}
@@ -214,16 +213,17 @@ function Figure({ tile, present, large = false }: { tile: DashboardTile; present
   const shape = large ? 'dash-tile dash-tile--large' : 'dash-tile dash-tile--line'
   // A late figure above zero is red: the one colour a manager reads first.
   const tone = (alert ? ' dash-tile--alert' : tile.count === 0 ? ' dash-tile--zero' : '') + (isLate(tile) ? ' dash-tile--late' : '')
+  const age = tile.oldestAt && tile.count > 0 ? <span className="dash-tile__note">{fill(tx(D.oldest), { age: relativeTime(tile.oldestAt, locale) })}</span> : null
   return (
     <li>
       <Link to={spec.href(present)} className={shape + tone}>
         <span className="dash-tile__value">{tile.capped ? `${number(tile.count)}+` : number(tile.count)}</span>
         <span className="dash-tile__text">
           <span className="dash-tile__label">{tx(spec.label)}</span>
-          {tile.oldestAt && tile.count > 0 && (
-            <span className="dash-tile__note">{fill(tx(D.oldest), { age: relativeTime(tile.oldestAt, locale) })}</span>
-          )}
+          {!large && age}
         </span>
+        {/* On a waiting row the age is its own column at the end, so the ranking can be read down it. */}
+        {large && <span className="dash-tile__age">{age}</span>}
         {large && (
           <span className="dash-tile__go" aria-hidden="true">
             <Icon name="chevronForward" size={18} />

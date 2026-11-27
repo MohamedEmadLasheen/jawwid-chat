@@ -54,7 +54,8 @@ export const C = {
 /** The queue's groups: where a case stands. */
 export const GROUP_LABEL = {
   past: { en: 'Past due', ar: 'تجاوزت موعدها' },
-  soon: { en: 'Due today or tomorrow', ar: 'موعدها اليوم أو غدًا' },
+  today: { en: 'Due today', ar: 'موعدها اليوم' },
+  tomorrow: { en: 'Due tomorrow', ar: 'موعدها غدًا' },
   later: { en: 'Later', ar: 'لاحقًا' },
   none: { en: 'No due date', ar: 'بلا موعد' },
   closed: { en: 'Closed', ar: 'مغلقة' },

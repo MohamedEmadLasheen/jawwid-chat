@@ -6,7 +6,7 @@ import { useSession } from '@/core/auth/SessionProvider'
 import { holdsAny } from '@/core/permissions/capabilities'
 import { Badge } from '@/shared/components/Badge'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
-import { Icon, type IconName } from '@/shared/components/Icon'
+import { Icon } from '@/shared/components/Icon'
 import type { MenuItem } from '@/shared/components/Menu'
 import { PageHeader } from '@/shared/components/PageHeader'
 import { RowActions } from '@/shared/components/RowActions'
@@ -14,7 +14,7 @@ import { EmptyState, QueryBoundary } from '@/shared/components/States'
 import { describeError } from '@/features/teacher-files/copy'
 import { academyToday } from '@/features/schedule/viewState'
 import { ACADEMY_ZONE, dayMonthIn } from '@/core/time/academyTime'
-import { casesApi, type CaseDetail, type CaseStatus, type CaseSubjectKind, type CaseSummary, type CaseTab } from './api'
+import { casesApi, type CaseDetail, type CaseStatus, type CaseSummary, type CaseTab } from './api'
 import { C, EVENT_LABEL, GROUP_LABEL, STATUS_LABEL, SUBJECT_LABEL, TAB_LABEL, TARGET_LABEL, useCopy } from './copy'
 import { CASES_ACCESS_KEYS, TasksAreaTabs } from '@/features/tasks/TasksAreaTabs'
 import { SearchableSelect } from '@/shared/components/SearchableSelect'
@@ -29,30 +29,25 @@ const keys = {
 }
 
 /** Not started is plain; being worked on is information; resolved is done. Urgency is the due day's to say. */
-const STATUS_TONE: Record<CaseStatus, 'info' | 'ok' | 'neutral' | 'outline'> = {
-  open: 'neutral',
-  in_progress: 'info',
+const STATUS_TONE: Record<CaseStatus, 'info' | 'ok' | 'waiting' | 'outline'> = {
+  open: 'info',
+  in_progress: 'waiting',
   resolved: 'ok',
   cancelled: 'outline',
 }
-const SUBJECT_ICON: Record<CaseSubjectKind, IconName> = {
-  teacher: 'teachers',
-  lesson: 'calendar',
-  learner: 'students',
-  complaint: 'alert',
-  feedback: 'chatText',
-}
-
 /** Where a case stands in the queue, by its due day as Tasks is: past it first, then today or tomorrow, then later. */
-type Group = 'past' | 'soon' | 'later' | 'none' | 'closed'
-const GROUPS: Group[] = ['past', 'soon', 'later', 'none', 'closed']
+type Group = 'past' | 'today' | 'tomorrow' | 'later' | 'none' | 'closed'
+const GROUPS: Group[] = ['past', 'today', 'tomorrow', 'later', 'none', 'closed']
 const isLive = (c: Pick<CaseSummary, 'status'>) => c.status === 'open' || c.status === 'in_progress'
 function groupOf(c: Pick<CaseSummary, 'status' | 'dueOn'>, today: string): Group {
   if (!isLive(c)) return 'closed'
   if (!c.dueOn) return 'none'
   const left = daysUntil(c.dueOn, today)
-  return left < 0 ? 'past' : left <= 1 ? 'soon' : 'later'
+  return left < 0 ? 'past' : left === 0 ? 'today' : left === 1 ? 'tomorrow' : 'later'
 }
+
+/** Grey while there is time, amber on the day before and the day itself, red once it has passed. */
+const breachOf = (left: number) => (left < 0 ? 'late' : left <= 1 ? 'soon' : 'later')
 
 /** A case's due day ("2026-11-29") as a date in the viewer's language: "29 November". */
 function useDay() {
@@ -132,7 +127,6 @@ export function CasesPage({ header }: { header?: React.ReactNode }) {
               </div>
               <div className="sheet-bar__end">
                 <span className="tq__sort">
-                  <Icon name="sort" size={16} />
                   {tx(C.sortNeed)}
                 </span>
                 <label className="cases__closed">
@@ -242,6 +236,7 @@ function CasePanel({ id, onClose }: { id: string; onClose: () => void }) {
   }
   const op = useMutation({ mutationFn: (fn: () => Promise<CaseDetail>) => fn(), onSuccess: done })
   const live = !!c && isLive(c)
+  const words = useDaysWords()
   // Named after the case once what it shows has arrived (the owners list too, for someone who acts).
   const ready = !!c && (!c.canAct || owners.isFetched)
   // One stated action (Resolve while the case is live); the rest behind "⋯".
@@ -262,19 +257,24 @@ function CasePanel({ id, onClose }: { id: string; onClose: () => void }) {
           <>
             <header className="insp__head">
               <div className="insp__top">
-                <span className="insp__kind">
-                  <Icon name={SUBJECT_ICON[c.subject.kind]} size={16} />
-                  {tx(SUBJECT_LABEL[c.subject.kind])}
-                </span>
+                <h2 className="cases__panel-title" dir="auto">{c.title}</h2>
                 <button type="button" className="btn btn--ghost btn--icon btn--sm insp__close" title={tx(C.close)} onClick={onClose}>
                   <Icon name="close" size={16} />
                   <span className="sr-only">{tx(C.close)}</span>
                 </button>
               </div>
-              <h2 className="cases__panel-title" dir="auto">{c.title}</h2>
               <div className="tasks__chips">
+                <span className="insp__kind">
+                  {tx(SUBJECT_LABEL[c.subject.kind])} <bdi>{c.subject.label}</bdi>
+                </span>
                 <Badge tone={STATUS_TONE[c.status]}>{tx(STATUS_LABEL[c.status])}</Badge>
               </div>
+              {/* The due day in words, coloured as on the row: the one fact the queue is read for. */}
+              {live && c.dueOn && (
+                <p className={`insp__due insp__due--${breachOf(daysUntil(c.dueOn, academyToday()))}`}>
+                  {tx(daysUntil(c.dueOn, academyToday()) < 0 ? C.wasDue : C.dueWhen, { when: words(daysUntil(c.dueOn, academyToday())) })}
+                </p>
+              )}
             </header>
 
             <div className="insp__body">

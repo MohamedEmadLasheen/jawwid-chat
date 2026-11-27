@@ -8,7 +8,8 @@ import { Icon, type IconName } from '@/shared/components/Icon'
 import { PageHeader } from '@/shared/components/PageHeader'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
 import { inboxApi, inboxKeys, routeFor, type InboxEntryDto, type InboxTab, type NotificationSettingsDto } from './api'
-import { CATEGORIES, N, SYSTEM, TABS, useCopy } from './copy'
+import { CATEGORIES, N, SYSTEM, TABS, useCopy, type Pair } from './copy'
+import { fill, relativeTime } from '@/features/admin/copy'
 import './notification-center.css'
 
 type View = InboxTab | 'settings'
@@ -21,6 +22,18 @@ const CATEGORY_ICON: Record<string, IconName> = {
   task: 'tasks',
   announcement: 'megaphoneSimple',
   system: 'info',
+}
+
+const DAY_MS = 86_400_000
+
+/** What an entry's one action opens, said on its button. */
+const OPEN_LABEL: Record<string, Pair> = {
+  open_conversation: { en: 'Open conversation', ar: 'افتح المحادثة' },
+  open_calls: { en: 'Open calls', ar: 'افتح المكالمات' },
+  view_payments: { en: 'Open payments', ar: 'افتح المدفوعات' },
+  open_case: { en: 'Open escalation', ar: 'افتح التصعيد' },
+  open_task: { en: 'Open task', ar: 'افتح المهمة' },
+  open_teacher_records: { en: "Open teacher's record", ar: 'افتح سجل المعلم' },
 }
 
 /** The reader's own calendar day of an instant, as a sortable key. */
@@ -37,7 +50,6 @@ const dayKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padSt
  */
 export function NotificationsPage() {
   const tx = useCopy()
-  const { number } = useI18n()
   const client = useQueryClient()
   const counts = useQuery({ queryKey: inboxKeys.counts, queryFn: inboxApi.counts })
   const tabs = counts.data?.tabs ?? ['all']
@@ -55,12 +67,6 @@ export function NotificationsPage() {
       <div className="page__inner">
         <PageHeader
           title={tx(N.title)}
-          subtitle={tx(N.subtitle)}
-          figures={
-            unread === undefined
-              ? undefined
-              : [{ key: 'unread', label: tx(TABS.unread), value: number(unread), tone: unread > 0 ? 'key' : 'quiet' }]
-          }
           actions={
             view !== 'settings' && (unread ?? 0) > 0 ? (
               <button type="button" className="btn btn--primary" onClick={() => readAll.mutate()} disabled={readAll.isPending}>
@@ -156,31 +162,37 @@ function Agenda({ tab, onShowAll }: { tab: InboxTab; onShowAll: () => void }) {
             <ul className="nc-list">
               {day.entries.map((entry) => {
                 const to = routeFor(entry.action)
+                const waiting = entry.requiresAction && !entry.acted
+                // Time to breach, where the server gives a due time: amber in the last day, red once it has passed.
+                const due = waiting && entry.dueAt ? Date.parse(entry.dueAt) - now.getTime() : null
+                const breach = due === null ? null : due < 0 ? 'late' : due < DAY_MS ? 'soon' : 'later'
                 return (
                   <li key={entry.id} className={`nc-item${entry.read ? '' : ' nc-item--unread'}`} data-testid={`nc-${entry.id}`}>
-                    <span className="nc-item__dot" aria-hidden="true" />
                     <span className="nc-item__icon" title={tx(CATEGORIES[entry.category] ?? SYSTEM)}>
                       <Icon name={CATEGORY_ICON[entry.category] ?? 'info'} size={18} />
+                      {!entry.read && <span className="nc-item__dot" role="img" aria-label={tx(TABS.unread)} />}
                     </span>
                     <div className="nc-item__text">
                       <span className="nc-item__title">
                         <bdi>{entry.title}</bdi>
-                        {entry.requiresAction && !entry.acted && <Badge tone="warn">{tx(TABS.action)}</Badge>}
                       </span>
                       {entry.body && <p className="nc-item__body"><bdi>{entry.body}</bdi></p>}
+                      {waiting && (
+                        <p className={`nc-item__due${breach ? ` nc-item__due--${breach}` : ''}`}>
+                          <Badge tone={breach === 'late' ? 'danger' : 'waiting'}>{tx(TABS.action)}</Badge>
+                          {entry.dueAt && (
+                            <span>{fill(tx(breach === 'late' ? N.wasDue : N.dueBy), { when: relativeTime(entry.dueAt, locale, now) })}</span>
+                          )}
+                        </p>
+                      )}
                     </div>
                     <time className="nc-item__time" dateTime={entry.at}>
                       {clock.format(new Date(entry.at))}
                     </time>
                     <div className="nc-item__actions">
                       {to && (
-                        <button
-                          type="button"
-                          className="btn btn--sm nc-item__open"
-                          title={tx(N.open)}
-                          onClick={() => void open(entry, to)}
-                        >
-                          {tx(N.open)}
+                        <button type="button" className="btn btn--sm nc-item__open" onClick={() => void open(entry, to)}>
+                          {tx(OPEN_LABEL[entry.action?.kind ?? ''] ?? N.open)}
                         </button>
                       )}
                     </div>

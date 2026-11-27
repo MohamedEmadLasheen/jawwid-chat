@@ -6,3 +6,6 @@
   .tq-row--case { grid-template-columns: minmax(0, 1fr) auto; }
   .tq-row--case .tq-row__main { grid-row: 1; }
 }
+@container tq (max-width: 480px) {
+  .tq-row--case { grid-template-columns: minmax(0, 1fr); }
+}

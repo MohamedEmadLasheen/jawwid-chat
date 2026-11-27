@@ -8,8 +8,8 @@ export const D = {
   needs: { ar: 'بانتظارك الآن', en: 'Needs you now' },
   needsClear: { ar: 'لا شيء ينتظر فريقك الآن. ما يتأخر أو ينتظر ردًّا يظهر هنا أولًا.', en: 'Nothing is waiting on your team. What is late or waiting for an answer appears here first.' },
   needsLoading: { ar: 'جارٍ عدّ ما ينتظر…', en: 'Counting what is waiting…' },
-  calm: { ar: 'لا شيء ينتظر', en: 'Nothing waiting' },
-  lateCount: { ar: 'منها {n} متأخرة', en: '{n} of them late' },
-  sortNeed: { ar: 'المتأخر أولًا، ثم الأطول انتظارًا', en: 'Late first, then longest waiting' },
+  calm: { ar: 'لا شيء بانتظارك', en: 'Nothing needs you' },
+  lateCount: { ar: '{n} متأخرة', en: '{n} late' },
+  sortNeed: { ar: 'الأقسام التي فيها تأخير أولًا، ثم الأطول انتظارًا', en: 'Sections with something late first, then longest waiting' },
   noSections: { ar: 'لا توجد أرقام متاحة لحسابك بعد', en: 'No figures are available for your account yet' },
 } satisfies Record<string, Bilingual>

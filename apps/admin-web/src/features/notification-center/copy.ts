@@ -6,10 +6,8 @@ export { useCopy, type Pair } from '@/features/organization/copy'
 /** PD-34 copy, Arabic and English side by side. */
 export const N = {
   title: { en: 'Notifications', ar: 'الإشعارات' },
-  subtitle: {
-    en: 'Newest first, by day. Times are in your own time zone.',
-    ar: 'الأحدث أولًا، يومًا بيوم. الأوقات بحسب توقيتك.',
-  },
+  dueBy: { en: 'due {when}', ar: 'موعده {when}' },
+  wasDue: { en: 'was due {when}', ar: 'تجاوز موعده {when}' },
   bell: { en: 'Notifications, {n} unread', ar: 'الإشعارات، {n} غير مقروءة' },
   empty: { en: 'No notifications yet', ar: 'لا إشعارات بعد' },
   emptyHint: {

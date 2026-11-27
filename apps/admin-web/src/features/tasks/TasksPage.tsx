@@ -7,11 +7,10 @@ import { holdsAny, isSuperAdmin } from '@/core/permissions/capabilities'
 import { academyWallClockToIso, ACADEMY_ZONE, clock12In, dayMonthIn, isoToAcademyWallClock } from '@/core/time/academyTime'
 import { Badge } from '@/shared/components/Badge'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
-import { PageHeader, type MastFigure } from '@/shared/components/PageHeader'
+import { PageHeader } from '@/shared/components/PageHeader'
 import { RowActions } from '@/shared/components/RowActions'
 import type { MenuItem } from '@/shared/components/Menu'
 import { relativeTime } from '@/features/admin/copy'
-import { dashboardApi, dashboardKeys } from '@/features/dashboard/api'
 import { academyToday, addDays } from '@/features/schedule/viewState'
 import { ReasonDialog } from '@/shared/components/ReasonDialog'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
@@ -30,7 +29,7 @@ import {
   type TaskView,
 } from './api'
 import { C, DEPARTMENT_LABEL, EVENT_LABEL, GROUP_LABEL, LEVEL_LABEL, SOURCE_LABEL, STATE_LABEL, TAB_LABEL, useCopy } from './copy'
-import { sourceLink, stateOf, STATE_TONE, titleOf } from './format'
+import { reasonOf, sourceLink, stateOf, STATE_TONE, titleOf } from './format'
 import { FinanceTag, PriorityChip } from './PriorityChip'
 import { SearchableSelect } from '@/shared/components/SearchableSelect'
 import { CASES_ACCESS_KEYS, TasksAreaTabs } from './TasksAreaTabs'
@@ -173,52 +172,8 @@ export function TasksPage({ eyebrow }: { eyebrow?: string }) {
   const hasCases = holdsAny(staff, CASES_ACCESS_KEYS)
   const today = academyToday()
 
-  // The masthead counts the viewer's own open tasks. They come from the unfiltered
-  // Mine list when all of it is loaded (the same request as the Mine view), else
-  // from the Dashboard's task counts; a figure neither can give is left out.
-  const mineQuery: ListQuery = useMemo(() => ({ view: 'mine', state: 'open' }), [])
-  const mine = useInfiniteQuery({
-    queryKey: keys.list(mineQuery),
-    queryFn: ({ pageParam }) => tasksApi.list(mineQuery, pageParam),
-    initialPageParam: undefined as string | undefined,
-    getNextPageParam: (last) => last.nextCursor ?? undefined,
-    staleTime: 15_000,
-  })
-  const counted = useQuery({ queryKey: dashboardKeys.section('tasks'), queryFn: () => dashboardApi.section('tasks'), staleTime: 60_000, retry: false })
-  const mineItems = mine.data?.pages.flatMap((p) => p.items) ?? []
-  const mineWhole = !!mine.data && !mine.hasNextPage
-  const tile = (key: string) => counted.data?.tiles.find((x) => x.key === key)
-  const figures: MastFigure[] = []
-  const overdueCount = mineWhole ? mineItems.filter((t) => t.overdue).length : tile('tasks.mine_overdue')?.count
-  if (overdueCount !== undefined) {
-    figures.push({
-      key: 'overdue',
-      label: tx(C.figOverdue),
-      value: number(overdueCount),
-      tone: overdueCount > 0 ? 'urgent' : 'quiet',
-      pressed: tab === 'mine' && overdue,
-      onClick: () => {
-        pick('mine')
-        setOverdue(!(tab === 'mine' && overdue))
-      },
-    })
-  }
-  if (mineWhole) {
-    const dueToday = mineItems.filter((t) => groupOf(t, today) === 'today').length
-    figures.push({ key: 'today', label: tx(C.figToday), value: number(dueToday), tone: dueToday > 0 ? undefined : 'quiet' })
-  }
-  // No "open" total: the list below is that number. The figures are what to act on, and two of them filter.
-  const waiting = tabs.includes('decisions') ? tile('tasks.awaiting_decision') : undefined
-  if (waiting) {
-    figures.push({
-      key: 'decisions',
-      label: tx(C.figDecisions),
-      value: waiting.capped ? `${number(waiting.count)}+` : number(waiting.count),
-      pressed: tab === 'decisions',
-      onClick: () => pick('decisions'),
-    })
-  }
-
+  // No figure strip: the overdue group below carries its count, and the Escalations
+  // page has none either, so the two pages of this place keep one layout.
   const filterCount = (level ? 1 : 0) + (category ? 1 : 0) + (overdue && tab !== 'closed' ? 1 : 0) + (tab === 'closed' && closedView !== 'mine' ? 1 : 0)
   const grouped = GROUPS.map((g) => ({ group: g, rows: items.filter((t) => groupOf(t, today) === g) })).filter((g) => g.rows.length > 0)
   const row = (t: TaskSummary) => (
@@ -231,7 +186,6 @@ export function TasksPage({ eyebrow }: { eyebrow?: string }) {
         <PageHeader
           eyebrow={eyebrow}
           title={tx(C.title)}
-          figures={figures}
           actions={
             canCreate ? (
               // One primary per screen: with a task open, its own action is the primary one.
@@ -269,7 +223,6 @@ export function TasksPage({ eyebrow }: { eyebrow?: string }) {
               </div>
               <div className="sheet-bar__end">
                 <span className="tq__sort">
-                  <Icon name="sort" size={16} />
                   {tx(tab === 'closed' ? C.sortClosed : C.sortDue)}
                 </span>
                 {gone && (
@@ -591,6 +544,10 @@ function TaskPanel({ id, onClose }: { id: string; onClose: () => void }) {
                           <option key={l} value={l}>{tx(LEVEL_LABEL[l])}</option>
                         ))}
                       </SearchableSelect>
+                      {/* When something raised the level above the one a person set, say so: one level, explained. */}
+                      {t.effectivePriority !== t.manualPriority && reasonOf(t, tx) && (
+                        <span className="field__hint">{tx(C.levelNow, { level: tx(LEVEL_LABEL[t.effectivePriority]), reason: reasonOf(t, tx)! })}</span>
+                      )}
                     </label>
                   )}
                   {can.has('due') && (
