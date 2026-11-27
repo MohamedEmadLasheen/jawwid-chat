@@ -26,7 +26,6 @@ export const I = {
   },
   beforeGoLiveBadge: { en: 'Before go-live', ar: 'قبل التفعيل' },
   account: { en: 'Payer', ar: 'الدافع' },
-  plan: { en: 'Plan', ar: 'الخطة' },
   planHint: {
     en: 'One mark per instalment of this plan in the list. Paid ones appear with “Show paid”.',
     ar: 'علامة لكل قسط من هذه الخطة في القائمة. يظهر المدفوع منها عند «إظهار المدفوع».',
@@ -34,16 +33,16 @@ export const I = {
   planLabel: { en: 'Instalment {i} of {n}', ar: 'القسط {i} من {n}' },
   planOpenLabel: { en: 'Instalment {i} of the {n} still open', ar: 'القسط {i} من {n} ما زالت مفتوحة' },
   // The strip's key, and the same words in each strip's own label.
-  planKey: { en: 'Plan marks', ar: 'علامات الخطة' },
   keyPaid: { en: 'paid', ar: 'مدفوع' },
   keyLate: { en: 'late', ar: 'متأخر' },
   keyDue: { en: 'due today', ar: 'مستحق اليوم' },
   keyUpcoming: { en: 'to come', ar: 'قادم' },
-  keyHere: { en: 'taller: this row', ar: 'الأطول: هذا الصف' },
-  status: { en: 'Status', ar: 'الحالة' },
   today: { en: 'Today', ar: 'اليوم' },
   filters: { en: 'Filters', ar: 'التصفية' },
   showAll: { en: 'Show all', ar: 'عرض الكل' },
+  showAllN: { en: 'Show all {n}', ar: 'عرض الكل ({n})' },
+  openFile: { en: 'Open file', ar: 'فتح الملف' },
+  more: { en: 'More actions: {name}', ar: 'إجراءات أخرى: {name}' },
   emptyHint: {
     en: 'No open instalments for the families you follow. An instalment plan is added on a Parent Profile.',
     ar: 'لا أقساط مفتوحة للأسر التي تتابعها. تُضاف خطة الأقساط من ملف ولي الأمر.',
@@ -58,15 +57,14 @@ export const I = {
   amount: { en: 'Amount', ar: 'المبلغ' },
   dueDate: { en: 'Due', ar: 'الاستحقاق' },
   supervisor: { en: 'Responsible supervisor', ar: 'المشرف المسؤول' },
-  supervisorShort: { en: 'Supervisor', ar: 'المشرف' },
   billingBasis: { en: 'billing supervisor', ar: 'مشرف التحصيل' },
   childBasis: { en: 'child’s supervisor', ar: 'مشرف الطفل' },
   unassigned: { en: 'Not set', ar: 'غير محدد' },
   unassignedChild: { en: 'The child has no supervisor', ar: 'لا مشرف للطفل' },
   open: { en: 'Open conversation', ar: 'فتح المحادثة' },
   noConversation: { en: 'No conversation you can open', ar: 'لا توجد محادثة يمكنك فتحها' },
-  setSupervisor: { en: 'Set', ar: 'تحديد' },
-  changeSupervisor: { en: 'Change', ar: 'تغيير' },
+  setSupervisor: { en: 'Set billing supervisor', ar: 'تحديد مشرف التحصيل' },
+  changeSupervisor: { en: 'Change billing supervisor', ar: 'تغيير مشرف التحصيل' },
   empty: { en: 'Nothing due.', ar: 'لا شيء مستحق.' },
   emptyFiltered: { en: 'Nothing matches this filter.', ar: 'لا شيء يطابق هذا التصفية.' },
   openProfile: { en: 'Open the Parent Profile of {name}', ar: 'فتح ملف ولي الأمر {name}' },
@@ -93,6 +91,14 @@ export const I = {
   save: { en: 'Save', ar: 'حفظ' },
   saving: { en: 'Saving…', ar: 'جارٍ الحفظ…' },
 } satisfies Record<string, Pair>
+
+/** The page's sections. What is overdue is headed the way the masthead names it. */
+export const GROUP_LABEL: Record<InstalmentStatus, Pair> = {
+  overdue: { en: 'Late', ar: 'متأخر' },
+  due: { en: 'Due today', ar: 'مستحق اليوم' },
+  upcoming: { en: 'Upcoming', ar: 'قادم' },
+  paid: { en: 'Paid', ar: 'مدفوع' },
+}
 
 export const STATUS_LABEL: Record<InstalmentStatus, Pair> = {
   overdue: { en: 'Overdue', ar: 'متأخر' },

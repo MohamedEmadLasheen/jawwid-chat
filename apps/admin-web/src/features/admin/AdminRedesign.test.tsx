@@ -140,13 +140,16 @@ describe('Conversations', () => {
     vi.stubGlobal('fetch', routeFetch({ '/admin/conversations': CONVERSATIONS }))
     renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/admin/conversations' })
     await screen.findByText('Alpha')
+    // A work queue: what waits on us leads under its own heading, the longest wait first; the rest follows by day.
+    expect(screen.getByRole('heading', { level: 2, name: /^Waiting on us\s*2$/ })).toBeInTheDocument()
     expect(screen.getByRole('heading', { level: 2, name: 'Today' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { level: 2, name: 'Older' })).toBeInTheDocument()
 
     const names = () => [...document.querySelectorAll('.conv-row__name')].map((n) => n.textContent)
-    expect(names()).toEqual(['Alpha', 'Charlie', 'Bravo'])
+    expect(names()).toEqual(['Bravo', 'Charlie', 'Alpha'])
     await chooseOption(userEvent, screen.getByRole('combobox', { name: 'Sort' }), 'oldest')
     expect(names()).toEqual(['Bravo', 'Charlie', 'Alpha'])
+    // A chosen order is by day only: the older days are headed again.
+    expect(screen.getByRole('heading', { level: 2, name: 'Older' })).toBeInTheDocument()
     await chooseOption(userEvent, screen.getByRole('combobox', { name: 'Sort' }), 'name')
     expect(names()).toEqual(['Alpha', 'Bravo', 'Charlie'])
     // Name order has no day sections.

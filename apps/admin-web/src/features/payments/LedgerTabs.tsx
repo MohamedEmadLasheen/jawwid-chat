@@ -1,14 +1,16 @@
 import { Fragment, useEffect, useId, useState, type ReactNode } from 'react'
+import { ACADEMY_ZONE, isoToAcademyWallClock } from '@/core/time/academyTime'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Avatar } from '@/shared/components/Avatar'
 import { Badge, type Tone } from '@/shared/components/Badge'
 import { Dialog } from '@/shared/components/Dialog'
 import { FilterChips } from '@/shared/components/FilterChips'
-import { Icon } from '@/shared/components/Icon'
+import { Icon, type IconName } from '@/shared/components/Icon'
+import type { MenuItem } from '@/shared/components/Menu'
+import { RowActions } from '@/shared/components/RowActions'
 import { SearchField } from '@/shared/components/SearchField'
 import { SearchableSelect, type SelectOption } from '@/shared/components/SearchableSelect'
 import { EmptyState, LoadingState, QueryBoundary } from '@/shared/components/States'
-import { useMediaQuery } from '@/shared/hooks/useMediaQuery'
 import { monthsLabel } from '@/features/subscriptions/copy'
 import type {
   AttemptFilter,
@@ -44,6 +46,7 @@ import {
   type Pair,
   attemptFailure,
   cardLabel,
+  dayHeading,
   describeError,
   formatDay,
   formatMoney,
@@ -51,9 +54,10 @@ import {
   paymentCreditsLessons,
   useCopy,
 } from './copy'
-import { Money } from './Money'
+import { Money, sumByCurrency } from './Money'
 import {
   useCardAttempts,
+  useDownloadInvoice,
   useReconcileNow,
   useReconcilePayment,
   useStripeEvents,
@@ -105,7 +109,41 @@ const OUTCOME_TONE: Record<string, Tone> = {
 
 const raw = (s: string): Pair => ({ en: s, ar: s })
 
-/** Whether a phone's filter fields are unfolded: the person's own choice, kept on this browser. */
+const METHOD_ICON: Record<PaymentMethod, IconName> = { card: 'card', bank_transfer: 'bankTransfer', cash: 'cash', invoice: 'invoice' }
+
+/** Rows gathered under the day they belong to; days in the order they first appear. */
+function byDay<T>(rows: readonly T[], dayOf: (row: T) => string): Array<{ day: string; rows: T[] }> {
+  const days: Array<{ day: string; rows: T[] }> = []
+  const at = new Map<string, T[]>()
+  for (const row of rows) {
+    const day = dayOf(row)
+    let list = at.get(day)
+    if (!list) {
+      list = []
+      at.set(day, list)
+      days.push({ day, rows: list })
+    }
+    list.push(row)
+  }
+  return days
+}
+
+/** A day's heading across a ledger: the day in words, and what the day came to where that is known. */
+function DayRow({ day, span, children }: { day: string; span: number; children?: ReactNode }) {
+  const { locale } = useI18n()
+  return (
+    <tr className="tx-day">
+      <th scope="rowgroup" colSpan={span}>
+        <span className="tx-day__in">
+          <span className="tx-day__name">{dayHeading(day, locale)}</span>
+          {children}
+        </span>
+      </th>
+    </tr>
+  )
+}
+
+/** Whether the filter fields are unfolded: the person's own choice, kept on this browser. */
 const FILTERS_OPEN_KEY = 'jawwid.payments.filters-open'
 function readFiltersOpen(): boolean {
   try {
@@ -233,15 +271,14 @@ export function TransactionsTab({ onSeeReceipts }: { onSeeReceipts?: () => void 
   const rangeError = from !== '' && to !== '' && from > to
   const filters: TransactionFilters = { status, method, purpose, planMonths: plan ? (Number(plan) as PlanMonths) : '', from, to, q }
   const list = useTransactions(filters, !rangeError)
+  const download = useDownloadInvoice()
   const [openId, setOpenId] = useState<string | null>(null)
   const rows = list.data?.pages.flatMap((p) => p.items) ?? []
   const totals = list.data?.pages[0]?.totals ?? []
   const filtered = Boolean(status || method || purpose || plan || from || to || search)
-  // A phone folds the six fields behind one control; the search stays out. A wrong range is never hidden.
-  const narrow = useMediaQuery('(max-width: 767px)')
+  // The six fields fold behind one control; what is set stays in view as chips. A wrong range is never hidden.
   const [filtersOpen, setFiltersOpen] = useState(readFiltersOpen)
-  const fieldsShown = !narrow || filtersOpen || rangeError
-  const fieldsSet = [status, method, purpose, plan, from, to].filter(Boolean).length
+  const fieldsShown = filtersOpen || rangeError
   const toggleFilters = () => {
     const next = !filtersOpen
     setFiltersOpen(next)
@@ -251,6 +288,13 @@ export function TransactionsTab({ onSeeReceipts }: { onSeeReceipts?: () => void 
       // Storage blocked: the fields still fold for this visit.
     }
   }
+  const set: Array<{ key: string; text: string; clear: () => void }> = []
+  if (status) set.push({ key: 'status', text: `${tx(PAY.status)}: ${tx(TRANSACTION_STATUS[status])}`, clear: () => setStatus('') })
+  if (method) set.push({ key: 'method', text: `${tx(PAY.method)}: ${tx(METHOD[method])}`, clear: () => setMethod('') })
+  if (purpose) set.push({ key: 'purpose', text: `${tx(PAY.purpose)}: ${tx(PURPOSE_LABEL[purpose])}`, clear: () => setPurpose('') })
+  if (plan) set.push({ key: 'plan', text: `${tx(LED.planMonths)}: ${monthsLabel(Number(plan), locale)}`, clear: () => setPlan('') })
+  if (from) set.push({ key: 'from', text: `${tx(LED.from)}: ${formatDay(from, locale)}`, clear: () => setFrom('') })
+  if (to) set.push({ key: 'to', text: `${tx(LED.to)}: ${formatDay(to, locale)}`, clear: () => setTo('') })
 
   const clear = () => {
     setStatus('')
@@ -262,124 +306,153 @@ export function TransactionsTab({ onSeeReceipts }: { onSeeReceipts?: () => void 
     setSearch('')
   }
 
+  const days = byDay(rows, (t) => t.paidOn)
+
   return (
     <>
-      <section className="pay-filters" aria-label={tx(LED.filters)}>
-        <div className="pay-filters__search">
-          <SearchField value={search} onChange={(v) => setSearch(v.slice(0, MAX_SEARCH))} label={tx(LED.search)} clearLabel={tx(LED.clearSearch)} />
-          {narrow && (
-            <button type="button" className="btn pay-filters__toggle" aria-expanded={fieldsShown} aria-controls="pay-filter-fields" onClick={toggleFilters}>
-              {fieldsSet > 0 ? tx(LED.filtersOn, { n: fieldsSet }) : tx(LED.filters)}
-              <Icon name={fieldsShown ? 'chevronUp' : 'chevronDown'} size={16} />
+      <div className="sheet tx-sheet">
+        <section className="tx-filters" aria-label={tx(LED.filters)}>
+          <div className="sheet-bar">
+            <SearchField value={search} onChange={(v) => setSearch(v.slice(0, MAX_SEARCH))} label={tx(LED.search)} clearLabel={tx(LED.clearSearch)} />
+            <button type="button" className="btn btn--sm tx-filters__toggle" aria-expanded={fieldsShown} aria-controls="pay-filter-fields" onClick={toggleFilters}>
+              <Icon name="filter" size={16} />
+              {set.length > 0 ? tx(LED.filtersOn, { n: set.length }) : tx(LED.filters)}
             </button>
-          )}
-          {filtered && (!narrow || fieldsShown) && (
-            <button type="button" className="btn btn--sm btn--ghost pay-filters__clear" onClick={clear}>
-              {tx(LED.clearFilters)}
-            </button>
-          )}
-        </div>
-        <div id="pay-filter-fields" className="pay-filters__row" hidden={!fieldsShown}>
-          <Picker
-            label={tx(PAY.status)}
-            value={status}
-            onChange={(v) => setStatus(v as TransactionStatus | '')}
-            any={tx(LED.anyStatus)}
-            options={STATUSES.map((s) => ({ value: s, label: tx(TRANSACTION_STATUS[s]) }))}
-          />
-          <Picker
-            label={tx(PAY.method)}
-            value={method}
-            onChange={(v) => setMethod(v as PaymentMethod | '')}
-            any={tx(LED.anyMethod)}
-            options={METHODS.map((m) => ({ value: m, label: tx(METHOD[m]) }))}
-          />
-          <Picker
-            label={tx(PAY.purpose)}
-            value={purpose}
-            onChange={(v) => setPurpose(v as RequestPurpose | '')}
-            any={tx(LED.anyPurpose)}
-            options={PURPOSES.map((p) => ({ value: p, label: tx(PURPOSE_LABEL[p]) }))}
-          />
-          <Picker
-            label={tx(LED.planMonths)}
-            value={plan}
-            onChange={setPlan}
-            any={tx(LED.anyPlan)}
-            options={PLANS.map((m) => ({ value: String(m), label: monthsLabel(m, locale) }))}
-          />
-          <Field label={tx(LED.from)}>
-            {(id) => <input id={id} className="input" type="date" dir="ltr" value={from} max={to || undefined} data-empty={from === '' || undefined} onChange={(e) => setFrom(e.target.value)} />}
-          </Field>
-          <Field label={tx(LED.to)} error={rangeError ? tx(PAY.periodOrder) : null}>
-            {(id, d) => (
-              <input id={id} className="input" type="date" dir="ltr" value={to} min={from || undefined} data-empty={to === '' || undefined} aria-describedby={d} aria-invalid={rangeError || undefined} onChange={(e) => setTo(e.target.value)} />
+            {set.map((f) => (
+              <span key={f.key} className="tx-set">
+                <span>{f.text}</span>
+                <button type="button" className="tx-set__x" onClick={f.clear} aria-label={tx(LED.removeFilter, { label: f.text })} title={tx(LED.removeFilter, { label: f.text })}>
+                  <Icon name="close" size={13} />
+                </button>
+              </span>
+            ))}
+            {filtered && (
+              <button type="button" className="btn btn--sm btn--ghost" onClick={clear}>
+                {tx(LED.clearFilters)}
+              </button>
             )}
-          </Field>
-        </div>
-      </section>
+          </div>
+          <div id="pay-filter-fields" className="tx-filters__fields" hidden={!fieldsShown}>
+            <Picker
+              label={tx(PAY.status)}
+              value={status}
+              onChange={(v) => setStatus(v as TransactionStatus | '')}
+              any={tx(LED.anyStatus)}
+              options={STATUSES.map((s) => ({ value: s, label: tx(TRANSACTION_STATUS[s]) }))}
+            />
+            <Picker
+              label={tx(PAY.method)}
+              value={method}
+              onChange={(v) => setMethod(v as PaymentMethod | '')}
+              any={tx(LED.anyMethod)}
+              options={METHODS.map((m) => ({ value: m, label: tx(METHOD[m]) }))}
+            />
+            <Picker
+              label={tx(PAY.purpose)}
+              value={purpose}
+              onChange={(v) => setPurpose(v as RequestPurpose | '')}
+              any={tx(LED.anyPurpose)}
+              options={PURPOSES.map((p) => ({ value: p, label: tx(PURPOSE_LABEL[p]) }))}
+            />
+            <Picker
+              label={tx(LED.planMonths)}
+              value={plan}
+              onChange={setPlan}
+              any={tx(LED.anyPlan)}
+              options={PLANS.map((m) => ({ value: String(m), label: monthsLabel(m, locale) }))}
+            />
+            <Field label={tx(LED.from)}>
+              {(id) => <input id={id} className="input" type="date" dir="ltr" value={from} max={to || undefined} data-empty={from === '' || undefined} onChange={(e) => setFrom(e.target.value)} />}
+            </Field>
+            <Field label={tx(LED.to)} error={rangeError ? tx(PAY.periodOrder) : null}>
+              {(id, d) => (
+                <input id={id} className="input" type="date" dir="ltr" value={to} min={from || undefined} data-empty={to === '' || undefined} aria-describedby={d} aria-invalid={rangeError || undefined} onChange={(e) => setTo(e.target.value)} />
+              )}
+            </Field>
+          </div>
+        </section>
 
-      {list.error && rows.length === 0 ? (
-        <EmptyState icon="alert" title={describeError(list.error, locale)} />
-      ) : (
-        <QueryBoundary isLoading={list.isLoading} error={null} onRetry={() => void list.refetch()}>
-          {totals.length > 0 && <Totals totals={totals} />}
-          {rows.length === 0 ? (
-            !rangeError &&
-            (filtered ? (
-              <EmptyState
-                title={tx(LED.noTransactions)}
-                hint={tx(LED.noTransactionsFiltered)}
-                action={
-                  <button type="button" className="btn btn--sm" onClick={clear}>
-                    {tx(LED.clearFilters)}
-                  </button>
-                }
-              />
-            ) : (
-              <EmptyState
-                title={tx(LED.noTransactions)}
-                hint={tx(LED.noTransactionsHint)}
-                action={
-                  onSeeReceipts && (
-                    <button type="button" className="btn btn--sm" onClick={onSeeReceipts}>
-                      {tx(LED.seeReceipts)}
+        {list.error && rows.length === 0 ? (
+          <EmptyState icon="alert" title={describeError(list.error, locale)} />
+        ) : (
+          <QueryBoundary isLoading={list.isLoading} error={null} onRetry={() => void list.refetch()}>
+            {rows.length === 0 ? (
+              !rangeError &&
+              (filtered ? (
+                <EmptyState
+                  title={tx(LED.noTransactions)}
+                  hint={tx(LED.noTransactionsFiltered)}
+                  action={
+                    <button type="button" className="btn btn--sm" onClick={clear}>
+                      {tx(LED.clearFilters)}
                     </button>
-                  )
-                }
-              />
-            ))
-          ) : (
-            <div className="table-wrap pay-table-wrap">
-              <table className="table table--interactive pay-table pay-table--tx" aria-label={tx(LED.transactions)}>
+                  }
+                />
+              ) : (
+                <EmptyState
+                  title={tx(LED.noTransactions)}
+                  hint={tx(LED.noTransactionsHint)}
+                  action={
+                    onSeeReceipts && (
+                      <button type="button" className="btn btn--sm" onClick={onSeeReceipts}>
+                        {tx(LED.seeReceipts)}
+                      </button>
+                    )
+                  }
+                />
+              ))
+            ) : (
+              <table className="table table--interactive tx-table tx-table--payments" aria-label={tx(LED.transactions)}>
                 <thead>
                   <tr>
                     <th scope="col">{tx(LED.colFamily)}</th>
                     <th scope="col">{tx(LED.colFor)}</th>
                     <th scope="col">{tx(LED.colMethod)}</th>
-                    <th scope="col">{tx(LED.colPaidOn)}</th>
-                    <th scope="col" className="pay-num">{tx(LED.colAmount)}</th>
-                    <th scope="col">{tx(LED.colStatus)}</th>
                     <th scope="col">{tx(LED.colInvoice)}</th>
-                    <th scope="col">
+                    <th scope="col" className="tx-end">
+                      {tx(LED.colAmount)}
+                    </th>
+                    <th scope="col" className="cell-actions">
                       <span className="sr-only">{tx(LED.details)}</span>
                     </th>
                   </tr>
                 </thead>
-                <tbody>
-                  {rows.map((t) => (
-                    <TransactionRow key={t.id} t={t} onOpen={() => setOpenId(t.id)} />
-                  ))}
-                </tbody>
+                {days.map((d, i) => (
+                  <tbody key={d.day}>
+                    <DayRow day={d.day} span={6}>
+                      {/* The last day shown may have more rows on the next page: its sum waits for them. */}
+                      {!(list.hasNextPage && i === days.length - 1) && <DayNet rows={d.rows} />}
+                    </DayRow>
+                    {d.rows.map((t) => (
+                      <TransactionRow key={t.id} t={t} onOpen={() => setOpenId(t.id)} onInvoice={(id) => download.mutate(id)} />
+                    ))}
+                  </tbody>
+                ))}
               </table>
-            </div>
-          )}
-          <ServerError error={rows.length > 0 ? list.error : null} />
-          <LoadMore query={list} />
-        </QueryBoundary>
-      )}
+            )}
+            <ServerError error={download.error ?? (rows.length > 0 ? list.error : null)} />
+            <LoadMore query={list} />
+          </QueryBoundary>
+        )}
+        {totals.length > 0 && <Totals totals={totals} />}
+      </div>
       {openId && <TransactionDetailDialog paymentId={openId} onClose={() => setOpenId(null)} />}
     </>
+  )
+}
+
+/** What a day came to: what stands of each payment, less its refunds, per currency. A voided payment adds nothing. */
+function DayNet({ rows }: { rows: Transaction[] }) {
+  const tx = useCopy()
+  const sums = sumByCurrency(rows.filter((t) => t.status !== 'voided').map((t) => ({ amountMinor: t.amountMinor - t.refundedMinor, currency: t.currency })))
+  if (sums.length === 0) return null
+  return (
+    <span className="tx-day__net">
+      <span className="tx-day__k">{tx(LED.net)}</span>
+      {sums.map((s) => (
+        <Money key={s.currency} amountMinor={s.amountMinor} currency={s.currency} size="sm" />
+      ))}
+    </span>
   )
 }
 
@@ -391,16 +464,18 @@ function forWhat(request: Transaction['request'], locale: 'ar' | 'en', tx: Retur
 }
 
 /**
- * What matches the filters, one line per currency, written as the sum it is:
- * received, less what was refunded, leaves the net. The currency names the
- * line, so the figures on it carry no symbol of their own.
+ * What matches the filters, at the foot of the sheet and in view while it
+ * scrolls: one line per currency, written as the sum it is. Received, less
+ * what was refunded, leaves the net. The currency names the line, so the
+ * figures on it carry no symbol of their own.
  */
 function Totals({ totals }: { totals: TransactionTotal[] }) {
   const tx = useCopy()
   const { locale, number } = useI18n()
   return (
-    <section className="pay-sum" aria-label={tx(LED.totals)}>
-      <ul className="pay-sum__lines">
+    <section className="tx-totals" aria-label={tx(LED.totals)} title={tx(LED.totalsHint)}>
+      <span className="tx-totals__name">{tx(LED.totals)}</span>
+      <ul className="tx-totals__lines">
         {totals.map((t) => {
           const figure = (n: number) => moneyParts(n, t.currency, locale).number
           // The line is named the way every amount on the page names its currency.
@@ -444,7 +519,7 @@ function Totals({ totals }: { totals: TransactionTotal[] }) {
           )
         })}
       </ul>
-      <p className="pay-sum__hint">{tx(LED.totalsHint)}</p>
+      <p className="sr-only">{tx(LED.totalsHint)}</p>
     </section>
   )
 }
@@ -473,17 +548,23 @@ function FamilyCell({ family, child, seed }: { family: { id: string; name: strin
   )
 }
 
-function TransactionRow({ t, onOpen }: { t: Transaction; onOpen: () => void }) {
+/**
+ * A payment: who paid, what for, how, its invoice, then the amount at the
+ * row's end with where it stands. One action opens it; the invoice is behind the menu.
+ */
+function TransactionRow({ t, onOpen, onInvoice }: { t: Transaction; onOpen: () => void; onInvoice: (invoiceId: string) => void }) {
   const tx = useCopy()
   const { locale } = useI18n()
   const money = (n: number) => formatMoney(n, t.currency, locale)
   const card = cardLabel(t.card)
+  const invoice = t.invoice
+  const more: MenuItem[] = invoice ? [{ key: 'invoice', label: tx(PAY.downloadNamed, { number: invoice.number }), icon: 'fileArrowDown', onSelect: () => onInvoice(invoice.id) }] : []
   return (
     <tr className={t.status === 'voided' ? 'pay-row pay-row--voided' : 'pay-row'} onClick={onOpen}>
-      <td className="pay-a-who">
+      <td className="tx-c-who">
         <FamilyCell family={t.family} child={t.child} seed={t.id} />
       </td>
-      <td className="pay-a-for">
+      <td className="tx-c-for">
         {t.request ? (
           <>
             <bdi>{t.request.label}</bdi>
@@ -493,46 +574,49 @@ function TransactionRow({ t, onOpen }: { t: Transaction; onOpen: () => void }) {
           <span className="pay-quiet">—</span>
         )}
       </td>
-      <td className="pay-a-method">
-        {tx(METHOD[t.method] ?? raw(t.method))}
+      <td className="tx-c-method">
+        <span className="tx-method">
+          <Icon name={METHOD_ICON[t.method] ?? 'cash'} size={17} />
+          <span>{tx(METHOD[t.method] ?? raw(t.method))}</span>
+        </span>
         {card && (
-          <span className="pay-sub">
+          <span className="pay-sub tx-method__card">
             <bdi dir="ltr">{card}</bdi>
           </span>
         )}
       </td>
-      <td className="pay-date pay-a-date">{formatDay(t.paidOn, locale)}</td>
-      <td className="pay-num pay-a-amount">
+      <td className="tx-c-ref">{invoice ? <bdi className="pay-invoice" dir="ltr">{invoice.number}</bdi> : <span className="pay-quiet">—</span>}</td>
+      <td className="tx-c-amount tx-end">
         <Money amountMinor={t.amountMinor} currency={t.currency} />
-        {t.refundedMinor > 0 && (
-          <span className="pay-sub pay-refunded">
-            <span>{tx(LED.refundedInline)}</span>
-            <Money amountMinor={t.refundedMinor} currency={t.currency} size="sm" />
-          </span>
-        )}
+        <span className="tx-states">
+          {t.refundedMinor > 0 && (
+            <span className="pay-sub pay-refunded">
+              <span>{tx(LED.refundedInline)}</span>
+              <Money amountMinor={t.refundedMinor} currency={t.currency} size="sm" />
+            </span>
+          )}
+          <TransactionStatusBadge status={t.status} />
+          {t.overpaid && <OverpaidBadge overpaid={t.overpaid} />}
+        </span>
       </td>
-      <td className="pay-a-status">
-        <TransactionStatusBadge status={t.status} />
-        {t.overpaid && (
-          <span className="pay-flag">
-            <OverpaidBadge overpaid={t.overpaid} />
-          </span>
-        )}
-      </td>
-      <td className="pay-a-invoice">{t.invoice ? <bdi className="pay-invoice" dir="ltr">{t.invoice.number}</bdi> : <span className="pay-quiet">—</span>}</td>
-      <td className="pay-open pay-a-open">
-        <button
-          type="button"
-          className="btn btn--sm btn--ghost btn--icon"
-          aria-label={tx(LED.detailsNamed, { amount: money(t.amountMinor), date: formatDay(t.paidOn, locale) })}
-          title={tx(LED.details)}
-          onClick={(e) => {
-            e.stopPropagation()
-            onOpen()
-          }}
-        >
-          <Icon name="chevronForward" size={18} />
-        </button>
+      <td className="cell-actions">
+        <RowActions
+          primary={
+            <button
+              type="button"
+              className="btn btn--sm"
+              aria-label={tx(LED.detailsNamed, { amount: money(t.amountMinor), date: formatDay(t.paidOn, locale) })}
+              onClick={(e) => {
+                e.stopPropagation()
+                onOpen()
+              }}
+            >
+              {tx(LED.open)}
+            </button>
+          }
+          more={more}
+          label={tx(LED.more, { name: t.family?.name ?? money(t.amountMinor) })}
+        />
       </td>
     </tr>
   )
@@ -904,89 +988,125 @@ export function AttemptsTab() {
   const { locale } = useI18n()
   const [status, setStatus] = useState<AttemptFilter>('failed')
   const list = useCardAttempts(status)
+  const [openPayment, setOpenPayment] = useState<string | null>(null)
   const rows = list.data?.pages.flatMap((p) => p.items) ?? []
+  const days = byDay(rows, (a) => isoToAcademyWallClock(a.createdAt, ACADEMY_ZONE).date)
   return (
     <>
-      <div className="pay-bar">
-        <FilterChips<AttemptFilter> label={tx(PAY.status)} value={status} onChange={setStatus} options={ATTEMPT_FILTERS.map((s) => ({ value: s, label: tx(ATTEMPT_FILTER[s]) }))} />
-      </div>
-      <p className="pay-hint">{tx(LED.attemptsHint)}</p>
-      {list.error && rows.length === 0 ? (
-        <EmptyState icon="alert" title={describeError(list.error, locale)} />
-      ) : (
-        <QueryBoundary isLoading={list.isLoading} error={null} onRetry={() => void list.refetch()}>
-          {rows.length === 0 ? (
-            <EmptyState
-              title={tx(LED.noCardAttempts)}
-              hint={tx(status === 'failed' ? LED.noFailedAttemptsHint : LED.noAttemptsHint)}
-              action={
-                status !== 'all' && (
-                  <button type="button" className="btn btn--sm" onClick={() => setStatus('all')}>
-                    {tx(LED.showAllAttempts)}
-                  </button>
-                )
-              }
-            />
-          ) : (
-            <div className="table-wrap pay-table-wrap">
-              <table className="table pay-table pay-table--attempts" aria-label={tx(LED.attempts)}>
+      <div className="sheet tx-sheet">
+        <div className="sheet-bar">
+          <FilterChips<AttemptFilter> label={tx(PAY.status)} value={status} onChange={setStatus} options={ATTEMPT_FILTERS.map((s) => ({ value: s, label: tx(ATTEMPT_FILTER[s]) }))} />
+        </div>
+        {list.error && rows.length === 0 ? (
+          <EmptyState icon="alert" title={describeError(list.error, locale)} />
+        ) : (
+          <QueryBoundary isLoading={list.isLoading} error={null} onRetry={() => void list.refetch()}>
+            {rows.length === 0 ? (
+              <EmptyState
+                title={tx(LED.noCardAttempts)}
+                hint={tx(status === 'failed' ? LED.noFailedAttemptsHint : LED.noAttemptsHint)}
+                action={
+                  status !== 'all' && (
+                    <button type="button" className="btn btn--sm" onClick={() => setStatus('all')}>
+                      {tx(LED.showAllAttempts)}
+                    </button>
+                  )
+                }
+              />
+            ) : (
+              <table className="table tx-table tx-table--attempts" aria-label={tx(LED.attempts)}>
                 <thead>
                   <tr>
                     <th scope="col">{tx(LED.colFamily)}</th>
-                    <th scope="col">{tx(LED.colRequest)}</th>
-                    <th scope="col" className="pay-num">{tx(LED.colAmount)}</th>
-                    <th scope="col" className="pay-num">{tx(LED.colTries)}</th>
                     <th scope="col">{tx(LED.colWhy)}</th>
-                    <th scope="col">{tx(LED.lastFailed)}</th>
                     <th scope="col">{tx(LED.colStatus)}</th>
-                    <th scope="col">{tx(LED.colPaid)}</th>
+                    <th scope="col" className="tx-end">
+                      {tx(LED.colAmount)}
+                    </th>
+                    <th scope="col" className="cell-actions">
+                      <span className="sr-only">{tx(LED.summary)}</span>
+                    </th>
                   </tr>
                 </thead>
-                <tbody>
-                  {rows.map((a) => (
-                    <AttemptRow key={a.sessionId} a={a} />
-                  ))}
-                </tbody>
+                {days.map((d) => (
+                  <tbody key={d.day}>
+                    <DayRow day={d.day} span={5} />
+                    {d.rows.map((a) => (
+                      <AttemptRow key={a.sessionId} a={a} onOpenPayment={setOpenPayment} />
+                    ))}
+                  </tbody>
+                ))}
               </table>
-            </div>
-          )}
-          <ServerError error={rows.length > 0 ? list.error : null} />
-          <LoadMore query={list} />
-        </QueryBoundary>
-      )}
+            )}
+            <ServerError error={rows.length > 0 ? list.error : null} />
+            <LoadMore query={list} />
+          </QueryBoundary>
+        )}
+        <p className="tx-foot">{tx(LED.attemptsHint)}</p>
+      </div>
+      {openPayment && <TransactionDetailDialog paymentId={openPayment} onClose={() => setOpenPayment(null)} />}
     </>
   )
 }
 
-function AttemptRow({ a }: { a: CardAttemptRow }) {
+/**
+ * A card attempt: whose and for which request; what happened, in words; where
+ * it stands and whether it was paid; the amount. A paid one opens its payment.
+ */
+function AttemptRow({ a, onOpenPayment }: { a: CardAttemptRow; onOpenPayment: (paymentId: string) => void }) {
   const tx = useCopy()
   const { dateTime, number } = useI18n()
+  const paymentId = a.paymentId
   return (
     <tr>
-      <td className="pay-a-who">
-        <FamilyCell family={a.family} seed={a.sessionId} />
+      <td className="tx-c-who">
+        <div className="entity">
+          <Avatar name={a.family?.name ?? ''} seed={a.family?.id ?? a.sessionId} size="sm" />
+          <div className="entity__text">
+            {a.family ? (
+              <span className="entity__name">
+                <bdi>{a.family.name}</bdi>
+              </span>
+            ) : (
+              <span className="pay-quiet">{tx(LED.beforeAssign)}</span>
+            )}
+            <span className="entity__sub">
+              <bdi>{a.request.label}</bdi>
+              <span aria-hidden="true"> · </span>
+              <span>{tx(PURPOSE_LABEL[a.request.purpose] ?? raw(a.request.purpose))}</span>
+            </span>
+          </div>
+        </div>
       </td>
-      <td className="pay-a-for">
-        <bdi>{a.request.label}</bdi>
-        <span className="pay-sub">{tx(PURPOSE_LABEL[a.request.purpose] ?? raw(a.request.purpose))}</span>
+      <td className="tx-c-why">
+        <FailureWords a={a} />
+        <span className="pay-sub tx-declines">
+          <span>
+            {tx(LED.colTries)} <span className="pay-count">{number(a.failureCount)}</span>
+          </span>
+          {a.lastFailedAt && <span>{tx(LED.lastFailedAt, { date: dateTime(a.lastFailedAt) })}</span>}
+        </span>
       </td>
-      <td className="pay-num pay-a-amount">
+      <td className="tx-c-state">
+        <AttemptStatusBadge status={a.status} />
+        <span className="pay-sub tx-paid">
+          {tx(LED.colPaid)} <Badge tone={paymentId ? 'ok' : 'outline'}>{tx(paymentId ? LED.yes : LED.no)}</Badge>
+        </span>
+      </td>
+      <td className="tx-c-amount tx-end">
         <Money amountMinor={a.amountMinor} currency={a.currency} />
       </td>
-      <td className="pay-num pay-count pay-a-tries" data-label={tx(LED.colTries)}>
-        {number(a.failureCount)}
-      </td>
-      <td className="pay-why-cell pay-a-why">
-        <FailureWords a={a} />
-      </td>
-      <td className="pay-date pay-a-last" data-label={tx(LED.lastFailed)}>
-        {a.lastFailedAt ? dateTime(a.lastFailedAt) : <span className="pay-quiet">—</span>}
-      </td>
-      <td className="pay-a-status">
-        <AttemptStatusBadge status={a.status} />
-      </td>
-      <td className="pay-a-paid" data-label={tx(LED.colPaid)}>
-        <Badge tone={a.paymentId ? 'ok' : 'outline'}>{tx(a.paymentId ? LED.yes : LED.no)}</Badge>
+      <td className="cell-actions">
+        <RowActions
+          primary={
+            paymentId ? (
+              <button type="button" className="btn btn--sm" onClick={() => onOpenPayment(paymentId)}>
+                {tx(LED.openPayment)}
+              </button>
+            ) : undefined
+          }
+          label={tx(LED.more, { name: a.family?.name ?? a.request.label })}
+        />
       </td>
     </tr>
   )
@@ -1001,37 +1121,43 @@ export function StripeEventsTab() {
   const [type, setType] = useState('')
   const list = useStripeEvents({ outcome, type })
   const sweep = useReconcileNow()
+  const hintId = useId()
   const rows = list.data?.pages.flatMap((p) => p.items) ?? []
+  const days = byDay(rows, (e) => isoToAcademyWallClock(e.receivedAt, ACADEMY_ZONE).date)
   return (
-    <>
-      <section className="pay-sweep" aria-label={tx(LED.reconcileNow)}>
-        <p className="pay-sweep__hint">{tx(LED.reconcileNowHint)}</p>
-        <button type="button" className="btn btn--sm" disabled={sweep.isPending} onClick={() => sweep.mutate()}>
-          {sweep.isPending ? tx(LED.reconciling) : tx(LED.reconcileNow)}
-        </button>
-        <ServerError error={sweep.error} />
-        {sweep.data && <SweepResult r={sweep.data} />}
-      </section>
-
-      <section className="pay-filters pay-filters--events" aria-label={tx(LED.filters)}>
-        <div className="pay-filters__row">
-          <Picker
-            label={tx(LED.outcome)}
-            value={outcome}
-            onChange={setOutcome}
-            any={tx(LED.anyOutcome)}
-            options={Object.entries(EVENT_OUTCOME).map(([value, label]) => ({ value, label: tx(label), hint: value }))}
-          />
-          <Picker
-            label={tx(LED.type)}
-            value={type}
-            onChange={setType}
-            any={tx(LED.anyType)}
-            options={EVENT_TYPES.map((t) => ({ value: t, label: t.endsWith('.') ? `${t}*` : t }))}
-          />
-          <p className="pay-bar__hint">{tx(LED.eventsHint)}</p>
+    <div className="sheet tx-sheet">
+      <section className="sheet-bar tx-bar--fields" aria-label={tx(LED.filters)}>
+        <Picker
+          label={tx(LED.outcome)}
+          value={outcome}
+          onChange={setOutcome}
+          any={tx(LED.anyOutcome)}
+          options={Object.entries(EVENT_OUTCOME).map(([value, label]) => ({ value, label: tx(label), hint: value }))}
+        />
+        <Picker
+          label={tx(LED.type)}
+          value={type}
+          onChange={setType}
+          any={tx(LED.anyType)}
+          options={EVENT_TYPES.map((t) => ({ value: t, label: t.endsWith('.') ? `${t}*` : t }))}
+        />
+        <div className="sheet-bar__end">
+          {/* The tab's one act. What it does is said to whoever asks (its title, and to a screen reader). */}
+          <button type="button" className="btn btn--primary" disabled={sweep.isPending} onClick={() => sweep.mutate()} title={tx(LED.reconcileNowHint)} aria-describedby={hintId}>
+            <Icon name="refresh" size={16} />
+            {sweep.isPending ? tx(LED.reconciling) : tx(LED.reconcileNow)}
+          </button>
+          <span id={hintId} className="sr-only">
+            {tx(LED.reconcileNowHint)}
+          </span>
         </div>
       </section>
+      {(sweep.error || sweep.data) && (
+        <div className="tx-sweep">
+          <ServerError error={sweep.error} />
+          {sweep.data && <SweepResult r={sweep.data} />}
+        </div>
+      )}
 
       {list.error && rows.length === 0 ? (
         <EmptyState icon="alert" title={describeError(list.error, locale)} />
@@ -1057,47 +1183,54 @@ export function StripeEventsTab() {
               }
             />
           ) : (
-            <div className="table-wrap pay-table-wrap">
-              <table className="table pay-table pay-table--events" aria-label={tx(LED.eventsTab)}>
-                <thead>
-                  <tr>
-                    <th scope="col">{tx(LED.colReceived)}</th>
-                    <th scope="col">{tx(LED.colType)}</th>
-                    <th scope="col">{tx(LED.colOutcome)}</th>
-                    <th scope="col">{tx(LED.colObject)}</th>
-                    <th scope="col">{tx(LED.colMode)}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((e) => (
+            <table className="table tx-table tx-table--events" aria-label={tx(LED.eventsTab)}>
+              <thead>
+                <tr>
+                  <th scope="col">{tx(LED.colReceived)}</th>
+                  <th scope="col">{tx(LED.colType)}</th>
+                  <th scope="col">{tx(LED.colOutcome)}</th>
+                  <th scope="col">{tx(LED.colObject)}</th>
+                  <th scope="col">{tx(LED.colMode)}</th>
+                </tr>
+              </thead>
+              {days.map((d) => (
+                <tbody key={d.day}>
+                  <DayRow day={d.day} span={5} />
+                  {d.rows.map((e) => (
                     <EventRow key={e.id} e={e} />
                   ))}
                 </tbody>
-              </table>
-            </div>
+              ))}
+            </table>
           )}
           <ServerError error={rows.length > 0 ? list.error : null} />
           <LoadMore query={list} />
         </QueryBoundary>
       )}
-    </>
+      <p className="tx-foot">{tx(LED.eventsHint)}</p>
+    </div>
   )
 }
 
+/** A message from Stripe: when, what it was, what Chat did with it, the object it names. */
 function EventRow({ e }: { e: StripeEvent }) {
   const tx = useCopy()
-  const { dateTime } = useI18n()
+  const { time, dateTime } = useI18n()
   return (
     <tr>
-      <td className="pay-date pay-a-date">{dateTime(e.receivedAt)}</td>
-      <td className="pay-a-who">
+      <td className="tx-c-time">
+        <time dateTime={e.receivedAt} title={dateTime(e.receivedAt)}>
+          {time(e.receivedAt)}
+        </time>
+      </td>
+      <td className="tx-c-type">
         <Code>{e.type}</Code>
       </td>
-      <td className="pay-a-why">
+      <td className="tx-c-outcome">
         <OutcomeBadge outcome={e.outcome} />
       </td>
-      <td className="pay-a-for">{e.objectId ? <Code>{e.objectId}</Code> : <span className="pay-quiet">—</span>}</td>
-      <td className="pay-a-status">{e.livemode ? tx(LED.live) : <Badge tone="warn">{tx(LED.testMode)}</Badge>}</td>
+      <td className="tx-c-object">{e.objectId ? <Code>{e.objectId}</Code> : <span className="pay-quiet">—</span>}</td>
+      <td className="tx-c-mode">{e.livemode ? tx(LED.live) : <Badge tone="warn">{tx(LED.testMode)}</Badge>}</td>
     </tr>
   )
 }

@@ -2,7 +2,6 @@ import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties } fr
 import { Link, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useI18n } from '@/core/i18n/I18nProvider'
-import { ACADEMY_ZONE, clock12In, dayMonthIn, weekdayIn, zoneLabel } from '@/core/time/academyTime'
 import { useSession } from '@/core/auth/SessionProvider'
 import { useRealtime } from '@/core/realtime/RealtimeProvider'
 import { ApiError } from '@/core/api/errors'
@@ -28,10 +27,11 @@ import { ExportDialog } from './ExportDialog'
 import { ThemeDialog } from './ThemeDialog'
 import { ThreadSearch } from './ThreadSearch'
 import { Highlighted, searchable } from './search'
-import { ConversationAvatar, cardFallbackText, conversationName, isGroup, isMuted, toneOfKind, westernDigits } from './chatView'
+import { ConversationAvatar, callWhen, cardFallbackText, conversationName, isGroup, isMuted, toneOfKind, westernDigits } from './chatView'
 import { useConversationPreferences } from './useChatActions'
 import { VoiceNotePlayer } from './VoiceRecorder'
-import { ThreadCalls } from './ThreadCalls'
+import { CallButton, CallHistoryDialog } from './ThreadCalls'
+import { FamilyFact } from './FamilyContext'
 import { useCallCapability } from '@/features/calls/useCallCapability'
 import { ScheduleCallDialog } from '@/features/calls-page/ScheduleCallDialog'
 import { TrialCardDialog, TrialGroupBar } from '@/features/trials/TrialCardDialog'
@@ -53,12 +53,7 @@ import {
 import { TrialBadge, isTrialGroup } from '@/shared/components/TrialBadge'
 import { CaseEscalatedCard, readCaseEscalatedCard } from '@/features/cases/CaseEscalatedCard'
 
-/** "Sun 29 Nov, 5:00 PM (Cairo time)": when a scheduled call starts, on the academy's clock, in the UI language. */
-export function callWhen(iso: string, locale: 'ar' | 'en'): string {
-  if (Number.isNaN(new Date(iso).getTime())) return ''
-  const day = `${weekdayIn(iso, ACADEMY_ZONE, locale)} ${dayMonthIn(iso, ACADEMY_ZONE, locale)}`
-  return `${day}${locale === 'ar' ? '،' : ','} ${clock12In(iso, ACADEMY_ZONE, locale)} (${zoneLabel(ACADEMY_ZONE, locale)})`
-}
+export { callWhen } from './chatView'
 
 /** A booked trial's card, reduced to what is drawn; null when it does not carry its instant (then its words are shown). */
 export function readTrialBookedCard(
@@ -75,6 +70,18 @@ export function readTrialBookedCard(
     minutes: typeof p.durationMinutes === 'number' ? p.durationMinutes : null,
     level: typeof p.level === 'string' && p.level !== '' ? p.level : null,
   }
+}
+
+/**
+ * A reference card's start edge: teal for what is simply so, gold for what
+ * asks someone to act (join a call, answer a request), terracotta for what
+ * reports a problem (an escalated case, an absence, paused lessons).
+ */
+export function cardEdge(kind: string | null | undefined): 'info' | 'act' | 'problem' {
+  if (!kind) return 'info'
+  if (kind === 'case_escalated' || /absent|absence|no_show|paused|locked|refus|failed/.test(kind)) return 'problem'
+  if (kind === 'call_scheduled' || kind === 'call_link' || /request|apology|excuse|owed|pending/.test(kind)) return 'act'
+  return 'info'
 }
 
 /** The quick reactions, the same six as the mobile app. */
@@ -219,6 +226,7 @@ export function ChatThread({
   // A trial group's "+ -> Trial" card (trial journey).
   const [trialCard, setTrialCard] = useState(false)
   const [theming, setTheming] = useState(false)
+  const [callHistory, setCallHistory] = useState(false)
   // PD-15: the supervisor's lesson cards under "+", and a lesson card's record.
   const lessonGroup = details.data?.type === 'student_group' || details.data?.type === 'family_group'
   const lessonCards = useLessonCards(conversationId, lessonGroup)
@@ -285,6 +293,18 @@ export function ChatThread({
       socket.off('message.updated', onUpdated)
     }
   }, [socket, conversationId])
+
+  // Where the viewer had read up to when the chat was opened: a "New" rule sits
+  // above the first message after it, for this visit. Fixed once, from the
+  // unread count the server gave with the conversation; never moved by reading.
+  const [firstNewId, setFirstNewId] = useState<string | null | undefined>(undefined)
+  const unreadAtOpen = details.data?.unreadCount
+  useEffect(() => {
+    if (firstNewId !== undefined || !details.data || !latest.data) return
+    const n = unreadAtOpen ?? 0
+    const first = n > 0 ? messages[messages.length - n] : undefined
+    setFirstNewId(first && first.authorId !== staff?.id ? first.id : null)
+  }, [firstNewId, details.data, latest.data, messages, unreadAtOpen, staff?.id])
 
   // A pending send disappears once the server's copy (same clientMessageId) is
   // in the thread: one message, never an echo plus a copy.
@@ -522,6 +542,7 @@ export function ChatThread({
 
   return (
     <>
+      {/* One bar: who this is; the family's one urgent fact; ONE primary control (Call); the rest behind "more". */}
       <header className="thread-head">
         <Link to={backTo} className="btn btn--ghost btn--icon thread-head__back" aria-label={copy.back}>
           <Icon name="arrowBack" size={20} />
@@ -548,6 +569,16 @@ export function ChatThread({
                       {memberCount > 0 && copy.membersCount(memberCount)}
                     </>
                   )}
+                  {favorite && (
+                    <span className="cw-row__mark cw-row__mark--favorite" title={copy.favoriteMark} aria-label={copy.favoriteMark}>
+                      <Icon name="heart" size={14} />
+                    </span>
+                  )}
+                  {muted && (
+                    <span className="cw-row__mark" title={copy.mutedMark} aria-label={copy.mutedMark}>
+                      <Icon name="bellOff" size={14} />
+                    </span>
+                  )}
                 </span>
               )}
               {conv.cover && (
@@ -565,45 +596,17 @@ export function ChatThread({
             </span>
           </button>
         )}
+        {conv?.familyId && <FamilyFact familyId={conv.familyId} onOpen={infoShown ? undefined : onToggleInfo} />}
         <div className="cw-head__actions">
-          {conv && <ThreadCalls conversationId={conversationId} peerLabel={name} isGroup={group} />}
-          {favorite && (
-            <span className="cw-row__mark cw-row__mark--favorite" title={copy.favoriteMark} aria-label={copy.favoriteMark}>
-              <Icon name="heart" size={16} />
-            </span>
-          )}
-          {muted && (
-            <span className="cw-row__mark" title={copy.mutedMark} aria-label={copy.mutedMark}>
-              <Icon name="bellOff" size={16} />
-            </span>
-          )}
-          <button
-            type="button"
-            className="btn btn--ghost btn--icon"
-            onClick={() => setSearching((on) => !on)}
-            aria-pressed={searching}
-            aria-label={copy.searchChat}
-            title={copy.searchChat}
-          >
-            <Icon name="search" />
-          </button>
-          <button
-            type="button"
-            className="btn btn--ghost btn--icon"
-            onClick={onToggleInfo}
-            aria-pressed={infoShown}
-            aria-label={copy.info}
-            title={copy.info}
-          >
-            <Icon name="panel" />
-          </button>
+          {conv && <CallButton conversationId={conversationId} peerLabel={name} isGroup={group} />}
           {conv && (
             <Menu
               label={copy.chatActions}
               items={[
-                { key: 'info', label: group ? copy.groupInfo : copy.contactInfo, icon: 'info', onSelect: onToggleInfo },
-                { key: 'select', label: copy.select, icon: 'checkSquare', onSelect: () => setSelecting(true) },
+                { key: 'info', label: group ? copy.groupInfo : copy.contactInfo, icon: 'panel', onSelect: onToggleInfo },
                 { key: 'search', label: copy.searchChat, icon: 'search', onSelect: () => setSearching(true) },
+                { key: 'calls', label: copy.callHistory, icon: 'history', onSelect: () => setCallHistory(true) },
+                { key: 'select', label: copy.select, icon: 'checkSquare', onSelect: () => setSelecting(true) },
                 ...(canSchedule
                   ? [{ key: 'schedule', label: copy.scheduleCall, icon: 'calendar' as const, onSelect: () => setScheduling(true) }]
                   : []),
@@ -674,6 +677,11 @@ export function ChatThread({
                   {newDay && (
                     <li className="athread__day">
                       <span>{dayLabel(m.createdAt, locale)}</span>
+                    </li>
+                  )}
+                  {m.id === firstNewId && (
+                    <li className="athread__new" role="separator" aria-label={copy.newDivider}>
+                      <span>{copy.newDivider}</span>
                     </li>
                   )}
                   <MessageItem
@@ -862,6 +870,7 @@ export function ChatThread({
       {trialCard && <TrialCardDialog conversationId={conversationId} onRecorded={refreshThread} onClose={() => setTrialCard(false)} />}
 
       {theming && conv && <ThemeDialog conversation={conv} onClose={() => setTheming(false)} />}
+      {callHistory && <CallHistoryDialog conversationId={conversationId} onClose={() => setCallHistory(false)} />}
 
       {scheduling && conv && (
         <ScheduleCallDialog
@@ -1028,6 +1037,7 @@ function MessageItem({
   const reactions = summarize(m.reactions ?? [], selfId)
   // A card is a reference, not something somebody typed: it is drawn as a ruled card, not a bubble.
   const isCard = live && m.type === 'card'
+  const edge = isCard ? cardEdge(m.card?.kind) : null
   const tone = toneOfKind(m.authorKind)
   // What used to be a one-line system note is drawn as a card now, and stays
   // what it was: a notice. It offers no message actions and is not selectable.
@@ -1070,7 +1080,7 @@ function MessageItem({
 
   return (
     <li
-      className={`bubble-row ${SIDE_CLASS[side]} cw-msg${runStart ? ' cw-msg--run-start' : ''}${identity !== 'none' ? ' cw-msg--with-sender' : ''}${selectable ? ' cw-msg--selectable' : ''}${isSelected ? ' cw-msg--selected' : ''}${m.mentionsViewer && !m.deletedForAll ? ' cw-msg--mentions-me' : ''}${isCard ? ' cw-msg--card' : ''}`}
+      className={`bubble-row ${SIDE_CLASS[side]} cw-msg${runStart ? ' cw-msg--run-start' : ''}${identity !== 'none' ? ' cw-msg--with-sender' : ''}${selectable ? ' cw-msg--selectable' : ''}${isSelected ? ' cw-msg--selected' : ''}${m.mentionsViewer && !m.deletedForAll ? ' cw-msg--mentions-me' : ''}${isCard ? ` cw-msg--card cw-msg--card-${edge}` : ''}`}
       data-seq={m.seq ?? undefined}
       data-msg-id={m.id}
       onClick={selectable ? onToggleSelect : undefined}

@@ -15,6 +15,8 @@ import { EmptyState, LoadingState, QueryBoundary } from '@/shared/components/Sta
 import { useMediaQuery } from '@/shared/hooks/useMediaQuery'
 import { chatCopyFor, systemText } from '@/features/chat/copy'
 import { BlankMonogram, conversationTone } from '@/features/chat/chatView'
+import { waitedFor } from '@/features/chat/queue'
+import { PageHeader, type MastFigure } from '@/shared/components/PageHeader'
 import { useWorkspaceKeys } from '@/features/chat/useWorkspaceKeys'
 import '@/features/chat/chat.css'
 import { ConversationStateBadge, conversationName, matches } from './common'
@@ -208,9 +210,16 @@ export function ConversationsView({ section }: { section: AdminSection }) {
     return { search: next.toString() }
   }
 
+  // A work queue, as in the chat workspace: what waits on us leads, the longest
+  // wait first; the rest follows by day. Only in the default order: a chosen
+  // order (oldest, by name) is one flat list.
+  const queued = sort === 'recent'
+  const waitingRows = queued
+    ? sorted.filter((c) => c.state === 'waiting_on_jawwid').sort((a, b) => new Date(a.lastActivityAt).getTime() - new Date(b.lastActivityAt).getTime())
+    : []
   // Day sections only make sense when the list is in time order.
   const groups: { key: string; group: DayGroup | null; rows: AdminConversation[] }[] = []
-  for (const c of sorted) {
+  for (const c of queued ? sorted.filter((x) => x.state !== 'waiting_on_jawwid') : sorted) {
     const g = sort === 'name' ? null : dayGroup(c.lastActivityAt)
     const last = groups[groups.length - 1]
     if (last && last.group === g) last.rows.push(c)
@@ -221,56 +230,59 @@ export function ConversationsView({ section }: { section: AdminSection }) {
   // The same keys as the chat workspace: J / K walk the list, Enter opens, Escape goes back.
   useWorkspaceKeys({ listId: 'conversation-list', onBack: selectedId ? () => setParams(new URLSearchParams(backTo().search), { replace: false }) : null })
 
+  // The masthead carries the counts as figures; a figure is also the status filter
+  // (so the list has no strip of status chips repeating them).
+  const figures: MastFigure[] = query.data
+    ? stateOptions.slice(0, 4).map((o) => ({
+        key: o.value,
+        label: o.label,
+        value: number(o.count),
+        tone: o.value === 'waiting_on_jawwid' ? ('urgent' as const) : o.value === 'all' ? ('key' as const) : undefined,
+        onClick: () => setParam('state', o.value),
+        pressed: stateFilter === o.value,
+      }))
+    : []
+
   return (
-    <div className="workspace cw cw--read" data-view={selectedId ? 'thread' : 'list'} style={style}>
-      <section className="workspace__list" id="conversation-list" aria-labelledby="conversations-title">
-        <div className="workspace__head">
-          <div className="workspace__title-row">
-            <h1 className="workspace__title" id="conversations-title">
-              {tx(section.label)}
-            </h1>
-            {query.data && <span className="workspace__count">{number(all.length)}</span>}
-            <button
-              type="button"
-              className="btn btn--ghost btn--icon btn--sm workspace__refresh"
-              onClick={() => void query.refetch()}
-              disabled={query.isFetching}
-              aria-label={tx(TEXT.refresh)}
-              title={tx(TEXT.refresh)}
-            >
+    <div className="cw-admin" data-view={selectedId ? 'thread' : 'list'}>
+      <div className="cw-admin__mast">
+        <PageHeader
+          title={tx(section.label)}
+          figures={figures}
+          actions={
+            <button type="button" className="btn" onClick={() => void query.refetch()} disabled={query.isFetching}>
               <Icon name="refresh" size={16} />
+              {tx(TEXT.refresh)}
             </button>
-          </div>
+          }
+        />
+      </div>
+    <div className="workspace cw cw--read" data-view={selectedId ? 'thread' : 'list'} style={style}>
+      <section className="workspace__list" id="conversation-list" aria-label={tx(section.label)}>
+        {/* The list's own bar: search, the kind of conversation, the order. */}
+        <div className="workspace__head">
           <SearchField
             value={search}
             onChange={setSearch}
             label={tx(TEXT.searchByName)}
             clearLabel={tx(TEXT.clearSearch)}
           />
-          {/* The kind of conversation is the list's main view: text tabs, as in the chat workspace. */}
-          {query.data && showTypeFilter && (
-            <div className="cw-filters">
-              <FilterChips
-                variant="tabs"
-                options={typeOptions}
-                value={typeFilter}
-                onChange={(v) => setParam('type', v)}
-                label={tx(TEXT.filterByType)}
-                formatCount={number}
-              />
-            </div>
-          )}
-        </div>
-        {query.data && (
-          <div className="workspace__filters cw-substrip">
-            <FilterChips
-              options={stateOptions}
-              value={stateFilter}
-              onChange={(v) => setParam('state', v)}
-              label={tx(TEXT.filterByStatus)}
-              formatCount={number}
-            />
-            <div className="workspace__controls">
+          <div className="cw-admin__bar">
+            {query.data && showTypeFilter && (
+              <div className="cw-filters">
+                <FilterChips
+                  variant="tabs"
+                  options={typeOptions}
+                  value={typeFilter}
+                  onChange={(v) => setParam('type', v)}
+                  label={tx(TEXT.filterByType)}
+                  formatCount={number}
+                />
+              </div>
+            )}
+          </div>
+          {query.data && (
+            <div className="cw-admin__sort">
               <SearchableSelect
                 className="select select--inline select--sm"
                 value={sort}
@@ -282,8 +294,8 @@ export function ConversationsView({ section }: { section: AdminSection }) {
                 <option value="name">{tx(TEXT.sortName)}</option>
               </SearchableSelect>
             </div>
-          </div>
-        )}
+          )}
+        </div>
         <div className="workspace__scroll">
           <QueryBoundary
             compact
@@ -308,16 +320,31 @@ export function ConversationsView({ section }: { section: AdminSection }) {
                 }
               />
             ) : (
-              groups.map((g) => (
-                <div className="conv-group" key={g.key}>
-                  {g.group && <h2 className="conv-group__title">{tx(TEXT[GROUP_LABEL[g.group]])}</h2>}
-                  <ul className="conv-list">
-                    {g.rows.map((c) => (
-                      <ConversationRow key={c.id} c={c} to={linkTo(c.id)} selected={c.id === selectedId} />
-                    ))}
-                  </ul>
-                </div>
-              ))
+              <>
+                {waitingRows.length > 0 && (
+                  <section className="cw-sec cw-sec--needs">
+                    <h2 className="cw-sec__title">
+                      {label(CONVERSATION_STATE, 'waiting_on_jawwid')}
+                      <span className="count count--urgent">{number(waitingRows.length)}</span>
+                    </h2>
+                    <ul className="conv-list">
+                      {waitingRows.map((c) => (
+                        <ConversationRow key={c.id} c={c} to={linkTo(c.id)} selected={c.id === selectedId} />
+                      ))}
+                    </ul>
+                  </section>
+                )}
+                {groups.map((g) => (
+                  <section className="cw-sec cw-sec--rest conv-group" key={g.key}>
+                    {g.group && <h2 className="cw-sec__title conv-group__title">{tx(TEXT[GROUP_LABEL[g.group]])}</h2>}
+                    <ul className="conv-list">
+                      {g.rows.map((c) => (
+                        <ConversationRow key={c.id} c={c} to={linkTo(c.id)} selected={c.id === selectedId} />
+                      ))}
+                    </ul>
+                  </section>
+                ))}
+              </>
             )}
             {query.data?.truncated && <p className="list-footnote workspace__footnote">{tx(TEXT.truncated)}</p>}
           </QueryBoundary>
@@ -370,6 +397,7 @@ export function ConversationsView({ section }: { section: AdminSection }) {
         </Dialog>
       )}
     </div>
+    </div>
   )
 }
 
@@ -406,6 +434,7 @@ function ConversationRow({
   selected: boolean
 }) {
   const tx = useText()
+  const label = useLabel()
   const typeLabel = useTypeLabel()
   const plural = usePlural()
   const { locale, dateTime } = useI18n()
@@ -432,7 +461,14 @@ function ConversationRow({
             <span className="conv-row__sub">
               {typeLabel(c.type)} · {plural(PLURAL.members, c.liveMembers)}
             </span>
-            <ConversationStateBadge state={c.state} />
+            {c.state === 'waiting_on_jawwid' ? (
+              <span className="cw-row__waited" title={dateTime(c.lastActivityAt)} aria-label={label(CONVERSATION_STATE, c.state)}>
+                <Icon name="hourglass" size={13} />
+                {waitedFor(c.lastActivityAt, locale)}
+              </span>
+            ) : (
+              <ConversationStateBadge state={c.state} />
+            )}
           </span>
         </span>
       </Link>

@@ -1367,3 +1367,4 @@ td.cell-actions, th.cell-actions { inline-size: 1%; white-space: nowrap; text-al
 .sidebar__brand-link .brand { padding: 5px 8px; border-radius: var(--radius); background: #fff; }
 :root .sidebar .sidebar__brand-link .brand-logo--light { display: block; }
 :root .sidebar .sidebar__brand-link .brand-logo--dark { display: none; }
+.auth__side { background: var(--surface); }

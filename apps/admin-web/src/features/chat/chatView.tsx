@@ -1,3 +1,4 @@
+import { ACADEMY_ZONE, clock12In, dayMonthIn, weekdayIn, zoneLabel } from '@/core/time/academyTime'
 import { Avatar } from '@/shared/components/Avatar'
 import { Icon, type IconName } from '@/shared/components/Icon'
 import type { ChatConversation, ChatLastMessage } from './chatApi'
@@ -138,6 +139,19 @@ export function ConversationAvatar({
       )}
     </span>
   )
+}
+
+/** "Sun 29 Nov, 5:00 PM": an instant on the academy's clock, in the UI language, with Western digits. */
+export function lessonWhen(iso: string, locale: 'ar' | 'en'): string {
+  if (Number.isNaN(new Date(iso).getTime())) return ''
+  const day = `${weekdayIn(iso, ACADEMY_ZONE, locale)} ${dayMonthIn(iso, ACADEMY_ZONE, locale)}`
+  return `${day}${locale === 'ar' ? '،' : ','} ${clock12In(iso, ACADEMY_ZONE, locale)}`
+}
+
+/** The same, saying whose clock it is: "Sun 29 Nov, 5:00 PM (Cairo time)", for a card families in other zones also read. */
+export function callWhen(iso: string, locale: 'ar' | 'en'): string {
+  const when = lessonWhen(iso, locale)
+  return when && `${when} (${zoneLabel(ACADEMY_ZONE, locale)})`
 }
 
 /** A conversation with no name of its own: the conversations glyph, never initials of a placeholder. */
