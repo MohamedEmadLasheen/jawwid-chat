@@ -780,3 +780,18 @@ button.sc-heat--off { cursor: pointer; }
   .sc-grid--week .sc-row__sub { display: block; text-overflow: ellipsis; }
   .sc-grid--week .sc-dayhead__name { font-size: var(--fs-xs); }
 }
+
+/* The month's five steps in dark: mixing the light text teal into the dark surface left steps 1-2 unseen
+   and step 4 too pale for white. A ramp of its own, each step clearly apart; white reads on the last. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .sc-heat--1 { background: #1f3c41; }
+  :root:not([data-theme='light']) .sc-heat--2 { background: #255058; }
+  :root:not([data-theme='light']) .sc-heat--3 { background: #2c6670; }
+  :root:not([data-theme='light']) .sc-heat--4 { background: #2f7f8b; color: #fff; }
+}
+
+/* The same, when the person chose Dark (the theme switch; data-theme on <html>). */
+:root[data-theme='dark'] .sc-heat--1 { background: #1f3c41; }
+:root[data-theme='dark'] .sc-heat--2 { background: #255058; }
+:root[data-theme='dark'] .sc-heat--3 { background: #2c6670; }
+:root[data-theme='dark'] .sc-heat--4 { background: #2f7f8b; color: #fff; }

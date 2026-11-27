@@ -34,6 +34,8 @@
   --teal-solid-hover: var(--teal-dark);
   --urgent-solid: var(--urgent);
   --avatar-bg: #ece7dc;
+  /* What floats over the page (menus, search, dialogs, tooltips): the surface in light, a step up in dark. */
+  --surface-raised: var(--surface);
   --canvas: #fbf8f1;
   --surface: #ffffff;
   --surface-2: #f7f4ec;
@@ -228,7 +230,7 @@ html[lang='ar'] {
     --urgent: #f2867a;
     --urgent-tint: #3d1e1b;
     --urgent-line: #6a2d27;
-    --waiting: #e6b25f;
+    --waiting: #f09a52;
     --waiting-tint: #3a2b10;
     --done: #74c79a;
     --done-tint: #163326;
@@ -248,6 +250,10 @@ html[lang='ar'] {
     --teal-solid-hover: #31909e;
     --urgent-solid: #c4463a;
     --avatar-bg: #23383c;
+    --surface-raised: #1d2e32;
+    --shadow-pop: 0 8px 28px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.06);
+    --shadow-palette: 0 24px 64px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.07);
+    --shadow-lift: 0 1px 2px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.3);
     color-scheme: dark;
   }
 }
@@ -272,7 +278,7 @@ html[lang='ar'] {
   --urgent: #f2867a;
   --urgent-tint: #3d1e1b;
   --urgent-line: #6a2d27;
-  --waiting: #e6b25f;
+  --waiting: #f09a52;
   --waiting-tint: #3a2b10;
   --done: #74c79a;
   --done-tint: #163326;
@@ -292,6 +298,10 @@ html[lang='ar'] {
   --teal-solid-hover: #31909e;
   --urgent-solid: #c4463a;
   --avatar-bg: #23383c;
+  --surface-raised: #1d2e32;
+  --shadow-pop: 0 8px 28px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --shadow-palette: 0 24px 64px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.07);
+  --shadow-lift: 0 1px 2px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.3);
   color-scheme: dark;
 }
 
@@ -1324,3 +1334,19 @@ button.side__item.is-current::before { content: none; }
 :root[data-theme='dark'] .brand { display: inline-flex; padding: 5px 9px; border-radius: 9px; background: #fbf8f1; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06); }
 :root[data-theme='dark'] .brand > .brand-logo--light { display: block; }
 :root[data-theme='dark'] .brand > .brand-logo--dark { display: none; }
+
+/* Dark review (fresh critic, 2026-11-28). */
+/* What floats separates from what is under it: a raised surface and a shadow that reads on dark. */
+:root .menu__popover, :root .sidebar .side__menu, :root .dialog, :root .palette { background: var(--surface-raised); }
+.side__menu-title { background: var(--surface-raised); }
+/* A menu item in keyboard focus is seen in both themes (it had only a faint hover tint). */
+.menu__item:focus-visible { background: var(--teal-tint); outline: 2px solid var(--teal); outline-offset: -2px; }
+/* The folded rail's tooltip in dark matches the menus instead of a near-white plate. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .side__tip { background: var(--surface-raised); color: var(--ink); box-shadow: var(--shadow-pop); border: 1px solid var(--line-strong); }
+  :root:not([data-theme='light']) .palette-backdrop { background: var(--overlay); }
+}
+
+/* The same, when the person chose Dark (the theme switch; data-theme on <html>). */
+:root[data-theme='dark'] .side__tip { background: var(--surface-raised); color: var(--ink); box-shadow: var(--shadow-pop); border: 1px solid var(--line-strong); }
+:root[data-theme='dark'] .palette-backdrop { background: var(--overlay); }

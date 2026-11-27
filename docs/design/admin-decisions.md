@@ -140,6 +140,14 @@ This replaces the earlier "labelled navigation" instruction.
 - **Brand.**
   - On dark surfaces (the opened sidebar, the phone top bar, sign-in), the wordmark is the original lockup on a small cream plate (#fbf8f1), its own colours on the surface they were drawn for. The lighter "dark" lockup variant reads dim on dark, and using it would be a recolour.
   - The folded rail's gold book mark reads well on dark and has no plate.
+- **Dark critic round (fresh eyes), all fixed:**
+  - `--waiting` moved to orange (#f09a52) in dark: at #e6b25f it matched the gold, and gold stopped meaning "now".
+  - Floating surfaces (menus, place menus, search, dialogs) use `--surface-raised` (#1d2e32 in dark) with shadows made for dark. The search backdrop dims with `--overlay`.
+  - The month heat has its own five dark steps, with white readable on the last.
+  - A menu item in keyboard focus shows a teal outline and tint, in both themes.
+  - The folded rail's tooltip matches the menus instead of a white plate.
+  - Story colour swatches always show their edge.
+  - Kept as they are: the Arabic label inside an English sentence is already isolated (`<bdi>`) and reads right to left as Arabic should; the cream wordmark plate is the brightest object by design.
 - **Review.** Every page was shot in dark, folded and opened, in Arabic and English, plus phones, and the menus, tooltip, dialog, search, schedule day and month views and row hover. Auto, forced Light on a dark device, and forced Dark on a light device were each verified.
 
 ## Lead decisions while integrating
