@@ -1,10 +1,22 @@
 import { useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Badge } from '@/shared/components/Badge'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
+import { Icon } from '@/shared/components/Icon'
 import { ReasonDialog } from '@/shared/components/ReasonDialog'
+import { DetailActions, DetailEnd, DetailSection, FlowSteps, type FlowStep, type StepState } from '@/shared/components/RequestQueue'
 import { QueryBoundary } from '@/shared/components/States'
-import { CERTIFICATE_ACCEPT, MAX_CERTIFICATE_BYTES, certificatesApi, type Certificate, type CertificateAct, type ConsentContact } from './api'
+import {
+  CERTIFICATE_ACCEPT,
+  MAX_CERTIFICATE_BYTES,
+  certificatesApi,
+  type Certificate,
+  type CertificateAct,
+  type CertificateState,
+  type ConsentContact,
+  type HistoryEntry,
+} from './api'
 import { C, actLabel, describeError, isCode, stateLabel, stateTone, useCopy, type Pair } from './copy'
 import { useCertificate, useCertificateAct, useConsent, useDeliveryTarget, useUploadDesign } from './hooks'
 import { RequestDialog } from './RequestDialog'
@@ -19,13 +31,127 @@ const WITH_REASON: Partial<Record<CertificateAct, { path: string; field: 'reason
   decline: { path: 'decline', field: 'reason' },
 }
 const DIRECT: Partial<Record<CertificateAct, string>> = { start: 'start', resubmit: 'resubmit', release: 'release' }
+const PRIMARY: ReadonlySet<CertificateAct> = new Set<CertificateAct>(['approve', 'send', 'start', 'upload', 'accept'])
+/** The acts that end a request: offered at the end of the detail, apart from the ones that move it on. */
+const ENDS: ReadonlySet<CertificateAct> = new Set<CertificateAct>(['cancel', 'decline'])
+/** The act that moves the request on comes first. */
+const rank = (a: CertificateAct) => (PRIMARY.has(a) ? 0 : 1)
+
+/** How far along the flow each state stands: request, design, review, send. */
+const STAGE: Record<CertificateState, number> = {
+  proposed: -1,
+  requested: 1,
+  in_design: 1,
+  changes_requested: 1,
+  uploaded: 2,
+  approved: 3,
+  sent: 4,
+  cancelled: 0,
+  declined: 0,
+}
+
+/** A certificate's state and what goes with it: the Story, the delivery. */
+export function CertificateStatus({ certificate: c }: { certificate: Certificate }) {
+  const tx = useCopy()
+  return (
+    <>
+      <Badge tone={stateTone(c.state)} dot>{tx(stateLabel(c.state))}</Badge>
+      {c.projection === 'full' && c.publishStory && (
+        <Badge tone={c.story && !c.story.withdrawnAt ? 'info' : 'waiting'}>{tx(c.story && !c.story.withdrawnAt ? C.storyPublished : C.storyOptedIn)}</Badge>
+      )}
+      {c.projection === 'design' && c.delivered && <Badge tone="ok">{tx(C.deliveredYes)}</Badge>}
+    </>
+  )
+}
+
+/** The request's steps, from what the server recorded: who, when, and where it stands now. */
+export function certificateSteps(c: Certificate | null, tx: ReturnType<typeof useCopy>, when: (iso: string) => string): FlowStep[] {
+  if (!c) {
+    // No certificate open: the flow itself, as a legend.
+    return (['st_requested', 'st_design', 'st_review', 'st_send'] as const).map((k) => ({ key: k, label: tx(C[k]), state: 'todo' as StepState }))
+  }
+  const full = c.projection === 'full' ? c : null
+  const closed = c.state === 'cancelled' || c.state === 'declined'
+  // A closed request got as far as its own record shows.
+  const reached = closed ? (full?.sent ? 4 : full?.approval ? 3 : c.currentFile ? 2 : c.designStartedAt ? 1 : 0) : STAGE[c.state]
+  const at = (stage: number): StepState => (reached > stage ? 'done' : reached === stage && !closed ? 'current' : closed ? 'skipped' : 'todo')
+  const who = (name: string | null | undefined, iso?: string | null) =>
+    name || iso ? (
+      <>
+        {name && <bdi>{name}</bdi>}
+        {name && iso && ' · '}
+        {iso && <time dateTime={iso}>{when(iso)}</time>}
+      </>
+    ) : undefined
+
+  const steps: FlowStep[] = []
+  const suggester = full?.suggestedBy
+  if (c.state === 'proposed' || suggester) {
+    steps.push({ key: 'suggested', label: tx(C.st_suggested), state: c.state === 'proposed' ? 'current' : 'done', meta: who(suggester?.name) })
+  }
+  if (c.state !== 'declined') {
+    steps.push({
+      key: 'requested',
+      label: tx(C.st_requested),
+      state: c.state === 'proposed' ? 'todo' : 'done',
+      meta: c.state === 'proposed' ? undefined : who(full ? full.requestedBy?.name : c.projection === 'design' ? c.requesterName : null, c.requestedAt),
+    })
+    steps.push({
+      key: 'design',
+      label: tx(C.st_design),
+      state: at(1),
+      meta:
+        c.state === 'requested' ? tx(C.waitingDesigner) : c.state === 'changes_requested' ? tx(C.s_changes_requested) : who(c.assignedDesigner?.name, c.designStartedAt),
+    })
+    steps.push({
+      key: 'review',
+      label: tx(C.st_review),
+      state: at(2),
+      meta:
+        c.state === 'uploaded' ? tx(C.s_uploaded) : full?.approval ? who(full.approval.by?.name, full.approval.at) : c.currentFile && reached >= 2 ? tx(C.revision, { n: c.currentFile.revision }) : undefined,
+    })
+    steps.push({
+      key: 'send',
+      label: tx(C.st_send),
+      state: reached >= 4 || (c.projection === 'design' && c.delivered) ? 'done' : at(3),
+      meta: c.state === 'approved' ? tx(C.readyToSend) : full?.sent ? who(full.sent.by?.name, full.sent.at) : undefined,
+    })
+    if (full?.publishStory) {
+      const live = !!full.story && !full.story.withdrawnAt
+      steps.push({
+        key: 'story',
+        label: tx(C.st_story),
+        state: live ? 'done' : closed ? 'skipped' : 'todo',
+        meta: live ? who(null, full.story!.publishedAt) ?? tx(C.storyPublished) : tx(C.storyOptedIn),
+      })
+    }
+  }
+  if (closed) {
+    const end = full?.cancelled
+    const decided = full?.suggestion
+    steps.push({
+      key: 'closed',
+      label: tx(stateLabel(c.state)),
+      state: 'done',
+      meta: c.state === 'cancelled' ? who(end?.by?.name, end?.at) : who(decided?.decidedBy?.name, decided?.decidedAt),
+      children: (end?.reason ?? decided?.declineReason) ? <p className="rq-quote" dir="auto">{end?.reason ?? decided?.declineReason}</p> : undefined,
+    })
+  }
+  return steps
+}
+
+/** A history line in the reader's words: the state it moved to, or the event's own name when the state stayed. */
+function historyLabel(h: HistoryEntry, tx: ReturnType<typeof useCopy>): string {
+  return h.fromState !== h.toState ? tx(stateLabel(h.toState)) : h.kind.replace(/_/g, ' ')
+}
 
 /**
- * One certificate: what it says, its design, the review, the delivery and the
- * history. The buttons are the server's `actions` -- the Designer never sees
- * approve, send or Story, because the server never offers them.
+ * One certificate: its steps, what it says, its design, the review, the
+ * delivery and the history. The buttons are the server's `actions` -- the
+ * Designer never sees approve, send or Story, because the server never offers
+ * them. The page shows it in the panel beside the queue, or in the side sheet.
  */
-export function CertificateDrawer({ certificateId, onClose }: { certificateId: string; onClose: () => void }) {
+export function CertificateDetail({ certificateId }: { certificateId: string }) {
   const tx = useCopy()
   const { locale, dateTime } = useI18n()
   const one = useCertificate(certificateId)
@@ -54,8 +180,7 @@ export function CertificateDrawer({ certificateId, onClose }: { certificateId: s
 
   const button = (a: CertificateAct) => {
     const label = tx(actLabel(a))
-    const primary = a === 'approve' || a === 'send' || a === 'start' || a === 'upload' || a === 'accept'
-    const cls = primary ? 'btn btn--primary' : 'btn'
+    const cls = PRIMARY.has(a) ? 'btn btn--primary' : ENDS.has(a) ? 'btn btn--sm rq-danger' : 'btn'
     if (WITH_REASON[a]) return <button key={a} type="button" className={cls} onClick={() => setReasonFor(a)}>{label}</button>
     if (DIRECT[a]) return <button key={a} type="button" className={cls} disabled={act.isPending} onClick={() => run(DIRECT[a]!)}>{label}</button>
     if (a === 'approve') {
@@ -78,63 +203,66 @@ export function CertificateDrawer({ certificateId, onClose }: { certificateId: s
     return null
   }
 
+  const chat = c?.projection === 'full' ? c.sent?.conversationId ?? null : null
+
   return (
-    <Dialog title={c ? c.printedName : tx(C.title)} onClose={onClose} variant="sheet">
+    <>
       <QueryBoundary isLoading={one.isLoading} error={one.error} onRetry={() => void one.refetch()}>
         {c && (
-          <div className="cert-drawer">
-            <div className="cert-drawer__status">
-              <Badge tone={stateTone(c.state)}>{tx(stateLabel(c.state))}</Badge>
-              {c.projection === 'full' && c.publishStory && <Badge tone={c.story && !c.story.withdrawnAt ? 'info' : 'waiting'}>{tx(c.story && !c.story.withdrawnAt ? C.storyPublished : C.storyOptedIn)}</Badge>}
-              {c.projection === 'design' && c.delivered && <Badge tone="ok">{tx(C.deliveredYes)}</Badge>}
-            </div>
-
-            <dl className="cert-facts">
-              <Fact label={C.type} value={c.type ? tx({ en: c.type.labelEn, ar: c.type.labelAr }) : c.title} />
-              <Fact label={C.titleField} value={c.title} />
-              <Fact label={C.achievement} value={c.achievement} />
-              <Fact label={C.juz} value={c.juz} />
-              <Fact label={C.period} value={c.periodStart ? `${c.periodStart}${c.periodEnd ? ` → ${c.periodEnd}` : ''}` : null} />
-              <Fact label={C.achievedOn} value={c.achievedOn} />
-              <Fact label={C.grade} value={c.grade} />
-              {c.projection === 'full' ? (
-                <>
-                  <Fact label={C.student} value={c.learner?.name} />
-                  <Fact label={C.teacher} value={c.teacher?.name} />
-                  <Fact label={C.signatory} value={c.signatoryTeacher?.name} />
-                  <Fact label={C.requestedBy} value={c.requestedBy?.name ?? c.suggestedBy?.name} />
-                  <Fact label={C.internalNote} value={c.internalNote} />
-                </>
-              ) : (
-                <>
-                  <Fact label={C.signatory} value={c.signatoryName} />
-                  <Fact label={C.requestedBy} value={c.requesterName} />
-                </>
-              )}
-              <Fact label={C.designerNote} value={c.designerNote} />
-              <Fact label={C.designer} value={c.assignedDesigner?.name} />
-              <Fact label={C.requested} value={dateTime(c.requestedAt)} />
-            </dl>
-
+          <>
             {c.returnMessage && (c.state === 'changes_requested' || c.state === 'in_design') && (
               <div className="cert-callout" role="note">
                 <strong>{tx(C.returnMessage)}:</strong> <span dir="auto">{c.returnMessage}</span>
               </div>
             )}
 
+            <DetailSection title={tx(C.steps)}>
+              <FlowSteps steps={certificateSteps(c, tx, dateTime)} label={tx(C.steps)} />
+            </DetailSection>
+
+            <DetailSection title={tx(C.theRequest)}>
+              <dl className="rq-fields">
+                <Fact label={C.type} value={c.type ? tx({ en: c.type.labelEn, ar: c.type.labelAr }) : c.title} />
+                <Fact label={C.titleField} value={c.title} />
+                <Fact label={C.achievement} value={c.achievement} />
+                <Fact label={C.juz} value={c.juz} />
+                <Fact label={C.period} value={c.periodStart ? `${c.periodStart}${c.periodEnd ? ` → ${c.periodEnd}` : ''}` : null} />
+                <Fact label={C.achievedOn} value={c.achievedOn} />
+                <Fact label={C.grade} value={c.grade} />
+                {c.projection === 'full' ? (
+                  <>
+                    <Fact label={C.student} value={c.learner?.name} />
+                    <Fact label={C.teacher} value={c.teacher?.name} />
+                    <Fact label={C.signatory} value={c.signatoryTeacher?.name} />
+                    <Fact label={C.requestedBy} value={c.requestedBy?.name ?? c.suggestedBy?.name} />
+                    <Fact label={C.internalNote} value={c.internalNote} />
+                  </>
+                ) : (
+                  <>
+                    <Fact label={C.signatory} value={c.signatoryName} />
+                    <Fact label={C.requestedBy} value={c.requesterName} />
+                  </>
+                )}
+                <Fact label={C.designerNote} value={c.designerNote} />
+                <Fact label={C.designer} value={c.assignedDesigner?.name} />
+                <Fact label={C.requested} value={dateTime(c.requestedAt)} />
+              </dl>
+            </DetailSection>
+
             {c.files.length > 0 && (
-              <section aria-label={tx(C.files)}>
-                <h3 className="cert-h">{tx(C.files)}</h3>
+              <DetailSection title={tx(C.files)}>
                 <ul className="cert-files">
                   {c.files.map((f) => (
                     <li key={f.id}>
-                      <span>{tx(C.revision, { n: f.revision })} · <span dir="auto">{f.fileName}</span></span>
-                      {f.id === c.currentFile?.id && <Badge tone="info">✓</Badge>}
-                      <button type="button" className="btn btn--small" onClick={() => void openFile(f.id)}>{tx(C.open)}</button>
+                      <span className="cert-files__name">
+                        {tx(C.revision, { n: f.revision })} · <span dir="auto">{f.fileName}</span>
+                        {f.id === c.currentFile?.id && <span className="cert-files__current">{tx(C.current)}</span>}
+                      </span>
+                      <button type="button" className="btn btn--sm" onClick={() => void openFile(f.id)}>{tx(C.open)}</button>
                     </li>
                   ))}
                 </ul>
-              </section>
+              </DetailSection>
             )}
 
             {c.projection === 'full' && c.category === 'student' && c.publishStory && (
@@ -143,30 +271,41 @@ export function CertificateDrawer({ certificateId, onClose }: { certificateId: s
               </p>
             )}
 
+            {c.history && c.history.length > 0 && (
+              <DetailSection title={tx(C.history)}>
+                <ol className="cert-history">
+                  {c.history.map((h) => (
+                    <li key={h.seq}>
+                      <strong title={h.kind}>{historyLabel(h, tx)}</strong>
+                      {h.actor?.name ? <> · <span dir="auto">{h.actor.name}</span></> : null}
+                      <span className="cert-history__when">{dateTime(h.at)}</span>
+                      {h.note ? <div className="cert-history__note" dir="auto">{h.note}</div> : null}
+                    </li>
+                  ))}
+                </ol>
+              </DetailSection>
+            )}
+
             <input ref={fileInput} type="file" accept={CERTIFICATE_ACCEPT} hidden onChange={(e) => onFile(e.target.files?.[0])} aria-label={tx(C.a_upload)} />
-            {c.actions.length > 0 && <div className="cert-actions">{c.actions.map(button)}</div>}
             {(fileError || upload.error || act.error) && (
               <div className="field__error" role="alert">
                 {fileError ?? describeError(upload.error ?? act.error, locale)}
               </div>
             )}
             {c.actions.includes('upload') && <p className="field__hint">{tx(C.uploadHint)}</p>}
-
-            {c.history && c.history.length > 0 && (
-              <section aria-label={tx(C.history)}>
-                <h3 className="cert-h">{tx(C.history)}</h3>
-                <ol className="cert-history">
-                  {c.history.map((h) => (
-                    <li key={h.seq}>
-                      <span className="cert-history__when">{dateTime(h.at)}</span> <strong>{h.kind.replace(/_/g, ' ')}</strong>
-                      {h.actor?.name ? <> · <span dir="auto">{h.actor.name}</span></> : null}
-                      {h.note ? <div className="cert-history__note" dir="auto">{h.note}</div> : null}
-                    </li>
-                  ))}
-                </ol>
-              </section>
+            {c.actions.some((x) => ENDS.has(x)) && <DetailEnd>{c.actions.filter((x) => ENDS.has(x)).map(button)}</DetailEnd>}
+            {(c.actions.some((x) => !ENDS.has(x)) || chat) && (
+              <DetailActions>
+                {c.actions.filter((x) => !ENDS.has(x)).sort((a, b) => rank(a) - rank(b)).map(button)}
+                {chat && (
+                  <Link className="btn" to={`/chat/${encodeURIComponent(chat)}`}>
+                    <Icon name="conversations" size={18} />
+                    {tx(C.openChat)}
+                  </Link>
+                )}
+              </DetailActions>
             )}
-          </div>
+          </>
         )}
       </QueryBoundary>
 
@@ -192,7 +331,7 @@ export function CertificateDrawer({ certificateId, onClose }: { certificateId: s
       {c && (dialog === 'edit' || dialog === 'accept') && c.projection === 'full' && (
         <RequestDialog category={c.category} editing={c} mode={dialog} onClose={() => setDialog(null)} />
       )}
-    </Dialog>
+    </>
   )
 }
 
@@ -200,10 +339,10 @@ function Fact({ label, value }: { label: Pair; value: string | number | null | u
   const tx = useCopy()
   if (value === null || value === undefined || value === '') return null
   return (
-    <>
+    <div className="rq-field">
       <dt>{tx(label)}</dt>
       <dd dir="auto">{value}</dd>
-    </>
+    </div>
   )
 }
 

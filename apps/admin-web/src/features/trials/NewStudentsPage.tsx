@@ -7,9 +7,22 @@ import { TrialPaymentsDialog, TrialRequestsSummary } from '@/features/payments/T
 import { PAY } from '@/features/payments/copy'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
 import { Badge } from '@/shared/components/Badge'
-import { FilterChips, type FilterOption } from '@/shared/components/FilterChips'
 import { Icon } from '@/shared/components/Icon'
 import { PageHeader } from '@/shared/components/PageHeader'
+import {
+  Age,
+  DetailHead,
+  DetailSection,
+  FlowStrip,
+  RequestQueue,
+  RowOpen,
+  ageText,
+  rowOpener,
+  useWidePane,
+  waitedOvernight,
+  type FlowCell,
+  type FlowStep,
+} from '@/shared/components/RequestQueue'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
 import type { Pair } from '../teachers/copy'
 import { describeOpsError } from '../teachers/opsCopy'
@@ -36,6 +49,9 @@ import '../teachers/teachers.css'
 import './trials.css'
 import './new-students.css'
 
+/** A family nobody was assigned to since before today is late; a parent's turn is never late. */
+const assignLate = (s: NewStudentDto, status: NewStudentStatus) => status === 'unassigned' && waitedOvernight(s.recordedAt)
+
 /**
  * The New Students page (trial journey): every family that subscribed after a
  * trial, exactly as Sales recorded it in Chat -- the parent, each child with
@@ -43,14 +59,20 @@ import './new-students.css'
  * details live here only; the trial group was told "The student has
  * subscribed." and nothing more. Operations, Sales and the super admin read
  * it; Sales may correct a typo.
+ *
+ * Laid out as a request queue: the setup states as a strip of counts, the
+ * families as the queue, and the open family's record beside it. Below 1100px
+ * the page has no drawer of its own, so every record is listed in full.
  */
 export function NewStudentsPage() {
-  const { locale, number } = useI18n()
+  const { locale } = useI18n()
   const tx = (p: Pair) => (locale === 'ar' ? p.ar : p.en)
   const q = useNewStudents()
   const access = useTrialsAccess()
+  const wide = useWidePane()
   const [editing, setEditing] = useState<NewStudentDto | null>(null)
   const [paying, setPaying] = useState<NewStudentDto | null>(null)
+  const [openId, setOpenId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   // PD-44: the filter lives in the URL, so a Dashboard tile opens the filter
   // it counted (?filter=unassigned|waiting|signed_up) and a later link moves it too.
@@ -73,62 +95,121 @@ export function NewStudentsPage() {
 
   // PD-32: one status per card drives the badge and the filter; the search is on names.
   const statuses = useMemo(() => new Map(students.map((s) => [s.trialId, newStudentStatus(s)])), [students])
+  const statusOf = (s: NewStudentDto) => statuses.get(s.trialId) ?? 'unassigned'
   const searched = students.filter((s) => matchesSearch(s, search))
-  const shown = searched.filter((s) => matchesFilter(statuses.get(s.trialId) ?? 'unassigned', filter))
-  const count = (f: StatusFilter) => searched.filter((s) => matchesFilter(statuses.get(s.trialId) ?? 'unassigned', f)).length
-  const options: Array<FilterOption<StatusFilter>> = [
-    { value: 'all', label: tx(NS.all), count: count('all') },
-    { value: 'unassigned', label: tx(STATUS.unassigned.label), count: count('unassigned') },
-    { value: 'waiting', label: tx(STATUS.waiting.label), count: count('waiting') },
-    { value: 'signed_up', label: tx(STATUS.signed_up.label), count: count('signed_up') },
+  const shown = searched.filter((s) => matchesFilter(statusOf(s), filter))
+  const count = (f: StatusFilter) => searched.filter((s) => matchesFilter(statusOf(s), f)).length
+  const unassigned = searched.filter((s) => statusOf(s) === 'unassigned')
+  const oldest = unassigned.reduce<NewStudentDto | null>((a, s) => (a === null || s.recordedAt < a.recordedAt ? s : a), null)
+  const locked = searched.filter((s) => statusOf(s) === 'locked').length
+  const cells: Array<FlowCell<StatusFilter>> = [
+    { key: 'all', label: tx(NS.all), count: count('all'), apart: true },
+    {
+      key: 'unassigned',
+      label: tx(STATUS.unassigned.label),
+      count: count('unassigned'),
+      note: oldest ? tx(NS.oldest).replace('{age}', ageText(oldest.recordedAt, locale)) : undefined,
+      late: unassigned.some((s) => assignLate(s, 'unassigned')),
+    },
+    {
+      key: 'waiting',
+      label: tx(STATUS.waiting.label),
+      count: count('waiting'),
+      note: locked > 0 ? tx(NS.lockedCount).replace('{n}', String(locked)) : undefined,
+      late: locked > 0,
+    },
+    { key: 'signed_up', label: tx(STATUS.signed_up.label), count: count('signed_up') },
   ]
 
+  const record = (s: NewStudentDto) => (
+    <FamilyRecord
+      key={s.trialId}
+      s={s}
+      status={statusOf(s)}
+      canAssign={q.data?.canAssign === true}
+      // PD-16: a form that became a family is frozen.
+      onEdit={access.sales && !s.enrolment ? () => setEditing(s) : undefined}
+      onPayments={mayRequestPayment ? () => setPaying(s) : undefined}
+    />
+  )
+  // Beside the queue the panel always shows a family: the one picked, else the first in the list.
+  const open = wide ? shown.find((s) => s.trialId === openId) ?? shown[0] ?? null : null
+
   return (
-    <div className="page">
+    <div className="page rq-page ns-page">
       <div className="page__inner">
         <TrialsAreaTabs />
         <PageHeader title={tx(TR.newTitle)} subtitle={tx(TR.newSubtitle)} />
-        <QueryBoundary isLoading={q.isLoading} error={q.error} onRetry={() => void q.refetch()}>
-          {students.length === 0 ? (
-            <EmptyState title={tx(TR.nothingNew)} />
-          ) : (
-            <>
-              <div className="ns-toolbar">
-                <label className="search ns-toolbar__search">
-                  <Icon name="search" size={16} />
-                  <span className="sr-only">{tx(NS.search)}</span>
-                  <input
-                    className="input"
-                    type="search"
-                    value={search}
-                    placeholder={tx(NS.search)}
-                    onChange={(e) => setSearch(e.target.value)}
-                  />
-                </label>
-                <FilterChips options={options} value={filter} onChange={setFilter} label={tx(NS.filterLabel)} formatCount={(n) => number(n)} />
-              </div>
-              {shown.length === 0 ? (
-                <EmptyState title={tx(NS.noMatch)} />
-              ) : (
-                <div className="ns-list">
-                  {shown.map((s) => (
-                    <StudentCard
-                      key={s.trialId}
-                      s={s}
-                      status={statuses.get(s.trialId) ?? 'unassigned'}
-                      canAssign={q.data?.canAssign === true}
-                      // PD-16: a form that became a family is frozen.
-                      onEdit={access.sales && !s.enrolment ? () => setEditing(s) : undefined}
-                      onPayments={mayRequestPayment ? () => setPaying(s) : undefined}
+        {students.length > 0 && <FlowStrip label={tx(NS.filterLabel)} cells={cells} value={filter} onChange={setFilter} />}
+        <RequestQueue
+          label={tx(NS.panelLabel)}
+          detail={open && { id: open.trialId, title: open.parent.name, bare: true, pinned: true, onClose: () => setOpenId(null), body: record(open) }}
+        >
+          <QueryBoundary isLoading={q.isLoading} error={q.error} onRetry={() => void q.refetch()}>
+            {students.length === 0 ? (
+              <EmptyState title={tx(TR.nothingNew)} hint={tx(NS.emptyHint)} />
+            ) : (
+              <>
+                <div className="rq-toolbar">
+                  <label className="search">
+                    <Icon name="search" size={16} />
+                    <span className="sr-only">{tx(NS.search)}</span>
+                    <input
+                      className="input"
+                      type="search"
+                      value={search}
+                      placeholder={tx(NS.search)}
+                      onChange={(e) => setSearch(e.target.value)}
                     />
-                  ))}
+                  </label>
                 </div>
-              )}
-            </>
-          )}
-        </QueryBoundary>
-        {/* PD-42 PR-3: the families supervisors entered by hand, to whoever owns them (the server's answer). */}
-        <EnteredFamilies />
+                {shown.length === 0 ? (
+                  <EmptyState title={tx(NS.noMatch)} />
+                ) : wide ? (
+                  <div className="table-wrap">
+                    <table className="table rq-table">
+                      <thead>
+                        <tr>
+                          <th scope="col">{tx(NS.family)}</th>
+                          <th scope="col">{tx(NS.supervisor)}</th>
+                          <th scope="col" className="rq-c--more">{tx(NS.recordedCol)}</th>
+                          <th scope="col">{tx(NS.status)}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {shown.map((s) => {
+                          const status = statusOf(s)
+                          return (
+                            <tr key={s.trialId} data-selected={open?.trialId === s.trialId || undefined} onClick={rowOpener(() => setOpenId(s.trialId))}>
+                              <th scope="row" className="rq-c-who">
+                                <RowOpen selected={open?.trialId === s.trialId} onOpen={() => setOpenId(s.trialId)}>{s.parent.name}</RowOpen>
+                                <span className="rq-sub"><bdi>{s.children.map((c) => c.name).join(' · ')}</bdi></span>
+                              </th>
+                              <td className="rq-c-meta">
+                                {s.enrolment?.supervisor ? <bdi>{s.enrolment.supervisor.name}</bdi> : <span className="rq-muted">—</span>}
+                              </td>
+                              <td className="rq-c-when rq-c--more">
+                                <Age iso={s.recordedAt} late={assignLate(s, status)} />
+                                <span className="rq-sub"><bdi>{s.recordedBy.name}</bdi></span>
+                              </td>
+                              <td className="rq-c-status">
+                                <Badge tone={STATUS[status].tone} dot>{tx(STATUS[status].label)}</Badge>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="ns-list">{shown.map(record)}</div>
+                )}
+              </>
+            )}
+          </QueryBoundary>
+          {/* PD-42 PR-3: the families supervisors entered by hand, to whoever owns them (the server's answer). */}
+          <EnteredFamilies />
+        </RequestQueue>
         {editing && <EditSubscriptionDialog student={editing} onClose={() => setEditing(null)} />}
         {paying && <TrialPaymentsDialog trialId={paying.trialId} name={paying.parent.name} onClose={() => setPaying(null)} />}
       </div>
@@ -138,10 +219,10 @@ export function NewStudentsPage() {
 
 /**
  * PD-32: one family, read top to bottom -- who (the parent, the status, who
- * recorded it), the trial it came from, then three blocks side by side
- * (contact, payment, setup) and the children in one aligned table.
+ * recorded it), its steps from the trial to the parent's sign-up, each with
+ * its own control, then the contact, the payment and the children.
  */
-function StudentCard({
+function FamilyRecord({
   s,
   status,
   onEdit,
@@ -158,114 +239,123 @@ function StudentCard({
   const tx = (p: Pair) => (locale === 'ar' ? p.ar : p.en)
   const money = (n: number) => formatAmount(n, s.payment.currency, locale)
   const headingId = `ns-${s.trialId}`
+  const before: FlowStep[] = [
+    {
+      key: 'trial',
+      label: tx(NS.stepTrial),
+      state: 'done',
+      meta: (
+        <>
+          <bdi>{s.prospectName}</bdi>
+          {s.trialTeacher && <> · <bdi>{s.trialTeacher.name}</bdi></>}
+          {s.trialAt && <> · <time dateTime={s.trialAt}>{formatWhen(s.trialAt, locale)}</time></>}
+        </>
+      ),
+    },
+    { key: 'recorded', label: tx(NS.stepRecorded), state: 'done', meta: <time dateTime={s.recordedAt}>{formatWhen(s.recordedAt, locale)}</time> },
+  ]
   return (
-    <article className="card ns-card" aria-labelledby={headingId}>
-      <header className="ns-card__head">
-        <div className="ns-card__who">
-          <div className="ns-card__title-row">
-            <h2 id={headingId} className="ns-card__title" dir="auto">{s.parent.name}</h2>
+    <article className="ns-record" aria-labelledby={headingId}>
+      <DetailHead
+        id={headingId}
+        title={s.parent.name}
+        kind={{ icon: 'newStudents', label: tx(NS.kind) }}
+        status={
+          <>
             <Badge tone={STATUS[status].tone} dot>{tx(STATUS[status].label)}</Badge>
-          </div>
-          <p className="ns-card__byline">
-            {tx(NS.recorded)} <span dir="auto">{s.recordedBy.name}</span> · <time dateTime={s.recordedAt}>{formatWhen(s.recordedAt, locale)}</time>
-            {s.updatedAt && (
-              <> · {tx(NS.updated)} <time dateTime={s.updatedAt}>{formatWhen(s.updatedAt, locale)}</time></>
-            )}
-          </p>
+            <Age iso={s.recordedAt} late={assignLate(s, status)} />
+          </>
+        }
+      >
+        <p className="ns-record__byline">
+          {tx(NS.recorded)} <span dir="auto">{s.recordedBy.name}</span>
+          {s.updatedAt && (
+            <> · {tx(NS.updated)} <time dateTime={s.updatedAt}>{formatWhen(s.updatedAt, locale)}</time></>
+          )}
+        </p>
+      </DetailHead>
+      {(onEdit || onPayments) && (
+        <div className="ns-record__actions">
+          {onPayments && <button type="button" className="btn btn--sm" onClick={onPayments}>{tx(PAY.trialAction)}</button>}
+          {onEdit && <button type="button" className="btn btn--sm" onClick={onEdit}>{tx(TR.editForm)}</button>}
         </div>
-        {(onEdit || onPayments) && (
-          <div className="ns-card__actions">
-            {onEdit && <button type="button" className="btn btn--sm" onClick={onEdit}>{tx(TR.editForm)}</button>}
-            {onPayments && <button type="button" className="btn btn--sm" onClick={onPayments}>{tx(PAY.trialAction)}</button>}
-          </div>
-        )}
-      </header>
+      )}
 
-      <p className="ns-card__trial">
-        <Icon name="calendar" size={14} />
-        <span className="ns-card__trial-label">{tx(NS.trial)}</span>
-        <span dir="auto">{s.prospectName}</span>
-        {s.trialTeacher && <><span aria-hidden="true">·</span><span dir="auto">{s.trialTeacher.name}</span></>}
-        {s.trialAt && <><span aria-hidden="true">·</span><time dateTime={s.trialAt}>{formatWhen(s.trialAt, locale)}</time></>}
-      </p>
+      <div className="ns-record__body">
+        <NewStudentSetup s={s} canAssign={canAssign} before={before} />
 
-      <div className="ns-card__blocks">
-        <section className="ns-block" aria-label={tx(NS.contact)}>
-          <h3 className="ns-block__title">{tx(NS.contact)}</h3>
-          <dl className="ns-pairs">
-            <div>
-              <dt>{tx(TR.parentPhone)}</dt>
-              <dd><bdi dir="ltr" className="ns-ltr">{s.parent.phone}</bdi></dd>
-            </div>
-            <div>
-              <dt>{tx(TR.email)}</dt>
-              <dd>{s.parent.email ? <bdi dir="ltr" className="ns-ltr">{s.parent.email}</bdi> : <span className="ts-muted">—</span>}</dd>
-            </div>
-            <div>
-              <dt>{tx(TR.location)}</dt>
-              <dd>{formLocationText(s.parent.location, locale)}</dd>
-            </div>
-          </dl>
-        </section>
-        <section className="ns-block" aria-label={tx(NS.payment)}>
-          <h3 className="ns-block__title">{tx(NS.payment)}</h3>
-          <dl className="ns-pairs">
-            <div>
-              <dt>{tx(TR.paymentMethod)}</dt>
-              <dd>{tx(PAYMENT_METHOD[s.payment.method] ?? { en: s.payment.method, ar: s.payment.method })}</dd>
-            </div>
-            <div>
-              <dt>{tx(TR.currency)}</dt>
-              <dd>{currencyName(s.payment.currency, locale)}</dd>
-            </div>
-          </dl>
-          {onPayments && <TrialRequestsSummary trialId={s.trialId} />}
-        </section>
-        <NewStudentSetup s={s} canAssign={canAssign} />
-      </div>
+        <div className="ns-record__facts">
+          <DetailSection title={tx(NS.contact)}>
+            <dl className="rq-fields">
+              <div className="rq-field">
+                <dt>{tx(TR.parentPhone)}</dt>
+                <dd><bdi dir="ltr" className="ns-ltr">{s.parent.phone}</bdi></dd>
+              </div>
+              <div className="rq-field">
+                <dt>{tx(TR.email)}</dt>
+                <dd>{s.parent.email ? <bdi dir="ltr" className="ns-ltr">{s.parent.email}</bdi> : <span className="ts-muted">—</span>}</dd>
+              </div>
+              <div className="rq-field">
+                <dt>{tx(TR.location)}</dt>
+                <dd>{formLocationText(s.parent.location, locale)}</dd>
+              </div>
+            </dl>
+          </DetailSection>
+          <DetailSection title={tx(NS.payment)}>
+            <dl className="rq-fields">
+              <div className="rq-field">
+                <dt>{tx(TR.paymentMethod)}</dt>
+                <dd>{tx(PAYMENT_METHOD[s.payment.method] ?? { en: s.payment.method, ar: s.payment.method })}</dd>
+              </div>
+              <div className="rq-field">
+                <dt>{tx(TR.currency)}</dt>
+                <dd>{currencyName(s.payment.currency, locale)}</dd>
+              </div>
+            </dl>
+            {onPayments && <TrialRequestsSummary trialId={s.trialId} />}
+          </DetailSection>
+        </div>
 
-      <section className="ns-children" aria-labelledby={`${headingId}-children`}>
-        <h3 id={`${headingId}-children`} className="ns-block__title">
-          {tx(NS.children)} <span className="ns-count">{number(s.children.length)}</span>
-        </h3>
-        <div className="table-wrap">
-          <table className="table ns-table">
-            <thead>
-              <tr>
-                <th scope="col">{tx(TR.childName)}</th>
-                <th scope="col" className="ns-num">{tx(TR.childAge)}</th>
-                <th scope="col">{tx(TR.course)}</th>
-                <th scope="col">{tx(TR.assignedTeacher)}</th>
-                <th scope="col" className="ns-num">{tx(TR.packagePrice)}</th>
-                <th scope="col" className="ns-num">{tx(TR.lessonPrice)}</th>
-                <th scope="col">{tx(TR.schedule)}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {s.children.map((c, i) => (
-                <tr key={i}>
-                  <th scope="row" dir="auto">{c.name}</th>
-                  <td className="ns-num">{number(c.age)}</td>
-                  <td dir="auto">{c.course}</td>
-                  <td dir="auto">{c.teacher.name}</td>
-                  <td className="ns-num">{money(c.packagePrice)}</td>
-                  <td className="ns-num">{money(c.lessonPrice)}</td>
-                  <td>
-                    <ul className="ns-slots">
-                      {c.schedule.map((x) => (
-                        <li key={`${x.weekday}@${x.time}`} className="ns-slot">
-                          <span>{tx(WEEKDAY[x.weekday] ?? { en: String(x.weekday), ar: String(x.weekday) })}</span>
-                          <span className="ns-slot__time">{formatClock(x.time, locale)}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </td>
+        <DetailSection title={tx(NS.children)} aside={<span className="ns-count">{number(s.children.length)}</span>}>
+          <div className="ns-children">
+            <table className="table ns-table">
+              <thead>
+                <tr>
+                  <th scope="col">{tx(TR.childName)}</th>
+                  <th scope="col" className="ns-num">{tx(TR.childAge)}</th>
+                  <th scope="col">{tx(TR.course)}</th>
+                  <th scope="col">{tx(TR.assignedTeacher)}</th>
+                  <th scope="col" className="ns-num">{tx(TR.packagePrice)}</th>
+                  <th scope="col" className="ns-num">{tx(TR.lessonPrice)}</th>
+                  <th scope="col">{tx(TR.schedule)}</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
+              </thead>
+              <tbody>
+                {s.children.map((c, i) => (
+                  <tr key={i}>
+                    <th scope="row" className="ns-c-name" dir="auto">{c.name}</th>
+                    <td className="ns-num ns-c-age" data-unit={tx(NS.years)}>{number(c.age)}</td>
+                    <td className="ns-c-course" dir="auto">{c.course}</td>
+                    <td className="ns-c-teacher" dir="auto">{c.teacher.name}</td>
+                    <td className="ns-num ns-c-price" data-label={tx(TR.packagePrice)}>{money(c.packagePrice)}</td>
+                    <td className="ns-num ns-c-price" data-label={tx(TR.lessonPrice)}>{money(c.lessonPrice)}</td>
+                    <td className="ns-c-slots">
+                      <ul className="ns-slots">
+                        {c.schedule.map((x) => (
+                          <li key={`${x.weekday}@${x.time}`} className="ns-slot">
+                            <span>{tx(WEEKDAY[x.weekday] ?? { en: String(x.weekday), ar: String(x.weekday) })}</span>
+                            <span className="ns-slot__time">{formatClock(x.time, locale)}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </DetailSection>
+      </div>
     </article>
   )
 }

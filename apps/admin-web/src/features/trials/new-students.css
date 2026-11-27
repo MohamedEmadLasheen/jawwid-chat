@@ -1,163 +1,127 @@
-/* PD-32: the New Students page, redesigned. One card per family, read top to
-   bottom: who and how far (header), where it came from (the trial), three
-   blocks side by side (contact, payment, setup), the children in one aligned
-   table. Logical properties only, so Arabic and English mirror exactly.
-   Tokens only. */
+/* New students: one record per family, read top to bottom -- who and how far
+   (the head), the steps from the trial to the parent's sign-up, then the
+   contact, the payment and the children. Beside the queue the record is the
+   panel; below 1100px every record is listed in full. Logical properties only,
+   so Arabic and English mirror exactly. Tokens only. */
 
-.ns-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-3);
-  margin-block-end: var(--space-4);
+/* The family's record needs a little more room than a single request does. */
+.ns-page { --rq-panel: 430px; }
+
+.ns-list { display: grid; }
+.ns-record { container: ns-record / inline-size; display: flex; flex-direction: column; min-inline-size: 0; }
+.ns-list > .ns-record { padding-block: var(--space-5) var(--space-4); border-block-start: 1px solid var(--hairline); }
+.ns-list > .ns-record:first-child { border-block-start: 0; padding-block-start: var(--space-2); }
+.ns-record__byline { margin: 6px 0 0; font-size: var(--fs-xs); color: var(--ink-muted); }
+.ns-record__actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-block-end: var(--space-4); }
+.ns-record__body { display: grid; min-inline-size: 0; }
+.ns-record__facts { display: grid; align-content: start; min-inline-size: 0; }
+
+/* In the panel the record's own actions stay at its foot while it scrolls. */
+.rq__panel .ns-record { min-block-size: 100%; }
+.rq__panel .ns-record__actions {
+  order: 2;
+  position: sticky;
+  inset-block-end: 0;
+  z-index: 1;
+  margin: auto 0 0;
+  padding-block: var(--space-3);
+  background: var(--paper);
+  border-block-start: 1px solid var(--hairline);
 }
-.ns-toolbar__search { flex: 1 1 18rem; max-inline-size: 26rem; }
+.rq__panel .ns-record__actions .btn { flex: 1 1 auto; min-block-size: var(--control-h); }
 
-.ns-list { display: grid; gap: var(--space-4); }
-
-.ns-card { display: grid; gap: var(--space-4); padding: var(--space-5); }
-
-/* Header: the parent and the status on one line, the byline under it, actions at the end. */
-.ns-card__head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-3);
+/* With room, the steps sit beside the contact and the payment; the children run full width under them. */
+@container ns-record (min-width: 700px) {
+  .ns-record__body { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); column-gap: var(--space-7); }
+  .ns-record__body > :last-child { grid-column: 1 / -1; }
 }
-.ns-card__who { display: grid; gap: var(--space-1); min-inline-size: 0; }
-.ns-card__title-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
-.ns-card__title { margin: 0; font-size: var(--fs-lg); font-weight: var(--fw-semibold); line-height: var(--lh-tight); }
-.ns-card__byline { margin: 0; font-size: var(--fs-sm); color: var(--text-muted); }
-.ns-card__actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 
-/* The trial it came from: one quiet strip. */
-.ns-card__trial {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
-  margin: 0;
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius);
-  background: var(--surface-sunken);
-  font-size: var(--fs-sm);
-  color: var(--text-muted);
-}
-.ns-card__trial .icon { flex: none; }
-.ns-card__trial-label { font-weight: var(--fw-semibold); color: var(--text); }
-
-/* The three blocks. */
-.ns-card__blocks {
-  display: grid;
-  gap: var(--space-4);
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
-  /* Each block as tall as its content: the setup block grows, the others do not stretch. */
-  align-items: start;
-}
-.ns-block {
-  display: grid;
-  align-content: start;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  min-inline-size: 0;
-}
-.ns-block--setup { grid-column: span 1; }
-.ns-block__title {
-  margin: 0;
-  font-size: var(--fs-xs);
-  font-weight: var(--fw-semibold);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-}
-:root[lang='ar'] .ns-block__title { letter-spacing: 0; text-transform: none; font-size: var(--fs-sm); }
-
-.ns-pairs { display: grid; gap: var(--space-3); margin: 0; }
-.ns-pairs > div { display: grid; gap: 2px; min-inline-size: 0; }
-.ns-pairs dt { font-size: var(--fs-sm); color: var(--text-muted); }
-.ns-pairs dd { margin: 0; overflow-wrap: anywhere; }
-.ns-inline { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 /* Phone numbers and e-mails are identifiers: always left to right, at the start edge. */
 .ns-ltr { unicode-bidi: isolate; font-variant-numeric: tabular-nums; }
 .ns-note { font-size: var(--fs-sm); }
+.ns-inline { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 
-/* The sign-up code: large, spaced, with what it is and what can be done. */
-.ns-code { display: grid; justify-items: start; gap: var(--space-1); }
+/* The sign-up code: large numerals on a gold rule, with what it is and what can be done. */
+.ns-code { display: grid; justify-items: start; gap: 6px; }
 .ns-code__value {
-  font-family: var(--font-mono);
-  font-size: 1.375rem;
-  letter-spacing: 0.25em;
-  font-variant-numeric: tabular-nums;
-  padding: var(--space-1) var(--space-2);
-  border-radius: var(--radius-sm);
-  background: var(--surface-sunken);
+  font-family: var(--display);
+  font-size: 27px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0.14em;
+  font-variant-numeric: tabular-nums lining-nums;
+  border-block-end: 2px solid var(--gold);
+  color: var(--ink);
 }
-.ns-lock { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-block-start: var(--space-2); font-size: var(--fs-sm); }
-.ns-lock--on {
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius);
-  background: var(--danger-soft);
-  color: var(--text);
-}
-.ns-lock--on .icon { color: var(--danger); vertical-align: -2px; }
+.ns-lock { display: grid; justify-items: start; gap: 6px; font-size: var(--fs-sm); }
+.ns-lock--on { color: var(--terracotta); }
+.ns-lock--on .icon { vertical-align: -2px; }
 
 /* The children. */
-.ns-children { display: grid; gap: var(--space-2); }
-.ns-count {
-  display: inline-block;
-  min-inline-size: 1.5em;
-  margin-inline-start: var(--space-1);
-  padding-inline: var(--space-1);
-  border-radius: var(--radius-full);
-  background: var(--surface-sunken);
-  text-align: center;
-  color: var(--text);
-}
-.ns-table th,
-.ns-table td { vertical-align: middle; text-align: start; }
+.ns-children { overflow-x: auto; }
+.ns-count { font-size: var(--fs-xs); color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+.ns-table th, .ns-table td { vertical-align: top; text-align: start; }
 /* A child's name heads its row, but reads like the cells beside it (not like a column header). */
 .ns-table tbody th {
+  position: static;
+  z-index: auto;
+  background: none;
+  color: var(--ink);
   font-size: inherit;
-  font-weight: var(--fw-semibold);
-  letter-spacing: normal;
-  padding-block: 12px;
-  background: transparent;
-  color: var(--text);
+  font-weight: 600;
   white-space: normal;
+  padding-block: 9px;
+  border-block-end: 1px solid var(--hairline-soft);
 }
-.ns-table tbody tr:last-child th { border-block-end: 0; }
+.ns-table tbody tr:hover { background: none; }
 /* Numbers line up on their end edge, digit under digit. */
 .ns-table .ns-num { text-align: end; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.ns-slots { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--space-1); }
-.ns-slot {
-  display: inline-flex;
-  gap: var(--space-1);
-  padding: 2px var(--space-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-full);
-  font-size: var(--fs-sm);
-  white-space: nowrap;
-}
-.ns-slot__time { font-variant-numeric: tabular-nums; font-weight: var(--fw-semibold); }
+.ns-slots { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 2px var(--space-3); }
+.ns-slot { display: inline-flex; gap: 6px; white-space: nowrap; }
+.ns-slot__time { font-variant-numeric: tabular-nums; font-weight: 600; direction: ltr; unicode-bidi: isolate; }
 
-@media (max-width: 40rem) {
-  .ns-card { padding: var(--space-4); }
-  .ns-card__actions { inline-size: 100%; }
+/* In the panel a child is a short block, not a seven-column row. */
+@container ns-record (max-width: 560px) {
+  .ns-children { overflow: visible; }
+  .ns-table, .ns-table tbody { display: block; }
+  .ns-table thead { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .ns-table tbody tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1px var(--space-3); padding-block: 9px; border-block-end: 1px solid var(--hairline-soft); }
+  .ns-table tbody tr:last-child { border-block-end: 0; }
+  .ns-table tbody :is(th, td) { display: block; padding: 0; border: 0; min-inline-size: 0; }
+  .ns-table .ns-c-name { grid-column: 1; }
+  .ns-table .ns-c-age { grid-column: 2; grid-row: 1; color: var(--ink-muted); }
+  .ns-table .ns-c-age::after { content: ' ' attr(data-unit); }
+  .ns-table :is(.ns-c-course, .ns-c-teacher) { grid-column: 1 / -1; font-size: var(--fs-xs); color: var(--ink-muted); }
+  .ns-table .ns-c-price { grid-column: 1 / -1; display: flex; justify-content: space-between; gap: var(--space-3); margin-block-start: 3px; }
+  .ns-table .ns-c-price::before { content: attr(data-label); color: var(--ink-muted); font-size: var(--fs-xs); }
+  .ns-table .ns-c-slots { grid-column: 1 / -1; margin-block-start: 3px; }
 }
 
-/* PD-27: the trial's payment requests in the payment block, before and after Assign. */
-.ns-requests {
-  display: grid;
-  gap: var(--space-2);
-  margin: 0;
-  padding: var(--space-3) 0 0;
-  border-block-start: 1px solid var(--border);
-  list-style: none;
-}
+/* PD-27: the trial's payment requests under the payment facts, before and after Assign. */
+.ns-requests { display: grid; gap: 6px; margin: var(--space-2) 0 0; padding: var(--space-2) 0 0; border-block-start: 1px solid var(--hairline-soft); list-style: none; }
 .ns-requests__item { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); font-size: var(--fs-sm); }
 .ns-requests__label { flex: 1 1 auto; min-inline-size: 0; overflow-wrap: anywhere; }
 .ns-requests__amount { font-variant-numeric: tabular-nums; }
-.ns-requests__empty { margin: 0; font-size: var(--fs-sm); }
+.ns-requests__empty { margin: var(--space-2) 0 0; font-size: var(--fs-xs); color: var(--ink-muted); }
+
+/* PD-42: the families entered by hand, under the queue: a ruled list of short records. */
+.ns-entered { margin-block-start: var(--space-7); }
+.ns-entered__title { margin: 0 0 2px; font-family: var(--display); font-size: var(--fs-xl); font-weight: 600; line-height: 1.3; }
+html[lang='ar'] .ns-entered__title { font-weight: 700; }
+.ns-entered .field__hint { margin: 0 0 var(--space-3); }
+.ns-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); margin-block-end: var(--space-3); }
+.ns-toolbar__search { flex: 1 1 18rem; max-inline-size: 26rem; }
+.ns-card.card { display: grid; gap: var(--space-3); margin: 0; padding: var(--space-4) 0; }
+.ns-card__head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: var(--space-3); }
+.ns-card__who { display: grid; gap: 2px; min-inline-size: 0; }
+.ns-card__title-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
+.ns-card__title { margin: 0; font-size: var(--fs-md); font-weight: 600; line-height: 1.4; }
+.ns-card__byline { margin: 0; font-size: var(--fs-xs); color: var(--ink-muted); }
+.ns-card__actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.ns-pairs { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 10.5rem), 1fr)); gap: var(--space-3) var(--space-5); margin: 0; }
+.ns-pairs > div { display: grid; align-content: start; gap: 2px; min-inline-size: 0; }
+.ns-pairs dt { font-size: 12.5px; color: var(--ink-muted); }
+.ns-pairs dd { margin: 0; font-size: var(--fs-sm); font-weight: 500; overflow-wrap: anywhere; }
+.ns-entered .ns-slots { display: grid; gap: 1px; }
+.ns-entered .ns-code__value { font-size: 21px; }
+.ns-block__title { margin: 0; font-size: 12.5px; font-weight: 500; color: var(--ink-muted); }

@@ -95,6 +95,18 @@ export const P = {
   converted: { en: 'Converted', ar: 'تم التحويل' },
   loading: { en: 'Loading…', ar: 'جارٍ التحميل…' },
   today: { en: 'Today', ar: 'اليوم' },
+  // The queue and its detail panel
+  kind: { en: 'Lead', ar: 'عميل محتمل' },
+  panelLabel: { en: 'Lead details', ar: 'تفاصيل العميل المحتمل' },
+  pick: { en: 'Open a lead', ar: 'افتح عميلًا محتملًا' },
+  pickLine: {
+    en: 'Its stage, its follow-up and the parent\'s contact appear here. Opening a lead is recorded in the audit log.',
+    ar: 'تظهر هنا مرحلته ومتابعته وبيانات ولي الأمر. فتح العميل يُسجَّل في سجل التدقيق.',
+  },
+  steps: { en: 'Steps', ar: 'الخطوات' },
+  about: { en: 'About', ar: 'عن العميل' },
+  followUp: { en: 'Follow-up', ar: 'المتابعة' },
+  created: { en: 'Added', ar: 'أُضيف' },
 } satisfies Record<string, Pair>
 
 export const STAGE: Record<Stage, { label: Pair; tone: Tone }> = {
