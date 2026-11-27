@@ -1,7 +1,7 @@
 import {
-  Fragment,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type FocusEvent,
@@ -130,6 +130,8 @@ function DrawerLink({ entry }: { entry: NavEntry }) {
 function DrawerNav() {
   const tx = useText()
   const destinations = useDestinations()
+  const { pathname } = useLocation()
+  const here = destinationForPath(destinations, pathname)
   return (
     <nav className="side__nav" aria-label={useNavLabel()}>
       {destinations.map((d) => {
@@ -146,24 +148,26 @@ function DrawerNav() {
           )
         }
         const labelId = `nav-destination-${d.key}`
+        // One fold per place, the one you are in open: forty links in one list read as none.
         return (
-          <div className="side__group" key={d.key} role="group" aria-labelledby={labelId}>
-            <p className="side__heading" id={labelId}>
-              {tx(d.label)}
-            </p>
-            {d.groups.map((g) => (
-              <Fragment key={g.key}>
-                {g.label && g.entries.length > 1 && <p className="side__subheading">{tx(g.label)}</p>}
-                <ul className="ruled">
-                  {g.entries.map((e) => (
-                    <li key={e.key}>
-                      <DrawerLink entry={e} />
-                    </li>
-                  ))}
-                </ul>
-              </Fragment>
-            ))}
-          </div>
+          <details className="side__group side__fold" key={d.key} role="group" aria-labelledby={labelId} open={here === d.key}>
+            <summary className="side__item side__fold-head">
+              <Icon name={d.icon} size={20} />
+              <span className="side__label" id={labelId}>
+                {tx(d.label)}
+              </span>
+              <span className="side__caret" aria-hidden="true">
+                <Icon name="chevronDown" size={16} />
+              </span>
+            </summary>
+            <ul className="ruled side__fold-list">
+              {d.groups.flatMap((g) => g.entries).map((e) => (
+                <li key={e.key}>
+                  <DrawerLink entry={e} />
+                </li>
+              ))}
+            </ul>
+          </details>
         )
       })}
     </nav>
@@ -221,6 +225,16 @@ function RailItem({
   const sole = soleEntry(d)
   const unread = useUnreadChats()
   const badge = d.key === 'conversations' ? unread : 0
+  const menu = useRef<HTMLDivElement>(null)
+  // The flyout opens level with its place; when that would run past the window's foot it moves up just enough.
+  useLayoutEffect(() => {
+    const el = menu.current
+    if (!el || !open) return
+    el.style.transform = ''
+    const r = el.getBoundingClientRect()
+    const over = r.bottom - (window.innerHeight - 12)
+    if (over > 0) el.style.transform = `translateY(${-Math.min(over, Math.max(0, r.top - 12))}px)`
+  }, [open])
   // Admin & Settings sits at the foot of the list, apart from the everyday places.
   const itemClass = d.key === 'admin' ? 'side__entry side__entry--end' : RAIL_RULE_BEFORE.has(d.key) ? 'side__entry side__entry--rule' : 'side__entry'
 
@@ -285,7 +299,7 @@ function RailItem({
           ))}
         </ul>
       )}
-      <div className="side__menu" id={menuId} hidden={!open} onKeyDown={onMenuKeyDown}>
+      <div className="side__menu" id={menuId} hidden={!open} onKeyDown={onMenuKeyDown} ref={menu}>
         <p className="side__menu-title" aria-hidden="true">
           {tx(d.label)}
         </p>
@@ -449,13 +463,13 @@ function AccountBlock() {
           <span className="side__me">
             <Avatar name={staff.name} seed={staff.id} size="sm" />
             <span className="side__me-text">
-              <span className="side__me-name">{staff.name}</span>
+              <span className="side__me-name" dir="auto">{staff.name}</span>
               <span className="side__me-role">{superAdmin ? t('role.super_admin') : tx(TEXT.operations)}</span>
             </span>
             <Icon name="caretUpDown" size={16} />
           </span>
         }
-        triggerClassName="side__me-button header__profile"
+        triggerClassName="side__me-button"
         items={[
           { key: 'profile', label: t('nav.profile'), icon: 'staff', onSelect: () => navigate('/profile') },
           { key: 'language', label: t('shell.switchLanguage'), icon: 'language', onSelect: () => setLocale(locale === 'ar' ? 'en' : 'ar') },
@@ -611,7 +625,13 @@ function Topbar({
           label={tx(ACCOUNT_LABEL)}
           className="topbar__account"
           trigger={<Avatar name={staff.name} seed={staff.id} size="sm" />}
-          triggerClassName="btn btn--ghost btn--icon topbar__me header__profile"
+          header={() => (
+            <p className="menu__who">
+              <bdi className="menu__who-name">{staff.name}</bdi>
+              <span className="menu__who-role">{isSuperAdmin(staff.role) ? t('role.super_admin') : tx(TEXT.operations)}</span>
+            </p>
+          )}
+          triggerClassName="btn btn--ghost btn--icon topbar__me"
           items={[
             { key: 'profile', label: t('nav.profile'), icon: 'staff', onSelect: () => navigate('/profile') },
             { key: 'language', label: t('shell.switchLanguage'), icon: 'language', onSelect: () => setLocale(locale === 'ar' ? 'en' : 'ar') },
@@ -625,7 +645,8 @@ function Topbar({
 }
 
 /** A tab's word under its icon: the first word of a long name. */
-const shortLabel = (label: string) => label.split(/\s+/)[0] ?? label
+const TAB_WORD: Record<string, string> = { 'لوحة المتابعة': 'المتابعة' }
+const shortLabel = (label: string) => TAB_WORD[label] ?? label.split(/\s+/)[0] ?? label
 
 /** Narrow screens: the first destinations along the bottom edge, and the rest behind More (the drawer). */
 function Tabbar({ destinations, onMore }: { destinations: Destination[]; onMore: () => void }) {
@@ -656,7 +677,7 @@ function Tabbar({ destinations, onMore }: { destinations: Destination[]; onMore:
         )
       })}
       <button type="button" className="tabbar__item" onClick={onMore} aria-label={t('shell.openMenu')}>
-        <Icon name="grid" size={22} />
+        <Icon name="menu" size={22} />
         <span aria-hidden="true">{tx({ en: 'More', ar: 'المزيد' })}</span>
       </button>
     </nav>

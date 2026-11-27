@@ -10,6 +10,7 @@ import { relativeTime, useText, type Bilingual } from '@/features/admin/copy'
 import { chatApi, chatKeys } from '@/features/chat/chatApi'
 import { chatCopyFor } from '@/features/chat/copy'
 import { conversationName } from '@/features/chat/chatView'
+import { waitTone, waitedFor } from '@/features/chat/queue'
 import { instalmentKeys, instalmentsApi } from '@/features/instalments/api'
 import { inboxApi, inboxKeys } from '@/features/notification-center/api'
 import { paymentKeys, paymentsApi } from '@/features/payments/api'
@@ -55,12 +56,13 @@ const T = {
   receipts: { en: 'Receipts to confirm', ar: 'إيصالات للتأكيد' },
   lessons: { en: 'Lessons today', ar: 'حصص اليوم' },
   now: { en: 'Now', ar: 'الآن' },
-  noLessons: { en: 'No lessons are booked today. Booked lessons appear here in time order.', ar: 'لا حصص محجوزة اليوم. تظهر الحصص المحجوزة هنا بترتيب الوقت.' },
+  noLessons: { en: 'No lessons are booked today.', ar: 'لا حصص محجوزة اليوم.' },
   calendar: { en: 'Open calendar', ar: 'فتح التقويم' },
   week: { en: 'This week', ar: 'هذا الأسبوع' },
   weekUnit: { en: 'lessons', ar: 'حصة' },
   activity: { en: 'Latest', ar: 'آخر المستجدات' },
-  noActivity: { en: 'Nothing new since you last looked. Notifications appear here as they arrive.', ar: 'لا جديد منذ آخر مرة. تظهر الإشعارات هنا عند وصولها.' },
+  noActivity: { en: 'Nothing new since you last looked.', ar: 'لا جديد منذ آخر مرة.' },
+  instalment: { en: 'Instalment {n} of {m}', ar: 'القسط {n} من {m}' },
   all: { en: 'All notifications', ar: 'كل الإشعارات' },
   requests: { en: 'All requests', ar: 'كل الطلبات' },
   first: { en: 'Reply first', ar: 'ابدأ بالرد على' },
@@ -71,6 +73,11 @@ const T = {
   moved: { en: 'Moved', ar: 'منقولة' },
   private: { en: 'Another supervisor’s lesson', ar: 'حصة لمشرف آخر' },
 } satisfies Record<string, Bilingual>
+
+/** An amount in whole pounds needs no ".00" in a queue. */
+function wholeMoney(text: string): string {
+  return text.replace(/[.,]00(?!\d)/, '')
+}
 
 function fillN(template: string, n: number | string): string {
   return template.replace('{n}', String(n))
@@ -158,7 +165,10 @@ export function TodayPage() {
       key: 'replies', label: tx(T.replies), urgent: needsReply.some((c) => c.needsReply), total: needsReply.length, all: '/chat',
       items: needsReply.slice(0, 4).map((c) => ({
         key: c.id, icon: 'conversations' as const, title: conversationName(c, staff?.id, copy), line: c.lastMessage?.text ?? undefined,
-        age: relativeTime(c.lastActivityAt, locale), urgent: c.needsReply, to: `/chat/${encodeURIComponent(c.id)}`, action: tx(T.answer),
+        // The same wait, in the same words and against the same reply target, as the Conversations page.
+        age: c.lastActivityAt ? waitedFor(c.lastActivityAt, locale) : undefined,
+        urgent: c.needsReply && !!c.lastActivityAt && waitTone(c.lastActivityAt) === 'late',
+        to: `/chat/${encodeURIComponent(c.id)}`, action: tx(T.open),
       })),
     })
   }
@@ -166,8 +176,8 @@ export function TodayPage() {
     groups.push({
       key: 'late', label: tx(T.lateGroup), urgent: true, total: late.length, all: instalmentsPath,
       items: late.slice(0, 4).map((i) => ({
-        key: i.id, icon: 'instalments' as const, title: i.account.name || i.family.name, line: [i.child?.name, i.label].filter(Boolean).join(locale === 'ar' ? '، ' : ', ') || i.family.name,
-        fact: formatMoney(i.amountMinor, i.currency, locale), age: i.days === 1 ? tx(T.dayLate) : fillN(tx(T.daysLate), num.format(i.days)), urgent: true,
+        key: i.id, icon: 'instalments' as const, title: i.account.name || i.family.name, line: [i.child?.name, instalmentLabel(i.label)].filter(Boolean).join(locale === 'ar' ? '، ' : ', ') || i.family.name,
+        fact: wholeMoney(formatMoney(i.amountMinor, i.currency, locale)), age: i.days === 1 ? tx(T.dayLate) : fillN(tx(T.daysLate), num.format(i.days)), urgent: true,
         to: i.account.id ? `${parentPath(i.account.id)}#money` : instalmentsPath, action: tx(T.file),
       })),
     })
@@ -186,9 +196,17 @@ export function TodayPage() {
       key: 'receipts', label: tx(T.receiptGroup), urgent: false, total: receipts.data?.counts.pending ?? pending.length, all: paymentsPath,
       items: pending.slice(0, 3).map((r) => ({
         key: r.id, icon: 'payments' as const, title: r.family?.name ?? r.label, line: r.label,
-        fact: formatMoney(r.amountMinor, r.currency, locale), to: paymentsPath, action: tx(T.review),
+        fact: wholeMoney(formatMoney(r.amountMinor, r.currency, locale)), to: paymentsPath, action: tx(T.review),
       })),
     })
+  }
+  /** "Term subscription · 2/4" reads "Term subscription, instalment 2 of 4". */
+  function instalmentLabel(label: string | null): string | null {
+    if (!label) return null
+    const m = /^(.*?)\s*[·•]\s*(\d+)\s*\/\s*(\d+)\s*$/.exec(label)
+    if (!m) return label
+    const which = tx(T.instalment).replace('{n}', m[2]!).replace('{m}', m[3]!)
+    return m[1] ? `${m[1]}${locale === 'ar' ? '، ' : ', '}${locale === 'ar' ? which : which.toLowerCase()}` : which
   }
   const loadingQueue = (chatPath === '/chat' && chats.isLoading) || (instalmentsPath !== null && instalments.isLoading) || (tasksPath !== null && tasks.isLoading)
 
@@ -219,12 +237,9 @@ export function TodayPage() {
 
         <div className="split split--wide-aside">
           <section className="today__queue" aria-labelledby="today-next">
-            <div className="today__queue-head">
-              <h2 className="today__h" id="today-next">
-                {tx(T.doNext)}
-              </h2>
-
-            </div>
+            <h2 className="sr-only" id="today-next">
+              {tx(T.doNext)}
+            </h2>
             {groups.length === 0 && !loadingQueue && (
               <div className="sheet">
                 <p className="today__clear">
@@ -252,7 +267,7 @@ export function TodayPage() {
                       <Avatar name={it.title} />
                       <span className="todo__main">
                         <bdi className="todo__title">{it.title}</bdi>
-                        {it.line && <bdi className="todo__line">{it.line}</bdi>}
+                        {it.line && <span className="todo__line" dir="auto">{it.line}</span>}
                       </span>
                       <span className="todo__facts">
                         {it.fact && <bdi className="todo__fact">{it.fact}</bdi>}

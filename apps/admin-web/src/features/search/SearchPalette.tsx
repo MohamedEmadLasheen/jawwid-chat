@@ -160,7 +160,7 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
       id: `s:${s.id}`,
       icon: 'students' as const,
       text: s.name,
-      sub: [s.family.displayName, s.teacher?.name].filter(Boolean).join(' · '),
+      sub: [s.family.displayName, s.teacher?.name ? fill(tx(S.teacherOf), { name: s.teacher.name }) : null].filter(Boolean).join(locale === 'ar' ? '، ' : ', '),
       to: studentPath(s.id),
     })))
 

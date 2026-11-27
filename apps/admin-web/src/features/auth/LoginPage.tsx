@@ -97,9 +97,13 @@ export function LoginPage() {
             >
               {login.isPending ? t('auth.signingIn') : t('auth.signIn')}
             </button>
-            <button type="button" className="auth__link" onClick={() => setMode('reset')}>
-              {tx(R.open)}
-            </button>
+            {/* The question is said once; only the way out of it is the link. */}
+            <p className="auth__help">
+              {tx(R.forgot)}{' '}
+              <button type="button" className="auth__link" onClick={() => setMode('reset')}>
+                {tx(R.open)}
+              </button>
+            </p>
           </form>
         )}
     </AuthFrame>

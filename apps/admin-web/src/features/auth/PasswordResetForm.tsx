@@ -9,7 +9,8 @@ import { PasswordField } from './AuthFrame'
 
 
 export const R = {
-  open: { en: 'Forgot your password? I have a reset code', ar: 'نسيت كلمة المرور؟ لديّ رمز إعادة تعيين' },
+  forgot: { en: 'Forgot your password?', ar: 'نسيت كلمة المرور؟' },
+  open: { en: 'Use a reset code', ar: 'استخدم رمز إعادة التعيين' },
   title: { en: 'Set a new password', ar: 'تعيين كلمة مرور جديدة' },
   explain: {
     en: 'Ask an administrator for a one-time code, then choose a new password. Nobody else will know it.',

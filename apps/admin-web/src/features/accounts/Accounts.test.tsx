@@ -205,7 +205,7 @@ describe('PD-21: finishing a reset on the sign-in page', () => {
     tokenStore.clear()
     on('POST', /\/auth\/password-reset$/, () => json({ ok: true }))
     renderWithProviders(<LoginPage />)
-    await userEvent.click(await screen.findByRole('button', { name: 'Forgot your password? I have a reset code' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Use a reset code' }))
     await userEvent.type(screen.getByLabelText('Email'), 'staff.one@example.test')
     await userEvent.type(screen.getByLabelText('One-time code'), '48a2913')
     await userEvent.type(screen.getByLabelText(/^New password/), 'my-own-password')
@@ -228,7 +228,7 @@ describe('PD-21: finishing a reset on the sign-in page', () => {
       json({ error: { code: 'AUTH.RESET_CODE_INVALID', message: 'the code is not valid' } }, 401),
     )
     renderWithProviders(<LoginPage />)
-    await userEvent.click(await screen.findByRole('button', { name: 'Forgot your password? I have a reset code' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Use a reset code' }))
     await userEvent.type(screen.getByLabelText('Email'), 'staff.one@example.test')
     await userEvent.type(screen.getByLabelText('One-time code'), '482913')
     await userEvent.type(screen.getByLabelText(/^New password/), 'my-own-password')

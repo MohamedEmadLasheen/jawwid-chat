@@ -17,12 +17,16 @@ html[lang='ar'] .today__h { font-weight: 700; }
 .todo__line { color: var(--ink-muted); font-size: var(--fs-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .todo__facts { display: grid; justify-items: end; gap: 1px; text-align: end; }
 .todo__fact { font-family: var(--font-head); font-size: var(--fs-md); font-weight: 600; color: var(--ink); white-space: nowrap; font-variant-numeric: tabular-nums; }
-.todo__age { font-size: var(--fs-xs); color: var(--ink-muted); white-space: nowrap; }
+.todo__age { font-size: 13px; color: var(--ink-muted); white-space: nowrap; }
 .todo__age--late { color: var(--urgent); font-weight: 600; }
+/* A phone row: who, then what is owed in full, then the facts with the action at their end. */
 @media (max-width: 640px) {
-  .todo__row { grid-template-columns: 36px minmax(0, 1fr) auto; }
-  .todo__facts { grid-column: 2; grid-row: 2; justify-items: start; text-align: start; grid-auto-flow: column; gap: 10px; }
-  .todo__row .btn { grid-column: 3; grid-row: 1 / span 2; }
+  .todo__row { grid-template-columns: 36px minmax(0, 1fr) auto; align-items: start; row-gap: 6px; }
+  .todo__row > .avatar { grid-row: 1; }
+  .todo__main { grid-column: 2 / 4; }
+  .todo__line { white-space: normal; }
+  .todo__facts { grid-column: 2; grid-row: 2; align-self: center; justify-items: start; text-align: start; grid-auto-flow: column; justify-content: start; gap: 12px; }
+  .todo__row .btn { grid-column: 3; grid-row: 2; align-self: center; }
 }
 
 .today__section-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); margin-block-end: 6px; }
@@ -65,3 +69,4 @@ html[lang='ar'] .today__h { font-weight: 700; }
 
 /* The side column's titles are section titles too. */
 .today__aside .aside-group__title { font-size: var(--fs-lg); font-weight: 700; color: var(--ink); }
+.todo__line[dir='auto'] { text-align: match-parent; unicode-bidi: plaintext; }

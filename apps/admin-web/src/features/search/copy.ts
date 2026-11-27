@@ -1,6 +1,7 @@
 import type { Bilingual } from '@/features/admin/copy'
 
 export const S = {
+  teacherOf: { en: 'Teacher: {name}', ar: 'المعلم: {name}' },
   open: { en: 'Search', ar: 'بحث' },
   short: { en: 'Search…', ar: 'بحث…' },
   placeholder: { en: 'Search people, chats and pages', ar: 'ابحث عن شخص أو محادثة أو صفحة' },

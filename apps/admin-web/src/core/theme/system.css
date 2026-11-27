@@ -1056,3 +1056,40 @@ a.ledger__cell:hover, button.ledger__cell:hover { background: var(--surface-hove
 /* Sheets stacked in one column keep a section's distance; anything placed side by side overrides it. */
 :where(.sheet) + :where(.sheet) { margin-block-start: var(--space-5); }
 html[lang='ar'] .count { font-size: 13px; }
+
+/* Critic round 2 on the shell. */
+/* One "you are here": inside a place, its open page carries the pill and the gold mark; the place keeps its weight. */
+button.side__item.is-current { background: none; box-shadow: none; min-block-size: 38px; }
+button.side__item.is-current::before { content: none; }
+.side__sub-link { position: relative; }
+.side__sub-link[aria-current='page'] { background: var(--sidebar-active); box-shadow: 0 0 0 1px var(--sidebar-line); color: var(--ink); }
+.side__sub-link[aria-current='page']::before { content: ''; position: absolute; inset-inline-start: 0; inset-block: 7px; inline-size: 3px; border-radius: 3px; background: var(--gold); }
+/* The flyout's caret points at where it opens and never turns; shown on the row in use only. */
+.side__item[aria-expanded] .side__caret { transform: none; opacity: 0; transition: opacity var(--dur-fast) var(--ease); }
+.side__item[aria-expanded]:is(:hover, :focus-visible, [aria-expanded='true'], .is-current) .side__caret { opacity: 1; }
+.side__menu-title { position: sticky; inset-block-start: -6px; z-index: 1; background: var(--surface); }
+/* A Latin name in Arabic keeps its start and is cut at its own end; it still sits at the column's edge. */
+.side__me-name { text-align: match-parent; unicode-bidi: plaintext; }
+/* The account menus end in the way out, set apart. */
+:is(.side__account, .topbar__account) .menu__item:last-child { margin-block-start: 4px; border-block-start: 1px solid var(--line-2); border-radius: 0 0 7px 7px; }
+.menu__who { display: grid; gap: 1px; margin: 0 0 4px; padding: 8px 12px 10px; border-block-end: 1px solid var(--line-2); }
+.menu__who-name { font-family: var(--font-head); font-weight: 600; color: var(--ink); }
+.menu__who-role { font-size: var(--fs-xs); color: var(--ink-muted); }
+/* The phone drawer: one fold per place. */
+.side__fold > summary { list-style: none; }
+.side__fold > summary::-webkit-details-marker { display: none; }
+.side__fold[open] > summary .side__caret { transform: rotate(180deg); }
+.side__fold-list { margin: 0 0 6px; padding-inline-start: 31px; }
+.side__fold-list .side__item { min-block-size: 36px; font-family: var(--font); font-weight: 400; }
+.side__fold-list .side__item > .icon { display: none; }
+.side__fold-list .side__item[aria-current] { font-weight: 600; }
+@media (max-width: 767px) {
+  .tabbar__item { font-size: 13px; }
+  .tabbar__item .side__count { inset-block-start: 3px; inset-inline-end: calc(50% - 24px); min-inline-size: 18px; padding: 0 4px; font-size: 12px; line-height: 16px; }
+}
+/* Sign-in: the top row spans the form's own width, so the language switch ends where the form ends. */
+.auth__top { box-sizing: content-box; max-inline-size: 400px; }
+.auth__help { margin: var(--space-4) 0 0; font-size: var(--fs-sm); color: var(--ink-muted); }
+.auth__help .auth__link { margin: 0; padding: 0; }
+/* On a phone the form is all there is. */
+@media (max-width: 899px) { .auth__brand { display: none; } }

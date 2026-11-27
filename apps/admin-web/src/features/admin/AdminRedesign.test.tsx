@@ -199,8 +199,8 @@ describe('Stories', () => {
     await screen.findByRole('link', { name: 'Story one' })
 
     const tiles = screen.getByRole('navigation', { name: 'Status' })
-    // Every state is shown, with its real count, including zero.
-    expect(within(tiles).getByRole('link', { name: /Deleted\s*0/ })).toBeInTheDocument()
+    // Every state is offered; a zero count is not printed beside it.
+    expect(within(tiles).getByRole('link', { name: /^Deleted$/ })).toBeInTheDocument()
     await userEvent.click(within(tiles).getByRole('link', { name: /Draft\s*1/ }))
     expect(screen.getByRole('link', { name: 'Story three' })).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Story one' })).not.toBeInTheDocument()
@@ -214,7 +214,8 @@ describe('Stories', () => {
     renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/admin/stories' })
     await screen.findByRole('link', { name: 'Story one' })
     expect(screen.getByText('18 of 20 viewed')).toBeInTheDocument()
-    expect(screen.getByText('Not published')).toBeInTheDocument()
+    // A draft has no reach yet: its reach cell stays empty rather than repeating its state.
+    expect(screen.queryByText('Not published')).not.toBeInTheDocument()
 
     await chooseOption(userEvent, screen.getByRole('combobox', { name: 'Sort' }), 'views')
     const titles = [...document.querySelectorAll('.story-row__name')].map((n) => n.textContent)
