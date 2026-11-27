@@ -53,7 +53,7 @@ export function CallHistoryDialog({ conversationId, onClose }: { conversationId:
             <li key={c.id}>
               <span>
                 {c.outcome ? copy.outcome[c.outcome] ?? c.outcome : c.status}
-                {c.durationSeconds ? ` · ${copy.duration(c.durationSeconds)}` : ''}
+                {c.durationSeconds ? `${locale === 'ar' ? '، ' : ', '}${copy.duration(c.durationSeconds)}` : ''}
               </span>
               <time dateTime={c.startedAt}>{dateTime(c.startedAt)}</time>
             </li>

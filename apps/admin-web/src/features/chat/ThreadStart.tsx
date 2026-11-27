@@ -2,9 +2,10 @@ import { useMemo } from 'react'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { useSession } from '@/core/auth/SessionProvider'
 import type { ChatConversation } from './chatApi'
-import { ConversationAvatar, conversationName, previewParts } from './chatView'
+import { Icon } from '@/shared/components/Icon'
+import { ConversationAvatar, conversationName, isGroup, previewParts } from './chatView'
 import { chatCopyFor } from './copy'
-import { waitedFor, waitingFirst } from './queue'
+import { waitTone, waitedFor, waitingFirst } from './queue'
 
 export { waitingFirst } from './queue'
 
@@ -18,7 +19,7 @@ const SHOWN = 6
  * now. With nobody waiting it says so in one line and lists what is unread.
  */
 export function ThreadStart({ conversations, onOpen }: { conversations: ChatConversation[]; onOpen: (id: string) => void }) {
-  const { locale, number } = useI18n()
+  const { locale, number, dateTime } = useI18n()
   const copy = chatCopyFor(locale)
   const { staff } = useSession()
   const waiting = useMemo(() => waitingFirst(conversations), [conversations])
@@ -32,10 +33,14 @@ export function ThreadStart({ conversations, onOpen }: { conversations: ChatConv
       <div className="cw-queue">
         <header className="cw-queue__head">
           {needs.length > 0 ? (
-            <h2 className="cw-queue__title">
-              {copy.section.needs}
-              <span className="count count--urgent">{number(needs.length)}</span>
-            </h2>
+            <>
+              <h2 className="cw-queue__title">
+                {copy.section.needs}
+                <span className="count count--urgent">{number(needs.length)}</span>
+              </h2>
+              {/* The order is named by need, so the first row reads as the one to take now. */}
+              <p className="cw-queue__sub">{copy.queueOrder}</p>
+            </>
           ) : (
             <h2 className="cw-queue__title cw-queue__title--calm">{copy.startNone}</h2>
           )}
@@ -52,7 +57,7 @@ export function ThreadStart({ conversations, onOpen }: { conversations: ChatConv
           <ol className="cw-queue__list sheet">
             {shown.map((c, i) => {
               const name = conversationName(c, staff?.id, copy)
-              const said = previewParts(c.lastMessage, staff?.id, copy)
+              const said = previewParts(c.lastMessage, staff?.id, copy, isGroup(c) ? c.members : undefined)
               const age = waitedFor(c.lastActivityAt, locale)
               return (
                 <li key={c.id} className="cw-queue__row">
@@ -62,17 +67,22 @@ export function ThreadStart({ conversations, onOpen }: { conversations: ChatConv
                       <bdi>{name}</bdi>
                     </h3>
                     <p className="cw-queue__said">
-                      {said.who && <span>{said.who}:</span>}
+                      {said.who && (
+                        <span>
+                          <bdi>{said.who}</bdi>:
+                        </span>
+                      )}
                       <bdi className="cw-line">{said.text || (copy.kind[c.type] ?? c.type)}</bdi>
                     </p>
                   </div>
                   {c.needsReply ? (
-                    <span className="cw-queue__waited" aria-label={copy.waitedLabel(age)}>
+                    <span className={`cw-queue__waited cw-wait--${waitTone(c.lastActivityAt)}`} title={dateTime(c.lastActivityAt)} aria-label={copy.waitedLabel(age)}>
+                      <Icon name="hourglass" size={16} />
                       {age}
                     </span>
                   ) : (
                     <span className="cw-unread" aria-label={copy.unread(c.unreadCount ?? 0)}>
-                      {c.unreadCount}
+                      {number(c.unreadCount ?? 0)}
                     </span>
                   )}
                   {/* One solid button on the pane: the conversation to take now. */}

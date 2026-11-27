@@ -423,6 +423,19 @@ export function ChatThread({
     }
     lastCount.current = count
   }, [messages.length, shownPending.length])
+  // What renders late (a font, a photo, a card's live note) grows the thread
+  // after it opened: a reader still at the bottom stays there.
+  const hasThread = latest.data !== undefined
+  useEffect(() => {
+    const el = scroller.current
+    const content = el?.firstElementChild
+    if (!el || !content || typeof ResizeObserver === 'undefined') return
+    const keep = new ResizeObserver(() => {
+      if (atBottom.current) el.scrollTop = el.scrollHeight
+    })
+    for (const child of Array.from(el.children)) keep.observe(child)
+    return () => keep.disconnect()
+  }, [hasThread, messages.length === 0])
 
   const send = useMutation({
     mutationFn: async (p: PendingSend) => {
@@ -564,7 +577,7 @@ export function ChatThread({
                     <>
                       <span className="thread-head__kind">
                         {copy.kind[conv.type] ?? conv.type}
-                        {memberCount > 0 && ' · '}
+                        {memberCount > 0 && copy.listSeparator.trimEnd()}
                       </span>
                       {memberCount > 0 && copy.membersCount(memberCount)}
                     </>
@@ -1125,9 +1138,9 @@ function MessageItem({
             </span>
           )}
           {side === 'internal' && (
-            <span className="bubble__flag">
-              <Icon name="lockNote" size={14} />
-              {copy.internal}
+            <span className="bubble__flag" title={copy.internal}>
+              <Icon name="lock" size={14} />
+              {copy.staffOnlyShort}
             </span>
           )}
           {quoted !== undefined && live && (

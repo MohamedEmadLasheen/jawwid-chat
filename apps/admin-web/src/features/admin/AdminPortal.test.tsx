@@ -264,7 +264,7 @@ describe('Conversations', () => {
     renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/admin/conversations' })
     expect(await screen.findByText('Family Two')).toBeInTheDocument()
     expect(screen.getAllByText('Waiting on us').length).toBeGreaterThan(0)
-    expect(screen.getByText('Student group · 5 members')).toBeInTheDocument()
+    expect(screen.getByText('Student group, 5 members')).toBeInTheDocument()
     expect(screen.queryByText('waiting_on_jawwid')).not.toBeInTheDocument()
     expect(screen.queryByText('direct')).not.toBeInTheDocument()
   })
@@ -451,7 +451,7 @@ describe('Arabic', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'المحادثات' })).toBeInTheDocument()
     expect(document.documentElement.dir).toBe('rtl')
     // Two members is the Arabic dual, not "٢ عضو".
-    expect((await screen.findAllByText('مباشرة · عضوان')).length).toBeGreaterThan(0)
+    expect((await screen.findAllByText('مباشرة، عضوان')).length).toBeGreaterThan(0)
     // The top bar speaks Arabic too (its read-only chip is gone since 2026-10-17).
     expect(screen.getAllByText('بوابة الإدارة').length).toBeGreaterThan(0)
     expect(screen.queryByText('وصول للقراءة فقط')).not.toBeInTheDocument()

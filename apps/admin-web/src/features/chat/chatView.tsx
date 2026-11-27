@@ -46,6 +46,8 @@ export function previewParts(
   m: ChatLastMessage | null | undefined,
   selfId: string | undefined,
   copy: ChatCopy,
+  /** A group's members: who else said it is then named, so the line says who is waiting. */
+  members?: ChatConversation['members'],
 ): { who: string | null; text: string } {
   if (!m) return { who: null, text: '' }
   if (m.deleted) return { who: null, text: copy.preview.deleted ?? '' }
@@ -54,7 +56,10 @@ export function previewParts(
   const family = m.type === 'card' ? CARD_FAMILIES.find((f) => m.cardKind?.startsWith(`${f}_`)) : undefined
   const kind = family ? `card.${family}` : m.type
   const text = m.text ?? (m.systemKind ? (copy.system[m.systemKind] ?? copy.system.fallback)!({}) : copy.preview[kind] ?? '')
-  return { who: text !== '' && m.authorId && m.authorId === selfId && !m.systemKind ? copy.you : null, text }
+  if (text === '' || !m.authorId || m.systemKind || m.authorKind === 'system') return { who: null, text }
+  if (m.authorId === selfId) return { who: copy.you, text }
+  const author = members?.find((x) => x.actorId === m.authorId)?.displayName
+  return { who: author || null, text }
 }
 
 export function previewText(m: ChatLastMessage | null | undefined, selfId: string | undefined, copy: ChatCopy): string {

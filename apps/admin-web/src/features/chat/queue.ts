@@ -44,6 +44,22 @@ export function waitedFor(iso: string, locale: 'ar' | 'en', now: number = Date.n
   return new Intl.NumberFormat(locale === 'ar' ? 'ar-EG-u-nu-latn' : 'en-GB', { style: 'unit', unit, unitDisplay: 'short' }).format(value)
 }
 
+/**
+ * How long a family may wait for an answer before the wait is the row's
+ * warning (amber) and then its problem (red). The API carries no reply target
+ * of its own (no SLA field exists), so this is the client's one named
+ * constant: a reply within two hours, the second hour being the warning.
+ */
+export const REPLY_WAIT = { soonMinutes: 60, lateMinutes: 120 } as const
+
+export type WaitTone = 'calm' | 'soon' | 'late'
+
+/** Grey while there is time, amber in the last window, red past it. */
+export function waitTone(iso: string, now: number = Date.now()): WaitTone {
+  const minutes = (now - new Date(iso).getTime()) / 60_000
+  return minutes >= REPLY_WAIT.lateMinutes ? 'late' : minutes >= REPLY_WAIT.soonMinutes ? 'soon' : 'calm'
+}
+
 /** Still owed an answer, the one to take first leading; the viewer's own archive and closed conversations left out. */
 export function waitingFirst(conversations: ChatConversation[]): ChatConversation[] {
   const live = conversations.filter((c) => !c.viewerState?.archived && c.archivedAt === null)
