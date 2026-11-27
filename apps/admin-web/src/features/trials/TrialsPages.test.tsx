@@ -77,6 +77,34 @@ function access(a: { lessonManager?: boolean; sales?: boolean; operations?: bool
 
 const staff = makeStaff({ role: 'admin' })
 
+/**
+ * New students is a board: a family is a card, and its record (contact, payment,
+ * children, set-up) opens in the inspector -- a side sheet without room beside the board.
+ */
+async function openFamily(name: string): Promise<HTMLElement> {
+  const open = screen.queryByRole('dialog')
+  if (open) await userEvent.click(within(open).getByRole('button', { name: /^(Close|إغلاق)$/ }))
+  const title = await screen.findByRole('heading', { name, level: 3 })
+  await userEvent.click(within(title).getByRole('button', { name }))
+  return screen.findByRole('dialog', { name })
+}
+
+/** What a "⋯" offers inside `scope`: its items, or none when there is no menu at all. */
+async function moreItems(scope: HTMLElement): Promise<string[]> {
+  const more = within(scope).queryByRole('button', { name: /More actions/ })
+  if (!more) return []
+  await userEvent.click(more)
+  const items = screen.queryAllByRole('menuitem').map((i) => i.textContent ?? '')
+  await userEvent.keyboard('{Escape}')
+  return items
+}
+
+/** An action kept behind a row's or a card's "⋯". */
+async function chooseMore(scope: HTMLElement, name: string): Promise<void> {
+  await userEvent.click(within(scope).getByRole('button', { name: /More actions/ }))
+  await userEvent.click(await screen.findByRole('menuitem', { name }))
+}
+
 beforeEach(() => {
   routes = []
   fetchMock = vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
@@ -104,13 +132,13 @@ describe('Trial lessons, as Sales', () => {
   it('lists each trial with its one outcome; recorded ones offer a correction', async () => {
     access({ sales: true })
     renderWithProviders(<AppRoutes />, { staff, route: '/trials' })
-    const row = (await screen.findByText('Prospect Gamma')).closest('tr')!
+    const row = (await screen.findByText('Prospect Gamma')).closest('li')!
     expect(within(row).getByText('Attended')).toBeInTheDocument()
     expect(within(row).getByText('Subscribed')).toBeInTheDocument()
     expect(screen.queryByText(/Core/)).not.toBeInTheDocument()
     expect(within(row).getByRole('button', { name: 'Correct outcome' })).toBeInTheDocument()
     expect(within(row).queryByRole('button', { name: 'Record outcome' })).not.toBeInTheDocument()
-    const pending = screen.getByText('Prospect Alpha').closest('tr')!
+    const pending = screen.getByText('Prospect Alpha').closest('li')!
     expect(within(pending).getByRole('button', { name: 'Record outcome' })).toBeInTheDocument()
     // Prospects are typed in the booking itself: no separate step.
     expect(screen.queryByRole('button', { name: 'Record a prospect' })).not.toBeInTheDocument()
@@ -124,7 +152,7 @@ describe('Trial lessons, as Sales', () => {
     access({ sales: true })
     on('POST', /\/trials\/tr-pending\/outcome$/, () => json(trial('tr-pending', { outcome: 'not_subscribed' }), 201))
     renderWithProviders(<AppRoutes />, { staff, route: '/trials' })
-    const row = (await screen.findByText('Prospect Alpha')).closest('tr')!
+    const row = (await screen.findByText('Prospect Alpha')).closest('li')!
     await userEvent.click(within(row).getByRole('button', { name: 'Record outcome' }))
     const dialog = await screen.findByRole('dialog')
     await userEvent.click(within(dialog).getByRole('button', { name: /Why didn't the student subscribe\?/ }))
@@ -146,7 +174,7 @@ describe('Trial lessons, as Sales', () => {
     access({ sales: true })
     on('POST', /\/trials\/tr-pending\/outcome$/, () => json(trial('tr-pending', { outcome: 'subscribed' }), 201))
     renderWithProviders(<AppRoutes />, { staff, route: '/trials' })
-    const row = (await screen.findByText('Prospect Alpha')).closest('tr')!
+    const row = (await screen.findByText('Prospect Alpha')).closest('li')!
     await userEvent.click(within(row).getByRole('button', { name: 'Record outcome' }))
     const dialog = await screen.findByRole('dialog')
     await userEvent.click(within(dialog).getByRole('button', { name: 'The student subscribed' }))
@@ -202,7 +230,7 @@ describe('Trial lessons, as Sales', () => {
       }),
     )
     renderWithProviders(<AppRoutes />, { staff, route: '/trials' })
-    const row = (await screen.findByText('Prospect Alpha')).closest('tr')!
+    const row = (await screen.findByText('Prospect Alpha')).closest('li')!
     await userEvent.click(within(row).getByRole('button', { name: 'Record outcome' }))
     const dialog = await screen.findByRole('dialog')
     await userEvent.click(within(dialog).getByRole('button', { name: 'The student subscribed' }))
@@ -226,7 +254,7 @@ describe('Trial lessons, as Sales', () => {
     access({ sales: true })
     on('POST', /\/trials\/tr-sub\/correction$/, () => json(trial('tr-sub', { outcome: 'no_show' }), 201))
     renderWithProviders(<AppRoutes />, { staff, route: '/trials' })
-    const row = (await screen.findByText('Prospect Gamma')).closest('tr')!
+    const row = (await screen.findByText('Prospect Gamma')).closest('li')!
     await userEvent.click(within(row).getByRole('button', { name: 'Correct outcome' }))
     const dialog = await screen.findByRole('dialog')
     expect(within(dialog).getByText(/Current outcome/)).toHaveTextContent('Subscribed')
@@ -290,9 +318,9 @@ describe('Trial lessons, as Sales', () => {
     on('GET', /\/trials(\?.*)?$/, () => json({ trials: [...TRIALS, upcoming] }))
     on('POST', /\/trials\/tr-up\/reschedule$/, () => json(trial('tr-up2', { outcome: 'upcoming' }), 201))
     renderWithProviders(<AppRoutes />, { staff, route: '/trials' })
-    const row = (await screen.findByText('Karim, Huda')).closest('tr')!
+    const row = (await screen.findByText('Karim, Huda')).closest('li')!
     // Only a trial that has not started can be edited.
-    expect(within(screen.getByText('Prospect Alpha').closest('tr')!).queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument()
+    expect(within(screen.getByText('Prospect Alpha').closest('li')!).queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument()
     await userEvent.click(within(row).getByRole('button', { name: 'Edit' }))
     const dialog = await screen.findByRole('dialog', { name: /Edit — Karim, Huda/ })
     expect(within(dialog).queryByLabelText('Student name')).not.toBeInTheDocument()
@@ -378,9 +406,8 @@ describe('Trial lessons, opened from the Dashboard (PD-44)', () => {
     renderWithProviders(<AppRoutes />, { staff, route: '/trials?filter=decision' })
     expect(await screen.findByText('Prospect Alpha')).toBeInTheDocument()
     expect(screen.queryByText('Prospect Gamma')).not.toBeInTheDocument()
-    expect(screen.getAllByRole('tab').find((t) => t.getAttribute('aria-selected') === 'true')?.textContent).not.toBe(
-      screen.getAllByRole('tab')[0]!.textContent,
-    )
+    expect(screen.getByRole('button', { name: /^Needs an outcome/ })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: /^All/ })).toHaveAttribute('aria-pressed', 'false')
   })
 
   it('follows the URL when it changes while the page is open', async () => {
@@ -402,7 +429,7 @@ describe('Trial lessons, opened from the Dashboard (PD-44)', () => {
     access({ sales: true })
     renderWithProviders(<AppRoutes />, { staff, route: '/trials?filter=everything' })
     expect(await screen.findByText('Prospect Gamma')).toBeInTheDocument()
-    expect(screen.getAllByRole('tab')[0]).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('button', { name: /^All/ })).toHaveAttribute('aria-pressed', 'true')
   })
 })
 
@@ -413,13 +440,13 @@ describe('Trial lessons, as Operations (the trial desk)', () => {
     const tabs = await screen.findByRole('navigation', { name: 'Trials' })
     expect(within(tabs).getAllByRole('link').map((l) => l.textContent)).toEqual(['Trial lessons', 'New students'])
     expect(await screen.findByRole('button', { name: 'Book a trial' })).toBeInTheDocument()
-    const pending = (await screen.findByText('Prospect Alpha')).closest('tr')!
+    const pending = (await screen.findByText('Prospect Alpha')).closest('li')!
     await userEvent.click(within(pending).getByRole('button', { name: 'Record outcome' }))
     const dialog = await screen.findByRole('dialog')
     expect(within(dialog).getByRole('button', { name: 'The student subscribed' })).toBeEnabled()
     expect(within(dialog).getByRole('button', { name: /Why didn't the student subscribe/ })).toBeEnabled()
     await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
-    expect(within((await screen.findByText('Prospect Gamma')).closest('tr')!).getByRole('button', { name: 'Correct outcome' })).toBeInTheDocument()
+    expect(within((await screen.findByText('Prospect Gamma')).closest('li')!).getByRole('button', { name: 'Correct outcome' })).toBeInTheDocument()
   })
 })
 
@@ -455,8 +482,8 @@ describe('The trial group', () => {
     access({ sales: true })
     on('POST', /\/trials\/teachers\/t-1\/group$/, () => json({ conversationId: 'conv-trial-1' }, 201))
     renderWithProviders(<AppRoutes />, { staff, route: '/trials' })
-    const row = (await screen.findByText('Prospect Alpha')).closest('tr')!
-    await userEvent.click(within(row).getByRole('button', { name: 'Trial group' }))
+    const row = (await screen.findByText('Prospect Alpha')).closest('li')!
+    await chooseMore(row, 'Trial group')
     await waitFor(() => expect(fetchMock.mock.calls.some(([u]) => /\/conversations\/conv-trial-1/.test(String(u)))).toBe(true))
   })
 })
@@ -466,7 +493,7 @@ describe('Trial lessons, as the Teachers department', () => {
     access({ lessonManager: true })
     on('POST', /\/trials\/tr-awaiting\/outcome$/, () => json(trial('tr-awaiting', { attendance: 'no_show', outcome: 'no_show' }), 201))
     renderWithProviders(<AppRoutes />, { staff, route: '/trials' })
-    const row = (await screen.findByText('Prospect Beta')).closest('tr')!
+    const row = (await screen.findByText('Prospect Beta')).closest('li')!
     expect(screen.queryByRole('button', { name: 'Record a prospect' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Correct outcome' })).not.toBeInTheDocument()
     await userEvent.click(within(row).getByRole('button', { name: 'Record outcome' }))
@@ -575,7 +602,7 @@ describe('New students', () => {
     access({ operations: true })
     on('GET', /\/trials\/new-students$/, () => json({ students: [STUDENT] }))
     renderWithProviders(<AppRoutes />, { staff, route: '/trials/new-students' })
-    const card = (await screen.findByRole('heading', { name: 'Parent Gamma' })).closest('article')!
+    const card = await openFamily('Parent Gamma')
     expect(within(card).getByText('+99 000 222')).toBeInTheDocument()
     expect(within(card).getByText('gamma@example.test')).toBeInTheDocument()
     expect(within(card).getByText('Bank account transfer')).toBeInTheDocument()
@@ -590,6 +617,7 @@ describe('New students', () => {
     expect(within(rows[1]!).getByText('Teacher Two')).toBeInTheDocument()
     expect(within(card).getByText(/Sales One/)).toBeInTheDocument()
     expect(within(card).queryByRole('button', { name: 'Edit subscription' })).not.toBeInTheDocument()
+    expect(await moreItems(card)).not.toContain('Edit subscription')
     expect(screen.queryByText(/Core/)).not.toBeInTheDocument()
   })
 
@@ -616,7 +644,7 @@ describe('New students', () => {
     on('GET', /\/trials\/new-students$/, () => json({ students: [STUDENT] }))
     on('POST', /\/trials\/tr-sub\/subscription$/, () => json(STUDENT, 201))
     renderWithProviders(<AppRoutes />, { staff, route: '/trials/new-students' })
-    await userEvent.click(await screen.findByRole('button', { name: 'Edit subscription' }))
+    await chooseMore((await screen.findByRole('heading', { name: 'Parent Gamma' })).closest('article')!, 'Edit subscription')
     const dialog = await screen.findByRole('dialog')
     const phone = within(dialog).getByLabelText('Phone number')
     await userEvent.clear(phone)
@@ -657,7 +685,7 @@ describe('New students: assign, group and the parent\'s sign-up (PD-16)', () => 
     on('POST', /\/trials\/new-students\/tr-new\/assign$/, () => json({ familyId: 'f-1', learnerIds: ['k-1'], schedules: [{ learnerId: 'k-1', set: true, reason: null }] }))
     renderWithProviders(<AppRoutes />, { staff, route: '/trials/new-students' })
     const card = (await screen.findByRole('heading', { name: 'Parent Delta' })).closest('article')!
-    await userEvent.click(within(card).getByRole('button', { name: 'Assign' }))
+    await userEvent.click(within(card).getByRole('button', { name: 'Assign supervisor' }))
     const dialog = await screen.findByRole('dialog', { name: /Assign a supervisor/ })
     await userEvent.click(within(dialog).getByRole('button', { name: 'Assign' }))
     expect(sent('POST', /assign$/)).toEqual([])
@@ -680,7 +708,7 @@ describe('New students: assign, group and the parent\'s sign-up (PD-16)', () => 
     on('POST', /\/trials\/new-students\/tr-new\/group$/, () => json({ conversationId: 'c-new' }))
     on('POST', /\/trials\/new-students\/tr-new\/signup-code\/invalidate$/, () => json({ invalidated: true }, 201))
     renderWithProviders(<AppRoutes />, { staff, route: '/trials/new-students' })
-    const card = (await screen.findByRole('heading', { name: 'Parent Delta' })).closest('article')!
+    const card = await openFamily('Parent Delta')
     expect(within(card).getByText('Supervisor One')).toBeInTheDocument()
     expect(within(card).getByText('482913')).toBeInTheDocument()
     // PD-32: no deadline -- valid until used or invalidated; staff can end it.
@@ -691,6 +719,7 @@ describe('New students: assign, group and the parent\'s sign-up (PD-16)', () => 
     expect(await within(card).findByText('Code invalidated.')).toBeInTheDocument()
     expect(within(card).queryByRole('button', { name: 'Assign' })).not.toBeInTheDocument()
     expect(within(card).queryByRole('button', { name: 'Edit subscription' })).not.toBeInTheDocument()
+    expect(await moreItems(card)).not.toContain('Edit subscription')
     await userEvent.click(within(card).getByRole('button', { name: 'Create group' }))
     await waitFor(() => expect(sent('POST', /\/trials\/new-students\/tr-new\/group$/)).toHaveLength(1))
     // Only the Operations manager changes the supervisor (PD-24).
@@ -715,7 +744,7 @@ describe('New students: assign, group and the parent\'s sign-up (PD-16)', () => 
     on('POST', /\/trials\/new-students\/tr-new\/supervisor$/, () =>
       json({ supervisorId: 'sup-2', changed: true, learners: [{ id: 'k-1', name: 'Child D1' }], groups: 1, directChats: 1 }, 201))
     renderWithProviders(<AppRoutes />, { staff, route: '/trials/new-students' })
-    const card = (await screen.findByRole('heading', { name: 'Parent Delta' })).closest('article')!
+    const card = await openFamily('Parent Delta')
     await userEvent.click(within(card).getByRole('button', { name: 'Change' }))
     const dialog = await screen.findByRole('dialog', { name: /Change supervisor/ })
     expect(within(dialog).getByText(/Nothing is recreated and nothing is lost/)).toBeInTheDocument()
@@ -744,8 +773,8 @@ describe('New students: assign, group and the parent\'s sign-up (PD-16)', () => 
     on('GET', /\/trials\/new-students$/, () => json({ students: [locked], canAssign: false }))
     on('POST', /\/trials\/new-students\/tr-new\/signup-attempts\/reset$/, () => json({ cleared: 10 }, 201))
     renderWithProviders(<AppRoutes />, { staff, route: '/trials/new-students' })
-    const card = (await screen.findByRole('heading', { name: 'Parent Delta' })).closest('article')!
-    expect(within(card).getByText('Sign-up locked')).toBeInTheDocument()
+    const card = await openFamily('Parent Delta')
+    expect(within(card).getAllByText('Sign-up locked').length).toBeGreaterThan(0)
     expect(within(card).getByText(/too many wrong codes/)).toBeInTheDocument()
     await userEvent.click(within(card).getByRole('button', { name: 'Reset attempts' }))
     await waitFor(() => expect(sent('POST', /signup-attempts\/reset$/)).toHaveLength(1))
@@ -797,7 +826,7 @@ describe('PD-45 PR-3b: the family\'s location on the forms', () => {
   async function openNewForm(locale: 'en' | 'ar') {
     access({ sales: true })
     renderWithProviders(<AppRoutes />, { staff, route: '/trials', locale })
-    const row = (await screen.findByText('Prospect Alpha')).closest('tr')!
+    const row = (await screen.findByText('Prospect Alpha')).closest('li')!
     await userEvent.click(within(row).getByRole('button', { name: locale === 'en' ? 'Record outcome' : 'تسجيل النتيجة' }))
     const dialog = await screen.findByRole('dialog')
     await userEvent.click(within(dialog).getByRole('button', { name: locale === 'en' ? 'The student subscribed' : 'الطالب اشترك' }))
@@ -887,10 +916,10 @@ describe('PD-45 PR-3b: the family\'s location on the forms', () => {
       access({ operations: true })
       on('GET', /\/trials\/new-students$/, () => json({ students: [base(GIZA), { ...base(null), trialId: 'tr-old', parent: { ...base(null).parent, name: 'Parent Old' } }] }))
       renderWithProviders(<AppRoutes />, { staff, route: '/trials/new-students' })
-      const card = (await screen.findByRole('heading', { name: 'Parent Gamma' })).closest('article')!
+      const card = await openFamily('Parent Gamma')
       const term = within(card).getByText('Location')
       expect(term.nextElementSibling).toHaveTextContent('Egypt · Giza')
-      const old = screen.getByRole('heading', { name: 'Parent Old' }).closest('article')!
+      const old = await openFamily('Parent Old')
       expect(within(old).getByText('Location').nextElementSibling).toHaveTextContent('—')
     })
 
@@ -898,7 +927,7 @@ describe('PD-45 PR-3b: the family\'s location on the forms', () => {
       access({ operations: true })
       on('GET', /\/trials\/new-students$/, () => json({ students: [base(GIZA)] }))
       renderWithProviders(<AppRoutes />, { staff, route: '/trials/new-students', locale: 'ar' })
-      const card = (await screen.findByRole('heading', { name: 'Parent Gamma' })).closest('article')!
+      const card = await openFamily('Parent Gamma')
       expect(within(card).getByText('الموقع').nextElementSibling).toHaveTextContent('مصر · الجيزة')
     })
 
@@ -907,7 +936,7 @@ describe('PD-45 PR-3b: the family\'s location on the forms', () => {
       on('GET', /\/trials\/new-students$/, () => json({ students: [base(GIZA)] }))
       on('POST', /\/trials\/tr-sub\/subscription$/, () => json(base(GIZA), 201))
       renderWithProviders(<AppRoutes />, { staff, route: '/trials/new-students' })
-      await userEvent.click(await screen.findByRole('button', { name: 'Edit subscription' }))
+      await chooseMore((await screen.findByRole('heading', { name: 'Parent Gamma' })).closest('article')!, 'Edit subscription')
       const dialog = await screen.findByRole('dialog')
       await waitFor(() => expect(within(dialog).getByRole('combobox', { name: 'Country' })).toHaveAttribute('data-value', 'EG'))
       await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
@@ -919,7 +948,7 @@ describe('PD-45 PR-3b: the family\'s location on the forms', () => {
       on('GET', /\/trials\/new-students$/, () => json({ students: [base(null)] }))
       on('POST', /\/trials\/tr-sub\/subscription$/, () => json(base(null), 201))
       renderWithProviders(<AppRoutes />, { staff, route: '/trials/new-students' })
-      await userEvent.click(await screen.findByRole('button', { name: 'Edit subscription' }))
+      await chooseMore((await screen.findByRole('heading', { name: 'Parent Gamma' })).closest('article')!, 'Edit subscription')
       const dialog = await screen.findByRole('dialog')
       await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
       await waitFor(() => expect(sent('POST', /\/subscription$/)).toHaveLength(1))

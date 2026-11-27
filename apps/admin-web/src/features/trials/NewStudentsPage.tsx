@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { useSession } from '@/core/auth/SessionProvider'
 import { isSuperAdmin } from '@/core/permissions/capabilities'
@@ -8,26 +8,26 @@ import { PAY } from '@/features/payments/copy'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
 import { Badge } from '@/shared/components/Badge'
 import { Icon } from '@/shared/components/Icon'
-import { PageHeader } from '@/shared/components/PageHeader'
+import type { MenuItem } from '@/shared/components/Menu'
+import { PageHeader, type MastFigure } from '@/shared/components/PageHeader'
 import {
   Age,
-  DetailHead,
+  Board,
+  BoardCard,
   DetailSection,
-  FlowStrip,
   RequestQueue,
-  RowOpen,
   ageText,
-  rowOpener,
   useWidePane,
   waitedOvernight,
-  type FlowCell,
+  type BoardStage,
   type FlowStep,
 } from '@/shared/components/RequestQueue'
+import { RowActions } from '@/shared/components/RowActions'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
 import type { Pair } from '../teachers/copy'
 import { describeOpsError } from '../teachers/opsCopy'
 import { trialsApi, type NewStudentDto } from './api'
-import { TRIALS_AREA_BASE, TrialsAreaTabs, useTrialsAccess } from './area'
+import { TRIALS_AREA_BASE, TRIALS_TABS, TrialsAreaTabs, useTrialsAccess } from './area'
 import { PAYMENT_METHOD, TR, WEEKDAY, formatWhen } from './copy'
 import {
   NS,
@@ -43,12 +43,19 @@ import {
 } from './newStudentsCopy'
 import { useNewStudents, useTrialOp } from './hooks'
 import { SubscriptionForm, draftFrom, formErrors, toInput, type SubscriptionDraft } from './SubscriptionForm'
-import { NewStudentSetup } from './NewStudentSetup'
+import { NewStudentSetup, type SetupIntent } from './NewStudentSetup'
 import { EnteredFamilies } from '@/features/intake/EnteredFamilies'
 import '../teachers/teachers.css'
 import './trials.css'
 import './new-students.css'
 
+/** The board's stages, in the order a family moves through them. A locked sign-up is still waiting for the parent. */
+const STAGES = ['unassigned', 'waiting', 'signed_up'] as const
+type Stage = (typeof STAGES)[number]
+const stageOf = (status: NewStudentStatus): Stage => (status === 'locked' ? 'waiting' : status)
+
+/** When the family's present wait began: recorded, until someone is assigned; assigned, from then on. */
+const since = (s: NewStudentDto) => s.enrolment?.assignedAt ?? s.recordedAt
 /** A family nobody was assigned to since before today is late; a parent's turn is never late. */
 const assignLate = (s: NewStudentDto, status: NewStudentStatus) => status === 'unassigned' && waitedOvernight(s.recordedAt)
 
@@ -60,23 +67,28 @@ const assignLate = (s: NewStudentDto, status: NewStudentStatus) => status === 'u
  * subscribed." and nothing more. Operations, Sales and the super admin read
  * it; Sales may correct a typo.
  *
- * Laid out as a request queue: the setup states as a strip of counts, the
- * families as the queue, and the open family's record beside it. Below 1100px
- * the page has no drawer of its own, so every record is listed in full.
+ * Composed as a board: a column for each stage of the setup, in order (not
+ * assigned, waiting for the parent, signed up), a card for each family with
+ * the one step it needs next. The open family's record and its steps are in
+ * the inspector. The masthead's figures are the stages: they filter the board,
+ * and below 1100px, where there is no room for columns, they are its tabs.
  */
 export function NewStudentsPage() {
-  const { locale } = useI18n()
+  const { locale, number } = useI18n()
   const tx = (p: Pair) => (locale === 'ar' ? p.ar : p.en)
   const q = useNewStudents()
   const access = useTrialsAccess()
   const wide = useWidePane()
+  const navigate = useNavigate()
   const [editing, setEditing] = useState<NewStudentDto | null>(null)
   const [paying, setPaying] = useState<NewStudentDto | null>(null)
-  const [openId, setOpenId] = useState<string | null>(null)
-  const [search, setSearch] = useState('')
   // PD-44: the filter lives in the URL, so a Dashboard tile opens the filter
   // it counted (?filter=unassigned|waiting|signed_up) and a later link moves it too.
   const [params, setParams] = useSearchParams()
+  // The Requests page links here with the family to open (?open=<trial id>).
+  const [openId, setOpenId] = useState<string | null>(params.get('open'))
+  const [intent, setIntent] = useState<{ id: string; act: SetupIntent } | null>(null)
+  const [search, setSearch] = useState('')
   const asked = params.get('filter')
   const filter: StatusFilter = asked === 'unassigned' || asked === 'waiting' || asked === 'signed_up' ? asked : 'all'
   const setFilter = (next: StatusFilter) =>
@@ -88,75 +100,177 @@ export function NewStudentsPage() {
     }, { replace: true })
   const { staff } = useSession()
   const students = q.data?.students ?? []
+  const canAssign = q.data?.canAssign === true
   // PD-27: Sales, the Operations Manager (who assigns) and the super admin ask
   // for the subscription payment before Assign, and still see the trial's
   // requests after it (read only). The server decides each request.
-  const mayRequestPayment = access.sales || q.data?.canAssign === true || (staff !== null && isSuperAdmin(staff.role))
+  const mayRequestPayment = access.sales || canAssign || (staff !== null && isSuperAdmin(staff.role))
 
-  // PD-32: one status per card drives the badge and the filter; the search is on names.
+  // PD-32: one status per family drives its tag and its stage; the search is on names.
   const statuses = useMemo(() => new Map(students.map((s) => [s.trialId, newStudentStatus(s)])), [students])
   const statusOf = (s: NewStudentDto) => statuses.get(s.trialId) ?? 'unassigned'
   const searched = students.filter((s) => matchesSearch(s, search))
   const shown = searched.filter((s) => matchesFilter(statusOf(s), filter))
-  const count = (f: StatusFilter) => searched.filter((s) => matchesFilter(statusOf(s), f)).length
-  const unassigned = searched.filter((s) => statusOf(s) === 'unassigned')
+  const inStage = (stage: Stage) => searched.filter((s) => stageOf(statusOf(s)) === stage)
+  const unassigned = inStage('unassigned')
   const oldest = unassigned.reduce<NewStudentDto | null>((a, s) => (a === null || s.recordedAt < a.recordedAt ? s : a), null)
+  const late = unassigned.some((s) => assignLate(s, 'unassigned'))
   const locked = searched.filter((s) => statusOf(s) === 'locked').length
-  const cells: Array<FlowCell<StatusFilter>> = [
-    { key: 'all', label: tx(NS.all), count: count('all') },
+
+  const figures: MastFigure[] = [
+    { key: 'all', label: tx(NS.all), value: number(searched.length), onClick: () => setFilter('all'), pressed: filter === 'all' },
     {
       key: 'unassigned',
       label: tx(STATUS.unassigned.label),
-      count: count('unassigned'),
+      value: number(unassigned.length),
       note: oldest ? tx(NS.oldest).replace('{age}', ageText(oldest.recordedAt, locale)) : undefined,
-      late: unassigned.some((s) => assignLate(s, 'unassigned')),
+      tone: late ? 'urgent' : unassigned.length > 0 ? 'key' : undefined,
+      onClick: () => setFilter('unassigned'),
+      pressed: filter === 'unassigned',
     },
     {
       key: 'waiting',
       label: tx(STATUS.waiting.label),
-      count: count('waiting'),
-      note: locked > 0 ? tx(NS.lockedCount).replace('{n}', String(locked)) : undefined,
-      late: locked > 0,
+      value: number(inStage('waiting').length),
+      note: locked > 0 ? tx(NS.lockedCount).replace('{n}', number(locked)) : undefined,
+      onClick: () => setFilter('waiting'),
+      pressed: filter === 'waiting',
     },
-    { key: 'signed_up', label: tx(STATUS.signed_up.label), count: count('signed_up') },
+    {
+      key: 'signed_up',
+      label: tx(STATUS.signed_up.label),
+      value: number(inStage('signed_up').length),
+      tone: 'quiet',
+      onClick: () => setFilter('signed_up'),
+      pressed: filter === 'signed_up',
+    },
   ]
 
-  const record = (s: NewStudentDto) => (
-    <FamilyRecord
-      key={s.trialId}
-      s={s}
-      status={statusOf(s)}
-      canAssign={q.data?.canAssign === true}
-      // PD-16: a form that became a family is frozen.
-      onEdit={access.sales && !s.enrolment ? () => setEditing(s) : undefined}
-      onPayments={mayRequestPayment ? () => setPaying(s) : undefined}
-    />
-  )
-  // Beside the queue the panel always shows a family: the one picked, else the first in the list.
-  const open = wide ? shown.find((s) => s.trialId === openId) ?? shown[0] ?? null : null
+  const mayEdit = (s: NewStudentDto) => access.sales && !s.enrolment // PD-16: a form that became a family is frozen.
+  const more = (s: NewStudentDto): MenuItem[] => [
+    ...(mayRequestPayment ? [{ key: 'pay', label: tx(PAY.trialAction), icon: 'card' as const, onSelect: () => setPaying(s) }] : []),
+    ...(mayEdit(s) ? [{ key: 'edit', label: tx(TR.editForm), icon: 'pencil' as const, onSelect: () => setEditing(s) }] : []),
+  ]
+  const openWith = (s: NewStudentDto, act: SetupIntent) => {
+    setOpenId(s.trialId)
+    setIntent({ id: s.trialId, act })
+  }
 
+  /** A family on the board: who, the children, who looks after it, how long it has waited, and its next step. */
+  const card = (s: NewStudentDto) => {
+    const status = statusOf(s)
+    const e = s.enrolment ?? null
+    const group = e?.groupConversationId ?? null
+    const codeWaiting = e?.parentSignup.state === 'code_waiting'
+    const primary =
+      !e && canAssign ? (
+        <button type="button" className="btn btn--sm" onClick={() => openWith(s, 'assign')}>{tx(NS.assignSupervisor)}</button>
+      ) : codeWaiting ? (
+        <button type="button" className="btn btn--sm" onClick={() => setOpenId(s.trialId)}>{tx(NS.showCode)}</button>
+      ) : e && !group && e.canCreateGroup ? (
+        <button type="button" className="btn btn--sm" onClick={() => openWith(s, 'group')}>{tx(NS.createGroup)}</button>
+      ) : group ? (
+        <button type="button" className="btn btn--sm" onClick={() => navigate(`/chat/${group}`)}>{tx(NS.openGroup)}</button>
+      ) : (
+        <button type="button" className="btn btn--sm" onClick={() => setOpenId(s.trialId)}>{tx(NS.open)}</button>
+      )
+    return (
+      <BoardCard
+        key={s.trialId}
+        title={s.parent.name}
+        selected={open?.trialId === s.trialId}
+        onOpen={() => setOpenId(s.trialId)}
+        age={<Age iso={since(s)} late={assignLate(s, status)} />}
+        actions={<RowActions label={`${tx(NS.moreActions)}: ${s.parent.name}`} primary={primary} more={more(s)} />}
+      >
+        <p className="rq-card__line">
+          <Icon name="students" size={15} />
+          <bdi>{s.children.map((c) => c.name).join(' · ')}</bdi>
+        </p>
+        <div className="rq-card__tags">
+          {e?.supervisor ? (
+            <span className="rq-card__line">
+              <Icon name="user" size={15} />
+              <bdi>{e.supervisor.name}</bdi>
+            </span>
+          ) : (
+            <Badge tone="gold">{tx(NS.noSupervisor)}</Badge>
+          )}
+          {status === 'locked' && <Badge tone="danger">{tx(STATUS.locked.label)}</Badge>}
+          {codeWaiting && status !== 'locked' && <Badge tone="warn">{tx(NS.codeAsked)}</Badge>}
+        </div>
+      </BoardCard>
+    )
+  }
+
+  // Beside the board the inspector always shows a family: the one picked, else the first on the board.
+  const open = shown.find((s) => s.trialId === openId) ?? (wide ? [...STAGES].flatMap((st) => shown.filter((s) => stageOf(statusOf(s)) === st))[0] ?? null : null)
+  const openStatus = open ? statusOf(open) : 'unassigned'
+
+  const stages: Array<BoardStage<Stage>> = STAGES.map((stage) => {
+    const families = inStage(stage)
+    return {
+      key: stage,
+      label: tx(STATUS[stage].label),
+      count: families.length,
+      urgent: stage === 'unassigned' ? late : stage === 'waiting' && locked > 0,
+      cards: families.map(card),
+      empty: tx(NS.stageEmpty),
+    }
+  })
+
+  const offered = TRIALS_TABS.filter((t) => t.offered(access)).length > 1
   return (
     <div className="page rq-page ns-page">
       <div className="page__inner">
-        <TrialsAreaTabs />
-        <PageHeader title={tx(TR.newTitle)} subtitle={tx(TR.newSubtitle)} />
-        {students.length > 0 && <FlowStrip label={tx(NS.filterLabel)} cells={cells} value={filter} onChange={setFilter} />}
+        <PageHeader
+          title={tx(TR.newTitle)}
+          subtitle={tx(TR.newSubtitle)}
+          figures={students.length > 0 ? figures : undefined}
+          tabs={offered ? <TrialsAreaTabs /> : undefined}
+        />
         <RequestQueue
           label={tx(NS.panelLabel)}
           reserve={wide && q.isLoading}
-          detail={open && { id: open.trialId, title: open.parent.name, bare: true, pinned: true, onClose: () => setOpenId(null), body: record(open) }}
+          detail={
+            open && {
+              id: open.trialId,
+              title: open.parent.name,
+              kind: { icon: 'newStudents', label: tx(NS.kind) },
+              status: (
+                <>
+                  <Badge tone={STATUS[openStatus].tone} dot>{tx(STATUS[openStatus].label)}</Badge>
+                  <Age iso={since(open)} late={assignLate(open, openStatus)} />
+                </>
+              ),
+              pinned: true,
+              onClose: () => setOpenId(null),
+              body: (
+                <FamilyRecord
+                  s={open}
+                  canAssign={canAssign}
+                  showRequests={mayRequestPayment}
+                  more={more(open)}
+                  intent={intent?.id === open.trialId ? intent.act : null}
+                  onIntentDone={() => setIntent(null)}
+                />
+              ),
+            }
+          }
         >
           <QueryBoundary isLoading={q.isLoading} error={q.error} onRetry={() => void q.refetch()}>
             {students.length === 0 ? (
               // The one empty state of the page: what will be here, and where it comes from.
-              <EmptyState
-                title={tx(TR.nothingNew)}
-                hint={tx(NS.emptyHint)}
-                action={<Link className="btn btn--sm" to={TRIALS_AREA_BASE}>{tx(NS.openTrials)}</Link>}
-              />
+              <div className="sheet rq-blank">
+                <EmptyState
+                  title={tx(TR.nothingNew)}
+                  hint={tx(NS.emptyHint)}
+                  action={<Link className="btn btn--sm" to={TRIALS_AREA_BASE}>{tx(NS.openTrials)}</Link>}
+                />
+              </div>
             ) : (
               <>
-                <div className="rq-toolbar">
+                <div className="ns-find">
                   <label className="search">
                     <Icon name="search" size={16} />
                     <span className="sr-only">{tx(NS.search)}</span>
@@ -170,45 +284,12 @@ export function NewStudentsPage() {
                   </label>
                 </div>
                 {shown.length === 0 ? (
-                  <EmptyState title={tx(NS.noMatch)} />
-                ) : wide ? (
-                  <div className="table-wrap">
-                    <table className="table rq-table">
-                      <thead>
-                        <tr>
-                          <th scope="col">{tx(NS.family)}</th>
-                          <th scope="col">{tx(NS.supervisor)}</th>
-                          <th scope="col" className="rq-c--more">{tx(NS.recordedCol)}</th>
-                          <th scope="col">{tx(NS.status)}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {shown.map((s) => {
-                          const status = statusOf(s)
-                          return (
-                            <tr key={s.trialId} data-selected={open?.trialId === s.trialId || undefined} onClick={rowOpener(() => setOpenId(s.trialId))}>
-                              <th scope="row" className="rq-c-who">
-                                <RowOpen selected={open?.trialId === s.trialId} onOpen={() => setOpenId(s.trialId)}>{s.parent.name}</RowOpen>
-                                <span className="rq-sub"><bdi>{s.children.map((c) => c.name).join(' · ')}</bdi></span>
-                              </th>
-                              <td className="rq-c-meta">
-                                {s.enrolment?.supervisor ? <bdi>{s.enrolment.supervisor.name}</bdi> : <span className="rq-muted">—</span>}
-                              </td>
-                              <td className="rq-c-when rq-c--more">
-                                <Age iso={s.recordedAt} late={assignLate(s, status)} />
-                                <span className="rq-sub"><bdi>{s.recordedBy.name}</bdi></span>
-                              </td>
-                              <td className="rq-c-status">
-                                <Badge tone={STATUS[status].tone} dot>{tx(STATUS[status].label)}</Badge>
-                              </td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
+                  <div className="sheet rq-blank">
+                    <EmptyState title={tx(NS.noMatch)} />
                   </div>
                 ) : (
-                  <div className="ns-list">{shown.map(record)}</div>
+                  // The masthead's figures are this board's stage switch: it draws no tabs of its own.
+                  <Board label={tx(NS.filterLabel)} stages={stages} value={filter === 'all' ? 'all' : filter} onChange={setFilter} tabs={false} />
                 )}
               </>
             )}
@@ -224,27 +305,28 @@ export function NewStudentsPage() {
 }
 
 /**
- * PD-32: one family, read top to bottom -- who (the parent, the status, who
- * recorded it), its steps from the trial to the parent's sign-up, each with
- * its own control, then the contact, the payment and the children.
+ * PD-32: one family's record in the inspector, read top to bottom -- who
+ * recorded it, its steps from the trial to the parent's sign-up, then the
+ * contact, the payment and the children. Its next step is the foot's action.
  */
 function FamilyRecord({
   s,
-  status,
-  onEdit,
-  onPayments,
   canAssign,
+  showRequests,
+  more,
+  intent,
+  onIntentDone,
 }: {
   s: NewStudentDto
-  status: NewStudentStatus
-  onEdit?: () => void
-  onPayments?: () => void
   canAssign: boolean
+  showRequests: boolean
+  more: MenuItem[]
+  intent: SetupIntent | null
+  onIntentDone: () => void
 }) {
   const { locale, number } = useI18n()
   const tx = (p: Pair) => (locale === 'ar' ? p.ar : p.en)
   const money = (n: number) => formatAmount(n, s.payment.currency, locale)
-  const headingId = `ns-${s.trialId}`
   const before: FlowStep[] = [
     {
       key: 'trial',
@@ -258,70 +340,52 @@ function FamilyRecord({
         </>
       ),
     },
-    { key: 'recorded', label: tx(NS.stepRecorded), state: 'done', meta: <time dateTime={s.recordedAt}>{formatWhen(s.recordedAt, locale)}</time> },
-  ]
-  return (
-    <article className="ns-record" aria-labelledby={headingId}>
-      <DetailHead
-        id={headingId}
-        title={s.parent.name}
-        kind={{ icon: 'newStudents', label: tx(NS.kind) }}
-        status={
-          <>
-            <Badge tone={STATUS[status].tone} dot>{tx(STATUS[status].label)}</Badge>
-            <Age iso={s.recordedAt} late={assignLate(s, status)} />
-          </>
-        }
-      >
-        <p className="ns-record__byline">
-          {tx(NS.recorded)} <span dir="auto">{s.recordedBy.name}</span>
+    {
+      key: 'recorded',
+      label: tx(NS.stepRecorded),
+      state: 'done',
+      meta: (
+        <>
+          <time dateTime={s.recordedAt}>{formatWhen(s.recordedAt, locale)}</time> · {tx(NS.recorded)} <bdi>{s.recordedBy.name}</bdi>
           {s.updatedAt && (
             <> · {tx(NS.updated)} <time dateTime={s.updatedAt}>{formatWhen(s.updatedAt, locale)}</time></>
           )}
-        </p>
-      </DetailHead>
-      {(onEdit || onPayments) && (
-        <div className="ns-record__actions">
-          {onPayments && <button type="button" className="btn btn--sm" onClick={onPayments}>{tx(PAY.trialAction)}</button>}
-          {onEdit && <button type="button" className="btn btn--sm" onClick={onEdit}>{tx(TR.editForm)}</button>}
-        </div>
-      )}
-
-      <div className="ns-record__body">
-        <NewStudentSetup s={s} canAssign={canAssign} before={before} />
-
-        <div className="ns-record__facts">
-          <DetailSection title={tx(NS.contact)}>
-            <dl className="rq-fields">
-              <div className="rq-field">
-                <dt>{tx(TR.parentPhone)}</dt>
-                <dd><bdi dir="ltr" className="ns-ltr">{s.parent.phone}</bdi></dd>
-              </div>
-              <div className="rq-field">
-                <dt>{tx(TR.email)}</dt>
-                <dd>{s.parent.email ? <bdi dir="ltr" className="ns-ltr">{s.parent.email}</bdi> : <span className="ts-muted">—</span>}</dd>
-              </div>
-              <div className="rq-field">
-                <dt>{tx(TR.location)}</dt>
-                <dd>{formLocationText(s.parent.location, locale)}</dd>
-              </div>
-            </dl>
-          </DetailSection>
-          <DetailSection title={tx(NS.payment)}>
-            <dl className="rq-fields">
-              <div className="rq-field">
-                <dt>{tx(TR.paymentMethod)}</dt>
-                <dd>{tx(PAYMENT_METHOD[s.payment.method] ?? { en: s.payment.method, ar: s.payment.method })}</dd>
-              </div>
-              <div className="rq-field">
-                <dt>{tx(TR.currency)}</dt>
-                <dd>{currencyName(s.payment.currency, locale)}</dd>
-              </div>
-            </dl>
-            {onPayments && <TrialRequestsSummary trialId={s.trialId} />}
-          </DetailSection>
-        </div>
-
+        </>
+      ),
+    },
+  ]
+  return (
+    <div className="ns-record">
+      <NewStudentSetup s={s} canAssign={canAssign} before={before} intent={intent} onIntentDone={onIntentDone} more={more}>
+        <DetailSection title={tx(NS.contact)}>
+          <dl className="rq-fields">
+            <div className="rq-field">
+              <dt>{tx(TR.parentPhone)}</dt>
+              <dd><bdi dir="ltr" className="ns-ltr">{s.parent.phone}</bdi></dd>
+            </div>
+            <div className="rq-field">
+              <dt>{tx(TR.email)}</dt>
+              <dd>{s.parent.email ? <bdi dir="ltr" className="ns-ltr">{s.parent.email}</bdi> : <span className="ts-muted">—</span>}</dd>
+            </div>
+            <div className="rq-field">
+              <dt>{tx(TR.location)}</dt>
+              <dd>{formLocationText(s.parent.location, locale)}</dd>
+            </div>
+          </dl>
+        </DetailSection>
+        <DetailSection title={tx(NS.payment)}>
+          <dl className="rq-fields">
+            <div className="rq-field">
+              <dt>{tx(TR.paymentMethod)}</dt>
+              <dd>{tx(PAYMENT_METHOD[s.payment.method] ?? { en: s.payment.method, ar: s.payment.method })}</dd>
+            </div>
+            <div className="rq-field">
+              <dt>{tx(TR.currency)}</dt>
+              <dd>{currencyName(s.payment.currency, locale)}</dd>
+            </div>
+          </dl>
+          {showRequests && <TrialRequestsSummary trialId={s.trialId} />}
+        </DetailSection>
         <DetailSection title={tx(NS.children)} aside={<span className="ns-count">{number(s.children.length)}</span>}>
           <div className="ns-children">
             <table className="table ns-table">
@@ -361,8 +425,8 @@ function FamilyRecord({
             </table>
           </div>
         </DetailSection>
-      </div>
-    </article>
+      </NewStudentSetup>
+    </div>
   )
 }
 

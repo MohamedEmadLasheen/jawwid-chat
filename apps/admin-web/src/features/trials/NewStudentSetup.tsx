@@ -1,10 +1,11 @@
-import { useId, useState } from 'react'
+import { useEffect, useId, useState, type ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
 import { Icon } from '@/shared/components/Icon'
-import { DetailSection, FlowSteps, type FlowStep } from '@/shared/components/RequestQueue'
+import type { MenuItem } from '@/shared/components/Menu'
+import { DetailFoot, DetailSection, FlowSteps, type FlowStep } from '@/shared/components/RequestQueue'
 import { useStructure } from '@/features/organization/hooks'
 import { describeOpsError } from '../teachers/opsCopy'
 import type { Pair } from '../teachers/copy'
@@ -43,6 +44,7 @@ const S: Record<string, Pair> = {
   openGroup: { en: 'Open group', ar: 'فتح المجموعة' },
   group: { en: 'Group', ar: 'المجموعة' },
   noGroup: { en: 'Not created yet', ar: 'لم تُنشأ بعد' },
+  groupMade: { en: 'Created', ar: 'أُنشئت' },
   parent: { en: 'Parent\'s account', ar: 'حساب ولي الأمر' },
   notStarted: {
     en: 'Not signed up yet. Ask the parent to download the app and choose "I\'m a new parent" with their e-mail.',
@@ -59,16 +61,40 @@ const S: Record<string, Pair> = {
   },
 }
 
+/** What a family's card can ask of its setup directly: the next step, without hunting for it in the inspector. */
+export type SetupIntent = 'assign' | 'group'
+
 /**
- * PD-16: a new student's setup, on their New Students card. The Operations
+ * PD-16: a new student's setup, in the family's inspector. The Operations
  * manager assigns the responsible supervisor; the supervisor creates the
  * family's group; the parent signs up in the app with a code the supervisor
  * relays on WhatsApp. Every step is decided by the server.
  *
  * Drawn as the family's steps, top to bottom: `before` is what led here (the
- * trial, the recorded subscription); each later step carries its own control.
+ * trial, the recorded subscription). The step that moves the family on is the
+ * inspector's one primary action, at its foot; what only adjusts a step
+ * (change the supervisor, end a code, clear a lock) stays beside that step.
+ * `children` are the record's facts, between the steps and the foot; `more`
+ * is what the foot keeps behind "⋯".
  */
-export function NewStudentSetup({ s, canAssign, before = [] }: { s: NewStudentDto; canAssign: boolean; before?: FlowStep[] }) {
+export function NewStudentSetup({
+  s,
+  canAssign,
+  before = [],
+  intent = null,
+  onIntentDone,
+  more = [],
+  children,
+}: {
+  s: NewStudentDto
+  canAssign: boolean
+  before?: FlowStep[]
+  /** The step the family's card asked for; it is taken once, then `onIntentDone` clears it. */
+  intent?: SetupIntent | null
+  onIntentDone?: () => void
+  more?: MenuItem[]
+  children?: ReactNode
+}) {
   const { locale, number } = useI18n()
   const tx = (p: Pair | undefined) => (p ? (locale === 'ar' ? p.ar : p.en) : '')
   const qc = useQueryClient()
@@ -113,42 +139,38 @@ export function NewStudentSetup({ s, canAssign, before = [] }: { s: NewStudentDt
   const signup = e?.parentSignup
   const attempts = signup && signup.state !== 'signed_up' ? signup.attempts : undefined
 
+  // What moves the family on now, offered only where the server would accept it.
+  const next: SetupIntent | 'open' | null = !e?.supervisor && canAssign ? 'assign' : e && !e.groupConversationId && e.canCreateGroup ? 'group' : e?.groupConversationId ? 'open' : null
+
+  // The card asked for the next step: take it here, once, where its dialog and its notices live.
+  useEffect(() => {
+    if (!intent) return
+    if (intent === 'assign' && next === 'assign') setAssigning(true)
+    if (intent === 'group' && next === 'group') void createGroup()
+    onIntentDone?.()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- taken once per request from the card
+  }, [intent])
+
   const steps: FlowStep[] = [
     ...before,
     {
       key: 'supervisor',
       label: tx(S.supervisor),
       state: e?.supervisor ? 'done' : 'current',
-      meta: e?.supervisor ? <bdi>{e.supervisor.name}</bdi> : canAssign ? undefined : tx(S.notAssigned),
-      children: e?.supervisor ? (
-        canAssign ? (
+      meta: e?.supervisor ? <bdi>{e.supervisor.name}</bdi> : tx(S.notAssigned),
+      children:
+        e?.supervisor && canAssign ? (
           // PD-24: the Operations manager changes the supervisor at any time after Assign.
           <button type="button" className="btn btn--sm" onClick={() => setChanging(true)}>
             {tx(S.change)}
           </button>
-        ) : undefined
-      ) : canAssign ? (
-        <button type="button" className="btn btn--sm btn--primary" onClick={() => setAssigning(true)}>
-          {tx(S.assign)}
-        </button>
-      ) : undefined,
+        ) : undefined,
     },
     {
       key: 'group',
       label: tx(S.group),
       state: !e ? 'todo' : e.groupConversationId ? 'done' : 'current',
-      meta: e && !e.groupConversationId && !e.canCreateGroup ? tx(S.noGroup) : undefined,
-      children: !e ? undefined : e.groupConversationId ? (
-        <button type="button" className="btn btn--sm" onClick={() => navigate(`/chat/${e.groupConversationId}`)}>
-          <Icon name="conversations" size={16} />
-          {tx(S.openGroup)}
-        </button>
-      ) : e.canCreateGroup ? (
-        <button type="button" className="btn btn--sm btn--primary" disabled={pending} onClick={() => void createGroup()}>
-          <Icon name="plus" size={14} />
-          {pending ? tx(S.creating) : tx(S.createGroup)}
-        </button>
-      ) : undefined,
+      meta: !e ? undefined : e.groupConversationId ? tx(S.groupMade) : tx(S.noGroup),
     },
     {
       key: 'parent',
@@ -194,7 +216,7 @@ export function NewStudentSetup({ s, canAssign, before = [] }: { s: NewStudentDt
                 )}
                 <button
                   type="button"
-                  className={attempts.locked ? 'btn btn--sm btn--primary' : 'btn btn--sm'}
+                  className="btn btn--sm"
                   disabled={pending}
                   onClick={() => void signupAction(() => trialsApi.resetSignupAttempts(s.trialId), tx(NS.resetDone))}
                 >
@@ -207,12 +229,33 @@ export function NewStudentSetup({ s, canAssign, before = [] }: { s: NewStudentDt
     },
   ]
 
+  const primary =
+    next === 'assign' ? (
+      <button type="button" className="btn btn--primary" onClick={() => setAssigning(true)}>
+        {tx(S.assign)}
+      </button>
+    ) : next === 'group' ? (
+      <button type="button" className="btn btn--primary" disabled={pending} onClick={() => void createGroup()}>
+        <Icon name="plus" size={14} />
+        {pending ? tx(S.creating) : tx(S.createGroup)}
+      </button>
+    ) : next === 'open' ? (
+      <button type="button" className="btn" onClick={() => navigate(`/chat/${e!.groupConversationId}`)}>
+        <Icon name="conversations" size={16} />
+        {tx(S.openGroup)}
+      </button>
+    ) : undefined
+
   return (
-    <DetailSection title={tx(NS.setup)}>
-      <FlowSteps steps={steps} label={tx(S.setup)} />
-      {notice && <p className="banner banner--warning" role="status">{notice}</p>}
-      {done && <p className="banner banner--info" role="status">{done}</p>}
-      {error ? <p className="banner banner--danger" role="alert">{describeOpsError(error, locale)}</p> : null}
+    <>
+      <DetailSection title={tx(NS.setup)}>
+        <FlowSteps steps={steps} label={tx(S.setup)} />
+        {notice && <p className="banner banner--warning" role="status">{notice}</p>}
+        {done && <p className="banner banner--info" role="status">{done}</p>}
+        {error ? <p className="banner banner--danger" role="alert">{describeOpsError(error, locale)}</p> : null}
+      </DetailSection>
+      {children}
+      <DetailFoot primary={primary} more={more} label={`${tx(NS.moreActions)}: ${s.parent.name}`} />
       {changing && e && (
         <ChangeSupervisorDialog
           name={s.parent.name}
@@ -243,7 +286,7 @@ export function NewStudentSetup({ s, canAssign, before = [] }: { s: NewStudentDt
           }}
         />
       )}
-    </DetailSection>
+    </>
   )
 }
 
