@@ -14,7 +14,7 @@ import { Splitter, useResizableWidth } from '@/shared/components/Splitter'
 import { EmptyState, LoadingState, QueryBoundary } from '@/shared/components/States'
 import { useMediaQuery } from '@/shared/hooks/useMediaQuery'
 import { chatCopyFor, systemText } from '@/features/chat/copy'
-import { cardFallbackText, conversationTone } from '@/features/chat/chatView'
+import { conversationTone } from '@/features/chat/chatView'
 import { useWorkspaceKeys } from '@/features/chat/useWorkspaceKeys'
 import '@/features/chat/chat.css'
 import { ConversationStateBadge, conversationName, matches } from './common'
@@ -609,9 +609,10 @@ function MessageItem({ m, side, showAuthor }: { m: AdminMessage; side: Side; sho
                 {typeLabel && m.attachments > 1 && <> · {plural(PLURAL.attachments, m.attachments)}</>}
               </span>
             )}
+            {/* This view reads what was sent, word for word. */}
             {m.body && (
               <span className="bubble__text" dir="auto">
-                {isCard ? cardFallbackText(m.body) : m.body}
+                {m.body}
               </span>
             )}
           </>

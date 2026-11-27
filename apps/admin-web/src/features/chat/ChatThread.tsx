@@ -78,10 +78,10 @@ type Side = 'in' | 'out' | 'internal' | 'system'
  */
 function sideOf(m: ChatMessage, selfId: string | undefined): Side {
   if (m.visibility === 'internal') return 'internal'
-  // A lesson card Jawwid posted itself (a teacher's absence, an accepted late
-  // apology, a card recorded by staff outside the group) is still a card to
-  // draw -- the reason, the make-up's time -- not a one-line system note.
-  if (m.authorKind === 'system' && m.type === 'card' && m.card && readLessonExcuseCard(m.card.kind, m.card.payload)) return 'in'
+  // A card Jawwid posted itself (a teacher's absence, an accepted late apology,
+  // a case escalated to a department's room, a booked trial, "lessons are
+  // paused") is still a card to draw, not a one-line system note.
+  if (m.authorKind === 'system' && m.type === 'card') return 'in'
   if (m.authorKind === 'system' || m.type === 'system') return 'system'
   return m.authorId === selfId ? 'out' : 'in'
 }
@@ -638,8 +638,9 @@ export function ChatThread({
               const side = sideOf(m, staff?.id)
               const runStart =
                 newDay || !prev || prev.authorId !== m.authorId || sideOf(prev, staff?.id) !== side
+              // A card Jawwid posted itself has no sender to picture or name.
               const identity: Identity =
-                side === 'out' || side === 'system' || !showsSenders ? 'none' : runStart ? 'lead' : 'follow'
+                side === 'out' || side === 'system' || !showsSenders || m.authorKind === 'system' ? 'none' : runStart ? 'lead' : 'follow'
               return (
                 <Fragment key={m.id}>
                   {newDay && (
@@ -1099,18 +1100,15 @@ function MessageItem({
               {m.attachments.map((a) => (
                 <AttachmentView key={a.id} a={a} copy={copy} />
               ))}
-              {m.body && (
-                <span dir="auto">
-                  {highlight ? (
-                    <Highlighted text={isCard ? cardFallbackText(m.body) : m.body} query={highlight} />
-                  ) : isCard ? (
-                    // A card this client cannot draw shows the server's own words for it, without its pictograph.
-                    cardFallbackText(m.body)
-                  ) : (
-                    <MentionText body={m.body} mentions={m.mentions} selfId={selfId} />
-                  )}
-                </span>
-              )}
+              {m.body &&
+                (isCard ? (
+                  // A card this client cannot draw: the server's own words for it, its first line as the card's title.
+                  <FallbackCard text={cardFallbackText(m.body)} highlight={highlight} />
+                ) : (
+                  <span dir="auto">
+                    {highlight ? <Highlighted text={m.body} query={highlight} /> : <MentionText body={m.body} mentions={m.mentions} selfId={selfId} />}
+                  </span>
+                ))}
             </>
           )}
           {nowCard && m.conversationId && (
@@ -1185,6 +1183,24 @@ function MessageItem({
         </div>
       )}
     </li>
+  )
+}
+
+/** A card drawn from its plain words: the first line is its title, the rest its facts. */
+function FallbackCard({ text, highlight }: { text: string; highlight?: string }) {
+  const [title = '', ...lines] = text.split('\n').filter((line) => line.trim() !== '')
+  const show = (line: string) => (highlight ? <Highlighted text={line} query={highlight} /> : line)
+  return (
+    <span className="cw-card">
+      <strong className="cw-card__title" dir="auto">
+        {show(title)}
+      </strong>
+      {lines.map((line, i) => (
+        <span key={i} className="cw-card__line" dir="auto">
+          {show(line)}
+        </span>
+      ))}
+    </span>
   )
 }
 

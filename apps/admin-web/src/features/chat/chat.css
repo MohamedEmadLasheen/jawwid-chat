@@ -157,11 +157,11 @@ html[lang='ar'] .cw .workspace__title { font-size: 28px; }
 .cw-row__mark--favorite { color: var(--terracotta); }
 .cw-row__mark--mention { color: var(--gold-text); }
 /* The row's options wait for the pointer or the keyboard. */
-.cw-row__menu { position: absolute; inset-inline-end: 10px; inset-block-end: 5px; opacity: 0; }
+.cw-row__menu { position: absolute; inset-inline-end: 10px; inset-block-end: 4px; opacity: 0; }
 .cw-row__menu .menu__button {
-  inline-size: 28px;
-  min-block-size: 26px;
-  block-size: 26px;
+  inline-size: 32px;
+  min-block-size: 32px;
+  block-size: 32px;
   border: 1px solid var(--hairline);
   background: var(--surface);
 }
@@ -369,7 +369,7 @@ html[lang='ar'] .cw .thread-head__name { font-weight: 700; line-height: 1.5; }
 
 /* A reference card -- a scheduled call, a moved or excused lesson, an
    escalated case -- is ruled above and below with a gold start edge. */
-.cw .bubble-row.cw-msg.cw-msg--card { max-inline-size: min(460px, 88%); }
+.cw .bubble-row.cw-msg.cw-msg--card { max-inline-size: min(460px, 88%); margin-block: 5px; }
 .cw .bubble-row.cw-msg.cw-msg--card .bubble {
   min-inline-size: min(300px, 100%);
   padding: 10px 14px 7px;
@@ -385,6 +385,12 @@ html[lang='ar'] .cw .thread-head__name { font-weight: 700; line-height: 1.5; }
 .cw .cw-msg--card .cp-card__line--sub, .cw .cw-msg--card .cp-card__hint { color: var(--ink-muted); }
 .cw .cw-msg--card .cp-card__actions { margin-block-start: 8px; padding-block-start: 8px; border-block-start: 1px solid var(--hairline-soft); }
 .cw .cw-msg--card .jr-now { font-style: normal; }
+/* A card drawn from its plain words: a title, then its facts line by line. */
+.cw-card { display: grid; gap: 1px; white-space: normal; }
+.cw-card__title { font-family: var(--display); font-size: var(--fs-lg); font-weight: 600; line-height: 1.4; }
+html[lang='ar'] .cw-card__title { font-weight: 700; }
+.cw-card__line { font-size: var(--fs-sm); color: var(--ink); }
+.cw .cw-msg--card .case-card { display: block; }
 
 .cw-quote {
   display: grid;
@@ -408,6 +414,7 @@ html[lang='ar'] .cw .thread-head__name { font-weight: 700; line-height: 1.5; }
   display: inline-flex;
   align-items: center;
   gap: 3px;
+  min-block-size: 24px;
   padding: 0 7px;
   border: 1px solid var(--hairline);
   border-radius: var(--radius-lg);
@@ -417,6 +424,9 @@ html[lang='ar'] .cw .thread-head__name { font-weight: 700; line-height: 1.5; }
   cursor: pointer;
 }
 .cw-reaction--mine { border-color: var(--teal); background: var(--teal-tint); }
+/* Small marks keep a full-size target around them. */
+.cw-reaction, .cw-label-filter__item, .cw-swatch { position: relative; }
+:is(.cw-reaction, .cw-label-filter__item, .cw-swatch)::after { content: ''; position: absolute; inset: -5px; }
 .cw-react-row { display: flex; gap: 2px; padding: 2px 2px 6px; margin-block-end: 4px; border-block-end: 1px solid var(--hairline-soft); }
 .cw-react-row__emoji { inline-size: 34px; block-size: 34px; border: 0; border-radius: var(--radius); background: none; font-size: 18px; cursor: pointer; }
 .cw-react-row__emoji:hover, .cw-react-row__emoji:focus-visible, .cw-react-row__emoji[aria-pressed='true'] { background: var(--surface-hover); outline: none; }
@@ -521,7 +531,7 @@ html[lang='ar'] .cw .thread-head__name { font-weight: 700; line-height: 1.5; }
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-block-size: 30px;
+  min-block-size: 32px;
   padding: 0;
   border: 0;
   border-block-end: 2px solid transparent;

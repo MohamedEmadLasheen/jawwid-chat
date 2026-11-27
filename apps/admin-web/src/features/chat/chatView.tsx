@@ -129,9 +129,10 @@ export function ConversationAvatar({
 
 /**
  * A card's plain-text body is what the server wrote for clients that cannot
- * draw the card; it leads with a pictograph. The workspace shows the words only.
+ * draw the card; it leads with a pictograph. The workspace draws the card
+ * itself, so it shows the words without that leading mark, and changes nothing else.
  */
-export const cardFallbackText = (body: string) => body.replace(/[\p{Extended_Pictographic}\uFE0F]+[ \t]*/gu, '')
+export const cardFallbackText = (body: string) => body.replace(/^[\p{Extended_Pictographic}\uFE0F\u200D]+\s*/u, '')
 
 export const isMuted = (c: ChatConversation, now = Date.now()) => {
   const until = c.viewerState?.mutedUntil

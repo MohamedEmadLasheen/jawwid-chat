@@ -2,8 +2,12 @@ import { useEffect, useRef } from 'react'
 
 /** Where a key belongs to what is being typed, not to the workspace. */
 const TYPING = 'input, textarea, select, [contenteditable=""], [contenteditable="true"], [role="textbox"], [role="combobox"]'
-/** Anything floating over the workspace owns its own keys while it is open. */
-const OVERLAY = '[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"]'
+/**
+ * Anything floating over the workspace owns its own keys while it is open: a
+ * dialog, a menu, a picker's list, and the shell's own flyout or off-canvas
+ * navigation (which close on Escape themselves).
+ */
+const OVERLAY = '[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"], .rail__menu:not([hidden]), .shell--nav-open'
 
 /**
  * The conversation workspace's keys, for people who answer all day:
@@ -45,7 +49,8 @@ export function useWorkspaceKeys({ listId, onBack }: { listId: string; onBack: (
         return
       }
 
-      if (e.key === 'Escape' && back.current) {
+      // Select mode and the call history take Escape first (ChatThread, ThreadCalls).
+      if (e.key === 'Escape' && back.current && !document.querySelector('.cw-select-bar, .cw-calls__history')) {
         const at = rows().findIndex((r) => r.getAttribute('aria-current') === 'true')
         e.preventDefault()
         back.current()

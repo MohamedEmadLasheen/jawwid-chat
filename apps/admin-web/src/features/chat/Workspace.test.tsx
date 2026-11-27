@@ -365,6 +365,53 @@ describe('an internal note cannot be mistaken for a message', () => {
   })
 })
 
+describe('reference cards in the thread', () => {
+  it('draws a case escalated by the system as a card with the way to the case, not as a system line', async () => {
+    const room = conv('c1', { type: 'department_room', familyId: null, title: 'Teachers' })
+    const card = {
+      ...MESSAGE,
+      id: 'k1',
+      authorKind: 'system',
+      authorId: null,
+      authorDisplayName: null,
+      type: 'card',
+      body: '\u{1F4CC} New escalation',
+      card: { kind: 'case_escalated', lessonId: null, payload: { caseId: 'case-7', ownerId: 'o1', ownerName: 'Owner One', openedBy: 'p1', openedByName: 'Opener One' } },
+    }
+    stubApi([room], { '/conversations/c1/messages': { messages: [card], nextBefore: null } })
+    renderChat('/chat/c1')
+    const link = await screen.findByRole('link', { name: 'Open in Escalations' })
+    expect(link).toHaveAttribute('href', '/cases?case=case-7')
+    const row = link.closest('li') as HTMLElement
+    expect(row).toHaveClass('cw-msg--card')
+    expect(row).not.toHaveClass('bubble-row--system')
+    // Jawwid posted it: there is no sender to picture.
+    expect(row.querySelector('.cw-msg__avatar')).toBeNull()
+  })
+
+  it('draws a card it has no drawing for from its own words: the first line is the title, the leading mark is dropped', async () => {
+    const group = conv('c1', { type: 'trial_group', title: 'Teacher One' })
+    const card = {
+      ...MESSAGE,
+      id: 'k2',
+      authorKind: 'system',
+      authorId: null,
+      authorDisplayName: null,
+      type: 'card',
+      body: '\u{1F5D3} Trial lesson for Kid One\nWhen: Saturday 13:00\nLength: 30 minutes',
+      card: { kind: 'trial_booked', lessonId: null, payload: {} },
+    }
+    stubApi([group], { '/conversations/c1/messages': { messages: [card], nextBefore: null } })
+    renderChat('/chat/c1')
+    const title = await screen.findByText('Trial lesson for Kid One')
+    expect(title).toHaveClass('cw-card__title')
+    const row = title.closest('li') as HTMLElement
+    expect(row).toHaveClass('cw-msg--card')
+    expect(within(row).getByText('When: Saturday 13:00')).toBeInTheDocument()
+    expect(within(row).getByText('Length: 30 minutes')).toBeInTheDocument()
+  })
+})
+
 describe('who a monogram stands for', () => {
   it('tints by who the conversation is with', () => {
     expect(conversationTone({ type: 'family_group' })).toBe('parent')
@@ -383,6 +430,9 @@ describe('who a monogram stands for', () => {
 
   it("a card's fallback text loses its leading pictograph and nothing else", () => {
     expect(cardFallbackText('\u{1F4C5} Scheduled call\nMonthly follow-up 5:30')).toBe('Scheduled call\nMonthly follow-up 5:30')
+    expect(cardFallbackText('\u23F8\uFE0F Lessons are paused')).toBe('Lessons are paused')
     expect(cardFallbackText('Plain words, 24 lessons')).toBe('Plain words, 24 lessons')
+    // Only the mark the card leads with: words further in are the sender's.
+    expect(cardFallbackText('Booked \u{1F4C5} for Sunday')).toBe('Booked \u{1F4C5} for Sunday')
   })
 })

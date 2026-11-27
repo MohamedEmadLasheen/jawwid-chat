@@ -35,8 +35,16 @@ export function ThreadCalls({ conversationId, peerLabel, isGroup }: { conversati
     const onDown = (e: PointerEvent) => {
       if (root.current && !root.current.contains(e.target as Node)) setOpen(false)
     }
+    // Escape closes the history from wherever the keyboard is.
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false)
+    }
     document.addEventListener('pointerdown', onDown)
-    return () => document.removeEventListener('pointerdown', onDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', onDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
   }, [open])
 
   const canCall = capability.canCall && !!controller
@@ -46,16 +54,7 @@ export function ThreadCalls({ conversationId, peerLabel, isGroup }: { conversati
   const rows = history.data ?? []
 
   return (
-    <div
-      className="cw-calls"
-      ref={root}
-      onKeyDown={(e) => {
-        if (e.key === 'Escape' && open) {
-          e.stopPropagation()
-          setOpen(false)
-        }
-      }}
-    >
+    <div className="cw-calls" ref={root}>
       {canCall && (
         <button
           type="button"
