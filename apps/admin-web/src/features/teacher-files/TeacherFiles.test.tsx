@@ -98,6 +98,11 @@ afterEach(() => {
   tokenStore.clear()
 })
 
+/** The file is a record with tabs (`?tab=`): open the one a section lives under. */
+async function openTab(name: string) {
+  await userEvent.click(await screen.findByRole('button', { name }))
+}
+
 describe('the Teachers area', () => {
   // Navigation to the area is gated by T5's GET /lessons/access (TeacherStatsPage.test);
   // here: the Teacher files are one of its tabs.
@@ -134,16 +139,20 @@ describe('a teacher file', () => {
     const personal = screen.getByRole('region', { name: 'Personal information' })
     expect(within(personal).getByText('+20 100 555 0147')).toBeInTheDocument()
     expect(within(personal).getByText('1 Sept 2025')).toBeInTheDocument()
-    expect(within(screen.getByRole('region', { name: 'Assigned students (1)' })).getByText('Child Alpha')).toBeInTheDocument()
-    expect(within(screen.getByRole('region', { name: 'Complaints' })).getByText('Started late.')).toBeInTheDocument()
     const monthly = screen.getByRole('region', { name: 'Monthly performance' })
     expect(within(monthly).getByText('September 2026')).toBeInTheDocument()
     expect(within(monthly).getByText('1 earlier version(s)')).toBeInTheDocument()
-    expect(within(screen.getByRole('region', { name: 'Days off' })).getByText('21 Oct 2026')).toBeInTheDocument()
     const employment = screen.getByRole('region', { name: 'Employment' })
     expect(within(employment).getByText('Gulf')).toBeInTheDocument()
     // A Teachers-department reader: no payroll at all, and the finance route is never asked.
     expect(within(employment).queryByText('Salary type')).not.toBeInTheDocument()
+    await openTab('Students')
+    expect(within(screen.getByRole('region', { name: 'Assigned students (1)' })).getByText('Child Alpha')).toBeInTheDocument()
+    await openTab('Records')
+    expect(within(screen.getByRole('region', { name: 'Complaints' })).getByText('Started late.')).toBeInTheDocument()
+    await openTab('Leave')
+    expect(within(screen.getByRole('region', { name: 'Days off' })).getByText('21 Oct 2026')).toBeInTheDocument()
+    await openTab('Pay')
     expect(screen.queryByRole('region', { name: 'Financial summary' })).not.toBeInTheDocument()
     expect(calls('GET', /\/finance/)).toHaveLength(0)
     const bonuses = screen.getByRole('region', { name: 'Bonus history' })
@@ -157,12 +166,13 @@ describe('a teacher file', () => {
     renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/files/t-1' })
     await screen.findByRole('heading', { level: 1, name: /^Teacher One/ })
     expect(screen.queryByRole('button', { name: 'Edit personal information' })).not.toBeInTheDocument()
+    await openTab('Records')
     expect(screen.getByRole('button', { name: 'Record a complaint' })).toBeInTheDocument()
   })
 
   it('records a complaint resolution against the complaint it resolves', async () => {
     on('POST', /\/teacher-files\/t-1\/entries$/, () => json({ id: 'r-1', kind: 'complaint_resolution', createdAt: '2026-10-18T10:00:00Z' }, 201))
-    renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/files/t-1' })
+    renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/files/t-1?tab=records' })
     await userEvent.click(await screen.findByRole('button', { name: 'Resolve' }))
     const dialog = await screen.findByRole('dialog')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
@@ -183,7 +193,7 @@ describe('a teacher file', () => {
     on('POST', /\/teacher-files\/t-1\/entries$/, () =>
       json({ error: { code: 'COMM.TEACHER_FILE_CONFLICT', message: 'this day off is already recorded' } }, 409),
     )
-    renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/files/t-1' })
+    renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/files/t-1?tab=leave' })
     await userEvent.click(await screen.findByRole('button', { name: 'Record a day off' }))
     const dialog = await screen.findByRole('dialog')
     const day = dialog.querySelector('input[type="date"]') as HTMLInputElement
@@ -215,6 +225,7 @@ describe('a teacher file', () => {
   it('reads in Arabic, right to left', async () => {
     renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/files/t-1', locale: 'ar' })
     expect(await screen.findByRole('region', { name: 'البيانات الشخصية' })).toBeInTheDocument()
+    await openTab('السجلات')
     expect(screen.getByRole('region', { name: 'الشكاوى' })).toBeInTheDocument()
     expect(document.documentElement.dir === 'rtl' || document.querySelector('[dir="rtl"]')).toBeTruthy()
   })
@@ -233,7 +244,7 @@ describe('the supervision timeline', () => {
 
   it('shows every record in one line, with who recorded it, and filters by kind', async () => {
     on('GET', /\/teachers\/t-1\/supervision$/, () => json(timeline))
-    renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/files/t-1' })
+    renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/files/t-1?tab=records' })
     const section = await screen.findByRole('region', { name: 'Supervision timeline' })
     expect(within(section).getByText('Every report on time.')).toBeInTheDocument()
     expect(within(section).getAllByText(/Supervisor One/).length).toBeGreaterThan(0)
@@ -249,7 +260,7 @@ describe('the supervision timeline', () => {
     on('GET', /\/teachers\/t-1\/supervision$/, () => json(timeline))
     on('POST', /\/teachers\/t-1\/bonus$/, () => json({ id: 'b-2', kind: 'bonus', conversationId: 'sv-1' }, 201))
     on('POST', /\/teachers\/t-1\/supervision$/, () => json({ id: 'n-1', kind: 'note' }, 201))
-    renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/files/t-1' })
+    renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/files/t-1?tab=records' })
     const section = await screen.findByRole('region', { name: 'Supervision timeline' })
 
     await userEvent.click(within(section).getByRole('button', { name: 'Record a bonus' }))
@@ -273,14 +284,14 @@ describe('the supervision timeline', () => {
   it('offers no actions to a reader who cannot write, and is absent when the server refuses', async () => {
     on('GET', /\/teachers\/t-1\/supervision$/, () => json(timeline))
     on('GET', /\/teacher-files\/t-1$/, () => json(file({ canEditPersonal: false, canWriteSupervision: false })))
-    const { unmount } = renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/files/t-1' })
+    const { unmount } = renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/files/t-1?tab=records' })
     const section = await screen.findByRole('region', { name: 'Supervision timeline' })
     expect(within(section).queryByRole('button', { name: 'Record a bonus' })).not.toBeInTheDocument()
     unmount()
 
     on('GET', /\/teachers\/t-1\/supervision$/, () => json({ error: { code: 'COMM.LESSON_DENIED', message: 'no' } }, 403))
-    renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/files/t-1' })
-    await screen.findByRole('region', { name: 'Personal information' })
+    renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/files/t-1?tab=records' })
+    await screen.findByRole('region', { name: 'Complaints' })
     await waitFor(() => expect(calls('GET', /\/teachers\/t-1\/supervision$/).length).toBeGreaterThan(1))
     expect(screen.queryByRole('region', { name: 'Supervision timeline' })).not.toBeInTheDocument()
   })
@@ -331,7 +342,7 @@ describe('schedule and monthly performance', () => {
   })
 
   it("shows the teacher's working hours and next lessons, read from the Schedules routes", async () => {
-    renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/files/t-1' })
+    renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/files/t-1?tab=schedule' })
     const section = await screen.findByRole('region', { name: 'Schedule' })
     expect(await within(section).findByText('16:00–20:00')).toBeInTheDocument()
     const days = within(section).getAllByRole('term').map((d) => d.textContent)
@@ -370,10 +381,11 @@ describe('schedule and monthly performance', () => {
   })
 
   it("the super admin's copy of the file shows the same sections without links into the Teachers area", async () => {
-    renderWithProviders(<AppRoutes />, { staff: makeStaff({ role: 'super_admin' }), route: '/admin/teachers/t-1' })
+    renderWithProviders(<AppRoutes />, { staff: makeStaff({ role: 'super_admin' }), route: '/admin/teachers/t-1?tab=schedule' })
     const schedule = await screen.findByRole('region', { name: 'Schedule' })
     expect(await within(schedule).findByText('Child Alpha')).toBeInTheDocument()
     expect(within(schedule).queryByRole('link')).not.toBeInTheDocument()
+    await openTab('Overview')
     const monthly = screen.getByRole('region', { name: 'Monthly performance' })
     await within(monthly).findByLabelText('Key indicators')
     expect(within(monthly).queryByRole('link')).not.toBeInTheDocument()
@@ -415,7 +427,8 @@ describe('payroll (PD-18), the super admin only', () => {
     expect(within(employment).getByText(/6,000\.00/)).toBeInTheDocument()
     expect(within(employment).getByText('ending in 0002')).toBeInTheDocument()
 
-    const summary = screen.getByRole('region', { name: 'Financial summary' })
+    await openTab('Pay')
+    const summary = await screen.findByRole('region', { name: 'Financial summary' })
     const october = within(summary).getByText('October 2026').closest('tr')!
     expect(within(october).getByText(/6,425\.00/)).toBeInTheDocument()
     // TEACHER-005: unpaid leave is shown beside the pay, never priced.
@@ -434,7 +447,7 @@ describe('payroll (PD-18), the super admin only', () => {
 
   it('prices a recorded bonus and corrects an amount, sending what the server expects', async () => {
     on('POST', /\/finance\/adjustments$/, () => json({ id: 'a-9', kind: 'bonus', month: '2026-10', amount: '250.00', currency: 'EGP' }, 201))
-    renderWithProviders(<AppRoutes />, { staff: owner, route: '/admin/teachers/t-1' })
+    renderWithProviders(<AppRoutes />, { staff: owner, route: '/admin/teachers/t-1?tab=pay' })
     const bonuses = await screen.findByRole('region', { name: 'Bonus history' })
     const unpriced = (await within(bonuses).findByText('Covered Saturdays')).closest('tr')!
     await userEvent.click(within(unpriced).getByRole('button', { name: 'Set amount' }))
@@ -557,7 +570,7 @@ describe('lesson reports (RQA-F1)', () => {
     on('GET', /\/teacher-files\/t-1\/lesson-reports\?/, () =>
       json(page([row('ls-1', 'late', report), row('ls-2', 'missing', null, '2026-10-19T16:00:00Z')], null)),
     )
-    renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/files/t-1' })
+    renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/files/t-1?tab=records' })
     const section = await screen.findByRole('region', { name: 'Lesson reports' })
     const filters = await within(section).findByRole('group')
     expect(within(filters).getByRole('button', { name: /All · Reports 9/ })).toHaveAttribute('aria-pressed', 'true')
@@ -585,6 +598,8 @@ describe('lesson reports (RQA-F1)', () => {
     )
     const user = userEvent.setup()
     renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/files/t-1' })
+    await waitFor(() => expect(calls('GET', /\/stats\/teachers\/t-1\?month=/).length).toBeGreaterThan(0))
+    await openTab('Records')
     const section = await screen.findByRole('region', { name: 'Lesson reports' })
     await within(section).findByText('Surat al-Fil')
     const statsMonth = new URL(String(calls('GET', /\/stats\/teachers\/t-1\?month=/)[0]![0]), 'http://x').searchParams.get('month')
@@ -607,7 +622,7 @@ describe('lesson reports (RQA-F1)', () => {
     on('GET', /\/teacher-files\/t-1\/lesson-reports\?/, () =>
       json(page([{ ...row('ls-9', 'late', { submittedAt: '2026-10-22T10:00:00Z', delayMinutes: 2 * 24 * 60, graceHours: 24 }), anotherFamily: true, learner: null }], null)),
     )
-    renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/files/t-1' })
+    renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/files/t-1?tab=records' })
     const section = await screen.findByRole('region', { name: 'Lesson reports' })
     const [item] = await within(section).findAllByRole('listitem')
     expect(within(item!).getByText('Another family')).toBeInTheDocument()
@@ -621,7 +636,7 @@ describe('lesson reports (RQA-F1)', () => {
     on('GET', /\/teacher-files\/t-1\/lesson-reports\?/, () =>
       json(page([{ ...row('tr-1', 'on_time', { ...report, delayMinutes: 30 }), kind: 'trial', learner: null, prospectName: 'Prospect P' }], null)),
     )
-    renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/files/t-1' })
+    renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/files/t-1?tab=records' })
     const section = await screen.findByRole('region', { name: 'Lesson reports' })
     const [item] = await within(section).findAllByRole('listitem')
     expect(within(item!).getByText('Trial: Prospect P')).toBeInTheDocument()

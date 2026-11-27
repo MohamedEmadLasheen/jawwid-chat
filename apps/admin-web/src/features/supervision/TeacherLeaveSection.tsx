@@ -97,7 +97,7 @@ export function TeacherLeaveSection({ teacherId, canSetAllowance }: { teacherId:
  * chat workspace the viewer has: the operator chat, or the super admin's
  * Conversations section.
  */
-export function OpenSupervisionButton({ teacherId }: { teacherId: string }) {
+export function OpenSupervisionButton({ teacherId, className = 'btn' }: { teacherId: string; className?: string }) {
   const tx = useCopy()
   const { locale } = useI18n()
   const { staff } = useSession()
@@ -116,7 +116,7 @@ export function OpenSupervisionButton({ teacherId }: { teacherId: string }) {
     <>
       <button
         type="button"
-        className="btn"
+        className={className}
         disabled={open.isPending}
         onClick={() => open.mutate(teacherId, { onSuccess: (r) => go(r.conversationId) })}
       >

@@ -1,19 +1,23 @@
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
+import { Avatar } from '@/shared/components/Avatar'
 import { Badge } from '@/shared/components/Badge'
-import { AwayBadge } from './Complaint'
-import { PageHeader } from '@/shared/components/PageHeader'
+import { FilterChips } from '@/shared/components/FilterChips'
+import type { MenuItem } from '@/shared/components/Menu'
+import { PageHeader, type MastFigure } from '@/shared/components/PageHeader'
+import { RowActions } from '@/shared/components/RowActions'
 import { SearchField } from '@/shared/components/SearchField'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
-import { countLabel } from '@/core/i18n/counts'
-import { T, TEACHERS, useCopy } from './copy'
+import { AwayBadge } from './Complaint'
+import { T, useCopy } from './copy'
 import { Refusal, isTeacherFileRefusal } from './Refusal'
 import { useTeacherList } from './hooks'
 import './teacher-files.css'
-import '@/features/teachers/stack-table.css'
+import '@/features/teachers/rows.css'
 import { TeachersTabs } from '@/features/supervision/TeachersTabs'
 import { AddTeacherDialog } from './AddTeacherDialog'
+import { currentMonth, teacherAreaLinks } from './TeacherWork'
 import type { TeacherSummary } from './api'
 
 /** PD-43: an active teacher with set-up steps still open (a teacher who left is not being set up). */
@@ -22,125 +26,156 @@ const setupIncomplete = (t: TeacherSummary) => t.isActive && (t.setupMissing ?? 
 /** PD-43 §3.7: Organization's Teachers & supervisors tab, in the area this list was opened from. */
 const assignSupervisorPath = (basePath: string) => `${basePath.startsWith('/admin/') ? '/admin/teams' : '/organization'}?tab=teachers`
 
+type Show = 'all' | 'setup' | 'unsupervised'
+
 /**
- * PD-10: every teacher of the organization, for the Teachers department and
- * the super admin. The list carries nothing personal; the file is one click on.
+ * PD-10: the roster of teachers, for the Teachers department and the super
+ * admin. A row is a person: the name, what still needs doing about them as a
+ * tag, how many students they hold, and the way into their file. The list
+ * carries nothing personal; the file is one click on.
  */
 export function TeacherFilesPage({ basePath, eyebrow }: { basePath: string; eyebrow?: string }) {
   const tx = useCopy()
-  const { t, number, locale } = useI18n()
+  const { t, number } = useI18n()
+  const navigate = useNavigate()
   const list = useTeacherList()
   const [query, setQuery] = useState('')
   const [adding, setAdding] = useState(false)
-  // PD-43: the active teachers still being set up.
-  const [incompleteOnly, setIncompleteOnly] = useState(false)
-  // PD-43 §3.7: the Teachers Manager's work list -- teachers no supervisor holds.
-  const [unsupervisedOnly, setUnsupervisedOnly] = useState(false)
+  const [show, setShow] = useState<Show>('all')
   // PD-43: offered only when the server says so.
   const offer = list.data?.onboarding
-  // The filter, the count and the shortcut are the Manager's and the super admin's (they assign supervisors).
+  // The "no supervisor" view and its shortcut are the Manager's and the super admin's (they assign supervisors).
   const assigns = offer?.supervisorChoice === 'any'
-  const unsupervised = (list.data?.teachers ?? []).filter((x) => x.unsupervised).length
+  const all = useMemo(() => list.data?.teachers ?? [], [list.data])
+  const unsupervised = all.filter((x) => x.unsupervised).length
+  const incomplete = all.filter(setupIncomplete).length
+  const links = teacherAreaLinks(basePath)
+  const view: Show = show === 'unsupervised' && !assigns ? 'all' : show
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase()
-    return (list.data?.teachers ?? [])
+    return all
       .filter((x) => !q || x.name.toLowerCase().includes(q))
-      .filter((x) => !incompleteOnly || setupIncomplete(x))
-      .filter((x) => !unsupervisedOnly || x.unsupervised)
-  }, [list.data, query, incompleteOnly, unsupervisedOnly])
+      .filter((x) => view !== 'setup' || setupIncomplete(x))
+      .filter((x) => view !== 'unsupervised' || x.unsupervised)
+  }, [all, query, view])
+
+  const figures: MastFigure[] = list.data
+    ? [
+        { key: 'all', label: tx(T.rosterTeachers), value: number(all.length), tone: 'key' },
+
+      ]
+    : []
 
   return (
     <div className="page">
       <div className="page__inner">
-        {/* A tab of the Teachers area for operators; of Admin › Teachers for the super admin. */}
-        <TeachersTabs basePath={basePath} />
         <PageHeader
           eyebrow={eyebrow}
           title={tx(basePath.startsWith('/admin') ? T.title : T.filesTitle)}
           subtitle={tx(T.subtitle)}
+          figures={figures}
           actions={
-            offer?.canAdd && (
-              <button type="button" className="btn btn--primary" onClick={() => setAdding(true)}>
-                {tx(T.addTeacher)}
-              </button>
-            )
+            <>
+              {assigns && unsupervised > 0 && (
+                <Link className="btn" to={assignSupervisorPath(basePath)}>
+                  {tx(T.assignSupervisor)}
+                </Link>
+              )}
+              {offer?.canAdd && (
+                <button type="button" className="btn btn--primary" onClick={() => setAdding(true)}>
+                  {tx(T.addTeacher)}
+                </button>
+              )}
+            </>
           }
+          /* A tab of the Teachers area for operators; of Admin › Teachers for the super admin. */
+          tabs={<TeachersTabs basePath={basePath} />}
         />
         {isTeacherFileRefusal(list.error) ? (
           <Refusal error={list.error} />
         ) : (
           <QueryBoundary isLoading={list.isLoading} error={list.error} onRetry={() => void list.refetch()}>
-            <div className="toolbar tf-toolbar">
-              <SearchField value={query} onChange={setQuery} label={tx(T.search)} clearLabel={t('common.cancel')} />
-              <label className="tf-radio">
-                <input type="checkbox" checked={incompleteOnly} onChange={(e) => setIncompleteOnly(e.target.checked)} />
-                {tx(T.setupIncompleteOnly)}
-              </label>
-              {assigns && (
-                <label className="tf-radio">
-                  <input type="checkbox" checked={unsupervisedOnly} onChange={(e) => setUnsupervisedOnly(e.target.checked)} />
-                  {tx(T.unsupervisedOnly)}
-                </label>
-              )}
-              <span className="toolbar__count">{countLabel(rows.length, number(rows.length), TEACHERS, locale)}</span>
-              {assigns && unsupervised > 0 && (
-                <>
-                  <Badge tone="warn" dot>
-                    {tx(T.unsupervisedCount, { n: number(unsupervised) })}
-                  </Badge>
-                  <Link className="btn btn--sm" to={assignSupervisorPath(basePath)}>
-                    {tx(T.assignSupervisor)}
-                  </Link>
-                </>
-              )}
-            </div>
-            {rows.length === 0 ? (
-              <EmptyState title={tx(T.noTeachers)} hint={tx(T.noTeachersHint)} />
-            ) : (
-              <div className="table-wrap tf-table-wrap">
-                <table className="table stack-table">
+            <section className="sheet" aria-label={tx(T.title)}>
+              <div className="sheet-bar">
+                <SearchField value={query} onChange={setQuery} label={tx(T.search)} clearLabel={t('common.cancel')} />
+                <FilterChips<Show>
+                  label={tx(T.status)}
+                  value={view}
+                  onChange={setShow}
+                  formatCount={number}
+                  options={[
+                    { value: 'all', label: tx(T.rosterAll) },
+                    { value: 'setup', label: tx(T.setupIncomplete), count: incomplete },
+                    ...(assigns ? [{ value: 'unsupervised' as const, label: tx(T.noSupervisorBadge), count: unsupervised }] : []),
+                  ]}
+                />
+              </div>
+              {rows.length === 0 ? (
+                <EmptyState title={tx(T.noTeachers)} hint={tx(T.noTeachersHint)} />
+              ) : (
+                <table className="rowlist">
                   <thead>
                     <tr>
                       <th scope="col">{tx(T.name)}</th>
                       <th scope="col">{tx(T.students)}</th>
                       <th scope="col">{tx(T.openComplaints)}</th>
                       <th scope="col">{tx(T.status)}</th>
+                      <th scope="col">{tx(T.openFile)}</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {rows.map((row) => (
-                      <tr key={row.id}>
-                        <td>
-                          <Link className="tf-name-link" to={`${basePath}/${encodeURIComponent(row.id)}`}>{row.name}</Link>
-                        </td>
-                        <td className={row.studentCount > 0 ? 'tf-num' : 'tf-num tf-num--zero'} data-label={tx(T.students)}>{number(row.studentCount)}</td>
-                        <td className={row.openComplaints > 0 ? 'tf-num' : 'tf-num tf-num--zero'} data-label={tx(T.openComplaints)}>
-                          {row.openComplaints > 0 ? (
-                            <Badge tone="warn" dot>
-                              {number(row.openComplaints)}
-                            </Badge>
-                          ) : (
-                            number(0)
-                          )}
-                        </td>
-                        <td className="stack-wide" data-label={tx(T.status)}>
-                          <span className="tf-badges">
-                            <Badge tone={row.isActive ? 'ok' : 'outline'} dot>
-                              {tx(row.isActive ? T.active : T.inactive)}
-                            </Badge>
+                    {rows.map((row) => {
+                      const to = `${basePath}/${encodeURIComponent(row.id)}`
+                      const more: MenuItem[] = links
+                        ? [
+                            { key: 'stats', label: tx(T.rowStats), icon: 'chart', onSelect: () => navigate(links.stats(row.id, currentMonth())) },
+                            { key: 'schedule', label: tx(T.rowSchedule), icon: 'calendar', onSelect: () => navigate(links.schedule(row.id)) },
+                          ]
+                        : []
+                      return (
+                        <tr key={row.id}>
+                          <td className="rw-who">
+                            <Avatar name={row.name} seed={row.id} />
+                            <span className="rw-who__text">
+                              <Link className="rw-name" to={to}>
+                                <bdi>{row.name}</bdi>
+                              </Link>
+                              <span className="rw-sub">{tx(row.isActive ? T.active : T.inactive)}</span>
+                            </span>
+                          </td>
+                          <td className="rw-fact">
+                            <span className={row.studentCount > 0 ? 'rw-fact__n' : 'rw-fact__n rw-fact__n--quiet'}>{number(row.studentCount)}</span>
+                            <span className="rw-fact__label">{tx(T.students)}</span>
+                          </td>
+                          <td className="rw-fact">
+                            <span className={row.openComplaints > 0 ? 'rw-fact__n rw-fact__n--late' : 'rw-fact__n rw-fact__n--quiet'}>{number(row.openComplaints)}</span>
+                            <span className="rw-fact__label">{tx(T.openComplaints)}</span>
+                          </td>
+                          <td className="rw-tags rw-meta">
                             <AwayBadge away={row.away} />
-                            {row.signIn === 'none' && <Badge tone="outline">{tx(T.noSignIn)}</Badge>}
+                            {row.unsupervised && <Badge tone="danger">{tx(T.noSupervisorBadge)}</Badge>}
                             {setupIncomplete(row) && <Badge tone="warn">{tx(T.setupIncomplete)}</Badge>}
-                            {row.unsupervised && <Badge tone="warn">{tx(T.noSupervisorBadge)}</Badge>}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
+                            {row.signIn === 'none' && <Badge tone="outline">{tx(T.noSignIn)}</Badge>}
+                          </td>
+                          <td className="cell-actions">
+                            <RowActions
+                              primary={
+                                <Link className="btn btn--sm" to={to}>
+                                  {tx(T.openFile)}
+                                </Link>
+                              }
+                              more={more}
+                              label={tx(T.moreFor, { name: row.name })}
+                            />
+                          </td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
-              </div>
-            )}
+              )}
+            </section>
           </QueryBoundary>
         )}
         {adding && offer && <AddTeacherDialog offer={offer} basePath={basePath} onClose={() => setAdding(false)} />}

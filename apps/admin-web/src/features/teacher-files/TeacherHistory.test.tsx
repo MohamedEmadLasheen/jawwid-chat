@@ -73,7 +73,7 @@ describe('Teacher history', () => {
         ],
       }),
     )
-    renderWithProviders(<AppRoutes />, { staff: manager, route: '/teachers/files/t-1' })
+    renderWithProviders(<AppRoutes />, { staff: manager, route: '/teachers/files/t-1?tab=records' })
     const card = await screen.findByRole('region', { name: 'Sign-in and status history' })
     const items = await within(card).findAllByRole('listitem')
     expect(items).toHaveLength(5)
@@ -89,7 +89,7 @@ describe('Teacher history', () => {
 
   it('nothing recorded: said, not left blank', async () => {
     on('GET', /\/teachers\/t-1\/history$/, () => json({ teacherId: 't-1', events: [] }))
-    renderWithProviders(<AppRoutes />, { staff: manager, route: '/teachers/files/t-1' })
+    renderWithProviders(<AppRoutes />, { staff: manager, route: '/teachers/files/t-1?tab=records' })
     const card = await screen.findByRole('region', { name: 'Sign-in and status history' })
     expect(await within(card).findByText('Nothing recorded yet.')).toBeInTheDocument()
   })

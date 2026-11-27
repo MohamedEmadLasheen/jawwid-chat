@@ -1,0 +1,66 @@
+/*
+ * A designed row. A list of people or things is not a grid of columns: each
+ * row says who or what (a monogram, the name, one supporting line), sets the
+ * one fact that matters apart, shows its state as a tag, and ends with one
+ * action and "⋯".
+ *
+ * The markup stays a table (a row is still a row to a screen reader, and its
+ * head still names the facts), but no column lines are drawn: the head is
+ * read, not shown, and every cell takes its place in the row by its role.
+ */
+.rowlist { display: block; inline-size: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+.rowlist thead { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.rowlist tbody { display: block; }
+.rowlist tbody tr { display: flex; align-items: center; gap: 6px var(--space-4); min-block-size: 60px; padding: 9px var(--space-4); border-block-end: 1px solid var(--hairline-soft); transition: background var(--dur-fast) var(--ease-out); }
+.rowlist tbody tr:last-child { border-block-end: 0; }
+.rowlist tbody tr:hover { background: var(--surface-hover); }
+.rowlist tbody tr > * { display: block; min-inline-size: 0; padding: 0; border: 0; background: none; text-align: start; font-weight: 400; position: static; }
+
+/* Who or what: the row's name, with one quiet line under it. */
+.rw-who { flex: 0 1 21rem; display: flex !important; align-items: center; gap: var(--space-3); }
+.rw-who__text { display: grid; gap: 1px; min-inline-size: 0; }
+.rw-name { font-size: var(--fs-md); font-weight: 600; color: var(--ink); text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+a.rw-name:hover, button.rw-name:hover { color: var(--teal); text-decoration: underline; text-underline-offset: 3px; }
+button.rw-name { padding: 0; border: 0; background: none; font: inherit; font-size: var(--fs-md); font-weight: 600; cursor: pointer; text-align: start; }
+.rw-sub { font-size: var(--fs-xs); color: var(--ink-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* A supporting fact in words. */
+.rw-meta { flex: 1 1 10rem; color: var(--ink-muted); }
+.rw-meta--wide { flex: 2 1 16rem; }
+.rw-meta strong { color: var(--ink); font-weight: 500; }
+/* The one fact set apart: a numeral in the display face over its label. */
+.rw-fact { flex: none; inline-size: 5.5rem; display: grid !important; gap: 0; }
+.rw-fact__n { font-family: var(--display); font-size: var(--fs-xl); font-weight: 600; line-height: 1.15; font-variant-numeric: tabular-nums lining-nums; color: var(--ink); }
+.rw-fact__n--quiet { color: var(--ink-muted); font-weight: 400; }
+.rw-fact__n--late { color: var(--terracotta); }
+.rw-fact__label { font-size: 11.5px; color: var(--ink-muted); white-space: nowrap; }
+/* State tags, then the actions at the row's end. */
+.rw-tags { flex: 1 1 8rem; display: flex !important; flex-wrap: wrap; align-items: center; gap: 4px var(--space-2); }
+.rowlist td.cell-actions { flex: none; inline-size: auto; margin-inline-start: auto; }
+/* Small clock chips: a weekly time is read left to right in both languages. */
+.time-chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.time-chip { display: inline-flex; align-items: baseline; gap: 5px; padding: 2px 7px; border: 1px solid var(--hairline); border-radius: var(--radius-sm); background: var(--paper); font-size: var(--fs-xs); white-space: nowrap; }
+.time-chip__t { font-weight: 600; font-variant-numeric: tabular-nums; direction: ltr; unicode-bidi: isolate; }
+.time-chip__d { color: var(--ink-muted); }
+
+/* A sheet's head may carry one quiet line of the rule that governs it. */
+.sheet__hint { margin: 0; font-size: var(--fs-xs); font-weight: 400; color: var(--ink-muted); }
+.sheet__heading { display: grid; gap: 1px; min-inline-size: 0; }
+.sheet__title .count { margin-inline-start: 8px; vertical-align: 1px; }
+.sheet + .sheet { margin-block-start: var(--space-5); }
+.sheet .state { padding: var(--space-5) var(--space-4); }
+.sheet .table-wrap { border: 0; border-radius: 0; background: none; }
+
+@media (max-width: 767px) {
+  .rowlist tbody tr { flex-wrap: wrap; align-items: flex-start; padding: 12px var(--space-3); }
+  .rw-who { flex: 1 1 100%; }
+  .rw-name { white-space: normal; }
+  .rw-meta, .rw-meta--wide { flex: 1 1 100%; }
+  .rw-fact { inline-size: auto; grid-auto-flow: column; align-items: baseline; gap: 6px; }
+  .rw-fact__n { font-size: var(--fs-lg); }
+  .rowlist td.cell-actions { flex: 1 1 100%; margin-inline-start: 0; }
+  .rowlist td.cell-actions .row-actions2 { inline-size: 100%; justify-content: space-between; }
+  .rowlist td.cell-actions .row-actions2 > .btn, .rowlist td.cell-actions .row-actions2 > a.btn { flex: 1; justify-content: center; }
+}
+
+/* Tabs set on the masthead's lower edge carry no margin of their own. */
+.mast__tabs .ts-tabs, .mast__tabs .sv-tabs { margin-block-end: 0; border-block-end: 0; }
