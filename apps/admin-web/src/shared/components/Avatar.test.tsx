@@ -5,7 +5,11 @@ describe('initials', () => {
   it('takes the first letter of the first two words', () => {
     expect(initials('Salem family')).toBe('SF')
     expect(initials('  owner_o  ')).toBe('OO')
-    expect(initials('عائلة سالم')).toBe('عس')
+  })
+
+  it('gives an Arabic name one letter: two Arabic letters side by side join into a word', () => {
+    expect(initials('عائلة سالم')).toBe('ع')
+    expect(initials('محمود صابر')).toBe('م')
   })
 
   it('skips words with no letter in them, so a dash or a number never becomes an initial', () => {

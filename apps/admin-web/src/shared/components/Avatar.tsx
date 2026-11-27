@@ -13,6 +13,8 @@ export function initials(name: string): string {
   // Only words with a letter in them: "Parent — Salem family" is "PS", not "P—".
   const words = name.trim().split(/[\s_-]+/u).filter((w) => /\p{L}/u.test(w))
   const letters = words.slice(0, 2).map((w) => Array.from(w)[0] ?? '')
+  // Two Arabic letters side by side join into a word ("مص", "سخ"): an Arabic name takes one.
+  if (letters[0] && /\p{Script=Arabic}/u.test(letters[0])) return letters[0]
   return letters.join('').toLocaleUpperCase() || '?'
 }
 

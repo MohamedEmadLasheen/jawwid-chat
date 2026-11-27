@@ -576,7 +576,7 @@ html[lang='ar'] .side__item { font-size: 14.5px; }
 .figure__unit { font-size: var(--fs-sm); color: var(--ink-muted); }
 .figure__note, .kpi-card__sub { margin: 0; font-size: var(--fs-xs); color: var(--ink-muted); }
 .figure--key .figure__n { color: var(--teal); }
-.figure--urgent .figure__n, .figure--urgent .figure__note { color: var(--urgent); }
+.figure--urgent .figure__n { color: var(--urgent); }
 .figure--quiet .figure__n { color: var(--ink-muted); }
 .figure--link { cursor: pointer; }
 .figure--link:hover { background: var(--surface-hover); }
