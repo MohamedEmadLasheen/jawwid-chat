@@ -143,7 +143,10 @@
 /* Narrower than that, an open task takes the page; Close returns to the list. */
 @media (max-width: 1099px) {
   .tasks__body:has(.tasks__panel) > :not(.tasks__panel),
-  .cases__body:has(.cases__panel) > :not(.cases__panel) { display: none; }
+  .cases__body:has(.cases__panel) > :not(.cases__panel),
+  .tasks:has(.tasks__panel) .tasks__bar,
+  .cases:has(.cases__panel) .cases__bar { display: none; }
+  .tasks__panel, .cases__panel { border-block-start: 1px solid var(--hairline); }
 }
 
 .tasks__list,
