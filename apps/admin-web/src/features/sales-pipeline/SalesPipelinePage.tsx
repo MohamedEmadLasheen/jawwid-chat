@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
-import { Badge } from '@/shared/components/Badge'
 import { Icon } from '@/shared/components/Icon'
-import { PageHeader, type MastFigure } from '@/shared/components/PageHeader'
+import { PageHeader } from '@/shared/components/PageHeader'
 import { Age, Board, BoardCard, RequestQueue, dayName, sentence, type BoardStage } from '@/shared/components/RequestQueue'
 import { RowActions } from '@/shared/components/RowActions'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
@@ -21,8 +20,6 @@ import './sales-pipeline.css'
 
 const PAGE_SIZE = 25
 type StageFilter = Stage | 'all'
-/** The stages a lead is still being worked in. */
-const OPEN: readonly Stage[] = ['new_lead', 'contacted', 'trial_booked', 'trial_completed']
 
 /** A search that waits for a pause in typing, so each key is not a request. */
 function useDebounced<T>(value: T, ms = 300): T {
@@ -78,22 +75,6 @@ export function SalesPipelinePage() {
   const rows = data?.leads ?? []
   const last = data ? Math.min(data.offset + rows.length, data.total) : 0
   const openRow = rows.find((r) => r.id === openId)
-  const n = (count: number | null | undefined) => (count == null ? '–' : number(count))
-
-  const figures: MastFigure[] = [
-    { key: 'all', label: tx(P.leads), value: n(total), onClick: () => setStage('all'), pressed: stage === 'all' },
-    { key: 'open', label: tx(P.openLeads), value: n(counts ? OPEN.reduce((sum, s) => sum + counts[s], 0) : null), tone: 'key' },
-    {
-      key: 'due',
-      label: tx(P.followUpDue),
-      value: n(data?.dueCount),
-      tone: (data?.dueCount ?? 0) > 0 ? 'urgent' : 'quiet',
-      // Not a stage: the leads whose follow-up date has passed, across every stage.
-      onClick: () => setDue((d) => !d),
-      pressed: due,
-    },
-    { key: 'converted', label: tx(STAGE.converted.label), value: n(counts?.converted), tone: 'quiet', onClick: () => setStage('converted'), pressed: stage === 'converted' },
-  ]
 
   const stages: Array<BoardStage<Stage>> = STAGES.map((s) => {
     const mine = rows.filter((r) => r.stage === s)
@@ -123,7 +104,6 @@ export function SalesPipelinePage() {
       <div className="page__inner">
         <PageHeader
           title={tx(P.title)}
-          figures={figures}
           actions={
             <button type="button" className="btn" onClick={() => setCreating(true)}>
               <Icon name="plus" size={16} />
@@ -152,6 +132,16 @@ export function SalesPipelinePage() {
               <input className="input" type="search" value={search} placeholder={tx(P.search)} aria-describedby="sp-search-hint" onChange={(e) => setSearch(e.target.value)} />
             </label>
             <span id="sp-search-hint" className="lead-bar__hint">{tx(P.searchHint)}</span>
+            <div className="rq-bar__end">
+              {stage !== 'all' && (
+                <button type="button" className="chip" onClick={() => setStage('all')}>{tx(P.allStages)}</button>
+              )}
+              {/* Not a stage: the leads whose follow-up date has passed, across every stage. */}
+              <button type="button" className="chip" aria-pressed={due} onClick={() => setDue((d) => !d)}>
+                {tx(P.followUpDue)}
+                {data && <span className={data.dueCount > 0 ? 'count count--urgent' : 'chip__count'}>{number(data.dueCount)}</span>}
+              </button>
+            </div>
           </div>
           <QueryBoundary isLoading={list.isLoading} error={list.error} onRetry={() => void list.refetch()}>
             {rows.length === 0 && (total === 0 || !!q || due) ? (
@@ -201,7 +191,9 @@ function LeadCard({ row, selected, onOpen }: { row: LeadRow; selected: boolean; 
       ? lostText(row.lostReason, locale) || undefined
       : tx(P.handedOver)
     : row.nextFollowUpOn
-      ? sentence(tx(row.followUpDue ? P.dueOn : P.followUpOn), { date: <span className={row.followUpDue ? 'rq-age rq-age--late' : undefined}>{on(row.nextFollowUpOn)}</span> })
+      ? row.followUpDue
+        ? sentence(tx(P.dueSince), { what: tx(P.followUpDue), date: <span className="rq-age rq-age--late">{on(row.nextFollowUpOn)}</span> })
+        : sentence(tx(P.followUpOn), { date: on(row.nextFollowUpOn) })
       : row.lastContactedAt
         ? tx(P.noFollowUp)
         : tx(P.neverContacted)
@@ -218,7 +210,6 @@ function LeadCard({ row, selected, onOpen }: { row: LeadRow; selected: boolean; 
       selected={selected}
       onOpen={onOpen}
       quiet={ended}
-      status={row.followUpDue ? <Badge tone="waiting">{tx(P.followUpDue)}</Badge> : undefined}
       fact={fact}
       age={age}
       actions={
@@ -240,7 +231,7 @@ function LeadCard({ row, selected, onOpen }: { row: LeadRow; selected: boolean; 
           </p>
           <p className="rq-card__line">
             <Icon name="phone" size={16} />
-            <span>{channelsText(row.contact, tx, locale)}</span>
+            <span>{row.contact.phone || row.contact.whatsapp || row.contact.email ? channelsText(row.contact, tx, locale) : tx(P.noContactOnFile)}</span>
           </p>
         </>
       )}

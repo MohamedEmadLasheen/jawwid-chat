@@ -85,14 +85,18 @@ afterEach(() => {
 })
 
 describe('Trial lessons: the agenda', () => {
-  const figure = (name: RegExp) => screen.getByRole('button', { name })
+  /** The agenda's filters: one quiet row of chips above it. */
+  const figure = (name: RegExp) => within(screen.getByRole('group', { name: 'Show' })).getByRole('button', { name })
   const groups = () => [...document.querySelectorAll<HTMLElement>('.rq-group')]
 
-  it('the masthead counts each part from the list the page loaded, and a figure filters the agenda', async () => {
+  it('the filters count each part from the list the page loaded, and a filter narrows the agenda', async () => {
     renderWithProviders(<AppRoutes />, { staff, route: '/trials' })
     await screen.findByText('Prospect Gamma')
     expect(figure(/^All/)).toHaveTextContent(/^All4$/)
-    expect(figure(/^Needs an outcome/)).toHaveTextContent(/^Needs an outcome2oldest /)
+    expect(figure(/^Needs an outcome/)).toHaveTextContent(/^Needs an outcome2$/)
+    // The count that asks for action is solid red once an outcome has waited since before today.
+    expect(figure(/^Needs an outcome/).querySelector('.count')).toHaveClass('count--urgent')
+    expect(document.querySelector('.figures')).toBeNull()
     expect(figure(/^Upcoming/)).toHaveTextContent(/^Upcoming0$/)
     expect(figure(/^Recorded/)).toHaveTextContent(/^Recorded2$/)
 
@@ -106,9 +110,9 @@ describe('Trial lessons: the agenda', () => {
     expect(screen.getByText('No trial is in this state.')).toBeInTheDocument()
   })
 
-  it('shows no figure before the list has arrived, rather than a zero', () => {
+  it('shows no count before the list has arrived, rather than a zero', () => {
     renderWithProviders(<AppRoutes />, { staff, route: '/trials' })
-    for (const name of [/^All/, /^Needs an outcome/, /^Upcoming/, /^Recorded/]) expect(figure(name).querySelector('.figure__n')).toHaveTextContent(/^–$/)
+    for (const [name, label] of [[/^All/, 'All'], [/^Needs an outcome/, 'Needs an outcome'], [/^Upcoming/, 'Upcoming'], [/^Recorded/, 'Recorded']] as const) expect(figure(name)).toHaveTextContent(new RegExp(`^${label}$`))
   })
 
   it('is grouped by day: what needs an outcome first, then the days ahead by name, then what is recorded', async () => {
@@ -246,7 +250,7 @@ describe('New students: the board and the family beside it', () => {
     // The first family in flow order is open, with the step it is at as the foot's one action.
     expect(within(panel).getByRole('heading', { name: 'Parent Delta' })).toBeInTheDocument()
     expect(delta).toHaveAttribute('data-selected', 'true')
-    expect(within(panel).getByRole('button', { name: 'Assign' })).toHaveClass('btn--primary')
+    expect(within(panel).getByRole('button', { name: 'Assign supervisor' })).toHaveClass('btn--primary')
 
     await userEvent.click(within(echo).getByRole('button', { name: 'Show code' }))
     expect(within(panel).getByRole('heading', { name: 'Parent Echo' })).toBeInTheDocument()

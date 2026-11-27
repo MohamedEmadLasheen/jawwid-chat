@@ -45,7 +45,8 @@ export const TR = {
   whyNoShow: { en: 'Did not attend the lesson with {teacher}', ar: 'لم يحضر الحصة مع {teacher}' },
   whyCancelled: { en: 'Cancelled before it took place', ar: 'أُلغيت قبل أن تُعقد' },
   // The inspector's state, in one sentence
-  stateAwaiting: { en: 'The lesson ended {age}. Record whether the student attended and subscribed.', ar: 'انتهت الحصة {age}. سجّل هل حضر الطالب وهل اشترك.' },
+  stateAwaiting: { en: 'The lesson is over. Record whether the student attended and subscribed.', ar: 'انتهت الحصة. سجّل هل حضر الطالب وهل اشترك.' },
+  filterLabel: { en: 'Show', ar: 'عرض' },
   stateUpcoming: { en: 'Booked with {teacher} for {when}.', ar: 'محجوزة مع {teacher} في {when}.' },
   stateSubscribed: { en: 'Subscribed. The family is now on the New students page.', ar: 'اشترك، والأسرة الآن في صفحة الطلاب الجدد.' },
   stateNotSubscribed: { en: 'Did not subscribe.', ar: 'لم يشترك.' },

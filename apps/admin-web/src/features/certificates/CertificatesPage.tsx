@@ -4,7 +4,7 @@ import { useI18n } from '@/core/i18n/I18nProvider'
 import { Badge } from '@/shared/components/Badge'
 import { FilterChips } from '@/shared/components/FilterChips'
 import { Icon } from '@/shared/components/Icon'
-import { PageHeader, type MastFigure } from '@/shared/components/PageHeader'
+import { PageHeader } from '@/shared/components/PageHeader'
 import { Age, Board, BoardCard, RequestQueue, useWidePane, waitedOvernight, type BoardStage } from '@/shared/components/RequestQueue'
 import { RowActions } from '@/shared/components/RowActions'
 import { SearchField } from '@/shared/components/SearchField'
@@ -154,7 +154,8 @@ export function CertificatesPage() {
             {c.juz !== null && <> <bdi className="ltr">{number(c.juz)}</bdi></>}
           </span>
         </p>
-        {requester && group !== 'sent' && group !== 'closed' && (
+        {/* Who asked, unless the waiting fact already names them. */}
+        {requester && group !== 'sent' && group !== 'closed' && c.state !== 'requested' && c.state !== 'proposed' && (
           <p className="rq-card__line">
             <Icon name="user" size={16} />
             <bdi>{requester}</bdi>
@@ -182,30 +183,6 @@ export function CertificatesPage() {
     }
   })
 
-  // The masthead sums the board up rather than repeating its columns: what is open, whose turn it
-  // is, and what has gone out. The figure this account acts on is the key one. Each is the length
-  // of lists the board already holds ("+" when one of them is longer than its first page).
-  const sum = (label: string, key: string, of: readonly StateGroup[], tone?: MastFigure['tone'], opens?: StateGroup): MastFigure => {
-    const on = of.filter((g) => groups.includes(g))
-    const known = on.every((g) => countOf(g) !== null)
-    const total = on.reduce((n, g) => n + (countOf(g) ?? 0), 0)
-    return {
-      key,
-      label,
-      value: known ? `${number(total)}${on.some((g) => listOf(g)?.data?.nextCursor) ? '+' : ''}` : '–',
-      tone: known && total === 0 ? 'quiet' : tone,
-      ...(opens ? { onClick: () => setFocus(stage === opens ? 'all' : opens), pressed: stage === opens } : {}),
-    }
-  }
-  const figures: MastFigure[] = category
-    ? [
-        sum(tx(C.figOpen), 'open', ['suggested', 'pending', 'in_progress', 'completed']),
-        sum(tx(C.figDesigner), 'designer', ['pending', 'in_progress'], designerOnly ? 'key' : undefined),
-        sum(tx(C.figReview), 'review', ['completed'], designerOnly ? undefined : 'key', 'completed'),
-        sum(tx(groupLabel('sent')), 'sent', ['sent'], 'quiet', 'sent'),
-      ]
-    : []
-
   const loading = access.isLoading || lists.some((l) => l.isLoading)
   const failed = lists.find((l) => l.error)
   const none = !loading && lists.every((l) => (l.data?.certificates.length ?? 0) === 0)
@@ -216,7 +193,6 @@ export function CertificatesPage() {
         <PageHeader
           title={tx(C.title)}
           subtitle={tx(C.subtitle)}
-          figures={figures.length > 0 ? figures : undefined}
           tabs={
             tabs.length > 1 ? (
               <FilterChips<Tab>
@@ -249,7 +225,7 @@ export function CertificatesPage() {
                 ? {
                     id: openId,
                     title: opened?.printedName ?? tx(C.title),
-                    kind: { icon: 'certificates', label: opened?.type ? tx({ en: opened.type.labelEn, ar: opened.type.labelAr }) : tx(C.kind) },
+                    kind: { icon: 'certificates', label: tx(C.kind) },
                     body: <CertificateDetail certificateId={openId} intent={intent?.id === openId ? intent.act : null} onIntentDone={() => setIntent(null)} />,
                     onClose: () => setOpenId(null),
                   }

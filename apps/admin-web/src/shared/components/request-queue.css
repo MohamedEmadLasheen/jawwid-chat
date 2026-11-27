@@ -14,6 +14,8 @@
 @media (min-width: 1100px) and (min-height: 620px) {
   .page.rq-page { display: flex; flex-direction: column; overflow: hidden; padding-block-end: 0; }
   .rq-page > .page__inner { flex: 1; min-block-size: 0; inline-size: 100%; display: flex; flex-direction: column; }
+  /* A board beside its inspector uses a wide screen's room rather than clipping its columns. */
+  .rq-page:has(.rq-board) > .page__inner { max-inline-size: 1640px; }
   .rq-page .page-header.mast { flex: none; }
   .rq-page .rq { flex: 1; min-block-size: 0; grid-template-rows: minmax(0, 1fr); }
   .rq-page .rq--wide { align-items: stretch; }
@@ -239,12 +241,34 @@ a.rq-open { text-decoration: none; }
 .rq-col__cards { display: grid; gap: var(--space-2); align-content: start; padding-block-start: 4px; }
 .rq-col__empty { margin: 0; padding: var(--space-3) 2px; font-size: var(--fs-sm); color: var(--ink-muted); }
 .rq-col__foot { justify-self: start; font-size: var(--fs-sm); }
-/* A board wider than its pane scrolls sideways; the edge that hides columns fades, so a cut column reads as "more". */
-[dir='ltr'] .rq-board[data-more-end]:not([data-more-start]) { mask-image: linear-gradient(to left, transparent, #000 56px); }
-[dir='rtl'] .rq-board[data-more-end]:not([data-more-start]) { mask-image: linear-gradient(to right, transparent, #000 56px); }
-[dir='ltr'] .rq-board[data-more-start]:not([data-more-end]) { mask-image: linear-gradient(to right, transparent, #000 56px); }
-[dir='rtl'] .rq-board[data-more-start]:not([data-more-end]) { mask-image: linear-gradient(to left, transparent, #000 56px); }
-.rq-board[data-more-start][data-more-end] { mask-image: linear-gradient(to right, transparent, #000 56px, #000 calc(100% - 56px), transparent); }
+/* A board wider than its pane scrolls sideways. The side that hides columns is a solid
+   edge on the canvas that says how many and pages to them: no column is seen cut in half. */
+.rq-board-wrap { position: relative; min-inline-size: 0; }
+.rq--split .rq-board { --rq-col: 196px; --rq-col-quiet: 168px; }
+.rq-board__edge {
+  position: absolute;
+  inset-block: 0;
+  z-index: 3;
+  inline-size: 72px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 4px;
+  padding: 6px 0 0;
+  border: 0;
+  background: var(--canvas);
+  color: var(--ink-2);
+  font: inherit;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  cursor: pointer;
+}
+.rq-board__edge--end { inset-inline-end: 0; border-inline-start: 1px solid var(--line); }
+.rq-board__edge--start { inset-inline-start: 0; border-inline-end: 1px solid var(--line); }
+.rq-board__edge:hover { color: var(--teal); background: var(--surface-hover); }
+.rq-board__edge .icon { inline-size: 32px; block-size: 32px; padding: 7px; border: 1px solid var(--line-strong); border-radius: 50%; background: var(--surface); }
+.rq-board__back { display: inline-flex; transform: scaleX(-1); }
 /* Ended stages, one above the other in one narrower track. */
 .rq-col-stack { min-inline-size: 0; display: grid; gap: var(--space-5); align-content: start; scroll-snap-align: start; }
 
@@ -345,6 +369,28 @@ html[lang='ar'] .rq-step::before { inset-block-start: 22px; }
 
 @media (prefers-reduced-motion: reduce) {
   .rq-row, .rq-card { transition: none; }
+}
+
+/* The hub on a phone: who and why beside the age, the whole row the way in (its "Open" a quiet word). */
+@media (max-width: 767px) {
+  .rq-hub .rq-row { position: relative; grid-template-columns: auto minmax(0, 1fr) auto; gap: 2px var(--space-3); padding-block: 12px; }
+  .rq-hub .rq-row__main { grid-column: 2; grid-row: 1 / span 2; }
+  .rq-hub .rq-row__tag { grid-column: 3; grid-row: 1; justify-self: end; }
+  .rq-hub .rq-row__actions { grid-column: 3; grid-row: 2; justify-self: end; padding: 0; }
+  .rq-hub .rq-row__actions .btn { min-block-size: 0; padding: 0; border: 0; background: none; color: var(--teal); font-size: var(--fs-sm); }
+  .rq-hub .rq-row__actions .btn::after { content: ''; position: absolute; inset: 0; }
+  .rq-hub .rq-row:active { background: var(--surface-hover); }
+}
+
+/* A page's few filters: one quiet row of chips above its work. */
+.rq-filters { align-items: center; }
+.rq-filters .count { margin-inline-start: 4px; }
+
+/* Where no fact column is drawn, the reason takes its room. */
+@media (min-width: 768px) {
+  .rq-row:not(:has(.rq-row__fact)) { grid-template-columns: var(--rq-lead, auto) minmax(0, 1fr) auto auto; }
+  .rq-row:not(:has(.rq-row__fact)) .rq-row__tag { grid-column: 3; grid-row: 1; }
+  .rq-row:not(:has(.rq-row__fact)) .rq-row__actions { grid-column: 4; grid-row: 1; }
 }
 
 /* What a request asks for: said first, in ink. */

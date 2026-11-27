@@ -75,7 +75,8 @@ const DETAIL: LeadDetail = {
   manualStage: true,
   lastContactedAt: '2026-11-18T10:00:00Z',
   nextFollowUpOn: '2026-11-20',
-  followUpDue: true,
+  // A lead ready to hand over, with no follow-up overdue: its stated act is Convert.
+  followUpDue: false,
   followUpNote: null,
   createdAt: '2026-11-10T09:00:00Z',
   convertedAt: null,
@@ -139,7 +140,7 @@ describe('the Sales pipeline page', () => {
     expect(within(alpha).getByText('Phone, E-mail')).toBeInTheDocument()
     const beta = screen.getByText('Lead Beta').closest('article')!
     expect(within(beta.closest('section')!).getByRole('heading', { name: 'Trial booked' })).toBeInTheDocument()
-    expect(within(beta).getByText('None')).toBeInTheDocument()
+    expect(within(beta).getByText('No way to reach them on file')).toBeInTheDocument()
     expect(document.body.textContent).not.toContain(SECRET_PHONE)
     expect(document.body.textContent).not.toContain(SECRET_EMAIL)
     // The list's own request never asked for a contact; the detail has not been read.

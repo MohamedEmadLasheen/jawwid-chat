@@ -29,7 +29,7 @@ export const C = {
   whyCancelled: { en: 'Cancelled', ar: 'أُلغيت' },
   whyDeclined: { en: 'Declined', ar: 'رُفضت' },
   stateProposed: { en: '{who} suggested this certificate. Accept it to send it to the designer, or decline it.', ar: 'اقترح {who} هذه الشهادة. اقبلها لتصل إلى المصمم، أو ارفضها.' },
-  stateRequested: { en: 'Requested {age}. It waits for the designer to start.', ar: 'طُلبت {age}، وتنتظر أن يبدأ المصمم.' },
+  stateRequested: { en: 'It waits for the designer to start.', ar: 'تنتظر أن يبدأ المصمم العمل عليها.' },
   stateDesigning: { en: '{who} is designing it. The requester reviews the design when it is uploaded.', ar: 'يصممها {who}. يراجع صاحب الطلب التصميم عند رفعه.' },
   stateChanges: { en: 'The design was sent back for changes.', ar: 'أُعيد التصميم لإجراء تعديلات.' },
   stateUploaded: { en: 'The design is in. Open it, then approve it or ask for changes.', ar: 'وصل التصميم. افتحه ثم اعتمده أو اطلب تعديلات.' },

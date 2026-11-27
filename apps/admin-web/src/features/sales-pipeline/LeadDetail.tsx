@@ -139,7 +139,9 @@ function LeadBody({ lead }: { lead: Lead }) {
     contacted.mutate({ nextFollowUpOn: followUp || null, followUpNote: followUpNote.trim() || null }, { onSuccess: () => setMessage(tx(P.contactedDone)) })
   const reopen = () => update.mutate({ stage: 'contacted' })
   // The foot states one act: the hand-over when the server offers it, else the contact just made, else the way back from Lost.
-  const first = lead.canConvert ? 'convert' : manual && lead.stage !== 'lost' ? 'contacted' : manual && lead.stage === 'lost' ? 'reopen' : null
+  // The one act follows the lead's most urgent fact: a follow-up that is overdue is made first; then the hand-over.
+  const overdue = lead.followUpDue && manual && lead.stage !== 'lost'
+  const first = overdue ? 'contacted' : lead.canConvert ? 'convert' : manual && lead.stage !== 'lost' ? 'contacted' : manual && lead.stage === 'lost' ? 'reopen' : null
   const primary =
     first === 'convert' ? (
       <button type="button" className="btn btn--primary" disabled={convert.isPending} onClick={doConvert} title={tx(P.convertHint)}>
@@ -154,6 +156,7 @@ function LeadBody({ lead }: { lead: Lead }) {
     ) : undefined
   // The rest is behind "⋯"; what ends the lead comes last and is marked.
   const more: MenuItem[] = [
+    ...(first !== 'convert' && lead.canConvert ? [{ key: 'convert', label: tx(P.convert), icon: 'userCheck' as const, onSelect: doConvert }] : []),
     ...(first !== 'contacted' && manual && lead.stage !== 'lost' ? [{ key: 'contacted', label: tx(P.markContacted), icon: 'phone' as const, onSelect: markContacted }] : []),
     ...(first !== 'reopen' && manual && lead.stage === 'lost' ? [{ key: 'reopen', label: tx(P.reopen), icon: 'undo' as const, onSelect: reopen }] : []),
     ...(mayAssign && !reassigning ? [{ key: 'reassign', label: tx(P.reassign), icon: 'user' as const, onSelect: () => setReassigning(true) }] : []),
@@ -166,10 +169,10 @@ function LeadBody({ lead }: { lead: Lead }) {
       ? lead.lostReason ? tx(P.stateLost).replace('{reason}', lostText(lead.lostReason, locale)) : tx(P.stateLostPlain)
       : lead.convertedAt || lead.stage === 'converted'
         ? tx(P.stateConverted)
-        : lead.canConvert
-          ? tx(P.stateConvert)
-          : lead.followUpDue && lead.nextFollowUpOn
-            ? tx(P.stateDue).replace('{date}', on(lead.nextFollowUpOn))
+        : lead.followUpDue && lead.nextFollowUpOn
+          ? tx(P.stateDue).replace('{date}', on(lead.nextFollowUpOn))
+          : lead.canConvert
+            ? tx(P.stateConvert)
             : lead.stage === 'trial_booked'
               ? tx(P.stateTrial)
               : !lead.lastContactedAt
@@ -192,7 +195,6 @@ function LeadBody({ lead }: { lead: Lead }) {
           </>
         }
         state={state}
-        note={lead.canConvert ? tx(P.convertHint) : undefined}
         primary={primary}
         more={more}
         label={`${tx(P.moreActions)}: ${lead.displayName}`}

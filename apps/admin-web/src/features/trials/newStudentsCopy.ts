@@ -60,15 +60,15 @@ export const NS = {
   openTrials: { en: 'Open Trial lessons', ar: 'فتح الحصص التجريبية' },
   rule: { en: 'Contact and payment details are shown here only.', ar: 'بيانات التواصل والدفع تظهر هنا فقط.' },
   // A card's waiting fact: why the family stands in its column now
-  factUnassigned: { en: 'Subscribed {age}; needs a supervisor', ar: 'اشتركت {age}، وتحتاج مشرفًا' },
+  factUnassigned: { en: 'Subscribed; needs a supervisor', ar: 'اشتركت وتحتاج مشرفًا' },
   factNoGroup: { en: 'The family group is not created yet', ar: 'لم تُنشأ مجموعة الأسرة بعد' },
   factNotStarted: { en: 'The parent has not signed up yet', ar: 'ولي الأمر لم يُنشئ حسابه بعد' },
   factCode: { en: 'Asked for a code; send it on WhatsApp', ar: 'طلب رمزًا، أرسله إليه عبر واتساب' },
   factLocked: { en: 'Locked after too many wrong codes', ar: 'قُفل بعد رموز خاطئة كثيرة' },
   factSignedUp: { en: 'Signed up; the family is set up', ar: 'أنشأ حسابه واكتمل التجهيز' },
   // The inspector's state, in one sentence
-  stateUnassigned: { en: 'Subscribed {age}. Assign the supervisor who will look after this family.', ar: 'اشتركت {age}. عيّن المشرف الذي سيتابع هذه الأسرة.' },
-  stateUnassignedOther: { en: 'Subscribed {age}. The Operations manager assigns its supervisor.', ar: 'اشتركت {age}. يعيّن مدير التشغيل مشرفها.' },
+  stateUnassigned: { en: 'Assign the supervisor who will look after this family.', ar: 'عيّن المشرف الذي سيتابع هذه الأسرة.' },
+  stateUnassignedOther: { en: 'The Operations manager assigns its supervisor.', ar: 'يعيّن مدير التشغيل مشرفها.' },
   stateNoGroup: { en: '{supervisor} looks after it. Create the family group next.', ar: 'يتابعها {supervisor}. الخطوة التالية: إنشاء مجموعة الأسرة.' },
   stateNotStarted: { en: '{supervisor} looks after it. The parent has not signed up in the app yet.', ar: 'يتابعها {supervisor}. ولي الأمر لم يُنشئ حسابه في التطبيق بعد.' },
   stateCode: { en: 'The parent asked for a sign-up code. Send it to them on WhatsApp.', ar: 'طلب ولي الأمر رمز التسجيل. أرسله إليه عبر واتساب.' },
@@ -152,6 +152,12 @@ export function currencyName(code: string, locale: 'ar' | 'en'): string {
 export function formatClock(hhmm: string, locale: 'ar' | 'en'): string {
   const [h, m] = hhmm.split(':').map(Number)
   if (h === undefined || m === undefined || Number.isNaN(h) || Number.isNaN(m)) return hhmm
-  const n = new Intl.NumberFormat(locale === 'ar' ? 'ar-EG-u-nu-latn' : 'en', { minimumIntegerDigits: 2, useGrouping: false })
-  return `${n.format(h)}:${n.format(m)}`
+  // The same 12-hour clock as every other time on these pages ("05:00 PM", "05:00 م").
+  return new Intl.DateTimeFormat(locale === 'ar' ? 'ar-EG-u-nu-latn' : 'en', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'UTC' }).format(new Date(Date.UTC(2000, 0, 1, h, m)))
+}
+
+/** An age's unit with Arabic's number agreement: 1 سنة, 2 سنتان, 3 to 10 سنوات, 11 and up سنة. */
+export function yearsWord(n: number, locale: 'ar' | 'en'): string {
+  if (locale === 'en') return n === 1 ? 'yr' : 'yrs'
+  return n === 2 ? 'سنتان' : n >= 3 && n <= 10 ? 'سنوات' : 'سنة'
 }

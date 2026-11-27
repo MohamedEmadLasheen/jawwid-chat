@@ -6,7 +6,7 @@ import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
 import { Icon, type IconName } from '@/shared/components/Icon'
 import type { MenuItem } from '@/shared/components/Menu'
 import { ReasonDialog } from '@/shared/components/ReasonDialog'
-import { Age, DetailCallout, DetailSection, FlowSteps, ageText, dayName, sentence, type FlowStep, type StepState } from '@/shared/components/RequestQueue'
+import { Age, DetailCallout, DetailSection, FlowSteps, ageText, dayName, sentence, waitedOvernight, type FlowStep, type StepState } from '@/shared/components/RequestQueue'
 import { QueryBoundary } from '@/shared/components/States'
 import {
   CERTIFICATE_ACCEPT,
@@ -114,7 +114,7 @@ function certificateState(c: Certificate, tx: ReturnType<typeof useCopy>, locale
     case 'proposed':
       return sentence(tx(C.stateProposed), { who: (c.projection === 'full' ? c.suggestedBy?.name : null) ?? askerOf(c) ?? tx(C.someone) })
     case 'requested':
-      return tx(C.stateRequested).replace('{age}', ageText(c.requestedAt, locale))
+      return tx(C.stateRequested)
     case 'in_design':
       return designer ? sentence(tx(C.stateDesigning), { who: designer }) : tx(C.whyDesigningNobody)
     case 'changes_requested':
@@ -323,7 +323,7 @@ export function CertificateDetail({
               status={
                 <>
                   <CertificateStatus certificate={c} />
-                  <Age iso={c.requestedAt} />
+                  <Age iso={c.requestedAt} late={c.state !== 'sent' && c.state !== 'cancelled' && c.state !== 'declined' && waitedOvernight(c.requestedAt)} />
                 </>
               }
               state={certificateState(c, tx, locale)}

@@ -5,7 +5,7 @@ import { useI18n } from '@/core/i18n/I18nProvider'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
 import { Icon } from '@/shared/components/Icon'
 import type { MenuItem } from '@/shared/components/Menu'
-import { DetailCallout, DetailSection, FlowSteps, ageText, type FlowStep, sentence } from '@/shared/components/RequestQueue'
+import { DetailCallout, DetailSection, FlowSteps, type FlowStep, sentence } from '@/shared/components/RequestQueue'
 import { useStructure } from '@/features/organization/hooks'
 import { describeOpsError } from '../teachers/opsCopy'
 import type { Pair } from '../teachers/copy'
@@ -21,7 +21,7 @@ import { SearchableSelect } from '@/shared/components/SearchableSelect'
 
 const S: Record<string, Pair> = {
   setup: { en: 'Setup', ar: 'التجهيز' },
-  assign: { en: 'Assign', ar: 'تعيين' },
+  assign: { en: 'Assign supervisor', ar: 'تعيين مشرف' },
   change: { en: 'Change', ar: 'تغيير' },
   assignTitle: { en: 'Assign a supervisor', ar: 'تعيين مشرف' },
   assignHint: {
@@ -226,7 +226,7 @@ export function NewStudentSetup({
   // Where the setup stands, in one sentence: what moves the family on, or whose turn it is.
   const supervisorName = e?.supervisor?.name ?? tx(NS.itsSupervisor)
   const state: ReactNode = !e?.supervisor
-    ? tx(canAssign ? NS.stateUnassigned : NS.stateUnassignedOther).replace('{age}', ageText(s.recordedAt, locale))
+    ? tx(canAssign ? NS.stateUnassigned : NS.stateUnassignedOther)
     : attempts?.locked
       ? tx(NS.stateLocked)
       : signup?.state === 'code_waiting'

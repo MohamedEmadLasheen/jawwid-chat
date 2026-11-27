@@ -7,7 +7,7 @@ import { TrialBadge } from '@/shared/components/TrialBadge'
 import { Icon } from '@/shared/components/Icon'
 import type { MenuItem } from '@/shared/components/Menu'
 import { SlotPicker } from '@/shared/components/SlotPicker'
-import { PageHeader, type MastFigure } from '@/shared/components/PageHeader'
+import { PageHeader } from '@/shared/components/PageHeader'
 import {
   Age,
   DetailCallout,
@@ -22,6 +22,8 @@ import {
   waitedOvernight,
   type FlowStep,
   sentence,
+  type QueueFilter,
+  QueueFilters,
 } from '@/shared/components/RequestQueue'
 import { RowActions } from '@/shared/components/RowActions'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
@@ -93,7 +95,7 @@ interface Acts {
  * trial's steps and its one action are in the inspector beside it.
  */
 export function TrialsPage() {
-  const { locale, number } = useI18n()
+  const { locale } = useI18n()
   const tx = (p: Pair) => (locale === 'ar' ? p.ar : p.en)
   const access = useTrialsAccess()
   const q = useTrials()
@@ -154,30 +156,14 @@ export function TrialsPage() {
   const mayBook = desk || access.lessonManager
   const powers: TrialPowers = { noShow: desk || access.lessonManager, decide: desk, correct: desk }
 
-  const oldest = waiting[0]
   const late = waiting.some(outcomeLate)
-  // Until the list has arrived a figure shows a dash, never a zero.
-  const n = (count: number) => (q.data ? number(count) : '–')
-  const figures: MastFigure[] = [
-    { key: 'all', label: tx(TR.filterAll), value: n(all.length), onClick: () => setFilter('all'), pressed: filter === 'all' },
-    {
-      key: 'decision',
-      label: tx(TR.filterOutcome),
-      value: n(waiting.length),
-      note: oldest ? tx(TR.oldest).replace('{age}', ageText(oldest.endsAt, locale)) : undefined,
-      tone: late ? 'urgent' : waiting.length > 0 ? 'key' : undefined,
-      onClick: () => setFilter('decision'),
-      pressed: filter === 'decision',
-    },
-    { key: 'upcoming', label: tx(TR.filterUpcoming), value: n(upcoming.length), onClick: () => setFilter('upcoming'), pressed: filter === 'upcoming' },
-    {
-      key: 'recorded',
-      label: tx(TR.filterRecorded),
-      value: n(recorded.length),
-      tone: 'quiet',
-      onClick: () => setFilter('recorded'),
-      pressed: filter === 'recorded',
-    },
+  // Until the list has arrived a filter shows its name alone, never a zero.
+  const n = (count: number) => (q.data ? count : null)
+  const filters: Array<QueueFilter<Filter>> = [
+    { key: 'all', label: tx(TR.filterAll), count: n(all.length) },
+    { key: 'decision', label: tx(TR.filterOutcome), count: n(waiting.length), urgent: late },
+    { key: 'upcoming', label: tx(TR.filterUpcoming), count: n(upcoming.length) },
+    { key: 'recorded', label: tx(TR.filterRecorded), count: n(recorded.length) },
   ]
 
   const cancel = (t: TrialDto) =>
@@ -272,7 +258,6 @@ export function TrialsPage() {
       <div className="page__inner">
         <PageHeader
           title={tx(TR.trialsTitle)}
-          figures={figures}
           tabs={offered ? <TrialsAreaTabs /> : undefined}
           actions={
             mayBook ? (
@@ -307,6 +292,9 @@ export function TrialsPage() {
             }
           }
         >
+          <div className="rq-bar">
+            <QueueFilters label={tx(TR.filterLabel)} filters={filters} value={filter} onChange={setFilter} />
+          </div>
           <QueryBoundary isLoading={q.isLoading} error={q.error} onRetry={() => void q.refetch()}>
             {rows.length === 0 ? (
               <div className="sheet rq-blank">

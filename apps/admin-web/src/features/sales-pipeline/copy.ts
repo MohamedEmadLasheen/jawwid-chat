@@ -26,6 +26,7 @@ export const P = {
   whatsapp: { en: 'WhatsApp', ar: 'واتساب' },
   email: { en: 'E-mail', ar: 'البريد الإلكتروني' },
   noChannel: { en: 'None', ar: 'لا يوجد' },
+  noContactOnFile: { en: 'No way to reach them on file', ar: 'لا وسيلة تواصل مسجلة' },
   open: { en: 'Open', ar: 'فتح' },
   previous: { en: 'Previous', ar: 'السابق' },
   next: { en: 'Next', ar: 'التالي' },
@@ -106,6 +107,8 @@ export const P = {
   created: { en: 'Added', ar: 'أُضيف' },
   // A card's waiting fact and its age
   dueOn: { en: 'Follow-up was due on {date}', ar: 'كان موعد المتابعة {date}' },
+  dueSince: { en: '{what} since {date}', ar: '{what} منذ {date}' },
+  allStages: { en: 'All stages', ar: 'كل المراحل' },
   followUpOn: { en: 'Follow-up on {date}', ar: 'المتابعة في {date}' },
   noFollowUp: { en: 'No follow-up planned', ar: 'لا متابعة مخطط لها' },
   lastContactAge: { en: 'Last contact {age}', ar: 'آخر تواصل {age}' },

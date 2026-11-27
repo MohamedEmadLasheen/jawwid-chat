@@ -108,10 +108,8 @@ describe('the board of states', () => {
       expect(calls('GET', new RegExp(`/certificates\\?.*status=${status}(&|$)`))).toHaveLength(1)
     }
     expect(calls('GET', /\/certificates\?.*status=closed(&|$)/)).toHaveLength(0)
-    // The masthead sums the board up from the same lists: what is open, whose turn it is, what went out.
-    const figures = [...document.querySelectorAll('.figures .figure')].map((f) => f.textContent)
-    expect(figures).toEqual(['Open requests2+', 'With the designer1+', 'To review or send1', 'Sent1'])
-    expect(screen.getByRole('button', { name: /^To review or send/ })).toHaveClass('figure--key')
+    // No strip of totals repeats what the columns already count.
+    expect(document.querySelector('.figures')).toBeNull()
 
     await userEvent.click(screen.getByRole('button', { name: 'Closed' }))
     expect(await within(board).findByRole('region', { name: 'Closed' })).toBeInTheDocument()

@@ -16,10 +16,8 @@ import {
   BoardCard,
   DetailSection,
   RequestQueue,
-  ageText,
   useWidePane,
   waitedOvernight,
-  sentence,
   type BoardStage,
   type FlowStep,
 } from '@/shared/components/RequestQueue'
@@ -39,6 +37,7 @@ import {
   matchesFilter,
   matchesSearch,
   newStudentStatus,
+  yearsWord,
   type NewStudentStatus,
   type StatusFilter,
 } from './newStudentsCopy'
@@ -153,7 +152,7 @@ export function NewStudentsPage() {
     const codeWaiting = e?.parentSignup.state === 'code_waiting'
     const late = assignLate(s, status)
     const fact = !e
-      ? sentence(tx(NS.factUnassigned), { age: <span className={late ? 'rq-age rq-age--late' : 'rq-age'}>{ageText(s.recordedAt, locale)}</span> })
+      ? tx(NS.factUnassigned)
       : status === 'locked'
         ? tx(NS.factLocked)
         : codeWaiting
@@ -185,11 +184,10 @@ export function NewStudentsPage() {
         onOpen={() => setOpenId(s.trialId)}
         quiet={status === 'signed_up' && !!group}
         status={
-          status === 'locked' ? <Badge tone="waiting">{tx(STATUS.locked.label)}</Badge>
-            : undefined
+          undefined
         }
         fact={fact}
-        age={<Age iso={since(s)} />}
+        age={<Age iso={since(s)} late={late} />}
         actions={<RowActions label={`${tx(NS.moreActions)}: ${s.parent.name}`} primary={primary} more={more(s)} />}
       >
         <p className="rq-card__line">
@@ -411,7 +409,7 @@ function FamilyRecord({
                 {s.children.map((c, i) => (
                   <tr key={i}>
                     <th scope="row" className="ns-c-name"><bdi>{c.name}</bdi></th>
-                    <td className="ns-num ns-c-age" data-unit={tx(NS.years)}>{number(c.age)}</td>
+                    <td className="ns-num ns-c-age" data-unit={yearsWord(c.age, locale)}>{number(c.age)}</td>
                     <td className="ns-c-course"><bdi>{c.course}</bdi></td>
                     <td className="ns-c-teacher"><bdi>{c.teacher.name}</bdi></td>
                     <td className="ns-num ns-c-price" data-label={tx(TR.packagePrice)}>{money(c.packagePrice)}</td>

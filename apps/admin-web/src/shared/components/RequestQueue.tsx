@@ -35,6 +35,8 @@ const WORDS = {
   problem: { en: 'problem', ar: 'مشكلة' },
   skipped: { en: 'skipped', ar: 'لم يحدث' },
   more: { en: 'or more', ar: 'أو أكثر' },
+  moreColumns: { en: '{n} more', ar: '{n} أخرى' },
+  earlierColumns: { en: '{n} before', ar: '{n} قبلها' },
 } satisfies Record<string, Pair>
 
 /* ---------------------------------------------------------------- layout */
@@ -366,6 +368,13 @@ export function Board<K extends string>({
   const wide = useWidePane()
   const boardRef = useRef<HTMLDivElement>(null)
   const edges = useScrollEdges(boardRef, wide)
+  /** Scroll the board one pane's width toward its end (+1) or its start (-1), in the page's direction. */
+  const page = (toward: 1 | -1) => {
+    const el = boardRef.current
+    if (!el) return
+    const rtl = getComputedStyle(el).direction === 'rtl'
+    el.scrollBy({ left: toward * (rtl ? -1 : 1) * el.clientWidth * 0.8, behavior: 'smooth' })
+  }
   const shown = value === 'all' ? stages : stages.filter((s) => s.key === value)
   const figure = (s: BoardStage<K>) =>
     s.count === null ? null : (
@@ -398,17 +407,30 @@ export function Board<K extends string>({
       if (s.quiet && last?.[0]?.quiet) last.push(s)
       else tracks.push([s])
     }
+    // Columns the pane cannot show sit behind a solid edge that names how many, never as cut-off fragments.
     return (
-      <div
-        ref={boardRef}
-        className={shown.length === 1 ? 'rq-board rq-board--one' : 'rq-board'}
-        role="group"
-        aria-label={label}
-        data-more-start={edges.start || undefined}
-        data-more-end={edges.end || undefined}
-        style={shown.length === 1 ? undefined : { gridTemplateColumns: tracks.map((t) => (t[0]!.quiet ? 'minmax(184px, 0.8fr)' : 'minmax(208px, 1fr)')).join(' ') }}
-      >
-        {tracks.map((t) => (t.length === 1 ? column(t[0]!) : <div key={t[0]!.key} className="rq-col-stack">{t.map(column)}</div>))}
+      <div className="rq-board-wrap">
+        <div
+          ref={boardRef}
+          className={shown.length === 1 ? 'rq-board rq-board--one' : 'rq-board'}
+          role="group"
+          aria-label={label}
+          style={shown.length === 1 ? undefined : { gridTemplateColumns: tracks.map((t) => (t[0]!.quiet ? 'minmax(var(--rq-col-quiet, 184px), 0.8fr)' : 'minmax(var(--rq-col, 208px), 1fr)')).join(' ') }}
+        >
+          {tracks.map((t) => (t.length === 1 ? column(t[0]!) : <div key={t[0]!.key} className="rq-col-stack">{t.map(column)}</div>))}
+        </div>
+        {edges.start > 0 && (
+          <button type="button" className="rq-board__edge rq-board__edge--start" onClick={() => page(-1)}>
+            <span className="rq-board__back"><Icon name="chevronForward" size={18} /></span>
+            {WORDS.earlierColumns[locale].replace('{n}', number(edges.start))}
+          </button>
+        )}
+        {edges.end > 0 && (
+          <button type="button" className="rq-board__edge rq-board__edge--end" onClick={() => page(1)}>
+            <Icon name="chevronForward" size={18} />
+            {WORDS.moreColumns[locale].replace('{n}', number(edges.end))}
+          </button>
+        )}
       </div>
     )
   }
@@ -443,16 +465,24 @@ export function Board<K extends string>({
  * from 0 to negative.
  */
 function useScrollEdges(ref: RefObject<HTMLElement>, enabled: boolean) {
-  const [edges, setEdges] = useState({ start: false, end: false })
+  const [edges, setEdges] = useState({ start: 0, end: 0 })
   const update = () => {
     const el = ref.current
     if (!el) return
-    const max = el.scrollWidth - el.clientWidth
-    const at = Math.abs(el.scrollLeft)
-    setEdges((e) => {
-      const next = { start: at > 2, end: max - at > 2 }
-      return next.start === e.start && next.end === e.end ? e : next
-    })
+    const box = el.getBoundingClientRect()
+    const rtl = getComputedStyle(el).direction === 'rtl'
+    let start = 0
+    let end = 0
+    // A column the pane does not show whole counts as hidden on its side.
+    for (const child of Array.from(el.children)) {
+      const r = child.getBoundingClientRect()
+      if (r.width === 0) continue
+      const pastEnd = rtl ? r.left < box.left - 1 : r.right > box.right + 1
+      const beforeStart = rtl ? r.right > box.right + 1 : r.left < box.left - 1
+      if (pastEnd) end += child.classList.contains('rq-col-stack') ? child.children.length : 1
+      else if (beforeStart) start += child.classList.contains('rq-col-stack') ? child.children.length : 1
+    }
+    setEdges((e) => (e.start === start && e.end === end ? e : { start, end }))
   }
   // The columns change with the data, not only with the window: measure after every render.
   useEffect(update)
@@ -527,6 +557,45 @@ export function BoardCard({
         </div>
       )}
     </article>
+  )
+}
+
+/* --------------------------------------------------------------- filters */
+
+export interface QueueFilter<K extends string> {
+  key: K
+  label: string
+  /** Null until its list has arrived: the chip shows its name alone, never a zero. */
+  count?: number | null
+  /** The count asks for action: solid red while it is above zero. */
+  urgent?: boolean
+}
+
+/**
+ * A page's few filters as one quiet row of chips above its work: each names
+ * what it shows and how many, the one that asks for action counted in solid red.
+ */
+export function QueueFilters<K extends string>({
+  label,
+  filters,
+  value,
+  onChange,
+}: {
+  label: string
+  filters: ReadonlyArray<QueueFilter<K>>
+  value: K
+  onChange: (key: K) => void
+}) {
+  const { number } = useI18n()
+  return (
+    <div className="chips rq-filters" role="group" aria-label={label}>
+      {filters.map((f) => (
+        <button key={f.key} type="button" className="chip" aria-pressed={value === f.key} onClick={() => onChange(f.key)}>
+          {f.label}
+          {f.count != null && <span className={f.urgent && f.count > 0 ? 'count count--urgent' : 'chip__count'}>{number(f.count)}</span>}
+        </button>
+      ))}
+    </div>
   )
 }
 
@@ -608,7 +677,7 @@ export function waitedOvernight(iso: string, now: Date = new Date()): boolean {
 export function dayName(value: string, locale: 'ar' | 'en', weekday = true): string {
   const t = new Date(/^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T12:00:00Z` : value)
   if (Number.isNaN(t.getTime())) return value
-  return new Intl.DateTimeFormat(locale === 'ar' ? 'ar-EG-u-nu-latn' : 'en-GB', { ...(weekday ? { weekday: locale === 'ar' ? 'long' : 'short' } : {}), day: 'numeric', month: 'long', timeZone: ACADEMY_ZONE }).format(t)
+  return new Intl.DateTimeFormat(locale === 'ar' ? 'ar-EG-u-nu-latn' : 'en', { ...(weekday ? { weekday: locale === 'ar' ? 'long' : 'short' } : {}), day: 'numeric', month: locale === 'ar' ? 'long' : 'short', timeZone: ACADEMY_ZONE }).format(t)
 }
 
 /** "in 2 days", "3 hours ago", "yesterday": by the academy's calendar, in the reader's language. */
