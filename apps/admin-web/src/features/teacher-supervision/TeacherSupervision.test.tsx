@@ -154,8 +154,9 @@ describe('1. leave', () => {
     expect(within(one).getByText(/^On leave until .*2026/)).toBeInTheDocument()
     const two = screen.getByRole('link', { name: 'Teacher Two' }).closest('tr')!
     expect(within(two).getByText('16 of 21 days left')).toBeInTheDocument()
-    expect(within(two).getByText('Available')).toBeInTheDocument()
-    expect(within(two).getByText('2 waiting')).toBeInTheDocument()
+    // Round 3: an available teacher carries no tag (only the exception is marked).
+    expect(within(two).queryByText(/^On leave until/)).toBeNull()
+    expect(within(two).getByText('Requests waiting: 2')).toBeInTheDocument()
     // The leave requests are on the same page.
     expect(screen.getByRole('heading', { name: 'Leave requests' })).toBeInTheDocument()
   })
@@ -177,11 +178,11 @@ describe('1. leave', () => {
       return json({ request: { ...request, state: 'approved' }, cancelledLessons: 0, notCancelled: [] })
     })
     renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/teachers/supervision' })
-    expect(await screen.findByText('1 waiting')).toBeInTheDocument()
+    expect(await screen.findByText('Requests waiting: 1')).toBeInTheDocument()
     const row = (await screen.findByText('Family wedding')).closest('tr')!
     await userEvent.click(within(row).getByRole('button', { name: 'Approve' }))
     await userEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Approve' }))
-    await waitFor(() => expect(screen.queryByText('1 waiting')).toBeNull())
+    await waitFor(() => expect(screen.queryByText('Requests waiting: 1')).toBeNull())
   })
 
   it('the old Leave requests link lands on this section', async () => {
@@ -592,7 +593,8 @@ describe('PD-26 amendment: the Operations Supervision team (owner 2026-10-27)', 
     // The balance column is the Teachers department's: not there at all, not "Not tracked".
     expect(screen.queryByRole('columnheader', { name: 'Leave balance' })).not.toBeInTheDocument()
     expect(within(row).queryByText(/days left|Not tracked/)).not.toBeInTheDocument()
-    expect(within(row).getByText('Available')).toBeInTheDocument()
+    // Round 3: an available teacher carries no tag; the row still stands, without the balance.
+    expect(within(row).queryByText(/^On leave until/)).not.toBeInTheDocument()
   })
 
   it('records an absence for a teacher of her families, chosen from the page\'s own directory', async () => {

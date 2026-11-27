@@ -51,14 +51,25 @@ export function LeaveSection({ basePath, teacherId }: { basePath: string; teache
   const { number, locale } = useI18n()
   const overview = useLeaveOverview()
   // With a teacher chosen at the head of the page, the sheet is about them alone.
-  const rows = (overview.data?.teachers ?? []).filter((t) => !teacherId || t.id === teacherId)
+  // Round 3: who needs a decision first, then who is away; everyone else keeps the server's order.
+  const rank = (t: { pendingRequests: number; away: unknown }) => (t.pendingRequests > 0 ? 0 : t.away ? 1 : 2)
+  const rows = (overview.data?.teachers ?? [])
+    .filter((t) => !teacherId || t.id === teacherId)
+    .map((t, i) => ({ t, i }))
+    .sort((a, b) => rank(a.t) - rank(b.t) || a.i - b.i)
+    .map((x) => x.t)
   // The balance is the Teachers department's: absent for an Operations-only teacher, and
   // the column with it when no row has one (PD-26 amendment).
   const balances = rows.some((t) => t.used !== undefined)
   return (
     <>
+      {/* The requests waiting for a decision come first: they are this section's work. */}
+      <section className="sheet" aria-label={tx(H.leaveRequests)}>
+        <SectionIntro title={tx(H.leaveRequests)} />
+        <LeaveRequestsList basePath={basePath} />
+      </section>
       <section className="sheet" aria-label={tx(H.leave)}>
-      <SectionIntro title={tx(H.leave)} hint={tx(H.leaveHint)} />
+      <SectionIntro title={tx(H.leaveOverview)} hint={tx(H.leaveHint)} />
       {overview.error ? (
         <EmptyState icon="lock" title={describeError(overview.error, locale)} />
       ) : (
@@ -101,22 +112,15 @@ export function LeaveSection({ basePath, teacherId }: { basePath: string; teache
                         </td>
                       )}
                       <td className="rw-tags" data-label={tx(H.status)}>
-                        {t.away ? (
-                          <AwayBadge away={t.away} />
-                        ) : (
-                          <Badge tone="ok" dot>
-                            {tx(H.available)}
-                          </Badge>
-                        )}
+                        {/* Only the exception is marked: a teacher who is available carries no tag. */}
+                        {t.away ? <AwayBadge away={t.away} /> : null}
                       </td>
                       <td className="rw-tags" data-label={tx(H.requests)}>
                         {t.pendingRequests > 0 ? (
                           <Badge tone="warn" dot>
                             {tx(H.pending, { n: number(t.pendingRequests) })}
                           </Badge>
-                        ) : (
-                          <span className="th-muted">—</span>
-                        )}
+                        ) : null}
                       </td>
                     </tr>
                   ))}
@@ -126,10 +130,6 @@ export function LeaveSection({ basePath, teacherId }: { basePath: string; teache
           )}
         </QueryBoundary>
       )}
-      </section>
-      <section className="sheet" aria-label={tx(H.leaveRequests)}>
-        <SectionIntro title={tx(H.leaveRequests)} />
-        <LeaveRequestsList basePath={basePath} />
       </section>
     </>
   )

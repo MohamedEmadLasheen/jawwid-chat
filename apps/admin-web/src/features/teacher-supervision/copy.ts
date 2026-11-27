@@ -57,7 +57,8 @@ export const H = {
   notTrackedNone: { en: 'Not tracked (0 days taken)', ar: 'غير محدد (لم تُؤخذ إجازة)' },
   status: { en: 'Status', ar: 'الحالة' },
   available: { en: 'Available', ar: 'متاح' },
-  pending: { en: '{n} waiting', ar: '{n} بانتظار القرار' },
+  pending: { en: 'Requests waiting: {n}', ar: 'طلبات بانتظار القرار: {n}' },
+  leaveOverview: { en: 'Who is away, and leave balances', ar: 'من في إجازة، وأرصدة الإجازات' },
   requests: { en: 'Requests', ar: 'الطلبات' },
   leaveHint: {
     en: 'On leave: families see it in chat, and no new students, transfers or trials are given; messages still arrive.',

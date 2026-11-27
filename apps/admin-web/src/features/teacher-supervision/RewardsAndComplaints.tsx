@@ -57,7 +57,7 @@ export function RewardsSection({
         actions={
           canRecord &&
           rows.length > 0 && (
-            <button type="button" className="btn btn--sm" onClick={() => setRecording(true)}>
+            <button type="button" className="btn btn--sm btn--primary" onClick={() => setRecording(true)}>
               {tx(H.recordReward)}
             </button>
           )
@@ -99,7 +99,7 @@ export function RewardsSection({
                       </td>
                       <td className="stack-wide" data-label={tx(H.reason)}><bdi>{r.reason}</bdi></td>
                       {canViewAmounts && (
-                        <td className="th-money" data-label={tx(H.amount)}>{r.amount ? money(r.amount.amount, r.amount.currency) : <span className="th-muted">{tx(H.awaitingAmount)}</span>}</td>
+                        <td className="th-money" data-label={tx(H.amount)}>{r.amount ? <bdi dir="ltr">{money(r.amount.amount, r.amount.currency)}</bdi> : <span className="th-muted">{tx(H.awaitingAmount)}</span>}</td>
                       )}
                       <td data-label={tx(H.date)}>{dateTime(r.recordedAt)}</td>
                       <td data-label={tx(H.recordedBy)}><bdi>{r.recordedBy.name}</bdi></td>
@@ -211,7 +211,6 @@ function RewardDialog({ withAmount, requireAbout, onClose }: { withAmount: boole
 function DeductionDefaults() {
   const tx = useCopy()
   const { locale } = useI18n()
-  const money = useMoney()
   const defaults = useDeductionDefaults(true)
   const save = useSetDeductionDefault()
   const [extra, setExtra] = useState('')
@@ -255,16 +254,17 @@ function DeductionDefaults() {
                   <td dir="ltr">{cur}</td>
                   {(['deduction_1', 'deduction_2'] as const).map((kind) => {
                     const key = `${kind}|${cur}`
-                    const value = draft[key] ?? ''
                     const now = current(kind, cur)
+                    // Round 3: the field holds the amount in force (it was an empty box beside it); Set wakes on a change.
+                    const value = draft[key] ?? now?.amount ?? ''
                     return (
                       <td key={kind}>
                         <div className="th-default-cell">
-                          <span>{now ? money(now.amount, cur) : <span className="th-muted">{tx(H.notSet)}</span>}</span>
                           <input
                             className="input th-amount"
                             inputMode="decimal"
                             dir="ltr"
+                            placeholder={tx(H.notSet)}
                             aria-label={`${tx(kind === 'deduction_1' ? H.first : H.second)} ${cur}`}
                             value={value}
                             onChange={(e) => setDraft((d) => ({ ...d, [key]: e.target.value }))}
@@ -272,11 +272,11 @@ function DeductionDefaults() {
                           <button
                             type="button"
                             className="btn btn--sm"
-                            disabled={save.isPending || !MONEY.test(value.trim())}
+                            disabled={save.isPending || !MONEY.test(value.trim()) || value.trim() === (now?.amount ?? '')}
                             onClick={() =>
                               save.mutate(
                                 { kind, currency: cur, amount: value.trim() },
-                                { onSuccess: () => setDraft((d) => ({ ...d, [key]: '' })) },
+                                { onSuccess: () => setDraft((d) => { const next = { ...d }; delete next[key]; return next }) },
                               )
                             }
                           >
