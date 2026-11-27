@@ -197,8 +197,8 @@ export const O = {
   free: { en: 'free', ar: 'متاح' },
   notFree: { en: 'no longer free', ar: 'لم يعد متاحًا' },
   noLongerFree: {
-    en: 'No longer free: a requested time was taken after the request was sent. Approving would fail; reject it, or agree other times with the family.',
-    ar: 'لم يعد متاحًا: حُجز أحد المواعيد المطلوبة بعد إرسال الطلب. لا يمكن اعتماده؛ ارفضه أو اتفق على مواعيد أخرى.',
+    en: 'No longer free: a requested time was taken after the request. Reject it, or agree other times with the family.',
+    ar: 'لم يعد متاحًا: حُجز أحد المواعيد بعد الطلب. ارفضه، أو اتفق مع الأسرة على مواعيد أخرى.',
   },
   blocked: { en: 'Weekly lessons not scheduled', ar: 'حصص أسبوعية لم تُجدول' },
   blockedHint: {

@@ -98,3 +98,12 @@ button.rw-name { padding: 0; border: 0; background: none; font: inherit; font-si
 /* The reason a row is here, as a sentence: read text, not metadata. */
 .rw-reason { display: block; font-size: var(--fs-sm); color: var(--ink-2); line-height: 1.5; overflow-wrap: anywhere; }
 .rw-reason .rw-sub { display: inline; }
+
+/*
+ * Round 3: a row without "⋯" keeps the menu's place, so the stated actions line
+ * up down a list (the menu button is 34px wide on desktop, plus the 4px gap).
+ * Scoped to the teachers-office queues; the lead may lift it into system.css.
+ */
+@media (min-width: 768px) {
+  :is(.ts-inbox, .tp-list, .mod-queue, .mt-items) .row-actions2:not(:has(.row-actions2__more))::after { content: ''; flex: none; inline-size: 34px; }
+}

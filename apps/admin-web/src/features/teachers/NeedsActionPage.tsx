@@ -367,7 +367,7 @@ function ScheduleRequestRow({ r, label, onApprove, onReject }: { r: ScheduleRequ
         )}
         {r.note && (
           <span className="ts-note">
-            {tx(NOTE_FROM)} <bdi>“{r.note}”</bdi>
+            {tx(NOTE_FROM)} <bdi>{locale === 'ar' ? `«${r.note}»` : `“${r.note}”`}</bdi>
           </span>
         )}
         {stale && (
@@ -377,15 +377,27 @@ function ScheduleRequestRow({ r, label, onApprove, onReject }: { r: ScheduleRequ
         )}
       </div>
       <div className="cell-actions">
-        <RowActions
-          primary={
-            <button type="button" className="btn btn--sm" disabled={stale} aria-describedby={stale ? warnId : undefined} onClick={onApprove}>
-              {tx(O.approve)}
-            </button>
-          }
-          more={[{ key: 'reject', label: tx(O.reject), icon: 'xCircle', danger: true, onSelect: onReject }]}
-          label={label}
-        />
+        {/* A request that can no longer be approved states the step that is left: Reject. */}
+        {stale ? (
+          <RowActions
+            primary={
+              <button type="button" className="btn btn--sm" aria-describedby={warnId} onClick={onReject}>
+                {tx(O.reject)}
+              </button>
+            }
+            label={label}
+          />
+        ) : (
+          <RowActions
+            primary={
+              <button type="button" className="btn btn--sm" onClick={onApprove}>
+                {tx(O.approve)}
+              </button>
+            }
+            more={[{ key: 'reject', label: tx(O.reject), icon: 'xCircle', danger: true, onSelect: onReject }]}
+            label={label}
+          />
+        )}
       </div>
     </div>
   )
