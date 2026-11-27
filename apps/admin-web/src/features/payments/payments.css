@@ -155,7 +155,10 @@
 .tx-table .entity { align-items: flex-start; gap: 10px; }
 .tx-table .entity__text { display: grid; gap: 1px; }
 .tx-table .entity__sub { font-size: var(--fs-sm); }
+/* A label in the other script keeps its own direction but lines up with its column. */
 .tx-c-for > bdi { display: block; }
+[dir='ltr'] .tx-c-for > bdi { text-align: left; }
+[dir='rtl'] .tx-c-for > bdi { text-align: right; }
 /* The column heads stay in view down the page (the page scrolls inside its own padding). */
 .table.tx-table thead th { inset-block-start: -28px; }
 /* A day's heading runs the width of the ledger: the day at the start, what it came to at the end. */
@@ -217,8 +220,10 @@
 
 /* The payment's sheet: sections, entries without boxes. */
 .pay-detail { display: grid; gap: var(--space-4); }
-.pay-detail__section { min-inline-size: 0; margin: 0; }
-.pay-detail__section + .pay-detail__section { padding-block-start: var(--space-4); border-block-start: 1px solid var(--line-2); }
+/* Inside the sheet the sections are not boxes of their own: one surface, divided by space and a soft line. */
+.pay-detail > .tf-section.pay-detail__section { min-inline-size: 0; margin: 0; padding: 0; background: none; border: 0; border-radius: 0; }
+.pay-detail .pay-detail__section > .tf-section__head { margin-inline: 0; margin-block-end: var(--space-2); padding: 0; min-block-size: 36px; border-block-end: 0; }
+.pay-detail > .tf-section.pay-detail__section + .pay-detail__section { padding-block-start: var(--space-4); border-block-start: 1px solid var(--line-2); }
 .pay-detail .tf-section__title { font-family: var(--font-head); font-size: var(--fs-lg); font-weight: 600; }
 .pay-detail .tf-kv { font-size: var(--fs-sm); }
 .pay-detail .tf-kv dt { font-size: var(--fs-xs); color: var(--ink-muted); }
@@ -283,12 +288,13 @@
 .set-paused__why { max-inline-size: 56ch; font-size: var(--fs-sm); color: var(--ink-muted); }
 
 /* Reminders in the order they fire: before the due date, on it (a teal mark), after it. */
-.set-reminders { display: flex; margin: 4px 0 0; padding: 0; list-style: none; }
-.set-reminder { position: relative; flex: 1 1 0; min-inline-size: 0; padding-block: 14px 2px; padding-inline-end: var(--space-3); border-block-start: 2px solid var(--line); }
-.set-reminder::before { content: ''; position: absolute; inset-block-start: -5px; inset-inline-start: 4px; inline-size: 8px; block-size: 8px; border-radius: 50%; background: var(--surface); box-shadow: 0 0 0 2px var(--line-strong); }
+/* A short line down the start: each reminder a stop on it, the due date filled. */
+.set-reminders { display: grid; margin: 0 0 0 0; margin-inline-start: 6px; padding: 0; list-style: none; border-inline-start: 2px solid var(--line); }
+.set-reminder { position: relative; padding-block: 2px; padding-inline-start: var(--space-5); }
+.set-reminder::before { content: ''; position: absolute; inset-block-start: 16px; inset-inline-start: -6px; inline-size: 10px; block-size: 10px; border-radius: 50%; background: var(--surface); box-shadow: 0 0 0 2px var(--line-strong); }
 .set-reminder--due::before { background: var(--teal); box-shadow: 0 0 0 2px var(--teal); }
-.set-reminder label { display: inline-flex; align-items: flex-start; gap: var(--space-2); min-block-size: 36px; padding-block-start: 6px; font-size: var(--fs-sm); line-height: 1.4; cursor: pointer; }
-.set-reminder input { flex: none; inline-size: 17px; block-size: 17px; margin: 2px 0 0; accent-color: var(--teal); }
+.set-reminder label { display: inline-flex; align-items: center; gap: var(--space-3); min-block-size: 40px; font-size: var(--fs-md); cursor: pointer; }
+.set-reminder input { flex: none; inline-size: 18px; block-size: 18px; margin: 0; accent-color: var(--teal); }
 .set-reminder--due label { font-weight: 600; }
 fieldset:disabled .set-reminder label { cursor: default; }
 
@@ -369,10 +375,8 @@ fieldset:disabled .set-reminder label { cursor: default; }
 
   .set__head, .set__body { padding-inline: var(--space-4); }
   .set-grid { grid-template-columns: minmax(0, 1fr); }
-  .set-reminders { display: grid; gap: 0; border-inline-start: 2px solid var(--line); margin-inline-start: 6px; }
-  .set-reminder { border: 0; padding-block: 2px; padding-inline-start: var(--space-4); }
-  .set-reminder::before { inset-block-start: 18px; inset-inline-start: -5px; }
   .set-reminder label { min-block-size: 44px; }
+  .set-reminder::before { inset-block-start: 18px; }
   .set-save { position: sticky; inset-block-end: 0; padding-inline: var(--space-4); }
   .set-save .btn { flex: 1 1 100%; justify-content: center; min-block-size: 48px; }
 }

@@ -214,7 +214,7 @@ function linked(figure: MastFigure | null, to: string | null | false): MastFigur
 
 /**
  * One state's instalments on their own sheet: its name, how many (a solid
- * counter; terracotta for what is late), what they add up to, then the rows.
+ * counter, solid red for what is late), what they add up to, then the rows.
  */
 function Group({
   status,
