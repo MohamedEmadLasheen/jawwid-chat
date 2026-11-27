@@ -305,7 +305,7 @@ describe('the Parent Profile', () => {
     expect(await screen.findByRole('heading', { level: 1, name: /^Parent Alpha/ })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Edit contact information' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Edit the note' })).not.toBeInTheDocument()
-    expect(screen.queryByText('Upload photo')).not.toBeInTheDocument()
+    expect(screen.queryByText('Choose a photo')).not.toBeInTheDocument()
     expect(await screen.findByRole('button', { name: 'Add instalments' })).toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: 'Record payment' }).length).toBeGreaterThan(0)
   })

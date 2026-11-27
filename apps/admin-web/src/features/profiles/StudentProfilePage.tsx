@@ -9,7 +9,7 @@ import { WEEKDAY } from '@/features/trials/copy'
 import { parentPath, profileKeys, type StudentProfile } from './api'
 import { P, describeError, isProfileRefusal, useCopy } from './copy'
 import { useStudent } from './hooks'
-import { familyTime } from '@/core/time/academyTime'
+import { familyTime, zoneLabel } from '@/core/time/academyTime'
 import { SubscriptionPanel } from '@/features/subscriptions/SubscriptionPanel'
 import { CarriedOverPanel } from '@/features/intake/CarriedOverPanel'
 import { ChangeTeacherDialog } from '@/features/teachers/ChangeTeacherDialog'
@@ -160,7 +160,7 @@ function StudentFile({ s }: { s: StudentProfile }) {
         <div className="pp-schedule">
           <h3 className="section-label pp-schedule__label">
             {tx(P.schedule)}
-            {zones.length === 1 && s.schedule.length > 0 && <span className="pp-schedule__zone">{tx(P.timezone, { zone: zones[0]! })}</span>}
+            {zones.length === 1 && s.schedule.length > 0 && <span className="pp-schedule__zone">{zoneLabel(zones[0]!, locale)}</span>}
           </h3>
           {s.schedule.length === 0 ? (
             <p className="pp-empty">{tx(P.noSchedule)}</p>

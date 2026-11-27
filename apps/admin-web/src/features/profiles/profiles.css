@@ -20,9 +20,10 @@
 .pp-child__count { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
 .pp-child__standing .badge { min-inline-size: 5.5rem; }
 @media (max-width: 640px) {
-  .pp-row.pp-child { grid-template-columns: auto minmax(0, 1fr); }
-  .pp-child__standing { grid-column: 1 / -1; justify-content: space-between; }
-  .pp-child__lessons { inline-size: auto; flex: 1; }
+  /* Name and state share the first line; the lessons line runs under them, full width. */
+  .pp-row.pp-child .pp-child__standing { display: contents; }
+  .pp-row.pp-child .pp-child__standing > .badge { grid-column: 3; grid-row: 1; min-inline-size: 0; justify-self: end; }
+  .pp-row.pp-child .pp-child__lessons { grid-column: 1 / -1; grid-row: 2; inline-size: auto; }
 }
 
 /* ---------------------------------------------------------- the package */

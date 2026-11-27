@@ -1,6 +1,6 @@
-import { useI18n } from '@/core/i18n/I18nProvider'
 import { PageHeader } from '@/shared/components/PageHeader'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
+import { PLURAL, usePlural } from '@/features/admin/copy'
 import { T, useCopy } from './copy'
 import { useOrganization, useStaffProfile, useTeam } from './hooks'
 import { StaffTable } from './StaffTable'
@@ -18,7 +18,7 @@ import './profile.css'
  */
 export function TeamPage() {
   const tx = useCopy()
-  const { number } = useI18n()
+  const plural = usePlural()
   const me = useStaffProfile('me')
   const viewer = me.data?.viewer
   const whole = viewer?.organizationOverview === true
@@ -28,12 +28,12 @@ export function TeamPage() {
   const shown = whole ? organization.data?.directory.length : mine ? team.data?.members.length : undefined
 
   return (
-    <div className="page pp pp-list sp-page">
+    <div className="page pp pp-list sp-page sp-teampage">
       <div className="page__inner">
         <PageHeader
           title={tx(T.teamTitle)}
           subtitle={whole ? tx(T.directoryHint) : mine ? tx(T.myTeamHint) : undefined}
-          actions={shown !== undefined && <span className="pp-total">{tx(T.people, { n: number(shown) })}</span>}
+          actions={shown !== undefined && <span className="pp-total">{plural(PLURAL.people, shown)}</span>}
         />
         <QueryBoundary isLoading={me.isLoading} error={me.error} onRetry={() => void me.refetch()}>
           {whole ? (

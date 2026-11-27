@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { useSession } from '@/core/auth/SessionProvider'
 import { holdsAny, isSuperAdmin } from '@/core/permissions/capabilities'
+import { Avatar } from '@/shared/components/Avatar'
 import { Badge, type Tone } from '@/shared/components/Badge'
 import { Dialog } from '@/shared/components/Dialog'
 import { FilterChips } from '@/shared/components/FilterChips'
@@ -145,7 +146,7 @@ export function StaffAccountsPage() {
           onRetry={() => void list.refetch()}
         >
           <div className="table-wrap">
-            <table className="table">
+            <table className="table pp-stack">
               <thead>
                 <tr>
                   <th scope="col">{tx(SA.name)}</th>
@@ -160,13 +161,16 @@ export function StaffAccountsPage() {
                 {shown.map((a) => (
                   <tr key={a.staffId}>
                     <td>
-                      <button type="button" className="sa-name" dir="auto" onClick={() => setPending({ act: 'detail', account: a })}>
-                        {a.name}
-                      </button>
+                      <span className="pp-cell-two">
+                        <Avatar name={a.name} seed={a.staffId} size="sm" />
+                        <button type="button" className="sa-name" onClick={() => setPending({ act: 'detail', account: a })}>
+                          <bdi>{a.name}</bdi>
+                        </button>
+                      </span>
                     </td>
-                    <td dir="auto">{a.departmentId ? (departmentName.get(a.departmentId) ?? '…') : '—'}</td>
-                    <td>{tx(TIER[a.tier] ?? { ar: a.tier, en: a.tier })}</td>
-                    <td>
+                    <td data-label={tx(SA.department)}>{a.departmentId ? <bdi>{departmentName.get(a.departmentId) ?? '…'}</bdi> : '—'}</td>
+                    <td data-label={tx(SA.tier)}>{tx(TIER[a.tier] ?? { ar: a.tier, en: a.tier })}</td>
+                    <td data-label={tx(SA.roles)} data-wide="">
                       {a.roles.length === 0 ? (
                         <span className="field__hint">{tx(SA.noRoles)}</span>
                       ) : (
@@ -179,13 +183,13 @@ export function StaffAccountsPage() {
                         </span>
                       )}
                     </td>
-                    <td>
+                    <td data-at="end">
                       <Badge tone={STATUS_TONE[a.status] ?? 'neutral'} dot>
                         {tx(STATUS[a.status] ?? { ar: a.status, en: a.status })}
                       </Badge>{' '}
                       {a.setupPending && <Badge tone="warn">{tx(SA.setupPending)}</Badge>}
                     </td>
-                    <td>{a.lastLoginAt ? dateTime(a.lastLoginAt) : tx(SA.never)}</td>
+                    <td data-label={tx(SA.lastLogin)}>{a.lastLoginAt ? dateTime(a.lastLoginAt) : tx(SA.never)}</td>
                   </tr>
                 ))}
               </tbody>

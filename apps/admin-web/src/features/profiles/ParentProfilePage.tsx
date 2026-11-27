@@ -17,7 +17,7 @@ import { InvoiceDownloadButton, InvoiceStatusBadge, PaymentList, ReceiptFile, Re
 import { chatApi, chatKeys, type ChatConversation } from '@/features/chat/chatApi'
 import { useCallActions } from '@/features/calls-page/hooks'
 import { useSubscription } from '@/features/subscriptions/hooks'
-import { STATE_LABEL } from '@/features/subscriptions/copy'
+import { STATE_LABEL, lessonsLabel } from '@/features/subscriptions/copy'
 import type { AccessState } from '@/features/subscriptions/api'
 import { parentPath, studentPath, type FamilyBilling, type ParentProfile, type TimelineInstalment, type TimelineStatus } from './api'
 import { useCountries } from '@/shared/location/api'
@@ -547,7 +547,7 @@ function ChildrenSection({ profile }: { profile: ParentProfile }) {
  */
 function ChildStanding({ learnerId }: { learnerId: string }) {
   const tx = useCopy()
-  const { number } = useI18n()
+  const { number, locale } = useI18n()
   const view = useSubscription(learnerId)
   const s = view.data?.standing
   if (!s) return null
@@ -559,7 +559,7 @@ function ChildStanding({ learnerId }: { learnerId: string }) {
       {total !== null && used !== null && (
         <span className="pp-child__lessons">
           <span className="pp-child__count">
-            <span>{tx(P.lessonsUsed, { used: number(used), total: number(total) })}</span>
+            <span>{tx(P.lessonsUsed, { used: number(used), lessons: lessonsLabel(total, locale) })}</span>
             {s.lessonsLeft !== null && <span className="pp-row__sub">{tx(P.lessonsLeft, { n: number(s.lessonsLeft) })}</span>}
           </span>
           {share !== null && (
@@ -570,7 +570,7 @@ function ChildStanding({ learnerId }: { learnerId: string }) {
         </span>
       )}
       <Badge tone={ACCESS_TONE[s.state]} dot>
-        {tx(STATE_LABEL[s.state])}
+        {s.state === 'open' ? tx(P.subscriptionOpen) : tx(STATE_LABEL[s.state])}
       </Badge>
     </span>
   )

@@ -37,7 +37,7 @@ export function SessionList({
   const name = useDeviceName()
   return (
     <div className="table-wrap">
-      <table className="table dev-table">
+      <table className={compact ? 'table dev-table' : 'table dev-table pp-stack'}>
         <thead>
           <tr>
             <th scope="col">{tx(D.device)}</th>
@@ -73,11 +73,11 @@ export function SessionList({
                   </div>
                 )}
               </td>
-              {!compact && <td>{tx(PLATFORM[s.platform ?? 'unknown'])}</td>}
-              {!compact && <td className="cell-nowrap"><time dateTime={s.signedInAt}>{dateTime(s.signedInAt)}</time></td>}
-              {!compact && <td className="cell-nowrap">{s.lastSeenAt ? <time dateTime={s.lastSeenAt}>{dateTime(s.lastSeenAt)}</time> : tx(D.notYet)}</td>}
+              {!compact && <td data-label={tx(D.platform)}>{tx(PLATFORM[s.platform ?? 'unknown'])}</td>}
+              {!compact && <td className="cell-nowrap" data-label={tx(D.signedIn)}><time dateTime={s.signedInAt}>{dateTime(s.signedInAt)}</time></td>}
+              {!compact && <td className="cell-nowrap" data-label={tx(D.lastActive)}>{s.lastSeenAt ? <time dateTime={s.lastSeenAt}>{dateTime(s.lastSeenAt)}</time> : tx(D.notYet)}</td>}
               {onSignOut && (
-                <td>
+                <td data-wide="">
                   <button type="button" className="btn btn--sm btn--ghost dev-signout" onClick={() => onSignOut(s)}>
                     {tx(D.signOut)}
                   </button>

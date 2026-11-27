@@ -11,7 +11,9 @@
 .dev-section { margin-block-start: var(--space-2); }
 .dev-meta { display: flex; flex-direction: column; gap: 2px; margin-block-start: var(--space-1); }
 .dev-table .field__hint { font-size: var(--fs-xs); }
-.dev-table td:last-child { inline-size: 1%; white-space: nowrap; }
+@media (min-width: 768px) {
+  .dev-table td:last-child { inline-size: 1%; white-space: nowrap; }
+}
 /* Signing a device out is a word at the row's end: quiet at rest, terracotta under the
    pointer or the keyboard, never a red box on every row. */
 .dev-signout.btn--ghost { color: var(--ink-muted); }

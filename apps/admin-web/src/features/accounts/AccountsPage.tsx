@@ -136,7 +136,7 @@ export function AccountsPage({ eyebrow }: { eyebrow?: string }) {
                       <div className="acct-cell-actions">
                         <AccountActionButtons account={a} onAct={setPending} />
                         {grantees && a.kind === 'family' && a.familyId && (
-                          <button type="button" className="btn btn--sm btn--ghost" onClick={() => setGranting(a)}>
+                          <button type="button" className="btn btn--sm btn--ghost acct-act" onClick={() => setGranting(a)}>
                             {tx(F.grantButton)}
                           </button>
                         )}
@@ -167,27 +167,27 @@ export function AccountActionButtons({ account: a, onAct }: { account: AccountSu
   return (
     <div className="acct-actions">
       {a.allowed.resetPassword && (
-        <button type="button" className="btn btn--sm btn--ghost" onClick={() => onAct({ act: 'reset', account: a })}>
+        <button type="button" className="btn btn--sm btn--ghost acct-act acct-act--main" onClick={() => onAct({ act: 'reset', account: a })}>
           {tx(A.resetPassword)}
         </button>
       )}
       {a.allowed.suspend && (
-        <button type="button" className="btn btn--sm btn--ghost acct-danger" onClick={() => onAct({ act: 'suspend', account: a })}>
+        <button type="button" className="btn btn--sm btn--ghost acct-act acct-danger" onClick={() => onAct({ act: 'suspend', account: a })}>
           {tx(A.suspend)}
         </button>
       )}
       {a.allowed.impersonate && (
-        <button type="button" className="btn btn--sm btn--ghost" onClick={() => onAct({ act: 'impersonate', account: a })}>
+        <button type="button" className="btn btn--sm acct-act acct-as" onClick={() => onAct({ act: 'impersonate', account: a })}>
           {tx(S.open, { name: a.name })}
         </button>
       )}
       {a.allowed.signOut === true && (
-        <button type="button" className="btn btn--sm btn--ghost" onClick={() => onAct({ act: 'devices', account: a })}>
+        <button type="button" className="btn btn--sm btn--ghost acct-act" onClick={() => onAct({ act: 'devices', account: a })}>
           {tx(D.devicesButton)}
         </button>
       )}
       {a.allowed.reactivate && (
-        <button type="button" className="btn btn--sm btn--ghost" onClick={() => onAct({ act: 'reactivate', account: a })}>
+        <button type="button" className="btn btn--sm btn--ghost acct-act acct-act--main" onClick={() => onAct({ act: 'reactivate', account: a })}>
           {tx(A.reactivate)}
         </button>
       )}

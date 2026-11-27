@@ -271,8 +271,7 @@ export const T = {
     en: 'The team list opens for managers and the super admin. A staff profile still opens from a name.',
     ar: 'قائمة الفريق متاحة للمديرين والمدير العام. يبقى ملف الموظف متاحًا من اسمه.',
   },
-  people: { en: '{n} people', ar: '{n} شخصًا' },
-  colLoad: { en: 'Families', ar: 'الأسر' },
+  filters: { en: 'Filters', ar: 'تصفية' },
 
   // Completeness
   completeness: { en: 'Profile completeness', ar: 'اكتمال الملف' },

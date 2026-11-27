@@ -1,5 +1,5 @@
 import { useDeferredValue, useEffect, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Avatar } from '@/shared/components/Avatar'
 import { Badge } from '@/shared/components/Badge'
@@ -58,6 +58,7 @@ export function StudentDirectoryPage() {
   const tx = useCopy()
   const { locale, t, number } = useI18n()
   const [params, setParams] = useSearchParams()
+  const navigate = useNavigate()
   const [q, setQ] = useState(() => params.get('q') ?? '')
   const deferred = useDeferredValue(q.trim())
   const teacher = params.get('teacher') ?? ''
@@ -156,7 +157,14 @@ export function StudentDirectoryPage() {
                 </thead>
                 <tbody>
                   {(data?.students ?? []).map((s) => (
-                    <tr key={s.id}>
+                    <tr
+                      key={s.id}
+                      className="pp-rowlink"
+                      onClick={(e) => {
+                        // The whole row opens the file; the name is the link the keyboard uses.
+                        if (!(e.target as HTMLElement).closest('a, button, input')) navigate(studentPath(s.id))
+                      }}
+                    >
                       <td>
                         <span className="pp-cell-two">
                           <Avatar name={s.name} seed={s.id} size="sm" />
