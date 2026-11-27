@@ -99,7 +99,7 @@ describe('Dashboard', () => {
     vi.stubGlobal('fetch', routeFetch({ '/admin/overview': OVERVIEW, '/admin/conversations': CONVERSATIONS }))
     renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/admin/dashboard' })
 
-    const attention = await screen.findByRole('region', { name: 'Needs attention' })
+    const attention = await screen.findByRole('region', { name: 'Conversations and stories' })
     const waiting = await within(attention).findByRole('link', { name: /waiting on a reply from us/ })
     // The least recent of the two waiting conversations is 40 days old.
     expect(waiting).toHaveTextContent('Oldest activity 40 days ago')

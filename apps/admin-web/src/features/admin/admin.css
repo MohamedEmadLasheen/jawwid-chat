@@ -16,7 +16,8 @@
 /* What waits on us: each line is its count, what it is, and the way to it. */
 .adm-attn__head { display: flex; align-items: center; gap: 8px; }
 .adm-attn__row { color: inherit; text-decoration: none; }
-.adm-attn__n { flex: none; min-inline-size: 3.5rem; font-family: var(--font-head); font-size: var(--fs-2xl); font-weight: 600; line-height: 1.1; color: var(--urgent); font-variant-numeric: tabular-nums lining-nums; unicode-bidi: isolate; }
+/* In ink, as the manager sections' counts are: a waiting count is work, not a breach. */
+.adm-attn__n { flex: none; min-inline-size: 3.5rem; font-family: var(--font-head); font-size: var(--fs-2xl); font-weight: 600; line-height: 1.1; color: var(--ink); font-variant-numeric: tabular-nums lining-nums; unicode-bidi: isolate; }
 .adm-attn__row .rw-who { flex: 1 1 14rem; }
 .adm-attn__go { display: inline-flex; align-items: center; gap: 4px; flex: none; margin-inline-start: auto; color: var(--teal); font-size: var(--fs-sm); font-weight: 600; white-space: nowrap; }
 .adm-attn__row:hover .adm-attn__go { text-decoration: underline; text-underline-offset: 3px; }
@@ -29,6 +30,8 @@
 .adm-recent .dash-table th:first-child, .adm-recent .dash-table td:first-child { padding-inline-start: var(--space-4); }
 .adm-recent .dash-table th:last-child, .adm-recent .dash-table td:last-child { padding-inline-end: var(--space-4); }
 .adm-recent .dash-card__pad { padding: var(--space-3) var(--space-4); }
+/* Eight rows in a sheet need no sticky header: pinned to the page's scroll it floated over the rows. */
+.adm-recent .dash-table thead th { position: static; }
 
 /* The academy in numbers: plain lines on the canvas, each leading to its list. */
 .adm-totals__list { list-style: none; margin: 0; padding: 0; }
@@ -82,7 +85,7 @@
 /* -------------------------------------------------------- unbuilt sections */
 
 /* One sheet says what the section will hold; the sections open today are a quiet list beside it. */
-.adm-soon__line { margin: 0; max-inline-size: 48ch; font-family: var(--font-head); font-size: var(--fs-lg); font-weight: 600; line-height: 1.35; color: var(--ink); }
+.adm-soon__line { margin: 0; max-inline-size: 60ch; text-wrap: balance; font-family: var(--font-head); font-size: var(--fs-lg); font-weight: 600; line-height: 1.35; color: var(--ink); }
 html[lang='ar'] .adm-soon__line { font-weight: 700; line-height: 1.6; }
 .adm-soon__note { margin: var(--space-4) 0 0; font-size: var(--fs-sm); color: var(--ink-muted); }
 .adm-soon__status { color: var(--ink); font-weight: 600; }

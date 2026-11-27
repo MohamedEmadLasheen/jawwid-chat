@@ -59,7 +59,7 @@ describe('Dashboard: a failed conversations request', () => {
     vi.stubGlobal('fetch', routeFetch({ '/admin/overview': OVERVIEW, '/admin/conversations': 503 }))
     renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/admin/dashboard' })
 
-    const attention = await screen.findByRole('region', { name: 'Needs attention' })
+    const attention = await screen.findByRole('region', { name: 'Conversations and stories' })
     expect(await within(attention).findByRole('alert', {}, { timeout: 8000 })).toBeInTheDocument()
     expect(within(attention).queryByText('Nothing needs attention right now.')).not.toBeInTheDocument()
   }, 10000)
