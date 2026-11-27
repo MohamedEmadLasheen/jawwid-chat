@@ -143,7 +143,8 @@ describe('the Lesson audio page', () => {
   it('the hint to listen first is visible text the buttons point to, not a tooltip', async () => {
     renderWithProviders(<LessonAudioPage player={player({ audioSha256: AUDIO, matched: true })} />, { staff: reviewer })
     const clip = await screen.findByTestId('clip-clip-1')
-    const hint = within(clip).getByText('Listen to the end first.')
+    // Round 3: said once for the unit (it was repeated under every clip); the clip's buttons still point to it.
+    const hint = screen.getByText('Listen to the end first.')
     expect(within(clip).getByRole('button', { name: 'Approve' }).getAttribute('aria-describedby')).toBe(hint.id)
     expect(within(clip).getByRole('button', { name: 'Approve' }).getAttribute('title')).toBeNull()
   })

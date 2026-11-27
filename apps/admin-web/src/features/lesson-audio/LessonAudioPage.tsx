@@ -57,7 +57,8 @@ const C = {
   noUnitsHint: { en: 'Each unit appears here once its clips are made.', ar: 'تظهر كل وحدة هنا عند صنع تسجيلاتها.' },
   unitApproved: { en: '{n} of {of} play', ar: 'يُشغَّل {n} من {of}' },
   unitWaiting: { en: '{n} waiting', ar: 'بانتظار: {n}' },
-  unitDecide: { en: '{n} to decide', ar: 'للقرار: {n}' },
+  unitDecide: { en: '{n} to decide', ar: 'قرار مطلوب: {n}' },
+  earlier: { en: 'Earlier attempts ({n})', ar: 'المحاولات السابقة ({n})' },
   noAudio: { en: 'Decided: no audio. This word has no play button.', ar: 'تقرّر: بلا صوت. لا يظهر لهذه الكلمة زر تشغيل.' },
   needsDecision: { en: 'Three clips failed. Decide: no audio, or one more round.', ar: 'فشلت ثلاثة تسجيلات. قرّر: بلا صوت، أو جولة أخرى.' },
   decideNoAudio: { en: 'No audio', ar: 'بلا صوت' },
@@ -153,7 +154,7 @@ export function LessonAudioPage({ player: given }: { player?: ClipPlayer } = {})
               type="button"
               className="lesson-audio__unit-tab"
               aria-pressed={u.unit === current}
-              title={[tx(C.unitApproved, { n: u.approved, of: u.strings }), u.pending ? tx(C.unitWaiting, { n: u.pending }) : '', u.needsDecision ? tx(C.unitDecide, { n: u.needsDecision }) : ''].filter(Boolean).join(' · ')}
+              title={[tx(C.unitApproved, { n: u.approved, of: u.strings }), u.pending ? tx(C.unitWaiting, { n: u.pending }) : '', u.needsDecision ? tx(C.unitDecide, { n: u.needsDecision }) : ''].filter(Boolean).join(locale === 'ar' ? '، ' : ', ')}
               onClick={() => setUnit(u.unit)}
             >
               <span className="lesson-audio__unit-name">{unitName(u.unit, locale)}</span>
@@ -195,6 +196,13 @@ function Unit({ lesson, strings, required, canReview, player, title }: { lesson:
   const [playing, setPlaying] = useState<string | null>(null)
   const [mismatch, setMismatch] = useState<Record<string, boolean>>({})
   const stopAll = useRef(false)
+  // One hint for the unit, which every gated button points to (round 3: it was repeated under each clip).
+  const hintId = useId()
+  const gated = canReview && strings.some((s) => s.clips.some((c) => (c.canReview || c.state === 'approved') && !heard[c.clipId]))
+  // What needs a person first: a decision, then a review; the rest keeps the lesson's order.
+  const RANK: Partial<Record<StringStatus, number>> = { needsDecision: 0, pending: 1 }
+  const shown = strings.map((s, i) => ({ s, i })).sort((a, b) => (RANK[a.s.status] ?? 2) - (RANK[b.s.status] ?? 2) || a.i - b.i).map((x) => x.s)
+  const plays = strings.filter((s) => s.status === 'approved').length
 
   const listen = async (c: ClipView) => {
     if (!c.url) return false
@@ -231,8 +239,8 @@ function Unit({ lesson, strings, required, canReview, player, title }: { lesson:
     <section className="sheet lesson-audio__unit">
       <div className="sheet__head">
         <h2 className="sheet__title">
-          <span className="ltr">{title}</span>
-          <span className="sheet__count">{strings.length}</span>
+          <bdi>{title}</bdi>
+          <span className="lesson-audio__plays">{tx(C.unitApproved, { n: plays, of: strings.length })}</span>
         </h2>
         {playingAll ? (
           <button
@@ -253,8 +261,30 @@ function Unit({ lesson, strings, required, canReview, player, title }: { lesson:
           </button>
         )}
       </div>
+      {gated ? (
+        <p id={hintId} className="lesson-audio__hint lesson-audio__lead">
+          {tx(C.approveHint)}
+        </p>
+      ) : null}
       <ol className="lesson-audio__strings">
-        {strings.map((s) => (
+        {shown.map((s) => {
+          const old = (c: ClipView) => c.state === 'rejected' || c.state === 'withdrawn'
+          const clip = (c: ClipView) => (
+              <Clip
+                key={c.clipId}
+                s={s}
+                c={c}
+                required={required}
+                canReview={canReview}
+                heard={heard[c.clipId]}
+                mismatch={!!mismatch[c.clipId]}
+                playing={playing === c.clipId}
+                hintId={hintId}
+                onListen={() => void listen(c)}
+              />
+          )
+          const earlier = s.clips.filter(old)
+          return (
           <li key={s.id} className={s.clips.some((c) => c.clipId === playing) ? 'is-playing' : undefined}>
             <div className="lesson-audio__head">
               <div className="lesson-audio__text" lang="ar" dir="rtl">
@@ -267,21 +297,17 @@ function Unit({ lesson, strings, required, canReview, player, title }: { lesson:
             {s.status === 'noAudio' ? <p className="lesson-audio__hint">{tx(C.noAudio)}</p> : null}
             {s.status === 'needsDecision' && canReview ? <Decision lesson={lesson} s={s} /> : null}
             {s.clips.length === 0 && s.status === 'none' ? <p className="lesson-audio__hint">{tx(C.noClip)}</p> : null}
-            {s.clips.map((c) => (
-              <Clip
-                key={c.clipId}
-                s={s}
-                c={c}
-                required={required}
-                canReview={canReview}
-                heard={heard[c.clipId]}
-                mismatch={!!mismatch[c.clipId]}
-                playing={playing === c.clipId}
-                onListen={() => void listen(c)}
-              />
-            ))}
+            {s.clips.filter((c) => !old(c)).map(clip)}
+            {/* Rejected and withdrawn attempts are history: folded, so the current clip is the one in view. */}
+            {earlier.length ? (
+              <details className="lesson-audio__history lesson-audio__earlier">
+                <summary>{tx(C.earlier, { n: earlier.length })}</summary>
+                {earlier.map(clip)}
+              </details>
+            ) : null}
           </li>
-        ))}
+          )
+        })}
       </ol>
     </section>
   )
@@ -310,17 +336,17 @@ function Clip(props: {
   heard: string | undefined
   mismatch: boolean
   playing: boolean
+  hintId: string
   onListen: () => void
 }) {
-  const { s, c, required, canReview, heard, mismatch, playing, onListen } = props
+  const { s, c, required, canReview, heard, mismatch, playing, hintId, onListen } = props
   const tx = useCopy()
-  const { dateTime } = useI18n()
+  const { dateTime, locale } = useI18n()
   const qc = useQueryClient()
   const [form, setForm] = useState<'reject' | 'withdraw' | null>(null)
   // Nothing preselected: the reviewer names what is wrong (review of #254).
   const [category, setCategory] = useState<RejectCategory | ''>('')
   const [reason, setReason] = useState('')
-  const hintId = useId()
   // The text's hash is taken HERE, from the text on screen, and must be the clip's:
   // an approval says "this text", not just "this clip" (review of #254).
   const shownSha = useShownTextSha(s.text)
@@ -349,9 +375,6 @@ function Clip(props: {
         ) : null}
         <span className="lesson-audio__fact">{tx(C.attempt, { n: c.attempt })}</span>
         <span className="lesson-audio__fact">{tx(C.approvals, { n: c.approvals.length, of: required })}</span>
-        <span className="lesson-audio__voice ltr">
-          {c.vendor} · {c.voice}
-        </span>
         <span className="lesson-audio__decide">
           {canReview && c.canReview ? (
             <>
@@ -370,11 +393,6 @@ function Clip(props: {
           ) : null}
         </span>
       </div>
-      {canReview && !heard && (c.canReview || c.state === 'approved') ? (
-        <p id={hintId} className="lesson-audio__hint">
-          {tx(C.approveHint)}
-        </p>
-      ) : null}
       {mismatch ? <p className="lesson-audio__alert" role="alert">{tx(C.mismatch)}</p> : null}
       {shownSha !== null && !textMatches ? <p className="lesson-audio__alert" role="alert">{tx(C.textMismatch)}</p> : null}
       {form ? (
@@ -411,14 +429,17 @@ function Clip(props: {
         <details className="lesson-audio__history">
           <summary>{tx(C.history)}</summary>
           <ul>
+            <li>
+              <bdi className="ltr">{c.vendor}, {c.voice}</bdi>
+            </li>
             {c.approvals.map((a, i) => (
               <li key={`a${i}`}>
-                {tx(C.approvedBy, { by: a.by })} · {dateTime(a.at)}
+                {tx(C.approvedBy, { by: a.by })}{locale === 'ar' ? '، ' : ', '}<bdi>{dateTime(a.at)}</bdi>
               </li>
             ))}
             {c.rejections.map((r, i) => (
               <li key={`r${i}`}>
-                {tx(C.by, { action: tx(r.action === 'withdraw' ? C.withdraw : C.reject), by: r.by, reason: `${r.category ? tx(CATEGORY[r.category as RejectCategory] ?? { en: r.category, ar: r.category }) : ''} ${r.reason ?? ''}`.trim() })} · {dateTime(r.at)}
+                {tx(C.by, { action: tx(r.action === 'withdraw' ? C.withdraw : C.reject), by: r.by, reason: `${r.category ? tx(CATEGORY[r.category as RejectCategory] ?? { en: r.category, ar: r.category }) : ''} ${r.reason ?? ''}`.trim() })}{locale === 'ar' ? '، ' : ', '}<bdi>{dateTime(r.at)}</bdi>
               </li>
             ))}
             <li>
