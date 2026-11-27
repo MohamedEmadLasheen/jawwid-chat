@@ -10,9 +10,10 @@ export { useCopy, type Pair } from '@/features/organization/copy'
  */
 export const I = {
   title: { en: 'Instalment payments', ar: 'الأقساط' },
+  // The one line that prevents a mistake: the payment is not recorded here.
   subtitle: {
-    en: 'Overdue first, then due today, then upcoming. A payment is recorded on the Parent Profile.',
-    ar: 'المتأخر أولًا، ثم المستحق اليوم، ثم القادم. تُسجَّل الدفعة في ملف ولي الأمر.',
+    en: 'A payment is recorded on the payer’s Parent Profile: open their file from the row.',
+    ar: 'تُسجَّل الدفعة في ملف ولي الأمر الدافع: افتح ملفه من الصف.',
   },
   all: { en: 'All', ar: 'الكل' },
   mine: { en: 'Mine', ar: 'مسؤوليتي' },
@@ -32,6 +33,8 @@ export const I = {
   },
   planLabel: { en: 'Instalment {i} of {n}', ar: 'القسط {i} من {n}' },
   planOpenLabel: { en: 'Instalment {i} of the {n} still open', ar: 'القسط {i} من {n} ما زالت مفتوحة' },
+  planOf: { en: '{i} of {n}', ar: '{i} من {n}' },
+  leftOnPlan: { en: '{amount} left', ar: 'المتبقي {amount}' },
   // The strip's key, and the same words in each strip's own label.
   keyPaid: { en: 'paid', ar: 'مدفوع' },
   keyLate: { en: 'late', ar: 'متأخر' },

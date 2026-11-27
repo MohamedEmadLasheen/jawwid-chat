@@ -81,7 +81,9 @@ export const S = {
   openStudentNamed: { en: 'Open the Student Profile of {name}', ar: 'فتح ملف الطالب {name}' },
   renewalsDenied: { en: 'You do not have access to renewal requests.', ar: 'لا تملك صلاحية عرض طلبات التجديد.' },
   renewed: { en: 'Renewed', ar: 'تم التجديد' },
-  waiting: { en: 'Waiting', ar: 'بانتظار' },
+  askedBy: { en: '{name} asked to renew', ar: 'طلب {name} التجديد' },
+  askedWhen: { en: 'Asked {when}', ar: 'طُلب {when}' },
+  waiting: { en: 'Waiting for a renewal link', ar: 'بانتظار رابط التجديد' },
   // The chat banner (staff view)
   lockedBanner: {
     // PD-30 amendment, D-3 wording (owner, 2026-11-06).

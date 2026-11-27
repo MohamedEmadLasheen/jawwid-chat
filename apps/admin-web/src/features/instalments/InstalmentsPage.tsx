@@ -9,7 +9,7 @@ import { PageHeader, type MastFigure } from '@/shared/components/PageHeader'
 import { RowActions } from '@/shared/components/RowActions'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
 import type { Instalment, InstalmentStatus, Responsible } from './api'
-import { GROUP_LABEL, I, OPEN_ONES, countWords, describeError, formatDay, inDaysWords, lateWords, useCopy } from './copy'
+import { GROUP_LABEL, I, OPEN_ONES, countWords, describeError, formatDay, formatMoney, inDaysWords, lateWords, useCopy } from './copy'
 import { useInstalments } from './hooks'
 import { BillingSupervisorDialog } from './BillingSupervisorDialog'
 import { parentPath } from '@/features/profiles/api'
@@ -289,20 +289,31 @@ function PlanStrip({ row, plan, view }: { row: Instalment; plan: Instalment[]; v
   // "Instalment 2 of 4: 1 paid, 1 late, 2 to come". Without the paid instalments the list
   // holds only what is still open: it says so, never "2 of 4".
   const label = `${tx(view === 'whole' ? I.planLabel : I.planOpenLabel, { i: at, n: plan.length })}: ${said}`
+  // What is still owed on the plan, from the rows this list holds (never a total it cannot see).
+  const left = view === 'part' || plan.length < 2 ? [] : sumByCurrency(plan.filter((r) => r.status !== 'paid'))
   return (
-    <span className="plan" role="img" aria-label={label} title={label}>
-      <span className="plan__ticks">
-        {plan.map((r) => (
-          <span key={r.id} className={`plan__tick plan__tick--${r.status}${r.id === row.id ? ' plan__tick--here' : ''}`} />
-        ))}
-      </span>
-      {view === 'whole' ? (
-        <span className="plan__at" dir="ltr">
-          {at}/{plan.length}
+    <span className="plan">
+      <span className="plan__line" role="img" aria-label={label} title={label}>
+        <span className="plan__ticks">
+          {plan.map((r) => (
+            <span key={r.id} className={`plan__tick plan__tick--${r.status}${r.id === row.id ? ' plan__tick--here' : ''}`} />
+          ))}
         </span>
-      ) : view === 'open' ? (
-        <span className="plan__at">{countWords(plan.length, OPEN_ONES, locale)}</span>
-      ) : null}
+        {view === 'whole' ? (
+          <span className="plan__at">{tx(I.planOf, { i: at, n: plan.length })}</span>
+        ) : view === 'open' ? (
+          <span className="plan__at">{countWords(plan.length, OPEN_ONES, locale)}</span>
+        ) : null}
+      </span>
+      {left.length > 0 && (
+        <span className="plan__left">
+          {left.map((s) => (
+            <span key={s.currency} className="plan__left-sum">
+              {tx(I.leftOnPlan, { amount: formatMoney(s.amountMinor, s.currency, locale) })}
+            </span>
+          ))}
+        </span>
+      )}
     </span>
   )
 }
@@ -344,7 +355,7 @@ function Row({ row, plan, view, canAssign, onAssign }: { row: Instalment; plan: 
             <bdi>{forWhom}</bdi>
             {row.label && (
               <>
-                <span aria-hidden="true"> · </span>
+                {locale === 'ar' ? '، ' : ', '}
                 <bdi>{row.label}</bdi>
               </>
             )}

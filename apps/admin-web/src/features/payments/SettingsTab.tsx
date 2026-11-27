@@ -155,7 +155,7 @@ function SettingsForm({ settings }: { settings: BillingSettings }) {
             {hint && <p className="set__hint">{tx(hint)}</p>}
           </div>
           {edited[group] && (
-            <Badge tone="gold" dot>
+            <Badge tone="waiting" dot>
               {tx(PAY.edited)}
             </Badge>
           )}
@@ -170,7 +170,7 @@ function SettingsForm({ settings }: { settings: BillingSettings }) {
                 {settings.cardPaused ? (
                   <CardPausedNote />
                 ) : (
-                  <Badge tone={settings.cardAvailable ? 'ok' : 'outline'} dot>
+                  <Badge tone={settings.cardAvailable ? 'ok' : 'neutral'} dot>
                     {tx(settings.cardAvailable ? PAY.cardOn : PAY.cardOff)}
                   </Badge>
                 )}

@@ -54,7 +54,7 @@ import {
   paymentCreditsLessons,
   useCopy,
 } from './copy'
-import { Money, sumByCurrency } from './Money'
+import { FailedTag, Money, sumByCurrency } from './Money'
 import {
   useCardAttempts,
   useDownloadInvoice,
@@ -85,14 +85,19 @@ const ATTEMPT_FILTERS: readonly AttemptFilter[] = ['failed', 'open', 'expired', 
 /** The server caps the search at 100 characters. */
 const MAX_SEARCH = 100
 
-const STATUS_TONE: Record<TransactionStatus, Tone> = { standing: 'ok', partially_refunded: 'warn', refunded: 'outline', voided: 'outline' }
-const ATTEMPT_TONE: Record<AttemptStatus, Tone> = { open: 'info', complete: 'ok', expired: 'outline', failed: 'danger' }
+/*
+ * Three state colours only. Done is green; waiting (open, to look at again) is
+ * amber; what a person must act on now is the solid urgent tag; what failed and
+ * asks nothing more is the red dot (FailedTag), so "failed" never reads as "urgent".
+ */
+const STATUS_TONE: Record<TransactionStatus, Tone> = { standing: 'ok', partially_refunded: 'info', refunded: 'neutral', voided: 'neutral' }
+const ATTEMPT_TONE: Record<Exclude<AttemptStatus, 'failed'>, Tone> = { open: 'waiting', complete: 'ok', expired: 'neutral' }
+/** Outcomes that went wrong and are over: Stripe said no, nothing is left to do here. */
+const FAILED_OUTCOMES: ReadonlySet<string> = new Set(['payment_failed', 'checkout_failed'])
 const OUTCOME_TONE: Record<string, Tone> = {
   recorded: 'ok',
   refund_recorded: 'ok',
   mismatch: 'danger',
-  payment_failed: 'warn',
-  checkout_failed: 'warn',
   refund_deferred: 'warn',
   unknown_session: 'warn',
   refund_failed_after_record: 'danger',
@@ -175,7 +180,7 @@ export function TransactionStatusBadge({ status }: { status: TransactionStatus }
 function OverpaidBadge({ overpaid }: { overpaid: Overpaid }) {
   const tx = useCopy()
   return (
-    <Badge tone={overpaid.settled ? 'outline' : 'danger'}>
+    <Badge tone={overpaid.settled ? 'neutral' : 'danger'}>
       {tx(overpaid.settled ? LED.overpaidSettled : LED.overpaid)}
     </Badge>
   )
@@ -183,8 +188,9 @@ function OverpaidBadge({ overpaid }: { overpaid: Overpaid }) {
 
 function AttemptStatusBadge({ status }: { status: AttemptStatus }) {
   const tx = useCopy()
+  if (status === 'failed') return <FailedTag>{tx(ATTEMPT_STATUS.failed)}</FailedTag>
   return (
-    <Badge tone={ATTEMPT_TONE[status] ?? 'outline'} dot>
+    <Badge tone={ATTEMPT_TONE[status] ?? 'neutral'} dot>
       {tx(ATTEMPT_STATUS[status] ?? raw(status))}
     </Badge>
   )
@@ -192,6 +198,7 @@ function AttemptStatusBadge({ status }: { status: AttemptStatus }) {
 
 function OutcomeBadge({ outcome }: { outcome: string }) {
   const tx = useCopy()
+  if (FAILED_OUTCOMES.has(outcome)) return <FailedTag title={outcome}>{tx(EVENT_OUTCOME[outcome] ?? raw(outcome))}</FailedTag>
   return (
     <Badge tone={OUTCOME_TONE[outcome] ?? 'neutral'}>
       <span title={outcome}>{tx(EVENT_OUTCOME[outcome] ?? raw(outcome))}</span>
@@ -460,7 +467,7 @@ function forWhat(request: Transaction['request'], locale: 'ar' | 'en', tx: Retur
   if (!request) return null
   const parts = [tx(PURPOSE_LABEL[request.purpose] ?? raw(request.purpose))]
   if (request.planMonths) parts.push(monthsLabel(request.planMonths, locale))
-  return parts.join(' · ')
+  return parts.join(locale === 'ar' ? '، ' : ', ')
 }
 
 /**
@@ -571,7 +578,7 @@ function TransactionRow({ t, onOpen, onInvoice }: { t: Transaction; onOpen: () =
             <span className="pay-sub">{forWhat(t.request, locale, tx)}</span>
           </>
         ) : (
-          <span className="pay-quiet">—</span>
+          <span className="pay-quiet">{tx(LED.noRequestShort)}</span>
         )}
       </td>
       <td className="tx-c-method">
@@ -585,7 +592,7 @@ function TransactionRow({ t, onOpen, onInvoice }: { t: Transaction; onOpen: () =
           </span>
         )}
       </td>
-      <td className="tx-c-ref">{invoice ? <bdi className="pay-invoice" dir="ltr">{invoice.number}</bdi> : <span className="pay-quiet">—</span>}</td>
+      <td className="tx-c-ref">{invoice ? <bdi className="pay-invoice" dir="ltr">{invoice.number}</bdi> : <span className="pay-quiet">{tx(LED.noInvoice)}</span>}</td>
       <td className="tx-c-amount tx-end">
         <Money amountMinor={t.amountMinor} currency={t.currency} />
         <span className="tx-states">
@@ -688,7 +695,7 @@ function TransactionDetailBody({ d }: { d: TransactionDetail }) {
             {tx(METHOD[p.method] ?? raw(p.method))}
             {card && (
               <>
-                {' · '}
+                {locale === 'ar' ? '، ' : ', '}
                 <bdi dir="ltr">{card}</bdi>
               </>
             )}
@@ -738,10 +745,12 @@ function TransactionDetailBody({ d }: { d: TransactionDetail }) {
           {p.voided && (
             <>
               <dt>{tx(LED.voided)}</dt>
-              <dd dir="auto">
-                {dateTime(p.voided.at)}
-                {p.voided.by ? ` · ${p.voided.by.name}` : ''}
-                {p.voided.reason ? ` · ${p.voided.reason}` : ''}
+              <dd>
+                <span className="pay-why">
+                  <span>{dateTime(p.voided.at)}</span>
+                  {p.voided.by && <bdi>{tx(LED.voidedBy, { name: p.voided.by.name })}</bdi>}
+                  {p.voided.reason && <bdi className="pay-sub">{p.voided.reason}</bdi>}
+                </span>
               </dd>
             </>
           )}
@@ -1072,8 +1081,7 @@ function AttemptRow({ a, onOpenPayment }: { a: CardAttemptRow; onOpenPayment: (p
             )}
             <span className="entity__sub">
               <bdi>{a.request.label}</bdi>
-              <span aria-hidden="true"> · </span>
-              <span>{tx(PURPOSE_LABEL[a.request.purpose] ?? raw(a.request.purpose))}</span>
+              <span className="pay-purpose">{tx(PURPOSE_LABEL[a.request.purpose] ?? raw(a.request.purpose))}</span>
             </span>
           </div>
         </div>
@@ -1090,7 +1098,7 @@ function AttemptRow({ a, onOpenPayment }: { a: CardAttemptRow; onOpenPayment: (p
       <td className="tx-c-state">
         <AttemptStatusBadge status={a.status} />
         <span className="pay-sub tx-paid">
-          {tx(LED.colPaid)} <Badge tone={paymentId ? 'ok' : 'outline'}>{tx(paymentId ? LED.yes : LED.no)}</Badge>
+          {tx(LED.colPaid)} <Badge tone={paymentId ? 'ok' : 'neutral'}>{tx(paymentId ? LED.yes : LED.no)}</Badge>
         </span>
       </td>
       <td className="tx-c-amount tx-end">

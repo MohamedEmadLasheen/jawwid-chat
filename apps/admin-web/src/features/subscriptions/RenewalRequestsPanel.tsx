@@ -69,7 +69,7 @@ function Group({ title, rows, waiting = false }: { title: string; rows: RenewalR
   const { locale, dateTime, number } = useI18n()
   if (rows.length === 0) return null
   return (
-    <div className="rn-group">
+    <div className={waiting ? 'rn-group rn-group--waiting' : 'rn-group'}>
       <h3 className="rn-group__head">
         <span>{title}</span>
         <span className={waiting ? 'count' : 'count count--quiet'}>{number(rows.length)}</span>
@@ -83,13 +83,13 @@ function Group({ title, rows, waiting = false }: { title: string; rows: RenewalR
                 <span className="entity__name">
                   <bdi>{r.child.name}</bdi>
                 </span>
-                <span className="entity__sub">
-                  <bdi>{r.parentName}</bdi>
-                </span>
+                {/* The row's reason, as a sentence: who asked. */}
+                <span className="entity__sub">{tx(S.askedBy, { name: `\u2068${r.parentName}\u2069` })}</span>
               </div>
             </div>
+            {/* The group names the state; the row says how long ago the parent asked. */}
             <time className="rn-row__when" dateTime={r.requestedAt} title={dateTime(r.requestedAt)}>
-              {relativeTime(r.requestedAt, locale)}
+              {tx(S.askedWhen, { when: relativeTime(r.requestedAt, locale) })}
             </time>
             <RowActions
               primary={

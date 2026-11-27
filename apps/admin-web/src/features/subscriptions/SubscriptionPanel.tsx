@@ -58,10 +58,12 @@ export function SubscriptionPanel({ learnerId }: { learnerId: string }) {
           {data.subscriptions.map((r) => (
             <li key={r.id} className={r.voided ? 'sub-ledger__row sub-ledger__row--voided' : 'sub-ledger__row'}>
               <strong>{packageLabel(r.planMonths, r.lessonsIncluded, locale)}</strong>
-              <span className="tf-muted">
-                {' · '}
-                {tx(S.startsOn)} {formatDay(r.startsOn, locale)} · {tx(SOURCE_LABEL[r.source])}
-                {r.createdBy ? ` · ${tx(S.by, { name: r.createdBy.name })}` : ''}
+              <span className="tf-muted sub-meta">
+                <span>
+                  {tx(S.startsOn)} {formatDay(r.startsOn, locale)}
+                </span>
+                <span>{tx(SOURCE_LABEL[r.source])}</span>
+                {r.createdBy && <bdi>{tx(S.by, { name: r.createdBy.name })}</bdi>}
               </span>
               {r.note && (
                 <span className="field__hint" dir="auto">
@@ -69,7 +71,7 @@ export function SubscriptionPanel({ learnerId }: { learnerId: string }) {
                 </span>
               )}
               {r.voided ? (
-                <Badge tone="outline">
+                <Badge tone="neutral">
                   {tx(S.voided)}
                   {r.voided.reason ? ` — ${r.voided.reason}` : ''}
                 </Badge>
@@ -98,12 +100,13 @@ export function SubscriptionPanel({ learnerId }: { learnerId: string }) {
         <ul className="sub-ledger">
           {data.exceptions.map((e) => (
             <li key={e.id} className="sub-ledger__row">
-              <Badge tone={e.active ? 'gold' : 'outline'}>{tx(e.revoked ? S.revoked : e.active ? S.active : S.ended)}</Badge>
+              <Badge tone={e.active ? 'info' : 'neutral'}>{tx(e.revoked ? S.revoked : e.active ? S.active : S.ended)}</Badge>
               <strong>{tx(KIND_LABEL[e.kind])}</strong>
-              <span className="tf-muted">
-                {' · '}
-                {tx(S.validUntil)} {formatDay(e.validUntil, locale)}
-                {e.grantedBy ? ` · ${tx(S.by, { name: e.grantedBy.name })}` : ''}
+              <span className="tf-muted sub-meta">
+                <span>
+                  {tx(S.validUntil)} {formatDay(e.validUntil, locale)}
+                </span>
+                {e.grantedBy && <bdi>{tx(S.by, { name: e.grantedBy.name })}</bdi>}
               </span>
               <span className="field__hint" dir="auto">
                 {e.reason}
@@ -158,10 +161,9 @@ function StandingSummary({ s }: { s: Standing }) {
         <Badge tone={STATE_TONE[s.state]} dot>
           {tx(STATE_LABEL[s.state])}
         </Badge>
-        {s.state === 'grace' && s.graceLeft !== null && <span className="tf-muted"> · {tx(S.graceLeft, { n: s.graceLeft })}</span>}
+        {s.state === 'grace' && s.graceLeft !== null && <span className="tf-muted sub-after">{tx(S.graceLeft, { n: s.graceLeft })}</span>}
         {s.lockReasons.length > 0 && (
-          <span className="tf-muted">
-            {' · '}
+          <span className="tf-muted sub-after">
             {s.lockReasons.map((r) => tx(REASON_LABEL[r])).join(locale === 'ar' ? '، ' : ', ')}
             {s.overdue ? ` (${s.overdue.label}, ${formatDay(s.overdue.dueDate, locale)})` : ''}
           </span>

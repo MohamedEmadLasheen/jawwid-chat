@@ -6,11 +6,13 @@ import { FilterChips } from '@/shared/components/FilterChips'
 import { Icon } from '@/shared/components/Icon'
 import { DetailActions, RequestQueue, useWidePane } from '@/shared/components/RequestQueue'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
+import { relativeTime } from '@/features/admin/copy'
 import type { Receipt, ReceiptStatus } from './api'
 import { PAY, describeError, type Pair, formatDay, formatMoney, toMinor, useCopy } from './copy'
 import { useApproveReceipt, useReceipts, useRejectReceipt } from './hooks'
 import { Money } from './Money'
 import { Field, Footer, ReasonDialog, ReceiptStatusBadge, ServerError } from './PaymentParts'
+
 
 const STATUSES: readonly ReceiptStatus[] = ['pending', 'approved', 'rejected']
 const FILTER_LABEL: Record<ReceiptStatus, Pair> = {
@@ -174,11 +176,16 @@ export function ReceiptsDesk({ onSeeTransactions }: { onSeeTransactions: () => v
   )
 }
 
-/** A receipt in the queue: whose it is and what for, when it came, where it stands, the amount at the row's end. */
+/**
+ * A receipt in the queue: whose it is and what it pays for, whether the parent
+ * wrote a note; at the row's end the amount, the heaviest thing on it, and how
+ * long ago it came. The list is already one status, so the row does not repeat it.
+ */
 function QueueRow({ receipt: r, current, onOpen }: { receipt: Receipt; current: boolean; onOpen: () => void }) {
-  const { dateTime } = useI18n()
+  const tx = useCopy()
+  const { locale, dateTime } = useI18n()
   return (
-    <li className="rv-rows__item" aria-label={r.family ? `${r.family.name} · ${r.label}` : r.label}>
+    <li className="rv-rows__item" aria-label={r.family ? `${r.family.name}${locale === 'ar' ? '، ' : ', '}${r.label}` : r.label}>
       <button type="button" className="rv-row" aria-current={current ? 'true' : undefined} onClick={onOpen}>
         <Avatar name={r.family?.name ?? r.label} seed={r.family?.id ?? r.id} size="sm" />
         <span className="rv-row__who">
@@ -189,16 +196,19 @@ function QueueRow({ receipt: r, current, onOpen }: { receipt: Receipt; current: 
           )}
           <span className={r.family ? 'rv-row__for' : 'rv-row__name'}>
             <bdi>{r.label}</bdi>
+            {r.note && (
+              <span className="rv-row__note">
+                <Icon name="chatText" size={14} />
+                {tx(PAY.hasNote)}
+              </span>
+            )}
           </span>
         </span>
-        <time className="rv-row__when" dateTime={r.uploadedAt}>
-          {dateTime(r.uploadedAt)}
-        </time>
-        <span className="rv-row__state">
-          <ReceiptStatusBadge status={r.status} />
-        </span>
-        <span className="rv-row__amount">
+        <span className="rv-row__end">
           <Money amountMinor={r.amountMinor} currency={r.currency} />
+          <time className="rv-row__when" dateTime={r.uploadedAt} title={dateTime(r.uploadedAt)}>
+            {relativeTime(r.uploadedAt, locale)}
+          </time>
         </span>
       </button>
     </li>

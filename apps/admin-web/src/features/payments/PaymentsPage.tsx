@@ -88,7 +88,6 @@ export function PaymentsPage({ eyebrow }: { eyebrow?: string }) {
         <PageHeader
           eyebrow={eyebrow}
           title={tx(PAY.title)}
-          subtitle={tx(PAY.subtitle)}
           status={
             cardPaused ? (
               // A compact state beside the title; the whole sentence is said once, just below, and on Settings.
