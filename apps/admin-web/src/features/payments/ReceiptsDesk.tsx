@@ -271,7 +271,7 @@ function ReceiptInspector({ receipt: r, onApprove, onReject }: { receipt: Receip
             {r.uploadedBy && (
               <>
                 {' '}
-                <bdi>{tx(PAY.uploadedBy, { name: r.uploadedBy.name })}</bdi>
+                <bdi className="rv__by">{tx(PAY.uploadedBy, { name: r.uploadedBy.name })}</bdi>
               </>
             )}
           </dd>
@@ -355,6 +355,13 @@ function ApproveDialog({ receipt, onClose, onDone }: { receipt: Receipt; onClose
       footer={<Footer onCancel={onClose} onSave={submit} pending={approve.isPending} saveLabel={tx(PAY.approve)} />}
     >
       <ServerError error={approve.error} />
+      {/* What is being approved, first: whose money and how much they say they sent. */}
+      <div className="rv-approve">
+        <span className="rv-approve__who">
+          <bdi>{receipt.family?.name ?? receipt.label}</bdi>
+        </span>
+        <Money amountMinor={receipt.amountMinor} currency={receipt.currency} size="lg" />
+      </div>
       <p className="field__hint">{tx(PAY.approveHint)}</p>
       <Field
         label={tx(PAY.correctedAmount)}

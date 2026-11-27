@@ -20,7 +20,8 @@ export const I = {
   noSupervisor: { en: 'No billing supervisor', ar: 'بلا مشرف تحصيل' },
   showPaid: { en: 'Show paid', ar: 'إظهار المدفوع' },
   // PD-30: overdue before the payment lock started -- these never lock a group.
-  beforeGoLive: { en: 'Overdue before go-live', ar: 'متأخر قبل التفعيل' },
+  // The box narrows the list to these (the server's `beforeGoLive=true`); it says so.
+  beforeGoLive: { en: 'Overdue before go-live only', ar: 'المتأخر قبل التفعيل فقط' },
   beforeGoLiveHint: {
     en: 'Due before {date}: these never lock a group. Follow them up by hand.',
     ar: 'مستحق قبل {date}: لا يوقف المجموعة. تابِعه يدويًا.',

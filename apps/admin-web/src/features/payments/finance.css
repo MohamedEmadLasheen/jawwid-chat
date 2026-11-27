@@ -8,6 +8,9 @@
 .money__c { min-inline-size: 2.6em; font-size: var(--fs-xs); font-weight: 500; color: var(--ink-muted); text-align: start; }
 .money--lg .money__c { min-inline-size: 0; }
 .money--sm .money__n { font-size: 15px; font-weight: 600; }
+/* Digits line up on the decimal point in both languages: the numeral has a box of its own, its
+   digits set to the box's right edge (numbers run left to right in Arabic too). */
+.money:not(.money--lg) .money__n { display: inline-block; min-inline-size: 9.5ch; text-align: right; }
 .money--lg { gap: 8px; }
 .money--lg .money__n { font-size: var(--fs-kpi); font-weight: 700; line-height: 1.15; }
 .money--lg .money__c { font-size: var(--fs-sm); }

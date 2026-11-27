@@ -154,11 +154,6 @@ function SettingsForm({ settings }: { settings: BillingSettings }) {
             </h2>
             {hint && <p className="set__hint">{tx(hint)}</p>}
           </div>
-          {edited[group] && (
-            <Badge tone="waiting" dot>
-              {tx(PAY.edited)}
-            </Badge>
-          )}
         </div>
 
         <div className="sheet__body set__body">

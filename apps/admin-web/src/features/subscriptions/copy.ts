@@ -71,8 +71,8 @@ export const S = {
   // Renewal requests (Payments)
   renewalsTitle: { en: 'Renewal requests', ar: 'طلبات التجديد' },
   renewalsHint: {
-    en: 'Parents of locked children with nothing to pay yet asked to renew (last 30 days). Send the renewal link from the Parent Profile.',
-    ar: 'أولياء أمور أطفال موقوفين بلا مبلغ مستحق طلبوا التجديد (آخر 30 يومًا). أرسل رابط التجديد من ملف ولي الأمر.',
+    en: 'Parents of locked children with nothing to pay yet asked to renew (last 30 days). From the student, open the family’s Parent Profile and send the renewal link there.',
+    ar: 'أولياء أمور أطفال موقوفين بلا مبلغ مستحق طلبوا التجديد (آخر 30 يومًا). من ملف الطالب افتح ملف ولي الأمر وأرسل منه رابط التجديد.',
   },
   noRenewals: { en: 'A renewal request appears here when a parent asks to renew.', ar: 'يظهر طلب التجديد هنا عندما يطلب ولي الأمر التجديد.' },
   noRenewalsHint: { en: 'It stays for 30 days, with the child it is for. None is open now.', ar: 'يبقى 30 يومًا مع اسم الطفل المعني. لا طلب مفتوح الآن.' },

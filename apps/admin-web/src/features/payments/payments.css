@@ -157,6 +157,7 @@
 .rv__facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--space-2) var(--space-5); margin-block-start: calc(-1 * var(--space-2)); }
 .rv__facts .rq-field { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; padding: 0; border: 0; }
 .rv__facts .rq-field dt { font-size: var(--fs-xs); }
+.rv__by { white-space: nowrap; }
 /* What the parent wrote, set off as their words. */
 .rv__said { display: grid; gap: 4px; margin: 0; }
 .rv__said-who { font-size: var(--fs-xs); color: var(--ink-muted); }
@@ -164,6 +165,11 @@
 .rv__file { display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; color: var(--teal); font-size: var(--fs-sm); font-weight: 500; text-decoration: none; }
 .rv__file:hover { text-decoration: underline; }
 .rv > .rq-actions { margin-block-start: auto; }
+
+/* The approve dialog opens on what is approved: the family, then the amount, large. */
+.rv-approve { display: grid; gap: 2px; margin-block-end: var(--space-3); padding-block-end: var(--space-3); border-block-end: 1px solid var(--line-2); }
+.rv-approve__who { font-family: var(--font-head); font-size: var(--fs-md); font-weight: 600; color: var(--ink-2); }
+.rv-approve .money--lg .money__n { font-size: 30px; }
 
 /* ------------------------------------------------------- the ledger sheets */
 
@@ -224,7 +230,7 @@
 .tx-c-why { max-inline-size: 26rem; }
 .tx-declines { display: flex; flex-wrap: wrap; gap: 0 var(--space-3); margin-block-start: 2px; }
 .tx-paid { display: block; margin-block-start: 4px; }
-.tx-paid strong { font-weight: 600; color: var(--ink-2); }
+.tx-paid strong { font-weight: 500; color: var(--ink-muted); }
 .tx-paid .tx-paid__yes { color: var(--done); }
 .tx-c-time { white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--ink-muted); }
 /* Live is the rule and stays quiet; test mode, the exception, is the tag. */
@@ -381,6 +387,10 @@ fieldset:disabled .set-reminder label { cursor: default; }
 }
 
 @media (max-width: 767px) {
+  /* The top bar already names the page: the work starts higher. */
+  .pay-page .page-header__title:not(:has(.badge)) { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .pay-page .mast__row:has(.page-header__title) { min-block-size: 0; }
+  .pay-page .figures { margin-block-start: 0; }
   .pay-rules { display: grid; gap: 6px; }
   .pay-rules__list { display: grid; gap: 4px; }
 

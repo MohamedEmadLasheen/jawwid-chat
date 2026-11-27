@@ -16,9 +16,9 @@
 /* The group's sum stands in the amount column: clear of the action column (its width, then the gap). */
 .in-group { --in-act: 136px; }
 .in-group__sum { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 2px var(--space-4); padding-inline-end: calc(var(--in-act) + var(--space-4)); }
-.in-group__sum .money__n { color: var(--ink-2); }
+.in-group__sum .money__n { font-size: 17px; color: var(--ink-2); }
 .in-group--overdue .in-group__title { font-size: var(--fs-xl); font-weight: 700; }
-.in-group--overdue .in-group__sum .money__n { font-size: 19px; font-weight: 700; color: var(--ink); }
+.in-group--overdue .in-group__sum .money__n { font-weight: 700; color: var(--ink); }
 .in-group--paid .money__n { color: var(--ink-muted); font-weight: 500; }
 .in-group__more {
   display: block;
@@ -100,7 +100,6 @@
   .in-check { min-block-size: 44px; }
   /* What is left on the plan waits in the file; the row keeps to three lines. */
   .plan__left { display: none; }
-  .in-row__sup .in-sub { display: none; }
   .in-row {
     grid-template-columns: minmax(0, 1fr) auto;
     grid-template-areas: 'who amount' 'when plan' 'sup act';
