@@ -12,7 +12,7 @@ import { WEEKDAY } from '@/features/trials/copy'
 import { parentPath, profileKeys, studentPath, type StudentProfile } from './api'
 import { P, describeError, isProfileRefusal, useCopy } from './copy'
 import { useStudent } from './hooks'
-import { AttentionRow, Calm, Fact, Sheet } from './RecordParts'
+import { AttentionRow, Calm, Fact, Sheet, longDay } from './RecordParts'
 import { RecordHead, fill, useWalk, type Callout, type Highlight } from './RecordHead'
 import { RecordPanel, RecordTabs, useRecordTab, type RecordTab } from './RecordTabs'
 import { dayMonthIn, familyTime, weekdayIn, zoneLabel } from '@/core/time/academyTime'
@@ -125,7 +125,8 @@ function StudentFile({ s }: { s: StudentProfile }) {
         lead={<Avatar name={s.name} seed={s.id} src={s.avatarUrl} size="lg" />}
         name={s.name}
         status={
-          standing && (
+          // With nothing bought and nothing holding it back there is no subscription to describe.
+          standing && (standing.state !== 'open' || standing.lessonsIncluded !== null) && (
             <Badge tone={ACCESS_TONE[standing.state]} dot={standing.state === 'open'}>
               {standing.state === 'open' ? tx(P.subscriptionOpen) : tx(STATE_LABEL[standing.state])}
             </Badge>
@@ -246,9 +247,9 @@ function useStudentHighlights(s: StudentProfile, standing: Standing | undefined,
     }
     if (standing.lessonsIncluded !== null) out.push({ key: 'bought', icon: 'stack', label: tx(S.included), value: number(standing.lessonsIncluded), to: '#subscription' })
   }
-  out.push({ key: 'teacher', icon: 'teachers', label: tx(P.teacher), value: s.teacher ? <bdi>{s.teacher.name}</bdi> : none(tx(P.notSet)) })
-  out.push({ key: 'course', icon: 'book', label: tx(P.course), value: s.course ? <bdi>{s.course.name}</bdi> : none(tx(P.notSet)) })
-  out.push({ key: 'age', icon: 'user', label: tx(P.age), value: s.age === null ? none(tx(P.notSet)) : tx(P.years, { n: s.age }) })
+  // The teacher is named in the head's sentence; course and age are who the child is.
+  out.push({ key: 'course', icon: 'book', label: tx(P.course), value: s.course ? <bdi>{s.course.name}</bdi> : none(tx(P.notSet)), text: true })
+  out.push({ key: 'age', icon: 'user', label: tx(P.age), value: s.age === null ? none(tx(P.notSet)) : tx(P.years, { n: s.age }), text: true })
   return out
 }
 
@@ -295,6 +296,8 @@ function StudentAttention({ s, standing }: { s: StudentProfile; standing: Standi
   const { locale } = useI18n()
   const held = standing && standing.state !== 'open' ? standing : null
   const count = (held ? 1 : 0) + (s.teacher ? 0 : 1) + (s.schedule.length === 0 ? 1 : 0)
+  // One thing waiting is the head's callout; the list is for when there is more than one.
+  if (count === 1) return null
   return (
     <Sheet id="st-attention" section="attention" title={tx(P.attention)} count={count > 0 ? count : undefined}>
       {count === 0 ? (
@@ -351,6 +354,8 @@ function StudentFacts({ s }: { s: StudentProfile }) {
   const tx = useCopy()
   const { locale } = useI18n()
   const notSet = <span className="rec-missing">{tx(P.notSet)}</span>
+  // Age, course and teacher are the head's highlights; the margin keeps what they do not say.
+  if (s.birthDate === undefined) return null
   return (
     <section className="aside-group rec-group" aria-labelledby="st-info" data-section="student">
       <div className="rec-group__head">
@@ -359,19 +364,8 @@ function StudentFacts({ s }: { s: StudentProfile }) {
         </h2>
       </div>
       <dl className="rec-facts">
-        <Fact icon="user" label={tx(P.age)}>
-          {s.age === null ? notSet : tx(P.years, { n: s.age })}
-        </Fact>
-        {s.birthDate !== undefined && (
-          <Fact icon="calendar" label={tx(P.birthDate)}>
-            {s.birthDate ? formatDay(s.birthDate, locale) : notSet}
-          </Fact>
-        )}
-        <Fact icon="book" label={tx(P.course)}>
-          {s.course ? <bdi>{s.course.name}</bdi> : notSet}
-        </Fact>
-        <Fact icon="teachers" label={tx(P.teacher)}>
-          {s.teacher ? <bdi>{s.teacher.name}</bdi> : notSet}
+        <Fact icon="calendar" label={tx(P.birthDate)}>
+          {s.birthDate ? longDay(s.birthDate, locale) : notSet}
         </Fact>
       </dl>
     </section>

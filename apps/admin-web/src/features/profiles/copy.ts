@@ -259,6 +259,8 @@ export const P = {
   requestPayment: { en: 'Request payment', ar: 'طلب دفعة' },
   inactiveWord: { en: 'Inactive', ar: 'غير نشط' },
   studentsTitle: { en: 'Students', ar: 'الطلاب' },
+  listCount: { en: '{n} shown', ar: 'المعروض {n}' },
+  noContact: { en: 'No phone, e-mail or country recorded yet.', ar: 'لم يُسجَّل هاتف أو بريد أو دولة بعد.' },
   lineStudent: { en: 'Student', ar: 'طالب' },
   lineStudentIn: { en: 'Student in {family}', ar: 'طالب في {family}' },
   lineTaughtBy: { en: 'taught by {name}', ar: 'ومعلمه {name}' },

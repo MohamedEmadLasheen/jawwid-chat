@@ -239,7 +239,11 @@ function ParentFile({ profile, back }: { profile: ParentProfile; back: { to: str
         name={profile.name}
         status={
           <>
-            {access && <Badge tone={ACCESS_TONE[access]}>{tx(access === 'locked' ? P.accessLocked : P.accessGrace)}</Badge>}
+            {access ? (
+              <Badge tone={ACCESS_TONE[access]}>{tx(access === 'locked' ? P.accessLocked : P.accessGrace)}</Badge>
+            ) : (
+              profile.isActive && <Badge tone="ok">{tx(P.subscriptionOpen)}</Badge>
+            )}
             {!profile.isActive && <Badge tone="outline">{tx(P.inactive)}</Badge>}
           </>
         }
@@ -377,8 +381,8 @@ function useParentHighlights(
       const anyLate = billing.totals.some((t) => t.overdueMinor > 0)
       const m = moneyParts(main.outstandingMinor, main.currency, locale)
       const notes = [
-        main.overdueMinor > 0 ? tx(P.overdueOf, { amount: formatMoney(main.overdueMinor, main.currency, locale) }) : '',
-        ...others.map((t) => formatMoney(t.outstandingMinor, t.currency, locale)),
+        main.overdueMinor > 0 ? tx(P.overdueOf, { amount: amountText(main.overdueMinor, main.currency, locale) }) : '',
+        ...others.map((t) => amountText(t.outstandingMinor, t.currency, locale)),
       ].filter(Boolean)
       out.push({
         key: 'outstanding',
@@ -463,7 +467,7 @@ function parentCallout({
   if (billing && late.length > 0) {
     const oldest = late[0]!
     const owed = billing.totals.find((t) => t.overdueMinor > 0 && t.currency === oldest.currency) ?? billing.totals.find((t) => t.overdueMinor > 0)
-    const amount = <bdi>{formatMoney(owed?.overdueMinor ?? oldest.remainingMinor, owed?.currency ?? oldest.currency, locale)}</bdi>
+    const amount = <bdi>{amountText(owed?.overdueMinor ?? oldest.remainingMinor, owed?.currency ?? oldest.currency, locale)}</bdi>
     const what = countWords(late.length, INSTALMENTS, locale)
     return {
       tone: 'urgent',
@@ -514,6 +518,12 @@ function parentCallout({
     }
   }
   return null
+}
+
+/** An amount as every line of a record writes it: the figure, then its currency. */
+function amountText(minor: number, currency: string, locale: 'ar' | 'en'): string {
+  const m = moneyParts(minor, currency, locale)
+  return `${m.amount} ${m.unit}`
 }
 
 /** "Due 19 Dec 2026 for Hamza": when, and for whom, as one phrase. */
@@ -822,6 +832,9 @@ function ContactGroup({ profile, onEdit }: { profile: ParentProfile; onEdit: () 
           </button>
         )}
       </div>
+      {!c.phone && !c.email && !c.location && !c.region ? (
+        <p className="rec-fact__quiet rec-contact-none">{tx(P.noContact)}</p>
+      ) : (
       <dl className="rec-facts">
         <Fact icon="phone" label={tx(P.phone)}>
           {c.phone ? <bdi dir="ltr">{c.phone}</bdi> : missing}
@@ -847,6 +860,7 @@ function ContactGroup({ profile, onEdit }: { profile: ParentProfile; onEdit: () 
           </Fact>
         )}
       </dl>
+      )}
       {(setByParent || profile.updatedAt) && (
         <p className="rec-by">
           {setByParent && <span>{tx(P.setByParent, { date: date(setByParent) })}</span>}
@@ -1046,7 +1060,7 @@ function MoneyTab({ billing, onOpen }: { billing: FamilyBilling; onOpen: (d: Dia
                       <span>{tx(PAY.issued, { date: dateTime(inv.issuedAt) })}</span>
                       <span>{tx(METHOD[inv.method])}</span>
                       {inv.child && <span dir="auto">{inv.child.name}</span>}
-                      {inv.refundedMinor > 0 && <span>{tx(PAY.refunded, { amount: formatMoney(inv.refundedMinor, inv.currency, locale) })}</span>}
+                      {inv.refundedMinor > 0 && <span>{tx(PAY.refunded, { amount: amountText(inv.refundedMinor, inv.currency, locale) })}</span>}
                     </>
                   }
                   amount={<Amount minor={inv.amountMinor} currency={inv.currency} locale={locale} />}
@@ -1129,10 +1143,9 @@ function TotalsRows({ totals, locale }: { totals: FamilyBilling['totals'][number
         <tr key={r.key} className={r.late ? 'rec-totals__late' : undefined}>
           <th scope="row">
             {r.label}
-            <span className="rec-totals__cur"> {totals.currency}</span>
           </th>
           <td>
-            <bdi dir="ltr">{formatMoney(r.minor, totals.currency, locale)}</bdi>
+            <bdi dir="ltr">{amountText(r.minor, totals.currency, locale)}</bdi>
           </td>
         </tr>
       ))}

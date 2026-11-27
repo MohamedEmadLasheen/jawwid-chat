@@ -44,11 +44,12 @@
 .dir-name { justify-self: start; font-weight: 600; color: var(--ink); text-decoration: none; overflow-wrap: anywhere; }
 .dir-row:hover .dir-name { color: var(--teal); }
 .dir-name:hover { text-decoration: underline; text-underline-offset: 3px; }
-.dir-sub { display: flex; flex-wrap: wrap; gap: 0 8px; font-size: var(--fs-xs); color: var(--ink-muted); }
-/* The dot trails the fact before it, so a line that wraps never begins with one. */
-.dir-sub > :not(:last-child)::after { content: '·'; margin-inline-start: 8px; color: var(--border-control); }
+.dir-sub { display: flex; flex-wrap: wrap; gap: 0 5px; font-size: var(--fs-sm); color: var(--ink-muted); }
+/* The facts under a name read as one phrase: parted by commas, never by dots. */
+.dir-sub > :not(:last-child)::after { content: ','; }
+html[lang='ar'] .dir-sub > :not(:last-child)::after { content: '،'; }
 .dir-cell-quiet { font-size: var(--fs-sm); color: var(--ink-muted); }
-.dir-none { color: var(--border-control); }
+.dir-none { color: var(--ink-muted); }
 .dir-cell-state { white-space: nowrap; }
 .dir-state__note { display: block; margin-block-start: 2px; font-size: var(--fs-xs); color: var(--ink-muted); }
 .dir-table td.cell-actions { inline-size: 1%; }
@@ -61,10 +62,15 @@
 .dir-table > tbody:not(:first-of-type) > .dir-group__head > th { border-block-start: 1px solid var(--line-2); }
 .dir-group__title { display: inline-flex; align-items: center; gap: 8px; font-size: var(--fs-sm); font-weight: 600; color: var(--ink); }
 .dir-group__label { font-weight: 400; color: var(--ink-muted); }
-.dir-group--unplaced > .dir-group__head > th { border-inline-start: 3px solid var(--gold-line); }
+/* The group nobody holds is said by its heading's word and an amber dot, not by an edge. */
+.dir-group--unplaced .dir-group__title::before { content: ''; inline-size: 8px; block-size: 8px; border-radius: 50%; background: var(--waiting); }
 
 .dir-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-3); margin: 0; padding: 10px var(--space-4); border-block-start: 1px solid var(--line-2); font-size: var(--fs-sm); color: var(--ink-muted); }
 .dir-foot--note { font-size: var(--fs-xs); }
+/* How many the open list holds: said once, quietly, at the end of the sheet's bar. */
+.dir-count { margin-inline-start: auto; font-size: var(--fs-sm); color: var(--ink-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.dir-count strong { font-weight: 600; color: var(--ink); }
+.dir-missing { color: var(--ink-muted); }
 .dir-total { font-variant-numeric: tabular-nums; }
 .dir-pager { display: inline-flex; align-items: center; gap: var(--space-3); font-variant-numeric: tabular-nums; }
 

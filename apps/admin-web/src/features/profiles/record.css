@@ -41,8 +41,7 @@
 .rec-head__line a:hover { color: var(--teal); text-decoration: underline; text-underline-offset: 3px; }
 .rec-head__line strong { font-weight: 600; color: var(--ink); }
 .rec-head__actions { flex: none; align-self: flex-start; }
-/* The one solid action always comes first, whichever it is for this record. */
-.rec-head__actions > .btn--primary { order: -1; }
+/* The buttons keep their places from record to record; only which one is filled changes. */
 .rec-lock { display: inline-flex; align-items: center; gap: 4px; margin-inline-start: 10px; color: var(--ink-muted); font-size: var(--fs-xs); white-space: nowrap; vertical-align: 1px; }
 .rec-lock .icon { color: var(--ink-muted); }
 .rec-head__tabs { margin-block-start: var(--space-4); }
@@ -54,7 +53,7 @@
 .rec-hl[data-count='3'] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .rec-hl[data-count='2'] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .rec-hl .figure { flex: none; gap: 4px; padding: 10px 14px 11px; }
-.rec-hl .figure__label { display: flex; align-items: center; gap: 6px; font-size: var(--fs-xs); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rec-hl .figure__label { display: flex; align-items: center; gap: 6px; font-size: var(--fs-sm); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rec-hl .figure__label .icon { flex: none; color: var(--ink-muted); }
 .rec-hl .figure__n { font-size: var(--fs-lg); font-weight: 600; line-height: 1.35; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
 .rec-hl .figure__value { display: block; min-inline-size: 0; }
@@ -62,7 +61,7 @@
 .rec-hl .figure__unit, .rec-hl .rec-hl__unit { margin-inline-start: 4px; font-family: var(--font); font-size: var(--fs-xs); font-weight: 400; color: var(--ink-muted); }
 .rec-hl .figure__note { font-size: var(--fs-xs); line-height: 1.45; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rec-hl .figure--key .figure__n { color: var(--ink); }
-.rec-hl__item--waiting .figure__n, .rec-hl__item--waiting .figure__note { color: var(--waiting); }
+.rec-hl__item--waiting .figure__n { color: var(--waiting); }
 .rec-hl__late { color: var(--urgent); font-weight: 600; }
 .rec-hl__item--text .figure__n { font-family: var(--font); font-size: var(--fs-md); font-weight: 600; }
 .rec-hl__none { font-family: var(--font); font-size: var(--fs-sm); font-weight: 400; color: var(--ink-muted); }
@@ -152,6 +151,10 @@
 
 .rec-main { display: grid; gap: var(--space-4); min-inline-size: 0; align-content: start; }
 .rec-aside { min-inline-size: 0; }
+/* Nothing for the margin: the work takes the width. */
+.rec-split:has(> .rec-aside:empty) { grid-template-columns: minmax(0, 1fr); }
+.rec-split:has(> .rec-main:empty) { grid-template-columns: minmax(0, 1fr); }
+.rec-split > .rec-main:empty { display: none; }
 .rec-aside > * + * { margin-block-start: var(--space-5); padding-block-start: var(--space-5); border-block-start: 1px solid var(--line); }
 .rec-aside > .rec-note, .rec-aside > .rec-note + * { padding-block-start: 0; border-block-start: 0; }
 .rec-aside > .rec-slot:empty { display: none; }
@@ -357,7 +360,7 @@ html[lang='ar'] .rec-amount__unit { font-family: var(--font); }
   border-radius: var(--radius-lg);
   background: var(--surface);
 }
-.rec :is(.rec-history, .rec-main) .tf-section__head { min-block-size: 48px; padding: 8px var(--space-4); border-block-end: 1px solid var(--line-2); }
+.rec :is(.rec-history, .rec-main) .tf-section__head { min-block-size: 48px; margin: 0; padding: 8px var(--space-4); border-block-end: 1px solid var(--line-2); }
 .rec :is(.rec-history, .rec-main) .tf-section__title { font-family: var(--font); font-size: var(--fs-md); font-weight: 600; line-height: 1.5; color: var(--ink); }
 html[lang='ar'] .rec :is(.rec-history, .rec-main) .tf-section__title { font-family: var(--font); font-weight: 600; }
 .rec :is(.rec-history, .rec-main) .tf-section > :not(.tf-section__head) { margin-inline: var(--space-4); }
@@ -408,7 +411,7 @@ html[lang='ar'] .rec :is(.rec-history, .rec-main) .tf-section__title { font-fami
 .rec-split--sub > .rec-main:empty { display: none; }
 .rec-split--sub > .rec-aside:empty { display: none; }
 .rec-split--sub:has(> .rec-main:empty) { grid-template-columns: minmax(0, 520px); }
-.rec-split--sub:has(> .rec-aside:empty) { grid-template-columns: minmax(0, 1fr); max-inline-size: 960px; }
+.rec-split--sub:has(> .rec-aside:empty) { grid-template-columns: minmax(0, 1fr); }
 
 /* A weekly time: the day, the hour in display numerals, how long, and the family's clock. */
 .rec-slot-row {

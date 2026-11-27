@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Avatar } from '@/shared/components/Avatar'
 import { Badge } from '@/shared/components/Badge'
-import { PageHeader, type MastFigure } from '@/shared/components/PageHeader'
+import { PageHeader } from '@/shared/components/PageHeader'
 import { RowActions } from '@/shared/components/RowActions'
 import { SearchField } from '@/shared/components/SearchField'
 import { SearchableSelect } from '@/shared/components/SearchableSelect'
@@ -58,7 +58,8 @@ const WEEKLY_COUNT: CountForms = {
 }
 
 // A pause is waiting on a return day (gold); a stop is said quietly: nothing here is a fault to chase.
-const TONE = { active: 'ok', paused: 'warn', stopped: 'outline' } as const
+// Active is the usual state, said quietly; paused waits on a date; stopped is a fact.
+const TONE = { active: 'neutral', paused: 'warn', stopped: 'outline' } as const
 const STATUSES: ReadonlyArray<StudentStatus | ''> = ['', 'active', 'paused', 'stopped']
 
 interface Group {
@@ -133,13 +134,11 @@ export function StudentDirectoryPage() {
   const pages = data ? Math.max(1, Math.ceil(data.total / (data.limit || STUDENTS_PAGE_SIZE))) : 1
   const groups = byTeacher(data?.students ?? [], locale)
 
-  // The server counts the list it answered: the figure is that list's total.
-  const figures: MastFigure[] = data ? [{ key: 'total', label: status ? tx(S[status]) : tx(S.title), value: number(data.total) }] : []
 
   return (
     <div className="page dir">
       <div className="page__inner">
-        <PageHeader title={tx(S.title)} subtitle={tx(S.subtitle)} figures={figures} />
+        <PageHeader title={tx(S.title)} />
         <section className="sheet dir-sheet">
           <div className="sheet-bar">
             <SearchField value={q} onChange={setQ} label={tx(S.search)} clearLabel={t('common.cancel')} />
@@ -198,7 +197,7 @@ export function StudentDirectoryPage() {
                               <bdi>{g.teacher.name}</bdi>
                             </>
                           ) : (
-                            <Badge tone="gold">{tx(S.noTeacher)}</Badge>
+                            <Badge tone="waiting">{tx(S.noTeacher)}</Badge>
                           )}
                           <span className="count count--quiet" title={tx(S.onThisPage, { n: number(g.rows.length) })}>
                             {number(g.rows.length)}

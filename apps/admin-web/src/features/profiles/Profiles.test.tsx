@@ -370,7 +370,7 @@ describe('the Parent Profile is a record: a masthead and tabs', () => {
     // The balance itself is not the breach: the overdue line under it carries the urgent colour.
     expect(within(outstanding).getByText(/^Overdue /)).toHaveClass('rec-hl__late')
     expect(within(outstanding).getByText('1,250.50')).toHaveAttribute('dir', 'ltr')
-    expect(within(outstanding).getByText(/^Overdue .*1,250\.50$/)).toBeInTheDocument()
+    expect(within(outstanding).getByText(/^Overdue .*1,250\.50/)).toBeInTheDocument()
     // What was paid is set out with the family's money, on the Money tab.
     expect(within(screen.getByRole('table', { name: 'Totals' })).getByRole('row', { name: /^Paid/ })).toHaveTextContent('1,250.50')
     expect(within(figure('Open requests')).getByText('0')).toBeInTheDocument()
@@ -490,10 +490,12 @@ describe('the Student Profile', () => {
     on('GET', /\/learners\/k-1\/profile$/, () => json(student()))
     renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/students/k-1' })
     expect(await screen.findByRole('heading', { level: 1, name: 'Child One' })).toBeInTheDocument()
-    const info = screen.getByRole('region', { name: 'Student' })
+    // Age, course and teacher are the head's highlights.
+    const info = screen.getByLabelText('At a glance')
     expect(within(info).getByText('9 years')).toBeInTheDocument()
     expect(within(info).getByText('Tajweed')).toBeInTheDocument()
-    expect(within(info).getByText('Teacher Omega')).toBeInTheDocument()
+    // The teacher is named in the head's sentence.
+    expect(screen.getByText('Teacher Omega')).toBeInTheDocument()
     // The weekly times are the Schedule tab: one row each, the day, the hour, the length.
     await userEvent.click(screen.getByRole('tab', { name: 'Schedule' }))
     expect(screen.getByRole('tab', { name: 'Schedule' })).toHaveAttribute('aria-selected', 'true')
@@ -526,12 +528,12 @@ describe('the Student Profile', () => {
     expect(left).toHaveClass('figure--urgent')
     expect(within(figure('Lessons bought')).getByText('24')).toBeInTheDocument()
     expect(within(figure('Next lesson')).getByText('16:30')).toHaveAttribute('dir', 'ltr')
-    // Overview says what waits: the lock, why, and the way to it.
-    const waiting = within(screen.getByRole('region', { name: 'Needs attention now' })).getAllByRole('listitem')
-    expect(waiting).toHaveLength(1)
-    expect(within(waiting[0]!).getByText('Locked')).toBeInTheDocument()
-    expect(within(waiting[0]!).getByText('lessons used up')).toBeInTheDocument()
-    await userEvent.click(within(waiting[0]!).getByRole('link', { name: 'Open subscription' }))
+    // The one thing waiting is the head's callout: the lock, why, and the way to it.
+    expect(screen.queryByRole('region', { name: 'Needs attention now' })).not.toBeInTheDocument()
+    const callout = document.querySelector('.rec-callout') as HTMLElement
+    expect(within(callout).getByText(/locked/)).toBeInTheDocument()
+    expect(within(callout).getByText(/lessons used up/)).toBeInTheDocument()
+    await userEvent.click(within(callout).getByRole('link', { name: 'Open subscription' }))
     expect(screen.getByRole('tab', { name: 'Subscription' })).toHaveAttribute('aria-selected', 'true')
   })
 
@@ -552,8 +554,9 @@ describe('the Student Profile', () => {
       json(student({ age: null, course: null, teacher: null, schedule: [], family: undefined, birthDate: undefined, viewer: 'teacher' })),
     )
     renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/students/k-1' })
-    const info = await screen.findByRole('region', { name: 'Student' })
-    expect(within(info).getAllByText('Not set')).toHaveLength(3)
+    const info = await screen.findByLabelText('At a glance')
+    expect(within(info).getAllByText('Not set')).toHaveLength(2)
+    expect(screen.getByText(/no teacher yet/)).toBeInTheDocument()
     // The empty schedule is said on the Schedule tab (and Overview lists it as something that waits).
     expect(within(screen.getByRole('region', { name: 'Class schedule' })).getByText('No regular lesson times yet')).toBeInTheDocument()
     expect(within(screen.getByRole('region', { name: 'Needs attention now' })).getByText('No teacher assigned yet')).toBeInTheDocument()
