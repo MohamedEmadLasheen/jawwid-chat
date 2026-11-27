@@ -1,227 +1,76 @@
 /*
- * Requests and approvals: the status strip, the queue, the detail panel and
- * the step list (RequestQueue.tsx). Paper tokens only; logical properties only.
+ * Requests and approvals (RequestQueue.tsx): the work beside its inspector,
+ * headed sheets of designed rows, the board, the step list. Paper tokens only;
+ * logical properties only.
  */
 
 /* ================================================================= page */
 
-/* From 1100px on a screen with room, the page is a workspace: the header and
-   the strip stay put, the queue and the panel each scroll on their own, so the
-   panel and its actions never leave the screen. */
+/* From 1100px on a screen with room, the page is a workspace: the masthead
+   stays put, the work and the inspector each scroll on their own, so the
+   inspector and its one action never leave the screen. */
 @media (min-width: 1100px) and (min-height: 620px) {
   .page.rq-page { display: flex; flex-direction: column; overflow: hidden; padding-block-end: 0; }
   .rq-page > .page__inner { flex: 1; min-block-size: 0; inline-size: 100%; display: flex; flex-direction: column; }
+  .rq-page .page-header.mast { flex: none; }
   .rq-page .rq { flex: 1; min-block-size: 0; grid-template-rows: minmax(0, 1fr); }
   .rq-page .rq--wide { align-items: stretch; }
-  .rq-page .rq__queue, .rq-page .rq__panel { overflow-y: auto; max-block-size: none; padding-block-end: var(--space-6); }
-  .rq-page .rq__panel { position: static; padding-block-end: 0; }
-  /* The open row's marker sits in the gutter beside the queue; the scroller reaches out to hold it. */
-  .rq-page .rq__queue { padding-inline-start: var(--rq-gutter); margin-inline-start: calc(-1 * var(--rq-gutter)); }
+  .rq-page .rq__queue { overflow-y: auto; padding-block-end: var(--space-6); scrollbar-width: thin; }
+  .rq-page .rq__panel { position: static; max-block-size: none; margin-block-end: var(--space-5); }
 }
 
-.rq-page { --rq-gutter: 8px; }
-.rq-page .page-header { margin-block-end: var(--space-5); }
-.rq-page .page-header__subtitle { max-inline-size: 96ch; }
-
-/* ================================================================ strip */
-
-/* The page's states on the shared ledger: one hairline system, every state on
-   screen at every width. The component says how many columns each width gets
-   (--rq-n in one row, --rq-m in two rows, --rq-p on a phone), so no cell is
-   hidden and no label is cut. */
-.rq-strip.ledger { grid-template-columns: repeat(var(--rq-n, 4), minmax(0, 1fr)); margin-block-end: var(--space-4); }
-/* Under a row of tabs the strip keeps its distance: two rules, not a doubled one. */
-.seg + .rq-strip.ledger { margin-block-start: var(--space-4); }
-.rq-strip__cell { justify-content: space-between; gap: 6px; min-block-size: 78px; cursor: pointer; transition: background var(--dur-fast) var(--ease-out); }
-.rq-strip__cell:focus-visible { outline-offset: -2px; }
-.rq-strip__cell:is([aria-pressed='true'], [aria-selected='true']) .ledger__label { color: var(--teal-dark); font-weight: 600; }
-/* A long name takes a second line between its words; it is never cut. */
-.rq-strip .ledger__label { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.3; }
-.rq-strip__figure { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; }
-.rq-strip__more { margin-inline-start: 1px; font-size: 0.6em; color: var(--ink-muted); }
-/* A cell with nothing in it steps back, so the eye lands on where the work is. */
-.rq-strip__cell--zero:not([aria-pressed='true'], [aria-selected='true']) .ledger__value { color: var(--border-control); }
-/* The empty cells that complete a last row: there only at the width that needs them. */
-.rq-strip .rq-strip__fill { display: none; }
-
-@media (min-width: 768px) and (max-width: 1099px) {
-  .rq-strip.ledger { grid-template-columns: repeat(var(--rq-m, 3), minmax(0, 1fr)); }
-  .rq-strip .rq-strip__fill--m { display: block; }
-  /* The first cell of each row starts at the frame's edge, as the first cell of the strip does. */
-  .rq-strip.ledger[data-m='3'] .ledger__cell:nth-child(3n + 1),
-  .rq-strip.ledger[data-m='4'] .ledger__cell:nth-child(4n + 1) { padding-inline-start: 3px; }
-}
-@media (max-width: 767px) {
-  .rq-strip.ledger { grid-template-columns: repeat(var(--rq-p, 2), minmax(0, 1fr)); }
-  .rq-strip .rq-strip__fill--p { display: block; }
-  .rq-strip.ledger .ledger__cell { min-block-size: 66px; padding-block: 10px 9px; padding-inline: var(--space-3) var(--space-2); }
-  .rq-strip.ledger[data-p='1'] .ledger__cell,
-  .rq-strip.ledger[data-p='2'] .ledger__cell:nth-child(2n + 1),
-  .rq-strip.ledger[data-p='3'] .ledger__cell:nth-child(3n + 1) { padding-inline-start: 3px; }
-  .rq-strip .ledger__value { font-size: 24px; }
-}
+/* Tabs on the masthead's lower edge carry no space of their own. */
+.rq-page .mast__tabs .ts-tabs { margin-block-end: 0; }
 
 /* =============================================================== layout */
 
 .rq { display: grid; grid-template-columns: minmax(0, 1fr); min-inline-size: 0; }
-/* Beside the queue the panel has its own track. It is closed until a row is
-   open, and opens over 200ms: the queue gives way from its far edge, so a row's
+/* Beside the work the inspector has its own track. It is closed until a request
+   is open, and opens over 200ms: the work gives way from its far edge, so a
    name stays where it was. */
 .rq--wide { grid-template-columns: minmax(0, 1fr) 0px; column-gap: 0; align-items: start; }
-.rq--wide.rq--split { grid-template-columns: minmax(0, 1fr) var(--rq-panel, 380px); column-gap: var(--space-5); }
+.rq--wide.rq--split { grid-template-columns: minmax(0, 1fr) var(--rq-panel, 400px); column-gap: var(--space-5); }
 @media (prefers-reduced-motion: no-preference) {
   .rq--wide { transition: grid-template-columns var(--dur) var(--ease-out), column-gap var(--dur) var(--ease-out); }
 }
-.rq__queue { min-inline-size: 0; container: rq-queue / inline-size; }
+/* Each part keeps its own height: the work scrolls, a sheet is never squeezed. */
+.rq__queue { min-inline-size: 0; display: grid; grid-auto-rows: max-content; align-content: start; gap: var(--space-4); container: rq-queue / inline-size; }
+
+/* The inspector: a white sheet with its head, its scrolling body and a foot that stays. */
 .rq__panel {
   position: sticky;
   inset-block-start: 0;
   max-block-size: calc(100dvh - var(--topbar-h) - var(--space-5));
   overflow: hidden auto;
   min-inline-size: 0;
-  padding-inline-start: var(--space-5);
-  border-inline-start: 1px solid var(--hairline);
   scrollbar-width: thin;
 }
 /* The detail keeps its full width while its track opens: it is uncovered, not re-wrapped. */
-.rq__panel > .rq-detail { inline-size: calc(var(--rq-panel, 380px) - var(--space-5) - 1px); }
-.rq-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); margin-block-end: var(--space-3); }
-.rq-toolbar .search { flex: 1 1 240px; max-inline-size: 360px; }
-.rq-toolbar__hint { font-size: var(--fs-xs); color: var(--ink-muted); }
-
-/* ================================================================ queue */
-
-.rq-table { inline-size: 100%; }
-/* The queue's columns give way instead of scrolling sideways, so the open row's marker is never clipped. */
-.rq__queue .table-wrap { overflow: visible; }
-/* Straight under the strip the strip's own rule heads the queue: one rule, not a frame inside a frame. */
-.rq__queue > .table-wrap:first-child { border-block-start: 0; }
-.rq-table tbody th { font-weight: 400; white-space: normal; padding-block: 9px; }
-.rq-table td, .rq-table tbody th { vertical-align: top; }
-.rq-table tbody tr { cursor: pointer; }
-/* The open row: a teal tint, and a gold marker in the gutter beside it. The
-   marker is drawn outside the row, so opening a row moves nothing in it. */
-.rq-table tbody tr[data-selected='true'] { background: var(--teal-tint); }
-.rq-table tbody tr[data-selected='true'] > :first-child { position: relative; }
-.rq-table tbody tr[data-selected='true'] > :first-child::before {
-  content: '';
-  position: absolute;
-  inset-block: 0 -1px;
-  inset-inline-start: calc(-1 * var(--rq-gutter, 8px));
-  inline-size: var(--rq-gutter, 8px);
-  box-sizing: border-box;
-  background: var(--teal-tint);
-  border-inline-start: 3px solid var(--gold);
-}
-
-.rq-open {
-  display: inline;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--ink);
-  font: inherit;
-  font-weight: 600;
-  text-align: start;
-  cursor: pointer;
-}
-a.rq-open { text-decoration: none; }
-.rq-open:hover, .rq-table tbody tr:hover .rq-open { color: var(--teal-dark); }
-.rq-more { margin-block-start: var(--space-3); }
-.rq-open:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; border-radius: var(--radius-sm); }
-.rq-sub { display: block; margin-block-start: 1px; font-size: var(--fs-xs); color: var(--ink-muted); font-weight: 400; }
-.rq-table .rq-c-who { min-inline-size: 9.5em; }
-.rq-table .rq-c-meta { min-inline-size: 6.5em; }
-.rq-muted { color: var(--ink-muted); }
-.rq-nowrap { white-space: nowrap; }
-.rq-type { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; color: var(--ink); }
-.rq-type .icon { color: var(--teal); flex: none; }
-
-.rq-age { font-variant-numeric: tabular-nums; }
-.rq-age--late { color: var(--terracotta); font-weight: 600; }
-
-.rq-row-actions { display: flex; align-items: center; justify-content: flex-end; gap: 6px; white-space: nowrap; }
-.rq-table td.rq-c-act { padding-block: 5px; inline-size: 1%; }
-.rq-table tbody tr[data-selected='true'] .row-actions { opacity: 1; }
-
-/* The queue has less room beside the panel: the columns that only add detail give way. */
-@container rq-queue (max-width: 700px) {
-  .rq-c--extra { display: none; }
-  /* Beside the panel a row needs no buttons of its own: the open row's are in the panel. */
-  .rq--split .rq-table .rq-c-act { display: none; }
-}
-@container rq-queue (max-width: 560px) {
-  .rq-c--more { display: none; }
-}
-
-/* On a phone a row is two lines: who and its status, then the rest. */
-@media (max-width: 767px) {
-  .rq__queue .table-wrap { border-block-start: 1px solid var(--hairline); }
-  .rq-table, .rq-table tbody { display: block; }
-  .rq-table thead { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-  .rq-table tbody tr {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 2px var(--space-3);
-    align-items: start;
-    padding: 11px 2px 10px;
-    border-block-end: 1px solid var(--hairline-soft);
-  }
-  .rq-table.table tbody tr > :is(th, td) { display: block; padding: 0; border: 0; min-inline-size: 0; }
-  /* The sheet covers the list while a row is open: the list marks nothing. */
-  .rq-table tbody tr[data-selected='true'] { background: none; }
-  .rq-table tbody tr[data-selected='true'] > :first-child::before { display: none; }
-  /* What only adds detail stays in the detail. */
-  .rq-table.table tbody tr > .rq-c--extra, .rq-table :is(.rq-c-when, .rq-c-meta) > .rq-muted:only-child { display: none; }
-  .rq-table .row-actions { opacity: 1; }
-  .rq-table .rq-c-who { grid-column: 1; grid-row: 1; }
-  .rq-table .rq-c-status { grid-column: 2; grid-row: 1; justify-self: end; text-align: end; }
-  .rq-table .rq-c-status .rq-sub { text-align: end; }
-  .rq-table .rq-c-kind { grid-column: 1; grid-row: 2; font-size: var(--fs-xs); }
-  .rq-table .rq-c-kind .rq-type { color: var(--ink-muted); }
-  .rq-table .rq-c-meta { grid-column: 1; font-size: var(--fs-xs); color: var(--ink-muted); }
-  .rq-table .rq-c-meta .rq-sub { display: inline; }
-  .rq-table .rq-c-meta .rq-sub::before { content: ' · '; }
-  .rq-table .rq-c-when { grid-column: 2; grid-row: 2; justify-self: end; text-align: end; font-size: var(--fs-xs); color: var(--ink-muted); }
-  .rq-table.table tbody tr > td.rq-c-act { grid-column: 1 / -1; inline-size: auto; padding-block-start: 8px; }
-  .rq-table td.rq-c-act:empty { display: none; }
-  .rq-row-actions { justify-content: flex-start; flex-wrap: wrap; gap: var(--space-2); }
-  /* A row's icon-only action is a full touch target, and looks like one. */
-  .rq-row-actions .btn--icon { inline-size: var(--tap); block-size: var(--tap); min-block-size: var(--tap); border-color: var(--border-strong); }
-  .rq-row-actions .btn--icon .icon { inline-size: 22px; block-size: 22px; }
-  .rq-open { display: inline-block; min-block-size: 28px; }
-}
-@media (pointer: coarse) {
-  .rq-row-actions .btn--icon { inline-size: var(--tap); block-size: var(--tap); min-block-size: var(--tap); }
-}
-
-/* ================================================================ panel */
-
+.rq__panel > .rq-detail { inline-size: calc(var(--rq-panel, 400px) - 2px); padding: var(--space-4) var(--space-5) 0; }
 .rq-detail { display: flex; flex-direction: column; min-block-size: 100%; }
 @media (prefers-reduced-motion: no-preference) {
   .rq__panel > .rq-detail { animation: fade var(--dur) var(--ease-out); }
 }
 .rq-panel__head { padding-block-end: var(--space-4); }
 .rq-panel__top { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); min-block-size: 32px; }
-.rq-panel__close { margin-inline-end: -6px; color: var(--ink-muted); }
-.rq-kind { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 500; color: var(--ink-muted); }
-.rq-kind .icon { color: var(--teal); }
+.rq-panel__close { margin-inline-end: -8px; color: var(--ink-muted); }
+.rq-kind { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 600; color: var(--teal); }
 .rq-panel__title {
   margin: 2px 0 8px;
   font-family: var(--display);
-  font-size: 25px;
+  font-size: 24px;
   font-weight: 600;
   line-height: 1.2;
   color: var(--ink);
   overflow-wrap: anywhere;
 }
-html[lang='ar'] .rq-panel__title { font-size: 27px; font-weight: 700; line-height: 1.4; }
+html[lang='ar'] .rq-panel__title { font-size: 26px; font-weight: 700; line-height: 1.4; }
 .rq-lead { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px var(--space-3); margin-block-end: var(--space-4); }
 .rq-lead__status { display: flex; flex-wrap: wrap; align-items: center; gap: 4px var(--space-3); font-size: var(--fs-sm); color: var(--ink-muted); }
 
-.rq-section { padding-block: var(--space-3) var(--space-4); border-block-start: 1px solid var(--hairline); }
+.rq-section { padding-block: var(--space-3) var(--space-4); border-block-start: 1px solid var(--hairline-soft); }
 .rq-section__head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); margin-block-end: var(--space-2); }
-.rq-section__title { margin: 0; }
+.rq-section__title { margin: 0; font-size: 12.5px; font-weight: 600; color: var(--ink-muted); }
 
 .rq-fields { margin: 0; }
 .rq-field {
@@ -238,27 +87,151 @@ html[lang='ar'] .rq-panel__title { font-size: 27px; font-weight: 700; line-heigh
 .rq-note { margin: 0; font-size: var(--fs-sm); color: var(--ink-muted); }
 .rq-quote { margin: 0; padding-inline-start: var(--space-3); border-inline-start: 2px solid var(--gold-line); font-size: var(--fs-sm); }
 
-.rq-actions {
+/* The foot: the one thing to do next, and "⋯". It stays in view while the inspector scrolls. */
+.rq-foot {
   position: sticky;
   inset-block-end: 0;
-  z-index: 1;
+  z-index: 2;
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
   margin-block-start: auto;
-  padding-block: var(--space-3);
-  background: var(--paper);
+  margin-inline: calc(-1 * var(--space-5));
+  padding: var(--space-3) var(--space-5);
+  background: var(--surface);
   border-block-start: 1px solid var(--hairline);
 }
-.rq-actions:empty { display: none; }
-.rq-actions .btn--primary { flex: 1 1 auto; }
-.rq-end { display: flex; flex-wrap: wrap; gap: var(--space-2); padding-block: var(--space-3) var(--space-4); border-block-start: 1px solid var(--hairline); }
-.rq-end .btn.rq-danger { margin-inline-start: -10px; }
-.dialog .rq-actions { background: var(--surface); margin-inline: calc(-1 * var(--space-5)); padding-inline: var(--space-5); inset-block-end: calc(-1 * var(--space-5)); }
-.btn.rq-danger { border-color: transparent; background: none; color: var(--terracotta); }
-.btn.rq-danger:hover:not(:disabled) { background: var(--terracotta-tint); border-color: transparent; color: var(--terracotta); }
+.rq-foot > .btn, .rq-foot > a.btn { flex: 1 1 auto; justify-content: center; min-block-size: 40px; }
+.rq-foot__more { flex: none; }
+.rq-foot__more .menu__button { inline-size: 40px; min-block-size: 40px; border: 1px solid var(--border-strong); border-radius: var(--radius); color: var(--ink); }
+.rq-foot__more .menu__button:hover { background: var(--surface-hover); border-color: var(--border-control); }
 .dialog--sheet .rq-detail { min-block-size: calc(100% - 64px); }
+.dialog .rq-foot { inset-block-end: calc(-1 * var(--space-5)); }
+@media (max-width: 767px) {
+  .rq-foot > .btn, .rq-foot > a.btn { min-block-size: var(--tap); }
+  .rq-foot__more .menu__button { inline-size: var(--tap); min-block-size: var(--tap); }
+}
+
+/* ========================================================= groups & rows */
+
+.rq-group { overflow: hidden; }
+.rq-group .sheet__title { display: flex; align-items: center; gap: 10px; }
+.rq-group__count { margin: 0; }
+.rq-group__note { font-size: var(--fs-xs); color: var(--ink-muted); }
+.rq-group--urgent .rq-group__note { color: var(--terracotta); font-weight: 600; }
+.rq-rows { list-style: none; margin: 0; padding: 0; }
+
+/* A row: [lead] who + one line | the fact | a tag | its actions. */
+.rq-row {
+  display: grid;
+  grid-template-columns: var(--rq-lead, auto) minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, auto) auto;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  min-block-size: 60px;
+  padding: 10px var(--space-4);
+  border-block-end: 1px solid var(--hairline-soft);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out);
+}
+.rq-row:last-child { border-block-end: 0; }
+.rq-row:hover { background: var(--surface-hover); }
+/* The open row: a teal tint and a gold edge drawn inside its padding, so nothing in it moves. */
+.rq-row[data-selected='true'] { background: var(--teal-tint); box-shadow: inset 3px 0 0 var(--gold); }
+[dir='rtl'] .rq-row[data-selected='true'] { box-shadow: inset -3px 0 0 var(--gold); }
+.rq-row__lead { grid-column: 1; min-inline-size: 0; }
+.rq-row__main { grid-column: 2; min-inline-size: 0; }
+.rq-row__fact { grid-column: 3; min-inline-size: 0; font-size: var(--fs-sm); color: var(--ink-muted); }
+.rq-row__tag { grid-column: 4; justify-self: start; }
+.rq-row__actions { grid-column: 5; justify-self: end; }
+.rq-row__title { font-weight: 600; }
+
+/* A time that leads a row: display numerals, always left to right. */
+.rq-time { display: grid; gap: 1px; min-inline-size: 76px; }
+.rq-time__clock { font-family: var(--display); font-size: 19px; font-weight: 600; line-height: 1.2; font-variant-numeric: tabular-nums lining-nums; color: var(--ink); direction: ltr; unicode-bidi: isolate; text-align: start; }
+[dir='rtl'] .rq-time__clock { text-align: right; }
+.rq-time__day { font-size: var(--fs-xs); color: var(--ink-muted); }
+/* A type that leads a row: its icon on a quiet tile, and a word. */
+.rq-type { display: inline-flex; align-items: center; gap: 10px; min-inline-size: 132px; font-size: var(--fs-sm); color: var(--ink-muted); white-space: nowrap; }
+.rq-type__tile { display: grid; place-items: center; inline-size: 34px; block-size: 34px; flex: none; border-radius: var(--radius); background: var(--teal-tint); color: var(--teal); }
+
+.rq-open {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  text-align: start;
+  cursor: pointer;
+}
+a.rq-open { text-decoration: none; }
+.rq-open:hover, .rq-row:hover .rq-open, .rq-card:hover .rq-open { color: var(--teal); }
+.rq-open:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; border-radius: var(--radius-sm); }
+.rq-sub { display: block; margin-block-start: 1px; font-size: var(--fs-xs); color: var(--ink-muted); font-weight: 400; }
+.rq-nowrap { white-space: nowrap; }
+.rq-age { font-variant-numeric: tabular-nums; }
+.rq-age--late { color: var(--terracotta); font-weight: 600; }
+.rq-more { margin: 0; font-size: var(--fs-sm); color: var(--ink-muted); }
+
+/* Beside the inspector a row has less room: the fact folds under the name. */
+@container rq-queue (max-width: 760px) {
+  .rq-row { grid-template-columns: var(--rq-lead, auto) minmax(0, 1fr) auto auto; }
+  .rq-row__fact { grid-column: 2; grid-row: 2; }
+  .rq-row__tag { grid-column: 3; grid-row: 1; }
+  .rq-row__actions { grid-column: 4; grid-row: 1; }
+}
+/* On a phone a row is who and its tag, then the fact, then its actions on their own line. */
+@media (max-width: 767px) {
+  .rq-row { grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 4px var(--space-3); padding: 12px var(--space-3); }
+  .rq-row__lead { grid-column: 1; grid-row: 1 / span 4; }
+  .rq-row > :not(.rq-row__lead) { grid-column: 2; grid-row: auto; }
+  .rq-row__tag { display: flex; flex-wrap: wrap; align-items: center; gap: 4px var(--space-2); justify-self: start; }
+  .rq-row__tag > .rq-sub { display: inline; }
+  .rq-row__actions { justify-self: start; padding-block-start: 6px; }
+  .rq-row[data-selected='true'] { background: none; box-shadow: none; }
+  .rq-time { min-inline-size: 64px; }
+  .rq-type { min-inline-size: 0; }
+  .rq-type__word { display: none; }
+  .rq-open { display: inline-block; min-block-size: 24px; }
+}
+
+/* ================================================================ board */
+
+/* Columns in the flow's order: the first stage at the inline start. */
+.rq-board { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(236px, 1fr); gap: var(--space-4); align-items: start; overflow-x: auto; padding-block-end: 4px; scrollbar-width: thin; }
+.rq-board--one { grid-auto-columns: minmax(0, 560px); }
+.rq-col { min-inline-size: 0; display: grid; gap: var(--space-2); align-content: start; }
+.rq-col__head { display: flex; align-items: center; gap: 10px; min-block-size: 32px; padding-block-end: 6px; border-block-end: 2px solid var(--hairline); }
+.rq-col__title { margin: 0; font-size: var(--fs-sm); font-weight: 600; color: var(--ink); }
+.rq-col__cards { display: grid; gap: var(--space-2); align-content: start; }
+.rq-col__empty { margin: 0; padding: var(--space-3) 2px; font-size: var(--fs-sm); color: var(--ink-muted); }
+.rq-col__foot { font-size: var(--fs-sm); }
+
+.rq-card { display: grid; gap: 8px; padding: 12px 14px; cursor: pointer; transition: border-color var(--dur-fast) var(--ease-out); }
+.rq-card:hover { border-color: var(--border-control); }
+/* The open card: a teal frame and a gold edge inside it. */
+.rq-card[data-selected='true'] { border-color: var(--teal); box-shadow: inset 3px 0 0 var(--gold); }
+[dir='rtl'] .rq-card[data-selected='true'] { box-shadow: inset -3px 0 0 var(--gold); }
+.rq-card__title { margin: 0; font-size: var(--fs-md); font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
+.rq-card__body { display: grid; gap: 4px; font-size: var(--fs-sm); color: var(--ink-muted); min-inline-size: 0; }
+.rq-card__body > p { margin: 0; overflow-wrap: anywhere; }
+.rq-card__line { display: flex; align-items: center; gap: 6px; min-inline-size: 0; }
+.rq-card__line .icon { flex: none; color: var(--ink-muted); }
+.rq-card__tags { display: flex; flex-wrap: wrap; gap: 6px; }
+/* The foot: how long it has waited, and its one action at the far edge (on its own line when both do not fit). */
+.rq-card__foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px var(--space-2); padding-block-start: 8px; border-block-start: 1px solid var(--hairline-soft); }
+.rq-card__age { font-size: var(--fs-xs); color: var(--ink-muted); white-space: nowrap; }
+.rq-card__foot .row-actions2 { margin-inline-start: auto; }
+
+/* Without room for columns the stages are tabs, and their cards a list. */
+.rq-board--list { grid-auto-flow: row; grid-auto-columns: auto; grid-template-columns: minmax(0, 1fr); overflow: visible; gap: var(--space-4); }
+.rq-board__tabs { overflow-x: auto; scrollbar-width: none; flex-wrap: nowrap; white-space: nowrap; }
+.rq-board__tabs::-webkit-scrollbar { display: none; }
+.rq-board__tabs .seg__item { flex: none; }
+@media (min-width: 640px) and (max-width: 1099px) {
+  .rq-board--list .rq-col__cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 
 /* ================================================================ steps */
 
@@ -274,7 +247,7 @@ html[lang='ar'] .rq-panel__title { font-size: 27px; font-weight: 700; line-heigh
   border-inline-start: 1px solid var(--hairline);
 }
 .rq-step:last-child::before { display: none; }
-.rq-step--done::before { border-inline-start-color: var(--brand-200); }
+.rq-step--done::before { border-inline-start-color: var(--teal); }
 .rq-step__dot {
   box-sizing: border-box;
   inline-size: 11px;
@@ -282,6 +255,7 @@ html[lang='ar'] .rq-panel__title { font-size: 27px; font-weight: 700; line-heigh
   margin-block-start: 6px;
   border-radius: 50%;
   border: 1.5px solid var(--border-strong);
+  background: var(--surface);
 }
 html[lang='ar'] .rq-step__dot { margin-block-start: 8px; }
 html[lang='ar'] .rq-step::before { inset-block-start: 22px; }
@@ -298,5 +272,11 @@ html[lang='ar'] .rq-step::before { inset-block-start: 22px; }
 .rq-step__body { margin-block-start: 6px; display: grid; justify-items: start; gap: 6px; font-size: var(--fs-sm); }
 
 @media (prefers-reduced-motion: reduce) {
-  .rq-strip__cell { transition: none; }
+  .rq-row, .rq-card { transition: none; }
 }
+
+/* What a request asks for, on the hub: said first, in ink. */
+.rq-ask { color: var(--ink); font-weight: 500; }
+
+/* A page or a filter with nothing in it: one sheet that says so. */
+.rq-blank { padding: var(--space-5); }

@@ -2,11 +2,24 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '@/test/utils'
-import { FlowSteps, FlowStrip, RequestQueue, ageText, waitedOvernight, type FlowCell, type RequestDetail } from './RequestQueue'
+import {
+  Board,
+  BoardCard,
+  DetailFoot,
+  FlowSteps,
+  QueueGroup,
+  QueueRow,
+  RequestQueue,
+  ageText,
+  waitedOvernight,
+  type BoardStage,
+  type RequestDetail,
+} from './RequestQueue'
 
 /**
- * The shared request queue: the strip that filters, the steps, the panel that
- * is a side sheet below 1100px, and the ages it words by the academy's calendar.
+ * The shared request pattern: the board and its cards, headed groups of rows,
+ * the steps, the inspector (a side sheet below 1100px) with its one stated
+ * action, and the ages it words by the academy's calendar.
  */
 
 /** The viewport the layout asks about: jsdom has no matchMedia, which the layout reads as narrow. */
@@ -15,58 +28,144 @@ function viewport(wide: boolean) {
 }
 afterEach(() => vi.unstubAllGlobals())
 
-type Key = 'all' | 'new' | 'late' | 'unknown'
-const CELLS: Array<FlowCell<Key>> = [
-  { key: 'all', label: 'All', count: 7 },
-  { key: 'new', label: 'New', count: 0 },
-  { key: 'late', label: 'Overdue', count: 25, more: true, note: 'oldest 3 days ago', late: true },
-  { key: 'unknown', label: 'Closed', count: null },
+type Key = 'new' | 'late' | 'empty' | 'unknown'
+const stages = (): Array<BoardStage<Key>> => [
+  { key: 'new', label: 'New', count: 2, cards: [<BoardCard key="a" title="Family Alpha" onOpen={() => {}} />, <BoardCard key="b" title="Family Beta" onOpen={() => {}} />], empty: 'None here.' },
+  { key: 'late', label: 'Overdue', count: 25, more: true, urgent: true, cards: <BoardCard title="Family Gamma" onOpen={() => {}} />, empty: 'None here.' },
+  { key: 'empty', label: 'Done', count: 0, cards: null, empty: 'None here.' },
+  { key: 'unknown', label: 'Closed', count: null, cards: null, empty: 'None here.' },
 ]
 
-describe('FlowStrip', () => {
-  it('shows each state with its count, marks the active one and filters on a click', async () => {
+describe('Board', () => {
+  it('with room it is one column per stage, in order, each headed by its name and count', () => {
+    viewport(true)
+    renderWithProviders(<Board label="Stages" stages={stages()} value="all" onChange={() => {}} />)
+    const board = screen.getByRole('group', { name: 'Stages' })
+    expect(within(board).getAllByRole('region').map((c) => c.getAttribute('aria-label'))).toEqual(['New', 'Overdue', 'Done', 'Closed'])
+    const late = within(board).getByRole('region', { name: 'Overdue' })
+    // A list longer than was counted says so: "+" for the eye, words for a screen reader.
+    expect(late.querySelector('.count')).toHaveTextContent(/^25\+\s*or more$/)
+    // The stage that holds a real problem is the one solid terracotta counter.
+    expect(late.querySelector('.count')).toHaveClass('count--urgent')
+    expect(within(board).getByRole('region', { name: 'New' }).querySelector('.count')).not.toHaveClass('count--urgent')
+    // An empty stage keeps its column and says so in one line; a count that is not known is not shown as a zero.
+    expect(within(within(board).getByRole('region', { name: 'Done' })).getByText('None here.')).toBeInTheDocument()
+    expect(within(board).getByRole('region', { name: 'Closed' }).querySelector('.count')).toBeNull()
+    // No tabs beside the columns.
+    expect(within(board).queryByRole('button', { name: /^Overdue/ })).not.toBeInTheDocument()
+  })
+
+  it('without room the stages are tabs with their counts, and the cards a list', async () => {
     const onChange = vi.fn()
-    renderWithProviders(<FlowStrip label="States" cells={CELLS} value="all" onChange={onChange} />)
-    const strip = screen.getByRole('group', { name: 'States' })
-    expect(within(strip).getByRole('button', { name: /^All/ })).toHaveAttribute('aria-pressed', 'true')
-    expect(within(strip).getByRole('button', { name: /^New/ })).toHaveAttribute('aria-pressed', 'false')
-    // A count of zero is a count; a list longer than was counted says so.
-    expect(within(strip).getByRole('button', { name: /^New/ })).toHaveTextContent('0')
-    expect(within(strip).getByRole('button', { name: /^Overdue/ })).toHaveTextContent('25+')
-    // The "+" is drawn for the eye and spoken as words.
-    expect(within(strip).getByRole('button', { name: /^Overdue/ })).toHaveAccessibleName(/^Overdue\s*25\s*or more\s*oldest 3 days ago$/)
-    await userEvent.click(within(strip).getByRole('button', { name: /^Overdue/ }))
+    const { rerender } = renderWithProviders(<Board label="Stages" stages={stages()} value="all" onChange={onChange} />)
+    const tabs = screen.getByRole('group', { name: 'Stages' })
+    expect(within(tabs).getAllByRole('button').map((t) => t.textContent)).toEqual(['All', 'New2', 'Overdue25+ or more', 'Done0', 'Closed'])
+    expect(within(tabs).getByRole('button', { name: /^All/ })).toHaveAttribute('aria-pressed', 'true')
+    // Under "All" a stage with nothing in it is left out: its tab already says so.
+    expect(screen.queryByRole('region', { name: 'Done' })).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Family Gamma' })).toBeInTheDocument()
+    await userEvent.click(within(tabs).getByRole('button', { name: /^Overdue/ }))
     expect(onChange).toHaveBeenCalledWith('late')
+    rerender(<Board label="Stages" stages={stages()} value="late" onChange={onChange} />)
+    expect(screen.getByRole('button', { name: /^Overdue/ })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.queryByRole('heading', { name: 'Family Alpha' })).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Family Gamma' })).toBeInTheDocument()
   })
 
-  it('never shows a zero for a count it does not know', () => {
-    renderWithProviders(<FlowStrip label="States" cells={CELLS} value="all" onChange={() => {}} />)
-    expect(screen.getByRole('button', { name: 'Closed' })).toHaveTextContent(/^Closed$/)
+  it('leaves the switch to the page when its masthead figures are the stages', () => {
+    renderWithProviders(<Board label="Stages" stages={stages()} value="all" onChange={() => {}} tabs={false} />)
+    expect(screen.queryByRole('group', { name: 'Stages' })).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Family Alpha' })).toBeInTheDocument()
   })
+})
 
-  it('tells the layout how many columns each width gets, so every state stays on screen', () => {
-    // Four states: one row with room, and two rows of two on a phone.
-    renderWithProviders(<FlowStrip label="States" cells={CELLS} value="all" onChange={() => {}} />)
-    const four = screen.getByRole('group', { name: 'States' })
-    expect([four.style.getPropertyValue('--rq-n'), four.dataset.m, four.dataset.p]).toEqual(['4', '4', '2'])
-  })
-
-  it('more than five states take two rows on a narrower screen and rows of three on a phone, the page\'s own cell included', () => {
-    const seven = [...CELLS, { key: 'a' as Key, label: 'A', count: 1 }, { key: 'b' as Key, label: 'B', count: 1 }, { key: 'c' as Key, label: 'C', count: 1 }]
+describe('BoardCard', () => {
+  it('opens from its name or anywhere on it, but never from its own controls', async () => {
+    const onOpen = vi.fn()
+    const act = vi.fn()
     renderWithProviders(
-      <FlowStrip label="States" cells={seven} value="all" onChange={() => {}}>
-        <button type="button">Due</button>
-      </FlowStrip>,
+      <BoardCard title="Family Alpha" onOpen={onOpen} selected age="2 days ago" actions={<button type="button" onClick={act}>Assign</button>}>
+        <p>Child One</p>
+      </BoardCard>,
     )
-    const strip = screen.getByRole('group', { name: 'States' })
-    expect([strip.style.getPropertyValue('--rq-n'), strip.dataset.m, strip.dataset.p]).toEqual(['8', '4', '3'])
+    const card = screen.getByRole('article')
+    expect(card).toHaveAttribute('data-selected', 'true')
+    await userEvent.click(within(card).getByRole('button', { name: 'Family Alpha' }))
+    await userEvent.click(within(card).getByText('Child One'))
+    expect(onOpen).toHaveBeenCalledTimes(2)
+    await userEvent.click(within(card).getByRole('button', { name: 'Assign' }))
+    expect(act).toHaveBeenCalledTimes(1)
+    expect(onOpen).toHaveBeenCalledTimes(2)
   })
 
-  it('keeps tab semantics where the page had tabs', () => {
-    renderWithProviders(<FlowStrip tabs label="States" cells={CELLS} value="new" onChange={() => {}} />)
-    const tabs = within(screen.getByRole('tablist', { name: 'States' })).getAllByRole('tab')
-    expect(tabs.map((t) => t.getAttribute('aria-selected'))).toEqual(['false', 'true', 'false', 'false'])
-    expect(tabs[1]).not.toHaveAttribute('aria-pressed')
+  it('when its one action is "Open", the name is plain text: one control, not two', () => {
+    renderWithProviders(<BoardCard title="Lead Alpha" titleOpens={false} onOpen={() => {}} actions={<button type="button">Open</button>} />)
+    expect(screen.getByRole('heading', { name: 'Lead Alpha' })).toBeInTheDocument()
+    expect(screen.getAllByRole('button')).toHaveLength(1)
+  })
+})
+
+describe('QueueGroup and QueueRow', () => {
+  it('a group is a headed sheet with its count; an urgent one counts in solid terracotta', () => {
+    renderWithProviders(
+      <>
+        <QueueGroup title="Waiting since before today" count={3} tone="urgent" note="oldest 3 days ago">
+          <QueueRow title="Child Alpha" sub="Needs an outcome" fact="Teacher One" />
+        </QueueGroup>
+        <QueueGroup title="Today" count={1}>
+          <QueueRow title="Child Beta" />
+        </QueueGroup>
+      </>,
+    )
+    const late = screen.getByRole('region', { name: 'Waiting since before today' })
+    expect(within(late).getByRole('heading', { level: 2 })).toHaveTextContent('Waiting since before today3')
+    expect(late.querySelector('.count')).toHaveClass('count--urgent')
+    expect(within(late).getByText('oldest 3 days ago')).toBeInTheDocument()
+    expect(within(late).getAllByRole('listitem')).toHaveLength(1)
+    expect(screen.getByRole('region', { name: 'Today' }).querySelector('.count')).not.toHaveClass('count--urgent')
+  })
+
+  it('a row that opens does so from its name and from the row; one that does not has no button', async () => {
+    const onOpen = vi.fn()
+    renderWithProviders(
+      <ul>
+        <QueueRow title="Child Alpha" onOpen={onOpen} selected actions={<button type="button">Record outcome</button>} fact="Teacher One" />
+        <QueueRow title="Child Beta" />
+      </ul>,
+    )
+    const [first, second] = screen.getAllByRole('listitem')
+    expect(within(first!).getByRole('button', { name: 'Child Alpha' })).toHaveAttribute('aria-current', 'true')
+    await userEvent.click(within(first!).getByText('Teacher One'))
+    expect(onOpen).toHaveBeenCalledTimes(1)
+    await userEvent.click(within(first!).getByRole('button', { name: 'Record outcome' }))
+    expect(onOpen).toHaveBeenCalledTimes(1)
+    expect(within(second!).queryByRole('button')).not.toBeInTheDocument()
+  })
+})
+
+describe('DetailFoot', () => {
+  it('states one action and keeps the rest behind "⋯", the one that ends the request marked', async () => {
+    const cancel = vi.fn()
+    renderWithProviders(
+      <DetailFoot
+        label="More actions: Child Alpha"
+        primary={<button type="button">Approve</button>}
+        more={[
+          { key: 'redo', label: 'Ask for a redesign', onSelect: () => {} },
+          { key: 'cancel', label: 'Cancel request', danger: true, onSelect: cancel },
+        ]}
+      />,
+    )
+    expect(screen.getAllByRole('button').map((b) => b.getAttribute('aria-label') ?? b.textContent)).toEqual(['Approve', 'More actions: Child Alpha'])
+    await userEvent.click(screen.getByRole('button', { name: 'More actions: Child Alpha' }))
+    expect(screen.getAllByRole('menuitem').map((i) => i.textContent)).toEqual(['Ask for a redesign', 'Cancel request'])
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Cancel request' }))
+    expect(cancel).toHaveBeenCalledTimes(1)
+  })
+
+  it('is not there at all with nothing to do', () => {
+    const { container } = renderWithProviders(<DetailFoot label="More actions" />)
+    expect(container.querySelector('.rq-foot')).toBeNull()
   })
 })
 

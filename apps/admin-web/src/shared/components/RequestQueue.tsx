@@ -1,25 +1,32 @@
-import { Children, useEffect, useState, type CSSProperties, type MouseEvent, type ReactNode } from 'react'
+import { useEffect, useState, type MouseEvent, type ReactNode } from 'react'
 import { LOCALE_TAG, useI18n } from '@/core/i18n/I18nProvider'
 import { ACADEMY_ZONE } from '@/core/time/academyTime'
 import { Dialog } from './Dialog'
 import { Icon, type IconName } from './Icon'
+import { Menu, type MenuItem } from './Menu'
 import './request-queue.css'
 
 /**
- * The one pattern every requests-and-approvals page shares:
+ * What every requests-and-approvals page is composed from. The page's states
+ * are the figures of its masthead; below it:
  *
- *   FlowStrip      the page's states as a ruled row of counts; a click filters
- *   RequestQueue   the queue, and the open row's detail beside it
+ *   RequestQueue   the work, and the open request's inspector beside it
+ *   QueueGroup     a headed sheet of rows that belong together (a day, a wait)
+ *   QueueRow       one designed row: a lead, who, one line, a fact, a tag, its actions
+ *   Board          the flow as columns of cards, first stage first; tabs when narrow
+ *   BoardCard      one request on the board
  *   FlowSteps      the request's steps as a vertical list of dots
+ *   DetailFoot     the inspector's one primary action, and the rest behind "⋯"
  *
- * From 1100px the detail is a panel at the inline end, there while a row is
- * open; below that it is the side sheet (one pane on a phone). The page owns
- * its data, its filter and its rules: these components only lay them out.
+ * From 1100px the inspector is a white sheet at the inline end, there while a
+ * request is open; below that it is the side sheet (full screen on a phone).
+ * The page owns its data, its filter and its rules: these only lay them out.
  */
 
 type Pair = { en: string; ar: string }
 const WORDS = {
   close: { en: 'Close', ar: 'إغلاق' },
+  all: { en: 'All', ar: 'الكل' },
   done: { en: 'done', ar: 'تم' },
   current: { en: 'now', ar: 'الآن' },
   todo: { en: 'next', ar: 'لاحقًا' },
@@ -33,7 +40,7 @@ const WORDS = {
 const WIDE = '(min-width: 1100px)'
 const media = () => (typeof window !== 'undefined' && typeof window.matchMedia === 'function' ? window.matchMedia(WIDE) : null)
 
-/** True where the detail panel stays on screen beside the queue. */
+/** True where the inspector stays on screen beside the work, and a board has room for its columns. */
 export function useWidePane(): boolean {
   const [wide, setWide] = useState(() => media()?.matches ?? false)
   useEffect(() => {
@@ -48,7 +55,7 @@ export function useWidePane(): boolean {
 }
 
 export interface RequestDetail {
-  /** Changes when another row is opened, so the panel starts from its top. */
+  /** Changes when another request is opened, so the inspector starts from its top. */
   id: string
   title: string
   /** What kind of request this is: its icon and a word, above the title. */
@@ -56,10 +63,8 @@ export interface RequestDetail {
   status?: ReactNode
   body: ReactNode
   onClose: () => void
-  /** The panel always shows a row (the page falls back to its first), so it offers no close. */
+  /** The inspector always shows a request (the page falls back to its first), so it offers no close. */
   pinned?: boolean
-  /** The body brings its own heading (a record the page also shows outside the panel). */
-  bare?: boolean
 }
 
 /** What kind of request it is: its icon and a word. */
@@ -72,64 +77,24 @@ function Kind({ kind }: { kind: NonNullable<RequestDetail['kind']> }) {
   )
 }
 
-/**
- * The head of a detail: its kind, its name in display type, its status. The
- * panel draws it; a body that is `bare` draws its own with this.
- */
-export function DetailHead({
-  id,
-  title,
-  kind,
-  status,
-  onClose,
-  children,
-}: {
-  id?: string
-  title: string
-  kind?: RequestDetail['kind']
-  status?: ReactNode
-  /** Given, the head offers a close button. */
-  onClose?: () => void
-  children?: ReactNode
-}) {
-  const { locale } = useI18n()
-  return (
-    <header className="rq-panel__head">
-      {(kind || onClose) && (
-        <div className="rq-panel__top">
-          {kind && <Kind kind={kind} />}
-          {onClose && (
-            <button type="button" className="btn btn--ghost btn--icon btn--sm rq-panel__close" onClick={onClose} aria-label={WORDS.close[locale]}>
-              <Icon name="close" size={16} />
-            </button>
-          )}
-        </div>
-      )}
-      {/* The name keeps its own direction; the heading keeps the page's alignment. */}
-      <h2 className="rq-panel__title" id={id}><bdi>{title}</bdi></h2>
-      {status && <div className="rq-lead__status">{status}</div>}
-      {children}
-    </header>
-  )
-}
-
 export function RequestQueue({
   label,
   detail,
   reserve = false,
   children,
 }: {
-  /** The detail panel's accessible name. */
+  /** The inspector's accessible name. */
   label: string
-  /** The open row. With none, the queue has the full width; the panel comes in when a row opens. */
+  /** The open request. With none, the work has the full width; the inspector comes in when one opens. */
   detail: RequestDetail | null
   /**
-   * Keep the panel's place although no row is open yet: for a page whose panel
-   * always shows a row, while its list is still loading, so nothing moves when it arrives.
+   * Keep the inspector's place although nothing is open yet: for a page whose inspector
+   * always shows a request, while its list is still loading, so nothing moves when it arrives.
    */
   reserve?: boolean
   children: ReactNode
 }) {
+  const { locale } = useI18n()
   const wide = useWidePane()
 
   if (!wide) {
@@ -158,11 +123,23 @@ export function RequestQueue({
     <div className={detail || reserve ? 'rq rq--wide rq--split' : 'rq rq--wide'}>
       <div className="rq__queue">{children}</div>
       {detail && (
-        <aside className="rq__panel" aria-label={label}>
+        <aside className="rq__panel sheet" aria-label={label}>
           <div className="rq-detail" key={detail.id}>
-            {!detail.bare && (
-              <DetailHead title={detail.title} kind={detail.kind} status={detail.status} onClose={detail.pinned ? undefined : detail.onClose} />
-            )}
+            <header className="rq-panel__head">
+              {(detail.kind || !detail.pinned) && (
+                <div className="rq-panel__top">
+                  {detail.kind && <Kind kind={detail.kind} />}
+                  {!detail.pinned && (
+                    <button type="button" className="btn btn--ghost btn--icon btn--sm rq-panel__close" onClick={detail.onClose} aria-label={WORDS.close[locale]}>
+                      <Icon name="close" size={16} />
+                    </button>
+                  )}
+                </div>
+              )}
+              {/* The name keeps its own direction; the heading keeps the page's alignment. */}
+              <h2 className="rq-panel__title"><bdi>{detail.title}</bdi></h2>
+              {detail.status && <div className="rq-lead__status">{detail.status}</div>}
+            </header>
             {detail.body}
           </div>
         </aside>
@@ -171,12 +148,12 @@ export function RequestQueue({
   )
 }
 
-/** A titled part of the detail: a quiet label over a hairline. */
+/** A titled part of the inspector: a quiet label over a hairline. */
 export function DetailSection({ title, children, aside }: { title: string; children: ReactNode; aside?: ReactNode }) {
   return (
     <section className="rq-section" aria-label={title}>
       <div className="rq-section__head">
-        <h3 className="section-label rq-section__title">{title}</h3>
+        <h3 className="rq-section__title">{title}</h3>
         {aside}
       </div>
       {children}
@@ -184,128 +161,249 @@ export function DetailSection({ title, children, aside }: { title: string; child
   )
 }
 
-/** The detail's actions: they stay at the foot of the panel while it scrolls. */
-export function DetailActions({ children }: { children: ReactNode }) {
-  return <div className="rq-actions">{children}</div>
-}
-
 /**
- * The act that ends a request (cancel, decline, lost). It waits at the end of
- * the detail, below everything else, so it is found on purpose and never by a
- * slip beside the primary action.
+ * The inspector's foot: the ONE thing to do next, and everything else behind
+ * "⋯" (what ends the request last, marked as such). It stays at the foot while
+ * the inspector scrolls, and at the bottom of the screen on a phone.
  */
-export function DetailEnd({ children }: { children: ReactNode }) {
-  return <div className="rq-end">{children}</div>
-}
-
-/* ----------------------------------------------------------------- strip */
-
-export interface FlowCell<K extends string> {
-  key: K
-  label: string
-  /** Null when the count is not known: the cell then shows its name alone, never a zero. */
-  count: number | null
-  /** The list holds more than were counted ("25+"). */
-  more?: boolean
-  note?: string
-  /** A real problem: the numeral and the note turn terracotta. */
-  late?: boolean
-}
-
-/**
- * The states of a page as a ruled row of counts, on the shared ledger. Every
- * state stays on screen at every width: one row with room, two rows on a
- * narrower screen, rows of two or three on a phone. `tabs` keeps tab semantics
- * where a page had tabs.
- */
-export function FlowStrip<K extends string>({
-  label,
-  cells,
-  value,
-  onChange,
-  tabs = false,
-  children,
-}: {
-  label: string
-  cells: ReadonlyArray<FlowCell<K>>
-  value: K
-  onChange: (key: K) => void
-  tabs?: boolean
-  /** Further cells the page draws itself (a toggle that is not one of the states). */
-  children?: ReactNode
-}) {
-  // How many columns each width gets, so the rows are even and nothing is hidden or cut.
-  const n = cells.length + Children.toArray(children).length
-  const columns = { '--rq-n': n, '--rq-m': n <= 5 ? n : Math.ceil(n / 2), '--rq-p': n <= 3 ? n : n === 4 ? 2 : 3 }
-  // A last row that is not full is completed with empty ruled cells, so its rules run the whole width.
-  const missing = (per: number) => (per - (n % per)) % per
-  const fill = { m: missing(columns['--rq-m']), p: missing(columns['--rq-p']) }
+export function DetailFoot({ primary, more, label }: { primary?: ReactNode; more?: MenuItem[]; label: string }) {
+  const items = more ?? []
+  if (!primary && items.length === 0) return null
   return (
-    <div
-      className="ledger rq-strip"
-      role={tabs ? 'tablist' : 'group'}
-      aria-label={label}
-      style={columns as CSSProperties}
-      data-m={columns['--rq-m']}
-      data-p={columns['--rq-p']}
-    >
-      {cells.map((c) => (
-        <FlowStripCell
-          key={c.key}
-          cell={c}
-          active={c.key === value}
-          tab={tabs}
-          onClick={() => onChange(c.key)}
-        />
-      ))}
-      {children}
-      {Array.from({ length: Math.max(fill.m, fill.p) }, (_, i) => (
-        <span
-          key={`fill-${i}`}
-          className={['ledger__cell', 'rq-strip__fill', i < fill.m ? 'rq-strip__fill--m' : '', i < fill.p ? 'rq-strip__fill--p' : ''].filter(Boolean).join(' ')}
-          aria-hidden="true"
-        />
-      ))}
+    <div className="rq-foot">
+      {primary}
+      {items.length > 0 && <Menu label={label} items={items} icon="more" className="rq-foot__more" />}
     </div>
   )
 }
 
-export function FlowStripCell({
-  cell,
-  active,
-  onClick,
-  tab = false,
+/* ---------------------------------------------------------- groups & rows */
+
+/** Rows that belong together (a day, a wait), on their own headed sheet. An urgent group's count is solid terracotta. */
+export function QueueGroup({
+  title,
+  count,
+  tone,
+  note,
+  children,
 }: {
-  cell: Omit<FlowCell<string>, 'key'>
-  active: boolean
-  onClick: () => void
-  tab?: boolean
+  title: string
+  count?: number
+  tone?: 'urgent' | 'quiet'
+  /** One quiet fact at the head's end ("oldest 3 days ago"). */
+  note?: ReactNode
+  children: ReactNode
+}) {
+  const { number } = useI18n()
+  return (
+    <section className={tone === 'urgent' ? 'sheet rq-group rq-group--urgent' : 'sheet rq-group'} aria-label={title}>
+      <header className="sheet__head">
+        <h2 className="sheet__title">
+          {title}
+          {count !== undefined && <span className={tone === 'urgent' ? 'count count--urgent rq-group__count' : 'count count--quiet rq-group__count'}>{number(count)}</span>}
+        </h2>
+        {note && <span className="rq-group__note">{note}</span>}
+      </header>
+      <ul className="rq-rows">{children}</ul>
+    </section>
+  )
+}
+
+/**
+ * A request opens from anywhere on its row or card with a pointer; its own
+ * button is the keyboard path. Clicks on its controls are theirs alone.
+ */
+export function rowOpener(open: () => void) {
+  return (event: MouseEvent<HTMLElement>) => {
+    if ((event.target as HTMLElement).closest('button, a, input, select, textarea, label, [role="menu"]')) return
+    open()
+  }
+}
+
+/**
+ * One designed row: what leads it (a time, a type), who, one supporting line,
+ * the fact that matters, a tag, and its actions (one stated, the rest in "⋯").
+ */
+export function QueueRow({
+  lead,
+  title,
+  sub,
+  fact,
+  tag,
+  actions,
+  selected = false,
+  onOpen,
+}: {
+  lead?: ReactNode
+  title: string
+  sub?: ReactNode
+  fact?: ReactNode
+  tag?: ReactNode
+  actions?: ReactNode
+  selected?: boolean
+  /** Given, the name is the button that opens the request and the whole row opens it. */
+  onOpen?: () => void
+}) {
+  return (
+    <li className="rq-row" data-selected={selected || undefined} onClick={onOpen ? rowOpener(onOpen) : undefined}>
+      {lead && <div className="rq-row__lead">{lead}</div>}
+      <div className="rq-row__main">
+        {onOpen ? (
+          <button type="button" className="rq-open" onClick={onOpen} aria-current={selected ? 'true' : undefined}>
+            <bdi>{title}</bdi>
+          </button>
+        ) : (
+          <strong className="rq-row__title"><bdi>{title}</bdi></strong>
+        )}
+        {sub && <span className="rq-sub">{sub}</span>}
+      </div>
+      {fact && <div className="rq-row__fact">{fact}</div>}
+      {tag && <div className="rq-row__tag">{tag}</div>}
+      {actions && <div className="rq-row__actions">{actions}</div>}
+    </li>
+  )
+}
+
+/* ----------------------------------------------------------------- board */
+
+export interface BoardStage<K extends string> {
+  key: K
+  label: string
+  /** Null until its list has arrived: the head then shows its name alone, never a zero. */
+  count: number | null
+  /** The list holds more than were counted ("25+"). */
+  more?: boolean
+  /** A stage that holds a real problem: its count is solid terracotta. */
+  urgent?: boolean
+  /** The stage's cards. */
+  cards: ReactNode
+  /** One line for a stage with no cards. */
+  empty: string
+  /** Under the cards: a way to the rest of a long stage. */
+  foot?: ReactNode
+}
+
+/**
+ * A flow as a board: one column per stage, in the flow's order (the first stage
+ * at the inline start, so at the right in Arabic), each headed by its name and
+ * count. Cards move through the page's own actions; nothing is dragged.
+ *
+ * Below 1100px there is no room for columns: the stages become tabs with their
+ * counts and the cards a list. `value` is the stage in view ('all' for every
+ * stage); `tabs={false}` leaves the switch to the page (its masthead figures).
+ */
+export function Board<K extends string>({
+  label,
+  stages,
+  value,
+  onChange,
+  tabs = true,
+}: {
+  label: string
+  stages: ReadonlyArray<BoardStage<K>>
+  value: K | 'all'
+  onChange: (stage: K | 'all') => void
+  tabs?: boolean
 }) {
   const { locale, number } = useI18n()
-  const cls = ['ledger__cell', 'rq-strip__cell', cell.late ? 'ledger__cell--late' : '', cell.count === 0 ? 'rq-strip__cell--zero' : '']
-    .filter(Boolean)
-    .join(' ')
-  const state = tab ? { role: 'tab' as const, 'aria-selected': active } : { 'aria-pressed': active }
+  const wide = useWidePane()
+  const shown = value === 'all' ? stages : stages.filter((s) => s.key === value)
+  const figure = (s: BoardStage<K>) =>
+    s.count === null ? null : (
+      <>
+        {number(s.count)}
+        {s.more && (
+          <>
+            <span aria-hidden="true">+</span>
+            <span className="sr-only"> {WORDS.more[locale]}</span>
+          </>
+        )}
+      </>
+    )
+  const column = (s: BoardStage<K>) => (
+    <section key={s.key} className="rq-col" aria-label={s.label}>
+      <header className="rq-col__head">
+        <h2 className="rq-col__title">{s.label}</h2>
+        {s.count !== null && <span className={s.urgent ? 'count count--urgent' : 'count count--quiet'}>{figure(s)}</span>}
+      </header>
+      <div className="rq-col__cards">{s.count === 0 ? <p className="rq-col__empty">{s.empty}</p> : s.cards}</div>
+      {s.foot}
+    </section>
+  )
+
+  if (wide) {
+    return (
+      <div className={shown.length === 1 ? 'rq-board rq-board--one' : 'rq-board'} role="group" aria-label={label}>
+        {shown.map(column)}
+      </div>
+    )
+  }
+
+  const total = stages.every((s) => s.count !== null) ? stages.reduce((n, s) => n + (s.count ?? 0), 0) : null
+  // In the list of every stage, a stage with nothing in it is left out: its tab already says so.
+  const listed = value === 'all' ? stages.filter((s) => s.count !== 0) : shown
   return (
-    <button type="button" className={cls} onClick={onClick} {...state}>
-      <span className="ledger__label">{cell.label}</span>
-      {(cell.count !== null || cell.note) && (
-        <span className="rq-strip__figure">
-          {cell.count !== null && (
-            <span className="ledger__value">
-              {number(cell.count)}
-              {cell.more && (
-                <>
-                  <span className="rq-strip__more" aria-hidden="true">+</span>
-                  <span className="sr-only"> {WORDS.more[locale]}</span>
-                </>
-              )}
-            </span>
-          )}
-          {cell.note && <span className="ledger__note">{cell.note}</span>}
-        </span>
+    <div className="rq-board rq-board--list">
+      {tabs && (
+        <div className="seg rq-board__tabs" role="group" aria-label={label}>
+          <button type="button" className="seg__item" aria-pressed={value === 'all'} onClick={() => onChange('all')}>
+            {WORDS.all[locale]}
+            {total !== null && <span className="seg__count">{number(total)}</span>}
+          </button>
+          {stages.map((s) => (
+            <button key={s.key} type="button" className="seg__item" aria-pressed={value === s.key} onClick={() => onChange(s.key)}>
+              {s.label}
+              {s.count !== null && <span className="seg__count">{figure(s)}</span>}
+            </button>
+          ))}
+        </div>
       )}
-    </button>
+      {listed.length === 0 && shown.length > 0 ? <p className="rq-col__empty">{shown[0]!.empty}</p> : listed.map(column)}
+    </div>
+  )
+}
+
+/**
+ * One request on the board: who (the heading), what is known in a few quiet
+ * lines, how long it has waited, and its actions: one stated, the rest in "⋯".
+ */
+export function BoardCard({
+  title,
+  onOpen,
+  selected = false,
+  titleOpens = true,
+  children,
+  age,
+  actions,
+}: {
+  title: string
+  onOpen: () => void
+  selected?: boolean
+  /** False when the card's own primary action is "Open": the name is then plain text. */
+  titleOpens?: boolean
+  children?: ReactNode
+  age?: ReactNode
+  actions?: ReactNode
+}) {
+  return (
+    <article className="rq-card sheet" data-selected={selected || undefined} onClick={rowOpener(onOpen)}>
+      <h3 className="rq-card__title">
+        {titleOpens ? (
+          <button type="button" className="rq-open" onClick={onOpen} aria-current={selected ? 'true' : undefined}>
+            <bdi>{title}</bdi>
+          </button>
+        ) : (
+          <bdi>{title}</bdi>
+        )}
+      </h3>
+      {children && <div className="rq-card__body">{children}</div>}
+      {(age || actions) && (
+        <div className="rq-card__foot">
+          <span className="rq-card__age">{age}</span>
+          {actions}
+        </div>
+      )}
+    </article>
   )
 }
 
@@ -324,7 +422,7 @@ export interface FlowStep {
 }
 
 /**
- * A request's steps, top to bottom. A filled teal dot is done, the gold ring is
+ * A request's steps, top to bottom. A solid teal dot is done, the gold ring is
  * where it stands now, a hairline ring is still to come, terracotta is a problem.
  */
 export function FlowSteps({ steps, label }: { steps: ReadonlyArray<FlowStep>; label: string }) {
@@ -348,45 +446,17 @@ export function FlowSteps({ steps, label }: { steps: ReadonlyArray<FlowStep>; la
   )
 }
 
-/* ------------------------------------------------------------------ rows */
-
-/**
- * A queue row opens its detail from anywhere on it with a pointer; its own
- * button is the keyboard path. Clicks on the row's controls are theirs alone.
- */
-export function rowOpener(open: () => void) {
-  return (event: MouseEvent<HTMLTableRowElement>) => {
-    if ((event.target as HTMLElement).closest('button, a, input, select, textarea, label')) return
-    open()
-  }
-}
-
-/** The row's name, as the button that opens it. */
-export function RowOpen({
-  selected,
-  onOpen,
-  children,
-  label,
-}: {
-  selected: boolean
-  onOpen: () => void
-  children: ReactNode
-  /** An accessible name other than the visible text. */
-  label?: string
-}) {
-  return (
-    <button type="button" className="rq-open" onClick={onOpen} aria-current={selected ? 'true' : undefined} aria-label={label}>
-      <bdi>{children}</bdi>
-    </button>
-  )
-}
-
 /* ------------------------------------------------------------------- age */
 
 const dayKey = new Intl.DateTimeFormat('en-CA', { timeZone: ACADEMY_ZONE, year: 'numeric', month: '2-digit', day: '2-digit' })
 /** The academy's calendar day of an instant, as YYYY-MM-DD. */
-const academyDay = (d: Date) => dayKey.format(d)
+export const academyDayOf = (iso: string | Date): string => dayKey.format(typeof iso === 'string' ? new Date(iso) : iso)
 const daysBetween = (from: string, to: string) => Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000)
+
+/** How many academy calendar days from now to an instant: 0 today, 1 tomorrow, -1 yesterday. */
+export function dayOffset(iso: string, now: Date = new Date()): number {
+  return daysBetween(academyDayOf(now), academyDayOf(iso))
+}
 
 /**
  * True when something has waited since before today on the academy's calendar.
@@ -395,7 +465,7 @@ const daysBetween = (from: string, to: string) => Math.round((Date.parse(`${to}T
  */
 export function waitedOvernight(iso: string, now: Date = new Date()): boolean {
   const t = new Date(iso)
-  return !Number.isNaN(t.getTime()) && academyDay(t) < academyDay(now)
+  return !Number.isNaN(t.getTime()) && academyDayOf(t) < academyDayOf(now)
 }
 
 /** "in 2 days", "3 hours ago", "yesterday": by the academy's calendar, in the reader's language. */
@@ -403,7 +473,7 @@ export function ageText(iso: string, locale: 'ar' | 'en', now: Date = new Date()
   const t = new Date(iso)
   if (Number.isNaN(t.getTime())) return iso
   const f = new Intl.RelativeTimeFormat(LOCALE_TAG[locale], { numeric: 'auto' })
-  const days = daysBetween(academyDay(now), academyDay(t))
+  const days = daysBetween(academyDayOf(now), academyDayOf(t))
   if (days !== 0) return f.format(days, 'day')
   const minutes = Math.round((t.getTime() - now.getTime()) / 60_000)
   if (Math.abs(minutes) < 60) return f.format(minutes, 'minute')
