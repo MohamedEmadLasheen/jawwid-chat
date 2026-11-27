@@ -555,8 +555,14 @@ describe('The desktop rail', () => {
     const nav = within(sidebar).getByRole('navigation', { name: 'Admin Portal' })
     expect(within(nav).getByRole('button', { name: 'Finance' })).toBeInTheDocument()
 
+    // Folded, the head shows the mark (the book); opened, the full wordmark.
+    expect(sidebar.querySelector('.side__brand .brand-mark')).not.toBeNull()
+    expect(sidebar.querySelector('.side__brand .brand-logo')).toBeNull()
+
     await userEvent.click(within(sidebar).getByRole('button', { name: 'Expand sidebar' }))
     expect(sidebar).toHaveAttribute('data-rail', 'expanded')
+    expect(sidebar.querySelector('.side__brand .brand-mark')).toBeNull()
+    expect(sidebar.querySelector('.side__brand .brand-logo')).not.toBeNull()
     expect(sidebar.closest('.shell')).toHaveClass('shell--rail-open')
     expect(localStorage.getItem('jawwid.sidebar.expanded')).toBe('1')
     unmount()

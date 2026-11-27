@@ -110,6 +110,14 @@ This replaces the earlier "labelled navigation" instruction.
   - The closed day's narrow, quieter column. When today is the academy's closed day it stays quiet; the gold mark says "today".
 - **Logged for later:** the middle-dot plan labels on Instalments and receipts ("… · 2/4"). They come from the server's label; Today already re-renders them as words, and the other pages should share that helper.
 
+### The Jawwid mark (owner's instruction, 2026-11-27)
+- **The mark.** The folded sidebar's header shows the open-book glyph from the owner's logo file. It is cropped pixel for pixel: there is no redraw and no recolour, and all book pixels are byte-identical to the file. It is centred in a square with even side padding and replaces the earlier crop of the lockup's middle.
+- **Wordmark kept.** The opened sidebar, the phone top bar and the sign-in page keep the full JAWWID wordmark.
+- **Size.** In a 60px rail the mark is drawn at 52px. The book is about 5:1, so it is about 45 × 9 CSS px and sharp at 1× and 2×.
+- **Favicon.** The same mark is the favicon: SVG, 48, 32 and 16 px. At 16 px the book is about 3 px tall, a limit of its shape.
+- **SVG.** The SVG wraps the exact PNG. Tracing it into vectors would be a redraw, which the brief rules out.
+- **Provenance:** `docs/design/brand-mark/README.md`.
+
 ## Lead decisions while integrating
 - Shared fixes the builders reported went into `system.css` (outline tags without dashes, table row headers, neutral dots visible on white, stacked-sheet spacing, Arabic count size, switch buttons, one-letter Arabic avatars, a neutral note under an urgent figure); the teachers stylesheet's global `.sheet + .sheet` rule moved into the system.
 - "Teacher profiles" in Arabic reads "مؤهلات المعلمين" (credentials review): it shared its name with Teacher files.

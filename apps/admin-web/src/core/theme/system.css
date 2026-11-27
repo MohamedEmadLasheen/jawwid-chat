@@ -1125,10 +1125,10 @@ button.side__item.is-current::before { content: none; }
   .side__foot { gap: 4px; }
 
   .sidebar[data-rail='collapsed'] .side__head { justify-content: center; padding: 0; }
-  .sidebar[data-rail='collapsed'] .side__brand { gap: 0; padding: 16px 0 10px; }
+  .sidebar[data-rail='collapsed'] .side__brand { gap: 0; padding: 2px 0 0; }
   .sidebar[data-rail='collapsed'] .side__product { display: none; }
-  /* The lockup has no separate mark: the folded rail shows its middle, the W under the open book. */
-  .sidebar[data-rail='collapsed'] .side__brand .brand-logo { inline-size: 36px; block-size: 40px; object-fit: cover; object-position: 50% 0%; }
+  /* Folded, the rail shows the mark: the lockup's open book in its own square (assets/brand/jawwid-mark.svg). */
+  .side__brand .brand-mark { display: block; inline-size: 52px; block-size: 52px; }
   .sidebar[data-rail='collapsed'] .side__searchrow { flex-direction: column; gap: 2px; margin: 2px 10px 8px; }
   .sidebar[data-rail='collapsed'] .side__search { flex: none; justify-content: center; inline-size: 40px; block-size: 40px; padding: 0; border-color: transparent; background: none; color: var(--ink-2); }
   .sidebar[data-rail='collapsed'] .side__search:hover { background: var(--sidebar-hover); }

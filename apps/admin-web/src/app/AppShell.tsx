@@ -23,7 +23,7 @@ import { NotificationBell } from '@/features/notification-center/NotificationBel
 import { SearchPalette, useSearchShortcut } from '@/features/search/SearchPalette'
 import { S as SEARCH } from '@/features/search/copy'
 import { Avatar } from '@/shared/components/Avatar'
-import { BrandLogo } from '@/shared/components/BrandLogo'
+import { BrandLogo, BrandMark } from '@/shared/components/BrandLogo'
 import { Icon } from '@/shared/components/Icon'
 import { Menu } from '@/shared/components/Menu'
 import { useMediaQuery } from '@/shared/hooks/useMediaQuery'
@@ -590,7 +590,8 @@ function Sidebar({
       <div className="side__head">
         {/* The logo goes to Today. It sits outside the navigation landmark: it is not one of its destinations. */}
         <Link to={TODAY_PATH} className="side__brand" aria-label={`Jawwid — ${tx(TODAY_LABEL)}`} title={tx(TODAY_LABEL)}>
-          <BrandLogo />
+          {/* Folded, the rail shows the mark (the book); opened, the full wordmark. */}
+          {folded ? <BrandMark /> : <BrandLogo />}
           <span className="side__product">{staff && isSuperAdmin(staff.role) ? tx(TEXT.adminPortal) : tx(TEXT.operations)}</span>
         </Link>
         {!rail && (
