@@ -99,9 +99,10 @@
 .dash-tile--large:hover .dash-tile__go { color: var(--teal); }
 
 /* A section's other figures, and the calm sections: a name, a figure. */
+/* A quiet figure: its number first, as on a waiting row, so it never pairs with the next label. */
 .dash-tile--line {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: 44px minmax(0, 1fr);
   align-items: baseline;
   gap: 0 var(--space-3);
   min-block-size: 38px;
@@ -110,13 +111,13 @@
   font-size: var(--fs-sm);
   color: var(--ink-2);
 }
-.dash-tile--line .dash-tile__text { grid-column: 1; grid-row: 1; }
+.dash-tile--line .dash-tile__text { grid-column: 2; grid-row: 1; }
 .dash-tile--line .dash-tile__value {
-  grid-column: 2;
+  grid-column: 1;
   grid-row: 1;
   font-family: var(--font-head);
   font-size: var(--fs-lg);
-  font-weight: 600;
+  font-weight: 500;
   font-variant-numeric: tabular-nums lining-nums;
   color: var(--ink);
   unicode-bidi: isolate;

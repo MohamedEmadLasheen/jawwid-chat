@@ -1,8 +1,9 @@
 /*
  * The call window. Always dark, in both themes: a call is a different mode
- * from the paper around it. Its colours are the palette's deep teal, the paper
- * white, terracotta to end and the success green to answer; they are named once
- * here, and the paper white on each fill clears 4.5:1. The controls keep their
+ * from the work around it. Its colours are the brand's deep teal, white, the
+ * system's urgent red to end and its done green to answer; they are named once
+ * here, and white on each fill clears 4.5:1. No gold: ringing is said in words
+ * and a breathing green dot. The controls keep their
  * places in both languages (media controls are never mirrored); the glyphs
  * themselves never mirror either.
  */
@@ -15,10 +16,10 @@
   --call-control: rgba(255, 254, 250, 0.1);
   --call-control-hover: rgba(255, 254, 250, 0.18);
   --call-control-on: #fffefa;
-  --call-hangup: #a13c28;
-  --call-accept: #1e6a4e;
-  --call-alert: #f2b8a6;
-  --call-gold: #dfa855;
+  --call-hangup: #b42318;
+  --call-accept: #1e6f46;
+  --call-alert: #f6b7ae;
+  --call-ring: #74c79a;
 
   position: fixed;
   inset-block-end: var(--space-5, 20px);
@@ -28,15 +29,14 @@
   background: var(--call-bg);
   color: var(--call-fg);
   border: 1px solid var(--call-line);
-  border-radius: var(--radius-lg, 8px);
-  box-shadow: var(--shadow-pop);
+  border-radius: var(--radius-xl, 14px);
+  box-shadow: var(--shadow-palette);
   display: flex;
   flex-direction: column;
   overflow: hidden;
   touch-action: none;
 }
-/* Ringing: a gold rule along the top, and a dot that breathes beside the words. */
-.call-window--incoming { border-block-start: 2px solid var(--call-gold); }
+/* Ringing: a dot that breathes beside the words. */
 .call-window--incoming .call-window__status::before {
   content: '';
   display: inline-block;
@@ -44,7 +44,7 @@
   block-size: 7px;
   margin-inline-end: 8px;
   border-radius: 50%;
-  background: var(--call-gold);
+  background: var(--call-ring);
   animation: call-ring 1.1s var(--ease-out, ease-out) infinite alternate;
 }
 
@@ -56,7 +56,7 @@
   padding: 7px var(--space-4, 16px);
   border-block-end: 1px solid var(--call-line);
   color: var(--call-muted);
-  font-size: var(--fs-xs, 12px);
+  font-size: var(--fs-xs, 13px);
   cursor: grab;
   user-select: none;
 }
@@ -74,16 +74,18 @@
 .call-window__avatar .avatar {
   inline-size: 72px;
   block-size: 72px;
-  border-radius: var(--radius-lg, 8px);
-  font-family: var(--display);
+  border-radius: 18px;
+  background: var(--call-raised);
+  color: var(--call-fg);
+  font-family: var(--font-head);
   font-size: 28px;
   margin-block-end: var(--space-3, 12px);
 }
 .call-window__name {
   margin: 0;
-  font-family: var(--display);
+  font-family: var(--font-head);
   font-size: var(--fs-xl, 21px);
-  font-weight: 600;
+  font-weight: 700;
   line-height: 1.3;
 }
 .call-window__sub { margin: 0; color: var(--call-muted); font-size: var(--fs-sm, 13px); }
@@ -112,14 +114,14 @@
 }
 
 .call-window__action { display: flex; flex-direction: column; align-items: center; gap: 5px; min-inline-size: 60px; }
-.call-window__action-label { color: var(--call-muted); font-size: var(--fs-xs, 12px); text-align: center; max-inline-size: 84px; unicode-bidi: plaintext; }
+.call-window__action-label { color: var(--call-muted); font-size: var(--fs-xs, 13px); text-align: center; max-inline-size: 84px; unicode-bidi: plaintext; }
 
 .call-window__round {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border: 0;
-  border-radius: var(--radius-lg, 8px);
+  border-radius: 50%;
   cursor: pointer;
   color: var(--call-fg);
   background: var(--call-control);

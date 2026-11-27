@@ -36,6 +36,9 @@
   color: var(--ink-2);
 }
 .nc-day:first-child .nc-day__head { border-block-start: 0; }
+/* What asks for action leads; its titles keep weight whether read or not. */
+.nc-day--asks .nc-item__title { font-weight: 600; color: var(--ink); }
+.nc-item__open.btn--ghost { color: var(--teal); }
 .nc-list { list-style: none; margin: 0; padding: 0; }
 .nc-item {
   display: grid;
@@ -81,6 +84,7 @@
   -webkit-box-orient: vertical;
 }
 .nc-item__due { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 4px 0 0; font-size: var(--fs-sm); font-weight: 600; color: var(--ink-muted); }
+.nc-item__ask { font-weight: 500; color: var(--ink-2); }
 .nc-item__due--soon { color: var(--waiting); }
 .nc-item__due--late { color: var(--urgent); }
 .nc-item__time { padding-block-start: 8px; font-size: var(--fs-sm); color: var(--ink-muted); white-space: nowrap; font-variant-numeric: tabular-nums; unicode-bidi: isolate; }
@@ -142,7 +146,7 @@
   .nc-settings { grid-template-columns: minmax(0, 1fr); gap: var(--space-3); }
   .nc-settings__nav { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
   .nc-settings__link { flex: none; min-block-size: 44px; box-shadow: 0 0 0 1px var(--line); background: var(--surface); }
-  .nc-settings__link[aria-current='true'] { box-shadow: 0 0 0 1.5px var(--teal); }
+  .nc-settings__link[aria-current='true'] { background: var(--teal-tint); box-shadow: none; color: var(--teal-dark); }
 }
 @media (max-width: 767px) {
   /* What happened at the start; the time above the way in at the end. */

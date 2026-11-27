@@ -6,7 +6,7 @@ export { useCopy } from '@/features/organization/copy'
 /** PD-35 B5: escalation cases, Arabic and English side by side. */
 export const C = {
   title: { en: 'Escalations', ar: 'التصعيدات' },
-  sortNeed: { en: 'Past due first, then soonest due', ar: 'المتجاوزة موعدها أولًا، ثم الأقرب موعدًا' },
+  sortNeed: { en: 'Overdue first, then soonest due', ar: 'المتأخرة أولًا، ثم الأقرب موعدًا' },
   empty: { en: 'No open escalations in this list', ar: 'لا تصعيدات مفتوحة في هذه القائمة' },
   emptyAll: { en: 'No escalations in this list', ar: 'لا تصعيدات في هذه القائمة' },
   emptyHint: {
@@ -23,7 +23,7 @@ export const C = {
   about: { en: 'About', ar: 'بخصوص' },
   history: { en: 'History', ar: 'السجل' },
   start: { en: 'Start working on it', ar: 'بدء العمل عليها' },
-  resolve: { en: 'Resolve', ar: 'حل' },
+  resolve: { en: 'Resolve', ar: 'تمّ الحل' },
   cancel: { en: 'Cancel case', ar: 'إلغاء الحالة' },
   addNote: { en: 'Add a note', ar: 'إضافة ملاحظة' },
   note: { en: 'Note', ar: 'ملاحظة' },
@@ -33,8 +33,8 @@ export const C = {
   close: { en: 'Close', ar: 'إغلاق' },
   pastDue: { en: 'Past due', ar: 'تجاوزت موعدها' },
   // The due day, relative to today: "Due tomorrow", "Was due 3 days ago".
-  dueWhen: { en: 'Due {when}', ar: 'موعدها {when}' },
-  wasDue: { en: 'Was due {when}', ar: 'تجاوزت موعدها {when}' },
+  dueWhen: { en: 'Due {when}', ar: 'تستحق {when}' },
+  wasDue: { en: 'Was due {when}', ar: 'استحقت {when}' },
 
   factOpenedBy: { en: 'Opened by', ar: 'فتحها' },
   moreActions: { en: 'More actions: {name}', ar: 'إجراءات أخرى: {name}' },
@@ -53,9 +53,10 @@ export const C = {
 
 /** The queue's groups: where a case stands. */
 export const GROUP_LABEL = {
-  past: { en: 'Past due', ar: 'تجاوزت موعدها' },
-  today: { en: 'Due today', ar: 'موعدها اليوم' },
-  tomorrow: { en: 'Due tomorrow', ar: 'موعدها غدًا' },
+  past: { en: 'Overdue', ar: 'متأخرة' },
+  today: { en: 'Due today', ar: 'تستحق اليوم' },
+  tomorrow: { en: 'Due tomorrow', ar: 'تستحق غدًا' },
+  week: { en: 'This week', ar: 'خلال الأسبوع' },
   later: { en: 'Later', ar: 'لاحقًا' },
   none: { en: 'No due date', ar: 'بلا موعد' },
   closed: { en: 'Closed', ar: 'مغلقة' },

@@ -97,7 +97,6 @@ export function DashboardSections({ shown }: { shown: Shown }) {
     .filter((r) => r.waiting.length > 0 || r.failed)
     .sort((x, y) => Number(y.late) - Number(x.late) || x.since - y.since || y.most - x.most)
   const calm = ranked.filter((r) => r.waiting.length === 0 && !r.failed)
-  const kinds = needs.reduce((n, r) => n + r.waiting.length, 0)
   // The late items themselves, not the rows: "11 late" is what a manager acts on.
   const lateItems = needs.reduce((n, r) => n + r.waiting.filter(isLate).reduce((m, t) => m + t.count, 0), 0)
   const settled = shown.every(({ query }) => !query.isLoading)
@@ -107,11 +106,6 @@ export function DashboardSections({ shown }: { shown: Shown }) {
       <h2 className="dash-needs__head" id="dash-needs-title">
         <span className="dash-needs__title">{tx(D.needs)}</span>
         {lateItems > 0 && <span className="count count--urgent dash-needs__count">{fill(tx(D.lateCount), { n: number(lateItems) })}</span>}
-        {kinds > 0 && (
-          <span className="dash-needs__sort">
-            {tx(D.sortNeed)}
-          </span>
-        )}
       </h2>
       {needs.length === 0 && <p className="dash-needs__clear">{tx(settled ? D.needsClear : D.needsLoading)}</p>}
       {calm.length > 0 && <h2 className="dash-calm__head">{tx(D.calm)}</h2>}
@@ -213,7 +207,14 @@ function Figure({ tile, present, large = false }: { tile: DashboardTile; present
   const shape = large ? 'dash-tile dash-tile--large' : 'dash-tile dash-tile--line'
   // A late figure above zero is red: the one colour a manager reads first.
   const tone = (alert ? ' dash-tile--alert' : tile.count === 0 ? ' dash-tile--zero' : '') + (isLate(tile) ? ' dash-tile--late' : '')
-  const age = tile.oldestAt && tile.count > 0 ? <span className="dash-tile__note">{fill(tx(D.oldest), { age: relativeTime(tile.oldestAt, locale) })}</span> : null
+  // How long the oldest has waited, on a waiting row only; a late row with no age still says it is late.
+  const age = !large
+    ? null
+    : tile.oldestAt && tile.count > 0
+      ? <span className="dash-tile__note">{fill(tx(D.oldest), { age: relativeTime(tile.oldestAt, locale) })}</span>
+      : isLate(tile)
+        ? <span className="dash-tile__note">{tx(D.late)}</span>
+        : null
   return (
     <li>
       <Link to={spec.href(present)} className={shape + tone}>

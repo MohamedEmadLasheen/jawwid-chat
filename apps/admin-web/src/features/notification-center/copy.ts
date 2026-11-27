@@ -6,6 +6,7 @@ export { useCopy, type Pair } from '@/features/organization/copy'
 /** PD-34 copy, Arabic and English side by side. */
 export const N = {
   title: { en: 'Notifications', ar: 'الإشعارات' },
+  asks: { en: 'Asks you to act', ar: 'تحتاج إجراءً منك' },
   dueBy: { en: 'due {when}', ar: 'موعده {when}' },
   wasDue: { en: 'was due {when}', ar: 'تجاوز موعده {when}' },
   bell: { en: 'Notifications, {n} unread', ar: 'الإشعارات، {n} غير مقروءة' },

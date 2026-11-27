@@ -189,8 +189,8 @@
 
 /* The open task (or case): a white sheet that stays on screen beside the queue,
    its one action at the foot. */
-/* (A shared rule spaces a section after a sheet by 24px; beside the queue the inspector starts level with it.) */
-.tq > .insp { margin: 0; }
+/* teachers/rows.css spaces any .sheet + .sheet by 24px (a global rule); beside the queue the inspector starts level with it. */
+.tq > .sheet.insp { margin: 0; }
 .insp {
   position: sticky;
   inset-block-start: 0;
@@ -327,7 +327,7 @@
 }
 @media (max-width: 767px) {
   /* On a phone the open task is the whole screen, over the bar, with its own close. */
-  .insp { inset-block-start: 0; z-index: 60; inline-size: 100%; border: 0; box-shadow: none; }
+  .insp { inset-block-start: 0; z-index: 90; inline-size: 100%; border: 0; box-shadow: none; }
   .insp__head, .insp__body, .insp__foot { padding-inline: var(--space-4); }
   .insp__facts { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   .tasks__tabs, .cases__bar .ts-tabs { gap: var(--space-4); flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }

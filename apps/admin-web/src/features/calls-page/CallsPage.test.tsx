@@ -302,7 +302,7 @@ describe('Calls page layout', () => {
     // The length has its own column in the history table.
     expect(within(rows[0]!).getByText('2:05')).toBeInTheDocument()
     // CHATSCHED-013: a call that dropped says so beside its outcome.
-    expect(within(rows[0]!).getByText('· Connection lost')).toBeInTheDocument()
+    expect(within(rows[0]!).getByText('Connection lost')).toBeInTheDocument()
     expect(within(rows[1]!).queryByText(/Connection lost/)).not.toBeInTheDocument()
     // A group call is named after the conversation, not its participants; missed is marked.
     expect(within(rows[1]!).getByText('Group Alpha')).toHaveClass('cp-row__name--missed')

@@ -13,7 +13,7 @@ import { RowActions } from '@/shared/components/RowActions'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
 import { describeError } from '@/features/teacher-files/copy'
 import { academyToday } from '@/features/schedule/viewState'
-import { ACADEMY_ZONE, dayMonthIn } from '@/core/time/academyTime'
+import { ACADEMY_ZONE, clock12In, dayMonthIn } from '@/core/time/academyTime'
 import { casesApi, type CaseDetail, type CaseStatus, type CaseSummary, type CaseTab } from './api'
 import { C, EVENT_LABEL, GROUP_LABEL, STATUS_LABEL, SUBJECT_LABEL, TAB_LABEL, TARGET_LABEL, useCopy } from './copy'
 import { CASES_ACCESS_KEYS, TasksAreaTabs } from '@/features/tasks/TasksAreaTabs'
@@ -29,25 +29,25 @@ const keys = {
 }
 
 /** Not started is plain; being worked on is information; resolved is done. Urgency is the due day's to say. */
-const STATUS_TONE: Record<CaseStatus, 'info' | 'ok' | 'waiting' | 'outline'> = {
+const STATUS_TONE: Record<CaseStatus, 'info' | 'ok' | 'outline'> = {
   open: 'info',
-  in_progress: 'waiting',
+  in_progress: 'info',
   resolved: 'ok',
   cancelled: 'outline',
 }
 /** Where a case stands in the queue, by its due day as Tasks is: past it first, then today or tomorrow, then later. */
-type Group = 'past' | 'today' | 'tomorrow' | 'later' | 'none' | 'closed'
-const GROUPS: Group[] = ['past', 'today', 'tomorrow', 'later', 'none', 'closed']
+type Group = 'past' | 'today' | 'tomorrow' | 'week' | 'later' | 'none' | 'closed'
+const GROUPS: Group[] = ['past', 'today', 'tomorrow', 'week', 'later', 'none', 'closed']
 const isLive = (c: Pick<CaseSummary, 'status'>) => c.status === 'open' || c.status === 'in_progress'
 function groupOf(c: Pick<CaseSummary, 'status' | 'dueOn'>, today: string): Group {
   if (!isLive(c)) return 'closed'
   if (!c.dueOn) return 'none'
   const left = daysUntil(c.dueOn, today)
-  return left < 0 ? 'past' : left === 0 ? 'today' : left === 1 ? 'tomorrow' : 'later'
+  return left < 0 ? 'past' : left === 0 ? 'today' : left === 1 ? 'tomorrow' : left <= 7 ? 'week' : 'later'
 }
 
-/** Grey while there is time, amber on the day before and the day itself, red once it has passed. */
-const breachOf = (left: number) => (left < 0 ? 'late' : left <= 1 ? 'soon' : 'later')
+/** A case is due by the end of its day: grey while there is time, amber on the day itself (its last day), red once it has passed. */
+const breachOf = (left: number) => (left < 0 ? 'late' : left === 0 ? 'soon' : 'later')
 
 /** A case's due day ("2026-11-29") as a date in the viewer's language: "29 November". */
 function useDay() {
@@ -178,9 +178,8 @@ function CaseRow({ c, today, selected, onOpen }: { c: CaseSummary; today: string
   const words = useDaysWords()
   const live = isLive(c)
   const left = c.dueOn ? daysUntil(c.dueOn, today) : null
-  // Grey while there is time, amber on the day before and the day itself, red once it has passed.
-  const late = live && left !== null && left < 0
-  const soon = live && left !== null && left >= 0 && left <= 1
+  const late = live && left !== null && breachOf(left) === 'late'
+  const soon = live && left !== null && breachOf(left) === 'soon'
   const sep = locale === 'ar' ? '، ' : ', '
   return (
     <li className={`tq-row tq-row--case${selected ? ' tq-row--selected' : ''}${late ? ' tq-row--late' : ''}${soon ? ' tq-row--soon' : ''}`}>
@@ -222,7 +221,7 @@ function CaseRow({ c, today, selected, onOpen }: { c: CaseSummary; today: string
 
 function CasePanel({ id, onClose }: { id: string; onClose: () => void }) {
   const tx = useCopy()
-  const { locale, dateTime } = useI18n()
+  const { locale } = useI18n()
   const day = useDay()
   const qc = useQueryClient()
   const one = useQuery({ queryKey: keys.one(id), queryFn: () => casesApi.get(id) })
@@ -356,7 +355,7 @@ function CasePanel({ id, onClose }: { id: string; onClose: () => void }) {
                     <span className="cases__history-by">
                       <bdi>{e.actor.name}</bdi>
                       {locale === 'ar' ? '، ' : ', '}
-                      <time dateTime={e.at}>{dateTime(e.at)}</time>
+                      <time dateTime={e.at}>{`${dayMonthIn(e.at, ACADEMY_ZONE, locale)}${locale === 'ar' ? '، ' : ', '}${clock12In(e.at, ACADEMY_ZONE, locale)}`}</time>
                     </span>
                     {e.note && <p className="cases__text" dir="auto">{e.note}</p>}
                   </li>

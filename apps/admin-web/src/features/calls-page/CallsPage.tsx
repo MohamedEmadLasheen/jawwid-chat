@@ -154,7 +154,7 @@ function RecentRow({
           <Badge tone={missed ? 'danger' : row.outcome === 'answered' ? 'ok' : row.outcome ? 'neutral' : 'info'}>
             <span>{status}</span>
           </Badge>
-          {row.endReason === 'connection_lost' ? <span className="cp-recent__lost">· {copy.connectionLost}</span> : null}
+          {row.endReason === 'connection_lost' ? <span className="cp-recent__lost">{copy.connectionLost}</span> : null}
         </span>
       </span>
       <span className="cp-recent__len">{row.durationSeconds ? <bdi>{copy.duration(row.durationSeconds)}</bdi> : null}</span>
@@ -284,7 +284,6 @@ export function CallsPage() {
   }, [upcomingRows])
   const dayName = (day: string, at: string) =>
     day === today ? copy.today : day === tomorrow ? copy.tomorrow : `${weekdayIn(at, ACADEMY_ZONE, locale)} ${dayMonthIn(at, ACADEMY_ZONE, locale)}`
-  const openNow = (upcoming.data ?? []).filter((c) => c.state !== 'cancelled' && isJoinable(c.joinableFrom, c.joinableUntil, now)).length
 
   const upcomingSection = (
     <section className="sheet cp-section" aria-labelledby="cp-upcoming">
@@ -413,14 +412,6 @@ export function CallsPage() {
         <PageHeader
           title={copy.title}
           subtitle={copy.subtitle}
-          figures={
-            upcoming.data
-              ? [
-                  { key: 'open', label: copy.stateOpen, value: String(openNow), tone: openNow > 0 ? 'key' : 'quiet' },
-                  { key: 'scheduled', label: copy.figScheduled, value: String(upcoming.data.filter((c) => c.state !== 'cancelled').length) },
-                ]
-              : undefined
-          }
           actions={
             <section className="cp-actions" aria-label={copy.actions}>
               <button type="button" className="btn btn--primary cp-action" onClick={() => pick('call')}>

@@ -371,7 +371,7 @@ function TaskRow({ task, showAssignee, selected, onOpen }: { task: TaskSummary; 
           {!closed && <PriorityChip task={task} />}
           {task.category === 'financial' && <FinanceTag />}
           {!closed && state !== 'open' && <Badge tone={STATE_TONE[state]}>{tx(STATE_LABEL[state])}</Badge>}
-          {task.needsReassignment && !closed && <Badge tone="waiting">{tx(C.goneOnly)}</Badge>}
+          {task.needsReassignment && !closed && <Badge tone="neutral">{tx(C.goneOnly)}</Badge>}
         </div>
       </div>
       {/* The one fact a queue is read for: how long until it is due, or how long since. */}
@@ -407,7 +407,7 @@ function TaskRow({ task, showAssignee, selected, onOpen }: { task: TaskSummary; 
 
 function TaskPanel({ id, onClose }: { id: string; onClose: () => void }) {
   const tx = useCopy()
-  const { locale } = useI18n()
+  const { locale, duration } = useI18n()
   const qc = useQueryClient()
   const when = useWhen()
   const title = useTitle()
@@ -472,8 +472,16 @@ function TaskPanel({ id, onClose }: { id: string; onClose: () => void }) {
                 </span>
                 {live && <PriorityChip task={t} />}
                 {t.category === 'financial' && <FinanceTag />}
-                <Badge tone={STATE_TONE[state]}>{tx(STATE_LABEL[state])}</Badge>
+                {state !== 'open' && <Badge tone={STATE_TONE[state]}>{tx(STATE_LABEL[state])}</Badge>}
               </div>
+              {/* When it is due, in words and coloured as on the row: the one fact the queue is read for. */}
+              {live && t.dueAt && (
+                <p className={`insp__due insp__due--${t.overdue ? 'late' : Date.parse(t.dueAt) - Date.now() < SOON_MS ? 'soon' : 'later'}`}>
+                  {t.overdue ? tx(C.dueAgo, { ago: duration(t.dueAt) }) : relativeTime(t.dueAt, locale)}
+                  {locale === 'ar' ? '، ' : ', '}
+                  {when(t.dueAt)}
+                </p>
+              )}
             </header>
 
             <div className="insp__body">
@@ -488,13 +496,16 @@ function TaskPanel({ id, onClose }: { id: string; onClose: () => void }) {
                     <dd dir="auto">{t.createdBy.name}</dd>
                   </div>
                 )}
+                {/* Shown as a fact only where it cannot be edited below (the line under the title says it in words). */}
+                {!can.has('due') && (
                 <div>
-                  <dt>{tx(C.dueAt)}</dt>
-                  <dd className={t.overdue && live ? 'insp__late' : undefined}>
-                    <span className="insp__when">{t.dueAt ? when(t.dueAt) : tx(C.noDue)}</span>
-                    {t.overdue && t.priorityReason !== 'overdue' && live && <OverdueMark />}
-                  </dd>
-                </div>
+                    <dt>{tx(C.dueAt)}</dt>
+                    <dd className={t.overdue && live ? 'insp__late' : undefined}>
+                      <span className="insp__when">{t.dueAt ? when(t.dueAt) : tx(C.noDue)}</span>
+                      {t.overdue && t.priorityReason !== 'overdue' && live && <OverdueMark />}
+                    </dd>
+                  </div>
+                )}
                 {link && (
                   <div>
                     <dt>{tx(C.factWhere)}</dt>
