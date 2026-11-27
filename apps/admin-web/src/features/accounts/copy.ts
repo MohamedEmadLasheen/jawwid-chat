@@ -24,7 +24,6 @@ export const A = {
   noLogin: { en: 'No password yet', ar: 'لا توجد كلمة مرور بعد' },
   locked: { en: 'Locked', ar: 'مقفل مؤقتًا' },
   childrenLabel: { en: 'Children:', ar: 'الأطفال:' },
-  moreChildren: { en: '{n} more', ar: 'و{n} آخرون' },
   noneNeedHand: { en: 'No sign-in here needs a hand right now.', ar: 'لا يحتاج أي حساب هنا إلى مساعدة الآن.' },
   liveSession: { en: 'Your support session in {name}’s account is still open.', ar: 'جلسة الدعم التي فتحتها في حساب {name} ما زالت مفتوحة.' },
   empty: { en: 'No accounts to show.', ar: 'لا توجد حسابات لعرضها.' },
@@ -85,6 +84,12 @@ export const A = {
 } satisfies Record<string, Pair>
 
 export const ACCOUNTS_COUNT: CountForms = { en: ['{n} account', '{n} accounts'], ar: ['حساب واحد', 'حسابان', '{n} حسابات', '{n} حسابًا'] }
+
+/** The children past the first few named on a row. */
+export const MORE_CHILDREN: CountForms = {
+  en: ['and {n} more', 'and {n} more'],
+  ar: ['وطفل آخر', 'وطفلان آخران', 'و{n} أطفال آخرين', 'و{n} طفلًا آخر'],
+}
 
 /** How many sign-ins in the list need a hand (locked, no password yet, set inactive): they lead the list. */
 export const NEED_HAND: CountForms = {

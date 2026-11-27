@@ -19,7 +19,7 @@ import { ApiError } from '@/core/api/errors'
 import { countWords } from '@/features/instalments/copy'
 import { Sheet } from '@/features/profiles/RecordParts'
 import type { AccountSummary, IssuedReset } from './api'
-import { A, ACCOUNTS_COUNT, KIND, NEED_HAND, STATUS, describeError, useCopy } from './copy'
+import { A, ACCOUNTS_COUNT, KIND, MORE_CHILDREN, NEED_HAND, STATUS, describeError, useCopy } from './copy'
 import { useAccounts, useIssueReset, useReactivate, useSuspend } from './hooks'
 import { supportAdminApi, supportKeys, supportTokens, type SupportSession } from '@/features/support/api'
 import { ACTIONS_RECORDED, MINUTES, S, describeError as describeSupportError } from '@/features/support/copy'
@@ -195,7 +195,8 @@ function ChildNames({ names }: { names: string[] }) {
   const tx = useCopy()
   const { locale } = useI18n()
   const comma = locale === 'ar' ? '، ' : ', '
-  const shown = names.slice(0, CHILDREN_NAMED)
+  // Four fit on the line; past that, the first three and how many more.
+  const shown = names.length <= CHILDREN_NAMED + 1 ? names : names.slice(0, CHILDREN_NAMED)
   return (
     <span className="acct-children">
       {tx(A.childrenLabel)}{' '}
@@ -205,7 +206,7 @@ function ChildNames({ names }: { names: string[] }) {
           <bdi className="acct-child">{n}</bdi>
         </Fragment>
       ))}
-      {names.length > shown.length && <>{comma}{tx(A.moreChildren, { n: names.length - shown.length })}</>}
+      {names.length > shown.length && <> {countWords(names.length - shown.length, MORE_CHILDREN, locale)}</>}
     </span>
   )
 }
