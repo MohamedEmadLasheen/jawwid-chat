@@ -124,7 +124,7 @@ export function WeekBoard({
                 >
                   <span className="sc-cell__figure">
                     <span className="sc-cell__n">{h(booked)}</span>
-                    <span className="sc-cell__of">{base > 0 ? tx(S.ofHours, { base: h(base) }) : tx(S.hours, { h: '' }).trim()}</span>
+                    <span className="sc-cell__of">{tx(S.hours, { h: '' }).trim()}</span>
                   </span>
                   <span className="sc-cell__foot">
                     <span className="sc-cell__bar" aria-hidden="true">
@@ -164,7 +164,7 @@ export function MonthView({ data, today, onOpenDay }: { data: CalendarSummary; t
     () => month.map((d) => data.cells.some((c) => c.day === d && (c.shiftMinutes > 0 || c.workMinutes > 0 || c.lessons > 0))),
     [month, data.cells],
   )
-  const columns = { '--sc-cols': working.map((w) => (w ? 'minmax(30px, 1fr)' : '22px')).join(' ') } as CSSProperties
+  const columns = { '--sc-cols': working.map((w) => (w ? 'minmax(24px, 1fr)' : '20px')).join(' ') } as CSSProperties
   return (
     <div className="sc-grid sc-grid--month" role="table" aria-label={tx(S.title)} style={columns}>
       <div className="sc-row sc-row--axis" role="row">

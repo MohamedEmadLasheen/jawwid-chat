@@ -190,6 +190,15 @@ export function Track({
         const label = lessonLabel(l, tx, locale, miss, { clash, uncovered })
         const box: CSSProperties = { ...style, insetBlockStart: `calc(${(lane.lane / lane.of) * 100}% + 4px)`, blockSize: `calc(${100 / lane.of}% - 8px)` }
         const cls = `${lessonClasses(l, { miss, past, clash, uncovered })}${lane.of > 1 ? ' sc-lesson--half' : ''}${l.anonymous ? ' sc-lesson--anon' : ''}${highlight.has(l.id) ? ' is-hl' : ''}`
+        // The marks ride on the time line, so a narrow block keeps its first name whole.
+        const marks =
+          l.status === 'paused' || l.kind === 'makeup' || (!l.anonymous && l.suspendedFor === 'payment') ? (
+            <span className="sc-lesson__marks" aria-hidden="true">
+              {l.status === 'paused' && <Icon name="pause" size={12} />}
+              {l.kind === 'makeup' && <Icon name="history" size={12} />}
+              {!l.anonymous && l.suspendedFor === 'payment' && <Icon name="lock" size={12} />}
+            </span>
+          ) : null
         return (
           <button
             key={l.id}
@@ -206,14 +215,15 @@ export function Track({
             {/* Another supervisor's child: time and colour only, never a name. */}
             {!l.anonymous && (
               <span className="sc-lesson__name">
-                {l.status === 'paused' && <Icon name="pause" size={13} />}
                 <bdi className="sc-lesson__full">{lessonName(l, tx)}</bdi>
                 <bdi className="sc-lesson__short" aria-hidden="true">{shortName(lessonName(l, tx))}</bdi>
-                {l.kind === 'makeup' && <span className="sc-lesson__mark"><Icon name="history" size={13} /></span>}
               </span>
             )}
-            <span className="sc-lesson__time sc-lesson__time--range">{lessonTime(l, locale)}</span>
-            <span className="sc-lesson__time sc-lesson__time--start" aria-hidden="true">{clockShort(l.startsAt)}</span>
+            <span className="sc-lesson__line">
+              {marks}
+              <span className="sc-lesson__time sc-lesson__time--range">{lessonTime(l, locale)}</span>
+              <span className="sc-lesson__time sc-lesson__time--start" aria-hidden="true">{clockShort(l.startsAt)}</span>
+            </span>
           </button>
         )
       })}
@@ -246,7 +256,13 @@ export function TeacherHead({
     <div className="sc-row__head" role="rowheader">
       <span className="sc-row__name" dir="auto">{t.name}</span>
       <span className="sc-row__sub">
-        {absent || onLeave ? <Badge tone="neutral">{tx(S.onLeave)}</Badge> : outsideDays > 0 ? null : tx(CATEGORY_LABEL[t.category])}
+        {absent || onLeave ? (
+          <Badge tone="neutral">{tx(S.onLeave)}</Badge>
+        ) : outsideDays > 0 ? null : shift ? (
+          tx(CATEGORY_LABEL[t.category])
+        ) : (
+          joinList([tx(CATEGORY_LABEL[t.category]), tx(S.hourlyBooked, { h: hoursOf(t.totals.bookedMinutes, locale) })], locale)
+        )}
         {uncovered > 0 && (
           <span className="count count--urgent" title={tx(S.withoutTeacher, { n: number(uncovered) })}>
             {number(uncovered)}
@@ -255,9 +271,7 @@ export function TeacherHead({
         )}
         {outsideDays > 0 && <span className="sc-mark sc-mark--outside">{tx(S.outsideDays, { n: number(outsideDays) })}</span>}
       </span>
-      <span className="sc-row__figure" title={shift ? tx(S.utilization) : tx(S.colBooked)}>
-        {shift ? percentOf(t.utilization, locale) : tx(S.hours, { h: hoursOf(t.totals.bookedMinutes, locale) })}
-      </span>
+      <span className="sc-row__figure" title={tx(S.utilization)}>{shift ? percentOf(t.utilization, locale) : '—'}</span>
     </div>
   )
 }
@@ -333,7 +347,7 @@ export function DayView({
   // Open on the part of the day that matters: now on today, else the first lesson.
   const anchor = useRef<HTMLSpanElement>(null)
   const first = useMemo(() => data.lessons.reduce<string | null>((m, l) => (m === null || l.startsAt < m ? l.startsAt : m), null), [data.lessons])
-  const anchorMin = nowMin !== null ? Math.max(lo, nowMin - 60) : first ? Math.max(lo, minuteOfDay(first, day) - 30) : lo
+  const anchorMin = Math.floor((nowMin !== null ? Math.max(lo, nowMin - 60) : first ? Math.max(lo, minuteOfDay(first, day) - 30) : lo) / 60) * 60
   useLayoutEffect(() => {
     const el = anchor.current
     const scroller = el?.closest<HTMLElement>('.sc-scroll')
@@ -344,7 +358,9 @@ export function DayView({
     const rtl = getComputedStyle(scroller).direction === 'rtl'
     const headW = head?.getBoundingClientRect().width ?? 0
     // Bring the anchor to just past the sticky teacher column.
-    const delta = rtl ? -(s.right - headW - a.right) : a.left - (s.left + headW)
+    // A whole hour just past the sticky teacher column and the edge control.
+    const gutter = a.left > s.left + headW + 1 || a.right < s.right - headW - 1 ? 32 : 0
+    const delta = rtl ? -(s.right - headW - gutter - a.right) : a.left - (s.left + headW + gutter)
     scroller.scrollBy({ left: delta })
     // Only when the day changes: a re-read keeps where the person scrolled to.
     // eslint-disable-next-line react-hooks/exhaustive-deps

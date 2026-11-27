@@ -137,7 +137,7 @@ export function AttentionPanel({
             let action: ReactNode
             const openFirst = (
               <button type="button" className="sc-attn__action" onClick={() => onOpenLesson(first)}>
-                {tx(issue.kind === 'conflict' ? S.reviewLessons : S.reviewLesson)}
+                {tx(issue.lessons.length > 1 ? S.reviewLessons : S.reviewLesson)}
               </button>
             )
             if (issue.kind === 'conflict') {

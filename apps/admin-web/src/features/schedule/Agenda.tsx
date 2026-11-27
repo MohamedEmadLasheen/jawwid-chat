@@ -97,7 +97,18 @@ export function AgendaView({
                   </button>
                 )}
                 <ul className="sc-agenda__list">
-                  {rows.map((r) =>
+                  {(() => {
+                    const free = rows.filter((r): r is Extract<Row, { kind: 'empty' }> => r.kind === 'empty')
+                    return free.length > 0 ? (
+                      <li className="sc-agenda__empty">
+                        <span className="sc-agenda__free-label">{tx(S.availableSlot)}</span>
+                        <span className="sc-agenda__free">
+                          {joinList(free.map((r) => `${clock12In(r.at, ACADEMY_ZONE, locale)} – ${clock12In(r.to, ACADEMY_ZONE, locale)}`), locale)}
+                        </span>
+                      </li>
+                    ) : null
+                  })()}
+                  {rows.filter((r) => r.kind !== 'empty').map((r) =>
                     r.kind === 'lesson' ? (
                       <li key={r.lesson.id}>
                         {(() => {
@@ -132,11 +143,6 @@ export function AgendaView({
                             </button>
                           )
                         })()}
-                      </li>
-                    ) : r.kind === 'empty' ? (
-                      <li key={`empty-${r.at}`} className="sc-agenda__empty">
-                        <span className="sc-agenda__time">{`${clock12In(r.at, ACADEMY_ZONE, locale)} – ${clock12In(r.to, ACADEMY_ZONE, locale)}`}</span>
-                        <span>{tx(S.availableSlot)}</span>
                       </li>
                     ) : (
                       <li key="leave" className="sc-agenda__leave">{tx(S.onLeave)}</li>

@@ -20,6 +20,7 @@ const COPY = {
   noTeacherCount: { en: 'Students with no teacher yet', ar: 'طلاب بلا معلم بعد' },
   inSchedule: { en: 'See in the schedule', ar: 'اعرضه في الجدول' },
   shown: { en: '{n} of {all} students', ar: '{n} من {all} طالبًا' },
+  all: { en: '{n} students', ar: '{n} طالبًا' },
 } satisfies Record<string, Pair>
 
 const NONE = '__none'
@@ -84,7 +85,7 @@ export function StudentSchedulesPage() {
         <QueryBoundary isLoading={roster.isLoading} error={roster.error} onRetry={() => void roster.refetch()}>
           <div className="stu-toolbar" role="search">
             <label className="stu-pick stu-pick--wide">
-              <span className="stu-pick__label">{tx(COPY.chooseStudent)}</span>
+              <span className="stu-pick__label sr-only">{tx(COPY.chooseStudent)}</span>
               <SearchableSelect className="select" value={studentId} onValueChange={(v) => set('student', v)} aria-label={tx(COPY.chooseStudent)}>
                 <option value="">{tx(COPY.allStudents)}</option>
                 {learners.map((l) => (
@@ -93,7 +94,7 @@ export function StudentSchedulesPage() {
               </SearchableSelect>
             </label>
             <label className="stu-pick">
-              <span className="stu-pick__label">{tx(COPY.chooseTeacher)}</span>
+              <span className="stu-pick__label sr-only">{tx(COPY.chooseTeacher)}</span>
               <SearchableSelect className="select" value={teacherId} onValueChange={(v) => set('teacher', v)} aria-label={tx(COPY.chooseTeacher)}>
                 <option value="">{tx(COPY.allTeachers)}</option>
                 <option value={NONE}>{tx(COPY.noTeacher)}</option>
@@ -115,9 +116,11 @@ export function StudentSchedulesPage() {
               </button>
             )}
             <div className="stu-toolbar__end">
-              {narrowed && roster.data && (
+              {roster.data && (
                 <span className="stu-shown">
-                  {tx(COPY.shown).replace('{n}', number(shown.length)).replace('{all}', number(learners.length))}
+                  {narrowed
+                    ? tx(COPY.shown).replace('{n}', number(shown.length)).replace('{all}', number(learners.length))
+                    : tx(COPY.all).replace('{n}', number(learners.length))}
                 </span>
               )}
               {scheduleLink && (

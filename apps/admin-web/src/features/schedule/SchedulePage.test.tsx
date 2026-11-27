@@ -349,7 +349,7 @@ describe('third pass: what needs a person, the week board, the keys', () => {
       expect.stringContaining('The lesson of Child Gamma with Teacher Two at 4:00 PM is suspended until the family pays.'),
     ])
     // The leave: the desk where a student's teacher is changed (the manager opens it).
-    expect(within(items[1]!).getByRole('link', { name: 'Change teacher' })).toHaveAttribute('href', '/teachers/schedules?teacher=t-2')
+    expect(within(items[1]!).getByRole('link', { name: 'Open Teachers\' schedules' })).toHaveAttribute('href', '/teachers/schedules?teacher=t-2')
     expect(within(items[2]!).getByRole('link', { name: 'Open student profile' })).toHaveAttribute('href', '/students/k-10')
     // Pointing at an item lights its teacher's row and its lessons.
     await userEvent.hover(within(items[0]!).getByText(/has two lessons/))
@@ -376,7 +376,7 @@ describe('third pass: what needs a person, the week board, the keys', () => {
     on('GET', /\/calendar\?/, () => json(busy()))
     renderWithProviders(<AppRoutes />, { staff: manager, route: '/schedule?view=week&date=2026-10-26' })
     const cell = await screen.findByRole('button', { name: /^Open Teacher One, Monday 26 October: 2 \/ 7 h, 3 lessons, Clash/ })
-    expect(cell).toHaveTextContent('2/ 7 h')
+    expect(cell).toHaveTextContent('2h')
     expect(cell.querySelector('.sc-mark--conflict')).not.toBeNull()
     await userEvent.click(cell)
     await waitFor(() => expect(lastQuery(/\/calendar\?/).get('from')).toBe('2026-10-26'))

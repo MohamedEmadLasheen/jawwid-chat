@@ -160,7 +160,8 @@ export function SchedulePage() {
   const nFilters = activeFilterCount(state)
   const mine = options.data?.viewer.scope === 'supervisor' && state.lists.supervisorIds.includes(options.data.viewer.staffId)
   // The month has no lessons loaded: the panel stays, and says where its items are seen.
-  const showPanel = (teachers?.length ?? 0) > 0 && (month || !!win.data)
+  // The month loads totals only: no panel; its key says where the list is.
+  const showPanel = (teachers?.length ?? 0) > 0 && !month && !!win.data
 
   const panel = (inline: boolean) => (
     <AttentionPanel
@@ -217,8 +218,8 @@ export function SchedulePage() {
             <div className="page-header__actions sc-mast__actions">
               {narrow && steps}
               {views}
-              {!narrow && (stats.data?.teachers.length ?? 0) > 0 && (
-                <button type="button" className="btn btn--sm sc-byteacher-toggle" aria-expanded={byTeacher} onClick={() => setByTeacher((v) => !v)}>
+              {!narrow && (
+                <button type="button" className="btn btn--sm sc-byteacher-toggle" aria-expanded={byTeacher} disabled={(stats.data?.teachers.length ?? 0) === 0} onClick={() => setByTeacher((v) => !v)}>
                   <Icon name="rows" size={16} />
                   {tx(S.byTeacher)}
                 </button>
@@ -247,7 +248,8 @@ export function SchedulePage() {
             />
           )}
           <div className="sc-toolbar__end">
-            {!narrow && <Figures stats={stats.data} loading={stats.isFetching} />}
+            {/* Figures for what is shown: none when no teacher matches. */}
+            {!narrow && (teachers?.length ?? 0) > 0 && <Figures stats={stats.data} loading={stats.isFetching} />}
           </div>
         </div>
         {(mine || stats.data?.lessonFilter) && (
@@ -269,7 +271,7 @@ export function SchedulePage() {
                     title={tx(S.noTeachers)}
                     hint={tx(S.noTeachersHint)}
                     action={
-                      nFilters > 0 ? (
+                      nFilters > 0 && narrow ? (
                         <button type="button" className="btn btn--sm" onClick={() => update(clearFilters(state))}>
                           {tx(S.clearAll)}
                         </button>
@@ -305,7 +307,9 @@ export function SchedulePage() {
                     </>
                   )}
                 </ScrollBox>
-                {month && !narrow && (teachers?.length ?? 0) > 0 && <HeatKey />}
+                {month && !narrow && (teachers?.length ?? 0) > 0 && (
+                  <HeatKey note={tx(S.attnMonth)} onOpenWeek={() => update({ ...state, view: 'week', date: state.date.slice(0, 7) === today.slice(0, 7) ? today : state.date })} />
+                )}
               </QueryBoundary>
             </div>
             {showPanel && !narrow && panel(false)}

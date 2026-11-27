@@ -164,21 +164,23 @@ export function LegendHelp({
             <li><span className="sc-sample sc-c-sky sc-sample--icon" aria-hidden="true"><Icon name="history" size={13} /></span>{tx(KIND_LABEL.makeup)}</li>
             <li><span className="sc-sample sc-sample--paused sc-sample--icon" aria-hidden="true"><Icon name="pause" size={13} /></span>{tx(STATUS_LABEL.paused)}</li>
             <li><Sample cls="sc-sample--struck" />{tx(S.notHappening)}</li>
-            <li><Sample cls="sc-c-sky sc-sample--held" />{tx(S.paymentHold)}</li>
+            <li><span className="sc-sample sc-c-sky sc-sample--held sc-sample--icon" aria-hidden="true"><Icon name="lock" size={12} /></span>{tx(S.paymentHold)}</li>
             <li><Sample cls="sc-sample--past" />{tx(S.pastLesson)}</li>
             <li><Sample cls="sc-c-sky sc-sample--outside" />{tx(S.outsideShift)}</li>
-            <li><Sample cls="sc-c-sky sc-sample--clash" />{tx(S.clash)}</li>
+            <li><span className="sc-sample sc-sample--pair" aria-hidden="true"><span className="sc-c-sky" /><span className="sc-c-green" /></span>{tx(S.clash)}</li>
             <li><Sample cls="sc-sample--ghost" />{tx(S.needsSubstitute)}</li>
           </ul>
           <h3 className="sc-help__title">{tx(S.legendLane)}</h3>
           <ul className="sc-help__list">
             <li><Sample cls="sc-sample--band" />{tx(S.workBand)}</li>
+            <li><Sample cls="sc-sample--off" />{tx(S.offHours)}</li>
             <li><Sample cls="sc-sample--leave" />{tx(S.leaveBand)}</li>
             <li><Sample cls="sc-sample--now" />{tx(S.nowLine)}</li>
           </ul>
           {supervisors.length > 0 && (
             <>
               <h3 className="sc-help__title">{tx(S.supervisorsFilter)}</h3>
+              <p className="sc-help__hint">{tx(S.supervisorsHint)}</p>
               <div className="sc-help__people" role="group" aria-label={tx(S.supervisorsLegend)}>
                 {supervisors.map((s) => (
                   <button
@@ -277,10 +279,15 @@ export function LessonDetails({
 }
 
 /** The month's key, under its grid: how full a day is, and its two marks. */
-export function HeatKey() {
+export function HeatKey({ note, onOpenWeek }: { note: string; onOpenWeek: () => void }) {
   const tx = useScheduleText()
   return (
-    <div className="sc-heatkey" aria-hidden="true">
+    <div className="sc-heatkey">
+      <span className="sc-heatkey__note">
+        {note}
+        <button type="button" className="sc-attn__action" onClick={onOpenWeek}>{tx(S.openWeek)}</button>
+      </span>
+      <span className="sc-heatkey__scale" aria-hidden="true">
       <span>{tx(S.heatLess)}</span>
       {[0, 1, 2, 3, 4].map((n) => (
         <span key={n} className={`sc-heatkey__step sc-heat--${n}`} />
@@ -288,6 +295,7 @@ export function HeatKey() {
       <span>{tx(S.heatMore)}</span>
       <span className="sc-heatkey__mark"><span className="sc-heatkey__dot" />{tx(S.outsideShift)}</span>
       <span className="sc-heatkey__mark"><span className="sc-heatkey__step sc-heat--leave" />{tx(S.leaveBand)}</span>
+      </span>
     </div>
   )
 }
