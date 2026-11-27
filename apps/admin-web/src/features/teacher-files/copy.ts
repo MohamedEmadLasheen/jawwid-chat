@@ -401,6 +401,8 @@ export const T = {
     ar: 'نوع الأجر لا يطابق فئة الدوام (الأجر بالساعة يطابق فئة الساعة).',
   },
   setupIncomplete: { en: 'Setup incomplete', ar: 'التجهيز غير مكتمل' },
+  /** Round 3: the roster tag says how much is left, not only that something is. */
+  setupLeft: { en: 'Setup incomplete: {steps} left', ar: 'التجهيز غير مكتمل: بقي {steps}' },
   setupIncompleteOnly: { en: 'Setup incomplete only', ar: 'غير المكتمل فقط' },
   // PD-43 §3.7: teachers no supervisor holds; the Teachers Manager covers them
   noSupervisorBadge: { en: 'No supervisor', ar: 'بلا مشرف' },

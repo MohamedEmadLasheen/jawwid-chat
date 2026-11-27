@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
+import { STEPS, countLabel } from '@/core/i18n/counts'
 import { Avatar } from '@/shared/components/Avatar'
 import { Badge } from '@/shared/components/Badge'
 import { FilterChips } from '@/shared/components/FilterChips'
@@ -29,6 +30,12 @@ const assignSupervisorPath = (basePath: string) => `${basePath.startsWith('/admi
 
 type Show = 'all' | 'setup' | 'unsupervised'
 
+/** The noun under a student count, as Arabic says it after the number. */
+function studentNoun(n: number, locale: 'ar' | 'en'): string {
+  if (locale === 'en') return n === 1 ? 'student' : 'students'
+  return n === 1 ? 'طالب' : n === 2 ? 'طالبان' : n >= 3 && n <= 10 ? 'طلاب' : 'طالبًا'
+}
+
 /**
  * PD-10: the roster of teachers, for the Teachers department and the super
  * admin. A row is a person: the name, what still needs doing about them as a
@@ -37,7 +44,7 @@ type Show = 'all' | 'setup' | 'unsupervised'
  */
 export function TeacherFilesPage({ basePath, eyebrow }: { basePath: string; eyebrow?: string }) {
   const tx = useCopy()
-  const { t, number } = useI18n()
+  const { t, number, locale } = useI18n()
   const navigate = useNavigate()
   const list = useTeacherList()
   const [query, setQuery] = useState('')
@@ -143,26 +150,28 @@ export function TeacherFilesPage({ basePath, eyebrow }: { basePath: string; eyeb
                               <Link className="rw-name" to={to}>
                                 <bdi>{row.name}</bdi>
                               </Link>
-                              <span className="rw-sub">
+                              {/* The line under the name: who supervises, or that nobody does (the gap, in amber). */}
+                              <span className={row.isActive && row.unsupervised ? 'rw-sub tf-gap' : 'rw-sub'}>
                                 {!row.isActive
                                   ? tx(T.inactive)
                                   : supervisorOf.get(row.id)
                                     ? <>{tx(T.rowSupervisedBy)} <bdi>{supervisorOf.get(row.id)}</bdi></>
-                                    : tx(T.active)}
+                                    : row.unsupervised
+                                      ? tx(T.noSupervisorBadge)
+                                      : tx(T.active)}
                               </span>
                             </span>
                           </td>
                           <td className="rw-fact">
                             <span className={row.studentCount > 0 ? 'rw-fact__n' : 'rw-fact__n rw-fact__n--quiet'}>{number(row.studentCount)}</span>
-                            <span className="rw-fact__label">{tx(T.students)}</span>
+                            <span className="rw-fact__label">{studentNoun(row.studentCount, locale)}</span>
                           </td>
                           <td className="rw-tags rw-meta">
                             <AwayBadge away={row.away} />
                             {row.openComplaints > 0 && (
                               <Badge tone="warn">{row.openComplaints === 1 ? tx(T.oneOpenComplaint) : tx(T.nOpenComplaints, { n: number(row.openComplaints) })}</Badge>
                             )}
-                            {row.unsupervised && <Badge tone="warn">{tx(T.noSupervisorBadge)}</Badge>}
-                            {setupIncomplete(row) && <Badge tone="warn">{tx(T.setupIncomplete)}</Badge>}
+                            {setupIncomplete(row) && <Badge tone="warn">{tx(T.setupLeft, { steps: countLabel(row.setupMissing ?? 0, number(row.setupMissing ?? 0), STEPS, locale) })}</Badge>}
                             {row.signIn === 'none' && <Badge tone="outline">{tx(T.noSignIn)}</Badge>}
                           </td>
                           <td className="cell-actions">
