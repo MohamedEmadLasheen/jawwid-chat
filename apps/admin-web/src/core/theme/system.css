@@ -275,7 +275,7 @@ a { color: var(--teal); }
 
 /* ================================================================= shell */
 
-.shell { display: grid; grid-template-columns: var(--sidebar-w) minmax(0, 1fr); block-size: 100%; background: var(--canvas); }
+.shell { display: grid; grid-template-columns: var(--sidebar-w) minmax(0, 1fr); block-size: 100dvh; overflow: hidden; background: var(--canvas); }
 .shell__main { display: flex; flex-direction: column; min-inline-size: 0; min-block-size: 0; }
 .shell__content { flex: 1; min-block-size: 0; display: flex; flex-direction: column; }
 .shell__view { flex: 1; min-block-size: 0; display: flex; }
@@ -329,7 +329,10 @@ a { color: var(--teal); }
   line-height: 1;
   direction: ltr;
 }
-.side__nav { flex: 1; min-block-size: 0; overflow-y: auto; overflow-x: visible; padding: 2px 10px 12px; }
+/* The list does not scroll on any usual screen, so the pages a place opens can float beside it. */
+.side__nav { flex: 1; min-block-size: 0; overflow: visible; padding: 2px 10px 12px; }
+@media (max-height: 640px) { .side__nav { overflow-y: auto; } }
+@media (max-width: 1023px) { .side__nav { overflow-y: auto; } }
 .side__item > .side__caret { margin-inline-start: auto; }
 .side__group + .side__group { margin-block-start: 2px; }
 .side__item {
@@ -361,11 +364,10 @@ html[lang='ar'] .side__item { font-size: 14.5px; }
 .side__item[aria-current]::before, .side__item.is-current::before {
   content: '';
   position: absolute;
-  inset-inline-start: -10px;
+  inset-inline-start: 0;
   inset-block: 9px;
   inline-size: 3px;
-  border-start-end-radius: 3px;
-  border-end-end-radius: 3px;
+  border-radius: 0 3px 3px 0;
   background: var(--gold);
 }
 .side__label { flex: 1; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -377,7 +379,6 @@ html[lang='ar'] .side__item { font-size: 14.5px; }
 .side__sub[hidden] { display: none; }
 .side__sub .side__item { min-block-size: 34px; font-family: var(--font); font-size: var(--fs-sm); font-weight: 400; gap: 9px; }
 .side__sub .side__item[aria-current] { font-weight: 600; }
-.side__sub .side__item[aria-current]::before { inset-inline-start: -32px; }
 .side__heading { margin: 14px 10px 4px; font-size: 12.5px; font-weight: 500; color: var(--ink-muted); }
 .side__pending { margin-inline-start: auto; inline-size: 7px; block-size: 7px; border-radius: 50%; border: 1.5px solid currentColor; color: var(--ink-muted); }
 
@@ -979,12 +980,12 @@ a.ledger__cell:hover, button.ledger__cell:hover { background: var(--surface-hove
 /* Split: the academy's day on one side (DayRuler), the form on the other. */
 .login.auth { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); place-items: stretch; min-block-size: 100vh; padding: 0; background: var(--canvas); }
 .auth__side { display: flex; flex-direction: column; min-inline-size: 0; background: var(--canvas); }
-.auth__top { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: 22px 28px; }
+.auth__top { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: 28px clamp(28px, 7vw, 96px) 0; }
 .auth__mark-small { display: block; }
 .auth__mark-small .brand-logo { block-size: 30px; inline-size: auto; }
 .auth__form { flex: 1; display: grid; align-content: center; justify-items: start; padding: var(--space-4) clamp(28px, 7vw, 96px) var(--space-7); }
 .auth .login__card { inline-size: min(400px, 100%); padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
-.auth .login__title { margin: 0; font-family: var(--font-head); font-size: 32px; font-weight: 700; line-height: 1.25; text-align: start; }
+.auth .login__title { margin: 0; font-family: var(--font-head); font-size: 32px; font-weight: 700; line-height: 1.25; text-align: start; text-wrap: balance; }
 .auth .login__subtitle { margin: 8px 0 var(--space-6); font-size: var(--fs-md); color: var(--ink-muted); text-align: start; }
 .auth .field { margin-block-end: var(--space-4); }
 .auth .input { min-block-size: 46px; font-size: var(--fs-md); }
@@ -1005,7 +1006,7 @@ a.ledger__cell:hover, button.ledger__cell:hover { background: var(--surface-hove
 .auth__rule--met { color: var(--done); }
 .auth__rule--met::before { border-color: var(--done); background: var(--done); }
 .auth__brand { position: relative; display: flex; flex-direction: column; justify-content: center; gap: 36px; overflow: hidden; padding: 48px clamp(32px, 5vw, 72px); background: var(--brand-teal-deep); color: #e7f1f1; }
-.auth__brand-head { position: relative; max-inline-size: 30ch; margin: 0; font-family: var(--font-head); font-size: 28px; font-weight: 600; line-height: 1.35; color: #fff; }
+.auth__brand-head { position: relative; max-inline-size: 26ch; margin: 0; text-wrap: balance; font-family: var(--font-head); font-size: 28px; font-weight: 600; line-height: 1.35; color: #fff; }
 .auth__brand-note { position: relative; margin: 0; font-size: var(--fs-sm); color: #b9d3d6; }
 .auth__ruler { position: relative; inline-size: 100%; block-size: auto; }
 .login:not(.auth) { min-block-size: 100%; display: grid; place-items: center; padding: var(--space-6) var(--space-4); background: var(--canvas); }
@@ -1018,6 +1019,32 @@ a.ledger__cell:hover, button.ledger__cell:hover { background: var(--surface-hove
 .legal-gate__row { border: 1px solid var(--line); border-radius: var(--radius-lg); padding: var(--space-3); }
 @media (max-width: 899px) {
   .login.auth { grid-template-columns: minmax(0, 1fr); }
-  .auth__brand { display: none; }
+  /* On a phone the day becomes a short band under the form; the headline stays for wide screens. */
+  .auth__brand { padding: 20px 20px 24px; gap: 0; justify-content: flex-start; }
+  .auth__brand-head { display: none; }
+  .auth__ruler { max-block-size: 180px; }
   .auth__form { align-content: start; padding-block-start: var(--space-6); }
 }
+
+/* Search and the bell share the sidebar's head row. */
+.side__searchrow { display: flex; align-items: center; gap: 4px; margin: 6px 12px 10px; }
+.side__searchrow .side__search { flex: 1; margin: 0; }
+.side__searchrow .nc-bell { position: relative; display: inline-grid; place-items: center; inline-size: 38px; block-size: 38px; border-radius: 8px; color: var(--ink-2); border: 0; background: none; }
+.side__searchrow .nc-bell:hover { background: var(--sidebar-hover); color: var(--ink); }
+.side__today { margin: 0 10px 6px; inline-size: auto; }
+/* Where you are: the current place's pages under its name. */
+.side__sub { margin: 2px 0 6px; padding-inline-start: 41px; display: grid; gap: 1px; }
+.side__sub-link { display: block; padding: 6px 10px; border-radius: 7px; color: var(--ink-muted); font-size: var(--fs-sm); text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.side__sub-link:hover { background: var(--sidebar-hover); color: var(--ink); }
+.side__sub-link[aria-current='page'] { color: var(--ink); font-weight: 600; background: rgba(255, 255, 255, 0.6); }
+/* The account menu opens upward from the foot. */
+:root .side__foot .menu__popover { inset-block-start: auto; inset-block-end: calc(100% + 6px); inset-inline-start: 0; inset-inline-end: auto; inline-size: 100%; }
+.side__me .icon:last-child { margin-inline-start: auto; color: var(--ink-muted); }
+.side__me { inline-size: 100%; }
+.topbar__brand .brand-logo { block-size: 24px; inline-size: auto; }
+.topbar__brand .brand-logo--dark { display: none; }
+.topbar__spacer { flex: 1; }
+.topbar__me { text-decoration: none; }
+.side__menu { box-shadow: var(--shadow-pop); }
+.side__me-button, .side__me-button * { text-decoration: none; }
+.tabbar__item .side__count { position: absolute; inset-block-start: 4px; inset-inline-end: calc(50% - 26px); }

@@ -8,7 +8,6 @@ const A = {
   show: { en: 'Show password', ar: 'إظهار كلمة المرور' },
   hide: { en: 'Hide password', ar: 'إخفاء كلمة المرور' },
   head: { en: 'Every lesson, every family and every payment of the academy’s day, in one place.', ar: 'كل حصة وكل أسرة وكل دفعة في يوم الأكاديمية، في مكان واحد.' },
-  note: { en: 'For Jawwid staff. Accounts are created by the academy.', ar: 'لفريق جوّد. تنشئ الأكاديمية الحسابات.' },
 }
 
 /** Sign-in and reset share one frame: the form, and beside it the academy's day as the Schedule draws it. */
@@ -36,8 +35,7 @@ export function AuthFrame({ children }: { children: ReactNode }) {
       </div>
       <div className="auth__brand">
         <p className="auth__brand-head">{locale === 'ar' ? A.head.ar : A.head.en}</p>
-        <DayRuler rtl={locale === 'ar'} />
-        <p className="auth__brand-note">{locale === 'ar' ? A.note.ar : A.note.en}</p>
+        <DayRuler rtl={locale === 'ar'} ar={locale === 'ar'} />
       </div>
     </div>
   )

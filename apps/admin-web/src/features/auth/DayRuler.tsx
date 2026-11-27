@@ -46,7 +46,7 @@ function lessons(): Bar[] {
   return out
 }
 
-export function DayRuler({ rtl }: { rtl: boolean }) {
+export function DayRuler({ rtl, ar }: { rtl: boolean; ar: boolean }) {
   const bars = useMemo(lessons, [])
   const W = 560
   const laneH = 34
@@ -67,7 +67,8 @@ export function DayRuler({ rtl }: { rtl: boolean }) {
         <g key={h}>
           <line x1={x(h)} x2={x(h)} y1={top - 6} y2={H - 6} stroke="#e9f1f1" strokeOpacity={0.09} />
           <text x={x(h)} y={top - 14} fill="#b9d3d6" fillOpacity={0.7} fontSize={11} textAnchor="middle" fontFamily="Readex Pro, sans-serif">
-            {((h / 60 - 1) % 12) + 1}
+            {/* The academy's clock: "1 PM" / "1 م". */}
+            {`${((h / 60 - 1) % 12) + 1} ${ar ? 'م' : 'PM'}`}
           </text>
         </g>
       ))}

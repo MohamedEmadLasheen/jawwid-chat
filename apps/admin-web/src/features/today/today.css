@@ -62,3 +62,6 @@ html[lang='ar'] .today__h { font-weight: 700; }
 /* A name sets the order of its own words; its place in the row follows the page. */
 [dir='rtl'] :is(.todo__main, .tl__who) > bdi { text-align: right; }
 [dir='ltr'] :is(.todo__main, .tl__who) > bdi { text-align: left; }
+
+/* The side column's titles are section titles too. */
+.today__aside .aside-group__title { font-size: var(--fs-lg); font-weight: 700; color: var(--ink); }

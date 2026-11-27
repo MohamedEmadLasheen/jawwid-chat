@@ -103,7 +103,7 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
   {
     key: 'conversations',
     group: 'communication',
-    icon: 'conversations',
+    icon: 'messages',
     status: 'read_only',
     label: { en: 'Conversations', ar: 'المحادثات' },
     navLabel: { en: 'All conversations', ar: 'كل المحادثات' },

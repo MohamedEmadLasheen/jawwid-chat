@@ -540,7 +540,8 @@ describe('The desktop rail', () => {
       const nav = await screen.findByRole('navigation', { name: 'Jawwid Operations' })
       expect([...nav.querySelectorAll('[data-destination]')].map((el) => el.getAttribute('data-destination')), role).toEqual(keys)
       expect(within(nav).getAllByRole('link').map((l) => l.textContent), role).toEqual(links)
-      expect(within(nav).queryAllByRole('button').map((b) => b.textContent), role).toEqual(menus)
+      // By accessible name: a long place name may be shortened on screen (People & Organization reads "People").
+      expect(within(nav).queryAllByRole('button').map((b) => b.getAttribute('aria-label') ?? b.textContent), role).toEqual(menus)
       unmount()
     }
   })
