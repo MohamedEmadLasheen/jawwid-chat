@@ -1098,3 +1098,5 @@ button.side__item.is-current::before { content: none; }
   .tabbar__item[data-current]::before { content: ''; position: absolute; inset-block-start: -1px; inset-inline: 30%; block-size: 2px; background: var(--gold); }
 }
 .kbd { font-size: 12.5px; }
+/* A dangerous item in any menu stands apart from the rest. */
+.menu__item:not(.menu__item--danger) + .menu__item--danger { margin-block-start: 4px; border-block-start: 1px solid var(--line-2); }
