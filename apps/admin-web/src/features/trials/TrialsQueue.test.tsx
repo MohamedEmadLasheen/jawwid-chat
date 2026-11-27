@@ -269,17 +269,15 @@ describe('New students: the board and the family beside it', () => {
     expect(await screen.findByRole('dialog', { name: /Assign a supervisor/ })).toBeInTheDocument()
   })
 
-  it('the open family follows the filter: when it is filtered out, the first one left is shown', async () => {
+  it('with room every stage keeps its column: a filter the URL names does not reshape the board, and no strip repeats the columns', async () => {
     viewport(true)
     on('GET', /\/trials\/new-students$/, () => json({ students: [family('tr-1', 'Parent Delta'), family('tr-2', 'Parent Echo', WAITING)], canAssign: false }))
-    renderWithProviders(<AppRoutes />, { staff, route: '/trials/new-students' })
+    const { container } = renderWithProviders(<AppRoutes />, { staff, route: '/trials/new-students?filter=waiting' })
     const panel = await screen.findByRole('complementary', { name: 'Family details' })
+    expect(within(screen.getByRole('group', { name: 'Setup status' })).getAllByRole('region')).toHaveLength(3)
+    // The first family in flow order is open.
     expect(within(panel).getByRole('heading', { name: 'Parent Delta' })).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: /^Waiting for the parent/ }))
-    expect(within(panel).getByRole('heading', { name: 'Parent Echo' })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Parent Delta' })).not.toBeInTheDocument()
-    // One stage in view is one column.
-    expect(within(screen.getByRole('group', { name: 'Setup status' })).getAllByRole('region')).toHaveLength(1)
+    expect(container.querySelector('.figures')).toBeNull()
   })
 
   it('with nothing recorded the page says one thing: what will be here, and where to go', async () => {
@@ -303,9 +301,10 @@ describe('New students: the board and the family beside it', () => {
     expect(screen.getByRole('heading', { name: 'Parent Echo' })).toBeInTheDocument()
     expect(screen.queryByRole('complementary', { name: 'Family details' })).not.toBeInTheDocument()
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    // The figures are the stage switch: no second row of tabs under them.
-    expect(screen.queryByRole('group', { name: 'Setup status' })).not.toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: /^Waiting for the parent/ }))
+    // Without room for columns the stages are the board's tabs; no figure strip repeats them.
+    const stages = screen.getByRole('group', { name: 'Setup status' })
+    expect(document.querySelector('.figures')).toBeNull()
+    await userEvent.click(within(stages).getByRole('button', { name: /^Waiting for the parent/ }))
     expect(screen.queryByRole('heading', { name: 'Parent Delta' })).not.toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Parent Echo' }))
     const sheet = await screen.findByRole('dialog', { name: 'Parent Echo' })

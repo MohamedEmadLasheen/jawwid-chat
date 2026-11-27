@@ -87,7 +87,8 @@ html[lang='ar'] .rq-panel__title { font-size: 24px; line-height: 1.4; }
 }
 .rq-callout__status { display: flex; flex-wrap: wrap; align-items: center; gap: 4px var(--space-3); font-size: var(--fs-sm); color: var(--ink-muted); }
 .rq-callout__state { margin: 0; font-size: var(--fs-md); font-weight: 600; line-height: 1.5; color: var(--ink); }
-.rq-callout__note { margin: 0; padding-inline-start: var(--space-3); border-inline-start: 2px solid var(--line-strong); font-size: var(--fs-sm); color: var(--ink-2); }
+/* Guidance under the state: plain quiet text, never dressed as a quote (quotes are what people wrote). */
+.rq-callout__note { margin: 0; font-size: var(--fs-sm); color: var(--ink-2); }
 .rq-callout__note--urgent { border-inline-start-color: var(--urgent); }
 .rq-callout > .banner { margin: 0; border-radius: 6px; }
 
@@ -210,14 +211,16 @@ a.rq-open { text-decoration: none; }
   .rq-row__tag { grid-column: 3; grid-row: 1; }
   .rq-row__actions { grid-column: 4; grid-row: 1; }
 }
-/* On a phone a row is who and why, then its tag, then its action on its own line. */
+/* On a phone a row is who and why across the width, then its fact, then its tag with its action at the far edge. */
 @media (max-width: 767px) {
-  .rq-row { grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 4px var(--space-3); padding: 14px var(--space-4); }
-  .rq-row__lead { grid-column: 1; grid-row: 1 / span 4; }
-  .rq-row > :not(.rq-row__lead) { grid-column: 2; grid-row: auto; }
-  .rq-row__tag { display: flex; flex-wrap: wrap; align-items: center; gap: 4px var(--space-2); justify-self: start; justify-items: start; text-align: start; }
+  .rq-row { grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: 6px var(--space-3); padding: 14px var(--space-4); }
+  .rq-row__lead { grid-column: 1; grid-row: 1 / span 3; }
+  .rq-row__main { grid-column: 2 / -1; grid-row: 1; }
+  .rq-row__fact { grid-column: 2 / -1; grid-row: 2; }
+  .rq-row__tag { grid-column: 2; grid-row: 3; align-self: center; display: flex; flex-wrap: wrap; align-items: center; gap: 4px var(--space-2); justify-self: start; justify-items: start; text-align: start; }
   .rq-row__tag > .rq-sub { display: inline; margin: 0; }
-  .rq-row__actions { justify-self: start; padding-block-start: 6px; }
+  .rq-row__actions { grid-column: 3; grid-row: 3; justify-self: end; }
+  .rq-row:not(:has(.rq-row__tag)) .rq-row__actions { grid-column: 2 / -1; justify-self: start; }
   .rq-time { min-inline-size: 60px; }
   .rq-type { min-inline-size: 0; }
   .rq-type__word { display: none; }
@@ -265,11 +268,15 @@ a.rq-open { text-decoration: none; }
 .rq-card__status { flex: none; padding-block-start: 2px; }
 .rq-card__status .badge { font-size: var(--fs-xs); }
 /* The waiting fact: why the card is in this column now. The one emphasised line. */
-.rq-card__fact { margin: 0; font-size: var(--fs-sm); font-weight: 600; color: var(--ink); line-height: 1.5; }
-.rq-card__fact--late { color: var(--urgent); }
+.rq-card__fact { margin: 0; font-size: var(--fs-sm); font-weight: 500; color: var(--ink); line-height: 1.5; }
+.rq-card__fact .rq-age { font-size: inherit; }
 .rq-card__body { display: grid; gap: 2px; font-size: var(--fs-sm); color: var(--ink-muted); min-inline-size: 0; }
 .rq-card__body > p { margin: 0; overflow-wrap: anywhere; }
-.rq-card__line { display: flex; align-items: center; gap: 6px; min-inline-size: 0; margin: 0; }
+.rq-card__line { display: flex; align-items: flex-start; gap: 6px; min-inline-size: 0; margin: 0; }
+.rq-card__line .icon { margin-block-start: 3px; }
+/* An isolated name wraps on the page's side, beside its icon. */
+[dir='rtl'] .rq-card__line > bdi { text-align: right; }
+[dir='ltr'] .rq-card__line > bdi { text-align: left; }
 .rq-card__line .icon { flex: none; color: var(--ink-muted); }
 .rq-card__tags { display: flex; flex-wrap: wrap; gap: 6px; }
 /* The foot: how long it has waited, and its one action at the far edge. */

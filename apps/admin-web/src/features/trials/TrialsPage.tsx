@@ -200,7 +200,7 @@ export function TrialsPage() {
       case 'awaiting':
         return sentence(tx(TR.whyAwaiting), { teacher })
       case 'upcoming':
-        return sentence(tx(TR.whyUpcoming), { teacher, length: formatMinutes(t.durationMinutes, locale) })
+        return sentence(tx(TR.whyUpcoming), { teacher })
       case 'subscribed':
         return sentence(tx(TR.whySubscribed), { teacher })
       case 'not_subscribed':
@@ -241,7 +241,8 @@ export function TrialsPage() {
           t.outcome === 'awaiting' ? (
             <Age iso={t.endsAt} late={outcomeLate(t)} />
           ) : t.outcome === 'upcoming' ? (
-            <Age iso={t.startsAt} />
+            // A day's heading already says the day: only today's lessons count down.
+            dayOffset(t.startsAt) <= 0 ? <Age iso={t.startsAt} /> : undefined
           ) : (
             <Badge tone={OUTCOME_TONE[t.outcome] ?? 'neutral'} dot>{tx(OUTCOME[t.outcome] ?? { en: t.outcome, ar: t.outcome })}</Badge>
           )
@@ -275,7 +276,7 @@ export function TrialsPage() {
           tabs={offered ? <TrialsAreaTabs /> : undefined}
           actions={
             mayBook ? (
-              <button type="button" className="btn btn--primary" onClick={() => setBooking(true)}>
+              <button type="button" className="btn" onClick={() => setBooking(true)}>
                 <Icon name="plus" size={16} />
                 {tx(TR.bookTrial)}
               </button>

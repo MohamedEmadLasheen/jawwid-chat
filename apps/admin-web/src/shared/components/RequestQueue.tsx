@@ -474,7 +474,7 @@ function useScrollEdges(ref: RefObject<HTMLElement>, enabled: boolean) {
 /**
  * One request on the board. Its anatomy is fixed and its parts differ by role:
  * the name (Readex, the heading) with its status word at the end of that line;
- * the waiting fact, the one emphasised line (red only when `late`); a few quiet
+ * the waiting fact, the one emphasised line (red only on a late value in it); a few quiet
  * lines of what is known; then how long it has waited and its one action. A
  * `quiet` card (work that has ended) is the name and its lines, without a foot.
  */
@@ -485,7 +485,6 @@ export function BoardCard({
   titleOpens = true,
   status,
   fact,
-  late = false,
   quiet = false,
   children,
   age,
@@ -498,10 +497,8 @@ export function BoardCard({
   titleOpens?: boolean
   /** Its status word (a tag), at the end of the name's line. */
   status?: ReactNode
-  /** Why the card waits in this column now ("follow-up was due on Tuesday"). */
+  /** Why the card waits in this column now ("follow-up was due on Tuesday"); a value that is late inside it is red, never the line. */
   fact?: ReactNode
-  /** The waiting fact has passed its time: drawn red. */
-  late?: boolean
   quiet?: boolean
   children?: ReactNode
   age?: ReactNode
@@ -521,7 +518,7 @@ export function BoardCard({
         </h3>
         {status && <span className="rq-card__status">{status}</span>}
       </div>
-      {fact && <p className={late ? 'rq-card__fact rq-card__fact--late' : 'rq-card__fact'}>{fact}</p>}
+      {fact && <p className="rq-card__fact">{fact}</p>}
       {children && <div className="rq-card__body">{children}</div>}
       {!quiet && (age || actions) && (
         <div className="rq-card__foot">

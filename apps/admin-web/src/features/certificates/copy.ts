@@ -19,6 +19,7 @@ export const C = {
   // Why a certificate waits where it is, in one line; and the inspector's state
   whyProposed: { en: '{who} suggested it; waiting for a decision', ar: 'اقترحها {who} وتنتظر القرار' },
   whyRequested: { en: 'Waiting for the designer', ar: 'تنتظر المصمم' },
+  whyAsked: { en: 'Asked for by {who}', ar: 'طلبها {who}' },
   whyDesigning: { en: '{who} is designing it', ar: 'يصممها {who} الآن' },
   whyDesigningNobody: { en: 'Being designed', ar: 'قيد التصميم' },
   whyChanges: { en: 'Sent back to the designer for changes', ar: 'أُعيدت إلى المصمم لإجراء تعديلات' },

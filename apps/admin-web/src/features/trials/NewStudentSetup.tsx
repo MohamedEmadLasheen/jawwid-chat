@@ -208,14 +208,16 @@ export function NewStudentSetup({
             <span className="rq-note">
               {attempts.locked && <Icon name="lock" size={16} />} {tx(NS.wrongTries)}: <bdi className="ltr">{number(attempts.wrong)} / {number(attempts.cap)}</bdi>
             </span>
-            <button
-              type="button"
-              className={attempts.locked ? 'btn btn--sm' : 'btn btn--sm btn--ghost'}
-              disabled={pending}
-              onClick={() => void signupAction(() => trialsApi.resetSignupAttempts(s.trialId), tx(NS.resetDone))}
-            >
-              {tx(NS.reset)}
-            </button>
+            {!attempts.locked && (
+              <button
+                type="button"
+                className="btn btn--sm btn--ghost"
+                disabled={pending}
+                onClick={() => void signupAction(() => trialsApi.resetSignupAttempts(s.trialId), tx(NS.resetDone))}
+              >
+                {tx(NS.reset)}
+              </button>
+            )}
           </div>
         )}
       </>
@@ -235,8 +237,19 @@ export function NewStudentSetup({
             ? sentence(tx(NS.stateNoGroup), { supervisor: supervisorName })
             : sentence(tx(NS.stateNotStarted), { supervisor: supervisorName })
 
+  // A locked sign-up is what stops the family now: clearing it is the one action, the group waits behind "⋯".
+  const locked = !!attempts?.locked
   const primary =
-    next === 'assign' ? (
+    locked ? (
+      <button
+        type="button"
+        className="btn btn--primary"
+        disabled={pending}
+        onClick={() => void signupAction(() => trialsApi.resetSignupAttempts(s.trialId), tx(NS.resetDone))}
+      >
+        {tx(NS.reset)}
+      </button>
+    ) : next === 'assign' ? (
       <button type="button" className="btn btn--primary" onClick={() => setAssigning(true)}>
         {tx(S.assign)}
       </button>
@@ -259,7 +272,11 @@ export function NewStudentSetup({
         state={state}
         note={e?.supervisor && signup?.state === 'not_started' && !attempts?.locked ? tx(S.notStarted) : undefined}
         primary={primary}
-        more={more}
+        more={
+          locked && next === 'open'
+            ? [{ key: 'group', label: tx(S.openGroup), icon: 'conversations' as const, onSelect: () => navigate(`/chat/${e!.groupConversationId}`) }, ...more]
+            : more
+        }
         label={`${tx(NS.moreActions)}: ${s.parent.name}`}
       >
         {signupNow}

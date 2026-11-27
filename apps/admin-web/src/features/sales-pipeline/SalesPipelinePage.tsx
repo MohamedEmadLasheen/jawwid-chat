@@ -4,7 +4,7 @@ import { useI18n } from '@/core/i18n/I18nProvider'
 import { Badge } from '@/shared/components/Badge'
 import { Icon } from '@/shared/components/Icon'
 import { PageHeader, type MastFigure } from '@/shared/components/PageHeader'
-import { Age, Board, BoardCard, RequestQueue, dayName, type BoardStage } from '@/shared/components/RequestQueue'
+import { Age, Board, BoardCard, RequestQueue, dayName, sentence, type BoardStage } from '@/shared/components/RequestQueue'
 import { RowActions } from '@/shared/components/RowActions'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
 import { STAGES, type ContactPresence, type LeadDetail, type LeadRow, type Stage } from './api'
@@ -125,7 +125,7 @@ export function SalesPipelinePage() {
           title={tx(P.title)}
           figures={figures}
           actions={
-            <button type="button" className="btn btn--primary" onClick={() => setCreating(true)}>
+            <button type="button" className="btn" onClick={() => setCreating(true)}>
               <Icon name="plus" size={16} />
               {tx(P.newLead)}
             </button>
@@ -201,7 +201,7 @@ function LeadCard({ row, selected, onOpen }: { row: LeadRow; selected: boolean; 
       ? lostText(row.lostReason, locale) || undefined
       : tx(P.handedOver)
     : row.nextFollowUpOn
-      ? tx(row.followUpDue ? P.dueOn : P.followUpOn).replace('{date}', on(row.nextFollowUpOn))
+      ? sentence(tx(row.followUpDue ? P.dueOn : P.followUpOn), { date: <span className={row.followUpDue ? 'rq-age rq-age--late' : undefined}>{on(row.nextFollowUpOn)}</span> })
       : row.lastContactedAt
         ? tx(P.noFollowUp)
         : tx(P.neverContacted)
@@ -220,7 +220,6 @@ function LeadCard({ row, selected, onOpen }: { row: LeadRow; selected: boolean; 
       quiet={ended}
       status={row.followUpDue ? <Badge tone="waiting">{tx(P.followUpDue)}</Badge> : undefined}
       fact={fact}
-      late={row.followUpDue}
       age={age}
       actions={
         <RowActions

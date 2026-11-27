@@ -37,8 +37,8 @@ export const TR = {
   length: { en: 'Length', ar: 'المدة' },
   noLevel: { en: 'Level not given', ar: 'لم يُحدَّد المستوى' },
   // Why each trial is on the agenda, in one sentence
-  whyAwaiting: { en: 'The lesson with {teacher} is over; record what happened', ar: 'انتهت الحصة مع {teacher}، سجّل ما حدث' },
-  whyUpcoming: { en: 'With {teacher}, {length}', ar: 'مع {teacher}، {length}' },
+  whyAwaiting: { en: 'Lesson with {teacher} ended; no outcome yet', ar: 'انتهت الحصة مع {teacher} ولم تُسجَّل نتيجتها' },
+  whyUpcoming: { en: 'Booked with {teacher}', ar: 'محجوزة مع {teacher}' },
   whySubscribed: { en: 'Subscribed after the lesson with {teacher}', ar: 'اشترك بعد الحصة مع {teacher}' },
   whyNotSubscribed: { en: 'Did not subscribe after the lesson with {teacher}', ar: 'لم يشترك بعد الحصة مع {teacher}' },
   whyNotSubscribedBecause: { en: 'Did not subscribe; the reason given: {reason}', ar: 'لم يشترك، والسبب: {reason}' },

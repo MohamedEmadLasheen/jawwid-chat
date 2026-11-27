@@ -5,12 +5,12 @@ import { Badge } from '@/shared/components/Badge'
 import { FilterChips } from '@/shared/components/FilterChips'
 import { Icon } from '@/shared/components/Icon'
 import { PageHeader, type MastFigure } from '@/shared/components/PageHeader'
-import { Age, Board, BoardCard, RequestQueue, useWidePane, type BoardStage } from '@/shared/components/RequestQueue'
+import { Age, Board, BoardCard, RequestQueue, useWidePane, waitedOvernight, type BoardStage } from '@/shared/components/RequestQueue'
 import { RowActions } from '@/shared/components/RowActions'
 import { SearchField } from '@/shared/components/SearchField'
 import { EmptyState, ErrorState, LoadingState } from '@/shared/components/States'
 import type { Certificate, CertificateAct, CertificateCategory, StateGroup } from './api'
-import { C, GROUPS, actLabel, groupLabel, stateLabel, stateTone, useCopy } from './copy'
+import { C, GROUPS, actLabel, groupLabel, useCopy } from './copy'
 import { useCertificate, useCertificateAccess, useCertificateBoard } from './hooks'
 import { CertificateDetail, actEnds, actIcon, certificateWhy, orderedActs } from './CertificateDetail'
 import { RequestDialog } from './RequestDialog'
@@ -18,9 +18,6 @@ import { TypesPanel } from './TypesPanel'
 import './certificates.css'
 
 type Tab = CertificateCategory | 'types'
-
-/** The states that hold one kind of certificate: its card needs no tag to say which. */
-const PLAIN: ReadonlySet<StateGroup> = new Set<StateGroup>(['suggested', 'pending', 'sent'])
 
 /** A search that waits for a pause in typing: it is asked of every column. */
 function useDebounced<T>(value: T, ms = 300): T {
@@ -130,31 +127,32 @@ export function CertificatesPage() {
         onOpen={() => setOpenId(c.id)}
         // Work that has ended is a quiet card, unless the server still offers an act on it (a Story, consent).
         quiet={(group === 'sent' || group === 'closed') && acts.length === 0}
-        status={
-          !PLAIN.has(group) && group !== 'closed' ? <Badge tone={stateTone(c.state)} dot>{tx(stateLabel(c.state))}</Badge>
-            : story ? <Badge tone="info" dot>{tx(C.storyPublished)}</Badge>
-            : undefined
-        }
+        // The waiting fact already says the state; the status word is what it does not: a Story that is live.
+        status={story ? <Badge tone="info" dot>{tx(C.storyPublished)}</Badge> : undefined}
         fact={certificateWhy(c, tx, locale)}
-        age={<Age iso={c.requestedAt} />}
+        // An open request left since before today is late, as on the Requests hub.
+        age={<Age iso={c.requestedAt} late={group !== 'sent' && group !== 'closed' && waitedOvernight(c.requestedAt)} />}
         actions={
           <RowActions
             label={`${tx(C.moreActions)}: ${c.printedName}`}
             primary={
-              first ? (
+              // A card never states an act that ends the request: when that is all there is, it opens instead.
+              first && !actEnds(first) ? (
                 <button type="button" className="btn btn--sm" onClick={() => openWith(c, first)}>{tx(actLabel(first))}</button>
               ) : (
                 <button type="button" className="btn btn--sm" onClick={() => setOpenId(c.id)}>{tx(C.open)}</button>
               )
             }
-            more={acts.slice(1).map((x) => ({ key: x, label: tx(actLabel(x)), icon: actIcon(x), danger: actEnds(x), onSelect: () => openWith(c, x) }))}
+            more={(first && !actEnds(first) ? acts.slice(1) : acts).map((x) => ({ key: x, label: tx(actLabel(x)), icon: actIcon(x), danger: actEnds(x), onSelect: () => openWith(c, x) }))}
           />
         }
       >
         <p className="rq-card__line">
           <Icon name="certificates" size={16} />
-          <bdi>{c.type ? tx({ en: c.type.labelEn, ar: c.type.labelAr }) : c.title}</bdi>
-          {c.juz !== null && <bdi className="rq-card__num">{tx(C.juzN, { n: c.juz })}</bdi>}
+          <span>
+            <bdi>{c.type ? tx({ en: c.type.labelEn, ar: c.type.labelAr }) : c.title}</bdi>
+            {c.juz !== null && <> <bdi className="ltr">{number(c.juz)}</bdi></>}
+          </span>
         </p>
         {requester && group !== 'sent' && group !== 'closed' && (
           <p className="rq-card__line">
@@ -232,7 +230,7 @@ export function CertificatesPage() {
           }
           actions={
             canRequest ? (
-              <button type="button" className="btn btn--primary" onClick={() => setRequesting(true)}>
+              <button type="button" className="btn" onClick={() => setRequesting(true)}>
                 <Icon name="plus" size={16} />
                 {tx(C.newRequest)}
               </button>

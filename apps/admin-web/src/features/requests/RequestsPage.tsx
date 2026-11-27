@@ -260,7 +260,7 @@ export function RequestsPage() {
             offered.length > 0 ? (
               <div className="switch" role="group" aria-label={tx(RQ.orderLabel)}>
                 {(['longest', 'newest'] as const).map((o) => (
-                  <button key={o} type="button" aria-pressed={order === o} onClick={() => setOrder(o)}>
+                  <button key={o} type="button" className="switch__item" aria-pressed={order === o} onClick={() => setOrder(o)}>
                     {tx(o === 'longest' ? RQ.longest : RQ.newest)}
                   </button>
                 ))}

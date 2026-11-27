@@ -128,7 +128,7 @@ function EnteredRow({ f, canAssign, canSuggest }: { f: EnteredFamily; canAssign:
           ))}
         </ul>
         <p className="ef-row__byline">
-          {tx(OP.enteredBy)} <bdi>{f.enteredBy.name ?? tx(OP.none)}</bdi>{locale === 'ar' ? '، ' : ', '}<time dateTime={f.enteredAt}>{formatWhen(f.enteredAt, locale)}</time>
+          {tx(OP.enteredBy)} {f.enteredBy.name ?? tx(OP.none)}{locale === 'ar' ? '، ' : ', '}<time dateTime={f.enteredAt}>{formatWhen(f.enteredAt, locale)}</time>
         </p>
       </div>
       <dl className="ef-row__facts">

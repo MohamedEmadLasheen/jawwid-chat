@@ -423,6 +423,10 @@ describe('ownership in the page', () => {
     await user.click(await screen.findByRole('button', { name: 'Open Lead Alpha' }))
     const dialog = await screen.findByRole('dialog')
     await within(dialog).findByText('Parent One')
+    // Reassigning adjusts the lead; it waits behind "⋯" until it is asked for.
+    expect(within(dialog).queryByRole('combobox', { name: 'Reassign to' })).not.toBeInTheDocument()
+    await user.click(within(dialog).getByRole('button', { name: 'More actions: Lead Alpha' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Reassign to' }))
     const picker = await within(dialog).findByRole('combobox', { name: 'Reassign to' })
     await chooseOption(user, picker, 'Rep Two')
     await user.click(within(dialog).getByRole('button', { name: 'Reassign to' }))

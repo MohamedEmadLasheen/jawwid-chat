@@ -9,7 +9,7 @@ import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
 import { Badge } from '@/shared/components/Badge'
 import { Icon } from '@/shared/components/Icon'
 import type { MenuItem } from '@/shared/components/Menu'
-import { PageHeader, type MastFigure } from '@/shared/components/PageHeader'
+import { PageHeader } from '@/shared/components/PageHeader'
 import {
   Age,
   Board,
@@ -19,6 +19,7 @@ import {
   ageText,
   useWidePane,
   waitedOvernight,
+  sentence,
   type BoardStage,
   type FlowStep,
 } from '@/shared/components/RequestQueue'
@@ -70,11 +71,11 @@ const assignLate = (s: NewStudentDto, status: NewStudentStatus) => status === 'u
  * Composed as a board: a column for each stage of the setup, in order (not
  * assigned, waiting for the parent, signed up), a card for each family with
  * the one step it needs next. The open family's record and its steps are in
- * the inspector. The masthead's figures are the stages: they filter the board,
+ * the inspector. No figure strip repeats the columns' counts; below 1100px the stages are the board's tabs,
  * and below 1100px, where there is no room for columns, they are its tabs.
  */
 export function NewStudentsPage() {
-  const { locale, number } = useI18n()
+  const { locale } = useI18n()
   const tx = (p: Pair) => (locale === 'ar' ? p.ar : p.en)
   const q = useNewStudents()
   const access = useTrialsAccess()
@@ -113,38 +114,9 @@ export function NewStudentsPage() {
   const shown = searched.filter((s) => matchesFilter(statusOf(s), filter))
   const inStage = (stage: Stage) => searched.filter((s) => stageOf(statusOf(s)) === stage)
   const unassigned = inStage('unassigned')
-  const oldest = unassigned.reduce<NewStudentDto | null>((a, s) => (a === null || s.recordedAt < a.recordedAt ? s : a), null)
   const late = unassigned.some((s) => assignLate(s, 'unassigned'))
   const locked = searched.filter((s) => statusOf(s) === 'locked').length
 
-  const figures: MastFigure[] = [
-    { key: 'all', label: tx(NS.all), value: number(searched.length), onClick: () => setFilter('all'), pressed: filter === 'all' },
-    {
-      key: 'unassigned',
-      label: tx(STATUS.unassigned.label),
-      value: number(unassigned.length),
-      note: oldest ? tx(NS.oldest).replace('{age}', ageText(oldest.recordedAt, locale)) : undefined,
-      tone: late ? 'urgent' : unassigned.length > 0 ? 'key' : undefined,
-      onClick: () => setFilter('unassigned'),
-      pressed: filter === 'unassigned',
-    },
-    {
-      key: 'waiting',
-      label: tx(STATUS.waiting.label),
-      value: number(inStage('waiting').length),
-      note: locked > 0 ? tx(NS.lockedCount).replace('{n}', number(locked)) : undefined,
-      onClick: () => setFilter('waiting'),
-      pressed: filter === 'waiting',
-    },
-    {
-      key: 'signed_up',
-      label: tx(STATUS.signed_up.label),
-      value: number(inStage('signed_up').length),
-      tone: 'quiet',
-      onClick: () => setFilter('signed_up'),
-      pressed: filter === 'signed_up',
-    },
-  ]
 
   const mayEdit = (s: NewStudentDto) => access.sales && !s.enrolment // PD-16: a form that became a family is frozen.
   const more = (s: NewStudentDto): MenuItem[] => [
@@ -172,7 +144,7 @@ export function NewStudentsPage() {
     const codeWaiting = e?.parentSignup.state === 'code_waiting'
     const late = assignLate(s, status)
     const fact = !e
-      ? tx(NS.factUnassigned).replace('{age}', ageText(s.recordedAt, locale))
+      ? sentence(tx(NS.factUnassigned), { age: <span className={late ? 'rq-age rq-age--late' : 'rq-age'}>{ageText(s.recordedAt, locale)}</span> })
       : status === 'locked'
         ? tx(NS.factLocked)
         : codeWaiting
@@ -185,6 +157,8 @@ export function NewStudentsPage() {
     const primary =
       !e && canAssign ? (
         <button type="button" className="btn btn--sm" onClick={() => openWith(s, 'assign')}>{tx(NS.assignSupervisor)}</button>
+      ) : status === 'locked' ? (
+        <button type="button" className="btn btn--sm" onClick={() => setOpenId(s.trialId)}>{tx(NS.open)}</button>
       ) : codeWaiting ? (
         <button type="button" className="btn btn--sm" onClick={() => setOpenId(s.trialId)}>{tx(NS.showCode)}</button>
       ) : e && !group && e.canCreateGroup ? (
@@ -203,12 +177,10 @@ export function NewStudentsPage() {
         quiet={status === 'signed_up' && !!group}
         status={
           status === 'locked' ? <Badge tone="waiting">{tx(STATUS.locked.label)}</Badge>
-            : codeWaiting ? <Badge tone="waiting">{tx(NS.codeAsked)}</Badge>
             : undefined
         }
         fact={fact}
-        late={late}
-        age={<Age iso={since(s)} late={late} />}
+        age={<Age iso={since(s)} />}
         actions={<RowActions label={`${tx(NS.moreActions)}: ${s.parent.name}`} primary={primary} more={more(s)} />}
       >
         <p className="rq-card__line">
@@ -226,7 +198,8 @@ export function NewStudentsPage() {
   }
 
   // Beside the board the inspector always shows a family: the one picked, else the first on the board.
-  const open = shown.find((s) => s.trialId === openId) ?? (wide ? [...STAGES].flatMap((st) => shown.filter((s) => stageOf(statusOf(s)) === st))[0] ?? null : null)
+  const listed = wide ? searched : shown
+  const open = listed.find((s) => s.trialId === openId) ?? (wide ? [...STAGES].flatMap((st) => listed.filter((s) => stageOf(statusOf(s)) === st))[0] ?? null : null)
   const openStatus = open ? statusOf(open) : 'unassigned'
 
   const stages: Array<BoardStage<Stage>> = STAGES.map((stage) => {
@@ -249,7 +222,6 @@ export function NewStudentsPage() {
         <PageHeader
           title={tx(TR.newTitle)}
           subtitle={tx(NS.rule)}
-          figures={students.length > 0 ? figures : undefined}
           tabs={offered ? <TrialsAreaTabs /> : undefined}
         />
         <RequestQueue
@@ -311,8 +283,8 @@ export function NewStudentsPage() {
                     <EmptyState title={tx(NS.noMatch)} />
                   </div>
                 ) : (
-                  // The masthead's figures are this board's stage switch: it draws no tabs of its own.
-                  <Board label={tx(NS.filterLabel)} stages={stages} value={filter === 'all' ? 'all' : filter} onChange={setFilter} tabs={false} />
+                  // With room, every column stays on the board (a filter does not reshape it); without, the stages are tabs.
+                  <Board label={tx(NS.filterLabel)} stages={stages} value={wide || filter === 'all' ? 'all' : filter} onChange={setFilter} />
                 )}
               </>
             )}

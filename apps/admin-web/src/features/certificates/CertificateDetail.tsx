@@ -6,7 +6,7 @@ import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
 import { Icon, type IconName } from '@/shared/components/Icon'
 import type { MenuItem } from '@/shared/components/Menu'
 import { ReasonDialog } from '@/shared/components/ReasonDialog'
-import { Age, DetailCallout, DetailSection, FlowSteps, ageText, sentence, type FlowStep, type StepState } from '@/shared/components/RequestQueue'
+import { Age, DetailCallout, DetailSection, FlowSteps, ageText, dayName, sentence, type FlowStep, type StepState } from '@/shared/components/RequestQueue'
 import { QueryBoundary } from '@/shared/components/States'
 import {
   CERTIFICATE_ACCEPT,
@@ -84,8 +84,10 @@ export function certificateWhy(c: Certificate, tx: ReturnType<typeof useCopy>, l
   switch (c.state) {
     case 'proposed':
       return sentence(tx(C.whyProposed), { who: (c.projection === 'full' ? c.suggestedBy?.name : null) ?? askerOf(c) ?? tx(C.someone) })
-    case 'requested':
-      return tx(C.whyRequested)
+    case 'requested': {
+      const asker = askerOf(c)
+      return asker ? sentence(tx(C.whyAsked), { who: asker }) : tx(C.whyRequested)
+    }
     case 'in_design':
       return designer ? sentence(tx(C.whyDesigning), { who: designer }) : tx(C.whyDesigningNobody)
     case 'changes_requested':
@@ -351,8 +353,8 @@ export function CertificateDetail({
                 <Fact label={C.titleField} value={c.title} />
                 <Fact label={C.achievement} value={c.achievement} />
                 <Fact label={C.juz} value={c.juz} />
-                <Fact label={C.period} value={c.periodStart ? `${c.periodStart}${c.periodEnd ? ` ${tx(C.periodEnd)} ${c.periodEnd}` : ''}` : null} />
-                <Fact label={C.achievedOn} value={c.achievedOn} />
+                <Fact label={C.period} value={c.periodStart ? `${dayName(c.periodStart, locale, false)}${c.periodEnd ? ` ${tx(C.periodEnd)} ${dayName(c.periodEnd, locale, false)}` : ''}` : null} />
+                <Fact label={C.achievedOn} value={c.achievedOn ? dayName(c.achievedOn, locale, false) : null} />
                 <Fact label={C.grade} value={c.grade} />
                 {c.projection === 'full' ? (
                   <>

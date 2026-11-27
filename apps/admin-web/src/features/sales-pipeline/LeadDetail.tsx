@@ -97,6 +97,7 @@ function LeadBody({ lead }: { lead: Lead }) {
   const mayAssign = access.data?.standing === 'sales_manager' || access.data?.standing === 'super_admin'
   const owners = useOwners(mayAssign)
   const [newOwner, setNewOwner] = useState('')
+  const [reassigning, setReassigning] = useState(false)
   const intake = useIntakeOptions()
   const [followUp, setFollowUp] = useState(lead.nextFollowUpOn ?? '')
   const [followUpNote, setFollowUpNote] = useState(lead.followUpNote ?? '')
@@ -155,6 +156,7 @@ function LeadBody({ lead }: { lead: Lead }) {
   const more: MenuItem[] = [
     ...(first !== 'contacted' && manual && lead.stage !== 'lost' ? [{ key: 'contacted', label: tx(P.markContacted), icon: 'phone' as const, onSelect: markContacted }] : []),
     ...(first !== 'reopen' && manual && lead.stage === 'lost' ? [{ key: 'reopen', label: tx(P.reopen), icon: 'undo' as const, onSelect: reopen }] : []),
+    ...(mayAssign && !reassigning ? [{ key: 'reassign', label: tx(P.reassign), icon: 'user' as const, onSelect: () => setReassigning(true) }] : []),
     ...(manual && lead.stage !== 'lost' && !losing ? [{ key: 'lost', label: tx(P.markLost), icon: 'xCircle' as const, danger: true, onSelect: () => setLosing(true) }] : []),
   ]
   // Where the lead stands, in one sentence: what is overdue first, then what can be done now.
@@ -164,10 +166,10 @@ function LeadBody({ lead }: { lead: Lead }) {
       ? lead.lostReason ? tx(P.stateLost).replace('{reason}', lostText(lead.lostReason, locale)) : tx(P.stateLostPlain)
       : lead.convertedAt || lead.stage === 'converted'
         ? tx(P.stateConverted)
-        : lead.followUpDue && lead.nextFollowUpOn
-          ? tx(P.stateDue).replace('{date}', on(lead.nextFollowUpOn))
-          : lead.canConvert
-            ? tx(P.stateConvert)
+        : lead.canConvert
+          ? tx(P.stateConvert)
+          : lead.followUpDue && lead.nextFollowUpOn
+            ? tx(P.stateDue).replace('{date}', on(lead.nextFollowUpOn))
             : lead.stage === 'trial_booked'
               ? tx(P.stateTrial)
               : !lead.lastContactedAt
@@ -225,7 +227,7 @@ function LeadBody({ lead }: { lead: Lead }) {
           )}
         </dl>
         {lead.note && <p className="rq-quote lead-note"><bdi>{lead.note}</bdi></p>}
-        {mayAssign && (
+        {mayAssign && reassigning && (
           <div className="field lead-reassign">
             <label className="field__label" htmlFor={`${uid}-owner`}>{tx(P.reassign)}</label>
             <div className="lead-actions lead-actions--wrap">
@@ -237,7 +239,7 @@ function LeadBody({ lead }: { lead: Lead }) {
                 type="button"
                 className="btn btn--sm"
                 disabled={!newOwner || reassign.isPending}
-                onClick={() => reassign.mutate(newOwner, { onSuccess: () => { setNewOwner(''); setMessage(tx(P.reassignDone)) } })}
+                onClick={() => reassign.mutate(newOwner, { onSuccess: () => { setNewOwner(''); setReassigning(false); setMessage(tx(P.reassignDone)) } })}
               >
                 {tx(P.reassign)}
               </button>
