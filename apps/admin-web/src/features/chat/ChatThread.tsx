@@ -27,10 +27,10 @@ import { ExportDialog } from './ExportDialog'
 import { ThemeDialog } from './ThemeDialog'
 import { ThreadSearch } from './ThreadSearch'
 import { Highlighted, searchable } from './search'
-import { ConversationAvatar, conversationName, isGroup, isMuted } from './chatView'
+import { ConversationAvatar, cardFallbackText, conversationName, isGroup, isMuted, toneOfKind } from './chatView'
 import { useConversationPreferences } from './useChatActions'
 import { VoiceNotePlayer } from './VoiceRecorder'
-import { ConversationCallControls } from '@/features/calls/ConversationCallControls'
+import { ThreadCalls } from './ThreadCalls'
 import { useCallCapability } from '@/features/calls/useCallCapability'
 import { ScheduleCallDialog } from '@/features/calls-page/ScheduleCallDialog'
 import { TrialCardDialog, TrialGroupBar } from '@/features/trials/TrialCardDialog'
@@ -94,13 +94,6 @@ function sideOf(m: ChatMessage, selfId: string | undefined): Side {
  * other person is the header.
  */
 type Identity = 'lead' | 'follow' | 'none'
-
-/** One of eight name colours, stable per sender (as WhatsApp colours names in a group). */
-function nameTone(seed: string): number {
-  let h = 0
-  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) | 0
-  return (Math.abs(h) % 8) + 1
-}
 
 const SIDE_CLASS: Record<Side, string> = {
   in: 'bubble-row--contact',
@@ -218,6 +211,17 @@ export function ChatThread({
     setSelecting(false)
     setSelected([])
   }
+  // Escape leaves select mode first; only then does it go back to the list (useWorkspaceKeys).
+  useEffect(() => {
+    if (!selecting) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || document.querySelector('[role="dialog"], [role="alertdialog"], [role="menu"]')) return
+      setSelecting(false)
+      setSelected([])
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [selecting])
   const flash = (text: string) => {
     setNotice(text)
     setTimeout(() => setNotice(null), 2500)
@@ -509,7 +513,7 @@ export function ChatThread({
                   {typingNow}
                 </span>
               ) : (
-                <span className="thread-head__sub">
+                <span className={peerState?.online ? 'thread-head__sub thread-head__sub--online' : 'thread-head__sub'}>
                   {peerPresence ?? (
                     <>
                       {copy.kind[conv.type] ?? conv.type}
@@ -534,7 +538,7 @@ export function ChatThread({
           </button>
         )}
         <div className="cw-head__actions">
-          {conv && <ConversationCallControls conversationId={conversationId} peerLabel={name} isGroup={group} />}
+          {conv && <ThreadCalls conversationId={conversationId} peerLabel={name} isGroup={group} />}
           {favorite && (
             <span className="cw-row__mark cw-row__mark--favorite" title={copy.favoriteMark} aria-label={copy.favoriteMark}>
               <Icon name="heart" size={16} />
@@ -983,6 +987,9 @@ function MessageItem({
   // PD-35 B6: a case escalated to this department, linked to Escalations.
   const caseCard = live && m.type === 'card' && m.card?.kind === 'case_escalated' ? readCaseEscalatedCard(m.card.payload) : null
   const reactions = summarize(m.reactions ?? [], selfId)
+  // A card is a reference, not something somebody typed: it is drawn as a ruled card, not a bubble.
+  const isCard = live && m.type === 'card'
+  const tone = toneOfKind(m.authorKind)
   // A lesson report's card is changed only from its lesson record (PD-15).
   const reportCard = m.type === 'card' && m.card?.kind === 'lesson_report'
   const items: MenuItem[] = live
@@ -1019,7 +1026,7 @@ function MessageItem({
 
   return (
     <li
-      className={`bubble-row ${SIDE_CLASS[side]} cw-msg${runStart ? ' cw-msg--run-start' : ''}${identity !== 'none' ? ' cw-msg--with-sender' : ''}${selectMode ? ' cw-msg--selectable' : ''}${isSelected ? ' cw-msg--selected' : ''}${m.mentionsViewer && !m.deletedForAll ? ' cw-msg--mentions-me' : ''}`}
+      className={`bubble-row ${SIDE_CLASS[side]} cw-msg${runStart ? ' cw-msg--run-start' : ''}${identity !== 'none' ? ' cw-msg--with-sender' : ''}${selectMode ? ' cw-msg--selectable' : ''}${isSelected ? ' cw-msg--selected' : ''}${m.mentionsViewer && !m.deletedForAll ? ' cw-msg--mentions-me' : ''}${isCard ? ' cw-msg--card' : ''}`}
       data-seq={m.seq ?? undefined}
       data-msg-id={m.id}
       onClick={selectMode ? onToggleSelect : undefined}
@@ -1036,7 +1043,7 @@ function MessageItem({
           />
         )}
         {identity === 'lead' && (
-          <span className={`cw-msg__avatar cw-tone--${nameTone(m.authorId ?? m.authorKind)}`} title={authorName(m, copy)}>
+          <span className={`cw-msg__avatar cw-who cw-who--${tone}`} title={authorName(m, copy)}>
             <Avatar name={authorName(m, copy)} seed={m.authorId ?? m.authorKind} src={m.authorAvatarUrl} />
           </span>
         )}
@@ -1044,7 +1051,7 @@ function MessageItem({
         <div className="bubble">
           {identity === 'lead' && (
             <span className="cw-sender">
-              <span className={`cw-sender__name cw-sender__name--${nameTone(m.authorId ?? m.authorKind)}`} dir="auto">
+              <span className={`cw-sender__name cw-sender__name--${tone}`} dir="auto">
                 {authorName(m, copy)}
               </span>
               <span className={`kind-chip kind-chip--${m.authorKind}`}>{copy.role[m.authorKind] ?? m.authorKind}</span>
@@ -1065,7 +1072,7 @@ function MessageItem({
           )}
           {side === 'internal' && (
             <span className="bubble__flag">
-              <Icon name="lock" size={12} />
+              <Icon name="lockNote" size={14} />
               {copy.internal}
             </span>
           )}
@@ -1094,7 +1101,14 @@ function MessageItem({
               ))}
               {m.body && (
                 <span dir="auto">
-                  {highlight ? <Highlighted text={m.body} query={highlight} /> : <MentionText body={m.body} mentions={m.mentions} selfId={selfId} />}
+                  {highlight ? (
+                    <Highlighted text={isCard ? cardFallbackText(m.body) : m.body} query={highlight} />
+                  ) : isCard ? (
+                    // A card this client cannot draw shows the server's own words for it, without its pictograph.
+                    cardFallbackText(m.body)
+                  ) : (
+                    <MentionText body={m.body} mentions={m.mentions} selfId={selfId} />
+                  )}
                 </span>
               )}
             </>

@@ -15,7 +15,7 @@ import { Highlighted, SEARCH_ACROSS_MIN, searchable, snippetAround, useDebounced
 import { Avatar } from '@/shared/components/Avatar'
 import { chatCopyFor } from './copy'
 import { LabelChip, LabelsDialog } from './LabelsDialog'
-import { ConversationAvatar, conversationName, isGroup, isMuted, previewText } from './chatView'
+import { ConversationAvatar, conversationName, isGroup, isMuted, previewParts, textDir } from './chatView'
 import { useConversationPreferences } from './useChatActions'
 import { TrialBadge, isTrialGroup } from '@/shared/components/TrialBadge'
 
@@ -139,12 +139,12 @@ export function ConversationList({
           className="cw-filters"
           onWheel={(e) => {
             // A mouse wheel moves the one-line filter row sideways.
-            const row = e.currentTarget.querySelector<HTMLElement>('.chips')
+            const row = e.currentTarget.querySelector<HTMLElement>('.seg')
             if (!row || Math.abs(e.deltaY) <= Math.abs(e.deltaX) || row.scrollWidth <= row.clientWidth) return
             row.scrollLeft += getComputedStyle(row).direction === 'rtl' ? -e.deltaY : e.deltaY
           }}
         >
-          <FilterChips options={options} value={view} onChange={setView} label={copy.filterLabel} formatCount={number} />
+          <FilterChips variant="tabs" options={options} value={view} onChange={setView} label={copy.filterLabel} formatCount={number} />
         </div>
         {usedLabels.length > 0 && (
           <div className="cw-label-filter" role="group" aria-label={copy.labelFilter}>
@@ -261,7 +261,8 @@ function ConversationRow({
   const muted = isMuted(c)
   const archived = !!c.viewerState?.archived
   const favorite = !!c.viewerState?.favorite
-  const preview = previewText(c.lastMessage, selfId, copy) || (copy.kind[c.type] ?? c.type)
+  const said = previewParts(c.lastMessage, selfId, copy)
+  const preview = said.text || (copy.kind[c.type] ?? c.type)
   const mention = c.viewerState?.mention ?? null
   const summoned = mention?.kind === 'summons' && mention.state === 'pending'
 
@@ -283,7 +284,11 @@ function ConversationRow({
             </time>
           </span>
           <span className="conv-row__bottom">
-            <span className="conv-row__sub" dir="auto">{preview}</span>
+            <span className="conv-row__sub" dir={textDir(preview)}>
+              {said.who && <bdi>{said.who}</bdi>}
+              {said.who && ': '}
+              {preview}
+            </span>
             {c.needsReply && <Badge tone="now">{copy.needsReply}</Badge>}
             {/* PD-36: asked in and not yet answered; the dot keeps it from being colour-only. */}
             {summoned && (
