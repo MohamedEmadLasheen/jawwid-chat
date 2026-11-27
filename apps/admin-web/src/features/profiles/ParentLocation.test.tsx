@@ -308,13 +308,13 @@ describe('the Student Profile (§7)', () => {
 
   it('shows the family\'s time from the location, marked approximate, when no parent has an app clock', async () => {
     on('GET', /\/learners\/k-1\/profile$/, () => json(student({ familyTimeZone: null, familyTimeZoneEstimate: 'Asia/Dubai' })))
-    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/students/k-1' })
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/students/k-1#schedule' })
     expect(await screen.findByText(/family's time ≈ .*Dubai time.* \(from location\)/)).toBeInTheDocument()
   })
 
   it('a real app clock wins over the estimate', async () => {
     on('GET', /\/learners\/k-1\/profile$/, () => json(student({ familyTimeZone: 'Asia/Riyadh', familyTimeZoneEstimate: null })))
-    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/students/k-1' })
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/students/k-1#schedule' })
     expect(await screen.findByText(/family's time: .*Riyadh time/)).toBeInTheDocument()
     expect(screen.queryByText(/from location/)).not.toBeInTheDocument()
   })

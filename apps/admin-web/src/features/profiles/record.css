@@ -278,19 +278,32 @@ html[lang='ar'] .rec-amount__unit { font-family: var(--font-ar); }
 .rec-history > .rec-slot:only-child, .rec-history > .rec-slot:has(+ .rec-slot:empty), .rec-history > .rec-slot:empty + .rec-slot { max-inline-size: 760px; }
 
 /* A section another feature renders in the work column reads as a sheet. */
-.rec .rec-history .tf-section, .rec .rec-main .tf-section {
+.rec :is(.rec-history, .rec-main) .tf-section {
   margin: 0;
   padding: 0;
   border: 1px solid var(--hairline);
   border-radius: var(--radius-lg);
   background: var(--surface);
 }
-.rec .rec-history .tf-section__head, .rec .rec-main .tf-section__head { min-block-size: 48px; padding: 8px var(--space-4); border-block-end: 1px solid var(--hairline-soft); }
-.rec .rec-history .tf-section__title, .rec .rec-main .tf-section__title { font-family: var(--font); font-size: var(--fs-md); font-weight: 600; line-height: 1.5; color: var(--ink); }
-html[lang='ar'] .rec .rec-history .tf-section__title, html[lang='ar'] .rec .rec-main .tf-section__title { font-family: var(--font-ar); font-weight: 600; }
-.rec .rec-history .tf-section > .field__hint, .rec .rec-main .tf-section > .field__hint { margin: 0; padding: 9px var(--space-4) 0; max-inline-size: 78ch; }
-.rec .rec-history .tf-section > .tf-muted, .rec .rec-main .tf-section > .tf-muted { margin: 0; padding: 14px var(--space-4) 16px; }
-.rec .rec-history .pp-activity .pf-people, .rec .pp-activity .pf-people { margin: 0; padding: var(--space-4) var(--space-4) 4px; }
+.rec :is(.rec-history, .rec-main) .tf-section__head { min-block-size: 48px; padding: 8px var(--space-4); border-block-end: 1px solid var(--hairline-soft); }
+.rec :is(.rec-history, .rec-main) .tf-section__title { font-family: var(--font); font-size: var(--fs-md); font-weight: 600; line-height: 1.5; color: var(--ink); }
+html[lang='ar'] .rec :is(.rec-history, .rec-main) .tf-section__title { font-family: var(--font-ar); font-weight: 600; }
+.rec :is(.rec-history, .rec-main) .tf-section > :not(.tf-section__head) { margin-inline: var(--space-4); }
+.rec :is(.rec-history, .rec-main) .tf-section > :last-child:not(.tf-section__head) { margin-block-end: var(--space-4); }
+.rec :is(.rec-history, .rec-main) .tf-section > .field__hint { display: block; margin-block: 9px 0; max-inline-size: 78ch; font-size: var(--fs-xs); line-height: 1.5; color: var(--ink-muted); }
+.rec :is(.rec-history, .rec-main) .tf-section > .tf-muted { margin-block: 12px 0; font-size: var(--fs-sm); }
+.rec :is(.rec-history, .rec-main) .tf-section > .tf-kv { margin-block-start: 10px; }
+.rec :is(.rec-history, .rec-main) .tf-section > .tf-kv > :is(dt, dd):nth-last-child(-n + 2) { border-block-end: 0; }
+.rec :is(.rec-history, .rec-main) .tf-section > .banner { margin-block-start: 12px; }
+.rec :is(.rec-history, .rec-main) .tf-section > .btn { margin-block-start: 10px; }
+/* A part of a sheet: its own short heading over a hairline that runs the sheet's width. */
+.rec .rec-main .tf-subtitle { margin: var(--space-4) 0 0; padding: 12px var(--space-4) 0; border-block-start: 1px solid var(--hairline-soft); font-size: 12.5px; font-weight: 600; color: var(--ink-muted); }
+.rec .rec-main .tf-subtitle + .field__hint { margin-block-start: 4px; }
+.rec .rec-main .sub-ledger { list-style: none; padding: 0; display: block; margin-block: 6px 0; }
+.rec .rec-main .sub-ledger__row { display: flex; flex-wrap: wrap; align-items: center; gap: 2px var(--space-3); padding: 10px 0; border-block-end: 1px solid var(--hairline-soft); font-size: var(--fs-sm); }
+.rec .rec-main .sub-ledger__row:last-child { border-block-end: 0; }
+.rec .rec-main .sub-ledger__row .btn { margin-inline-start: auto; }
+.rec .pp-activity .pf-people { margin-block: var(--space-4) 4px; padding: 0; }
 .rec .pp-activity .pf-people > li::after { background: var(--surface); }
 .rec .pp-activity .pf-people > li:last-child::after { background: var(--teal); }
 .rec .rec-sheet .tf-entries { margin: 0; }
@@ -310,6 +323,39 @@ html[lang='ar'] .rec .rec-aside .tf-section__title { font-family: var(--font-ar)
 .rec .rec-aside .ns-inline .btn { margin-inline-start: auto; }
 .rec .rec-aside .tf-section > .field__hint { margin: 6px 0 0; font-size: var(--fs-xs); }
 .rec .rec-aside .tf-byline { margin: 10px 0 0; }
+
+/* ------------------------------------------------------------ the student */
+
+.rec-done { margin-block-end: var(--space-4); }
+/* A short list does not need the page's width. */
+.rec-narrow { max-inline-size: 820px; }
+.rec-sheet__aside { font-size: var(--fs-xs); color: var(--ink-muted); }
+/* Nothing in the work column (the server did not answer it): what is in the margin stands alone. */
+.rec-split--sub > .rec-main:empty { display: none; }
+.rec-split--sub > .rec-aside:empty { display: none; }
+.rec-split--sub:has(> .rec-main:empty) { grid-template-columns: minmax(0, 520px); }
+.rec-split--sub:has(> .rec-aside:empty) { grid-template-columns: minmax(0, 1fr); max-inline-size: 960px; }
+
+/* A weekly time: the day, the hour in display numerals, how long, and the family's clock. */
+.rec-slot-row {
+  display: grid;
+  grid-template-columns: 9rem 5.5rem 6rem minmax(0, 1fr);
+  align-items: baseline;
+  gap: 2px var(--space-4);
+  min-block-size: 54px;
+  padding: 14px var(--space-4);
+  border-block-end: 1px solid var(--hairline-soft);
+}
+.rec-slot-row:last-child { border-block-end: 0; }
+.rec-slot-row__day { font-weight: 600; }
+.rec-slot-row__time { font-family: var(--display); font-size: var(--fs-lg); font-weight: 600; font-variant-numeric: tabular-nums lining-nums; }
+.rec-slot-row__length { font-size: var(--fs-sm); color: var(--ink-muted); }
+.rec-slot-row__more { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0 10px; font-size: var(--fs-xs); color: var(--ink-muted); }
+.rec-slot-row__more > :not(:last-child)::after { content: '·'; margin-inline-start: 10px; color: var(--border-control); }
+@media (max-width: 640px) {
+  .rec-slot-row { grid-template-columns: minmax(0, 1fr) auto auto; }
+  .rec-slot-row__more { grid-column: 1 / -1; justify-content: flex-start; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   .rec-index__link { transition: none; }

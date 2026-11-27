@@ -492,9 +492,57 @@ describe('the Student Profile', () => {
     expect(within(info).getByText('9 years')).toBeInTheDocument()
     expect(within(info).getByText('Tajweed')).toBeInTheDocument()
     expect(within(info).getByText('Teacher Omega')).toBeInTheDocument()
-    expect(within(info).getByText(/Monday/)).toHaveTextContent('Monday · 16:30 · 30 min')
-    expect(within(info).getByText(/Thursday/)).toHaveTextContent('Thursday · 17:00 · 45 min')
+    // The weekly times are the Schedule tab: one row each, the day, the hour, the length.
+    await userEvent.click(screen.getByRole('tab', { name: 'Schedule' }))
+    expect(screen.getByRole('tab', { name: 'Schedule' })).toHaveAttribute('aria-selected', 'true')
+    const [monday, thursday] = within(screen.getByRole('region', { name: 'Class schedule' })).getAllByRole('listitem')
+    expect(monday).toHaveTextContent(/^Monday\s*16:30\s*30 min$/)
+    expect(thursday).toHaveTextContent(/^Thursday\s*17:00\s*45 min$/)
+    // The parents are the Family tab.
+    await userEvent.click(screen.getByRole('tab', { name: 'Family' }))
     expect(screen.getByRole('link', { name: 'Parent Alpha' })).toHaveAttribute('href', '/parents/p-1')
+  })
+
+  it('the masthead carries the lessons and the next lesson only when the server sends them; the tabs follow', async () => {
+    on('GET', /\/learners\/k-1\/profile$/, () =>
+      json(student({ schedule: [{ weekday: 1, start: '16:30', durationMinutes: 30, timezone: 'Africa/Cairo', nextStartsAt: '2027-01-18T14:30:00.000Z' }] })),
+    )
+    on('GET', /\/learners\/k-1\/subscription$/, () =>
+      json({
+        enforced: true, canRecord: false, canAddSubscription: false, canGrantException: false,
+        standing: {
+          child: { id: 'k-1', name: 'Child One' }, current: null, lessonsIncluded: 24, lessonsUsed: 24, lessonsLeft: 0, graceLeft: null,
+          state: 'locked', lockReasons: ['balance'], overdue: null, balance: 0, excepted: [], held: false,
+        },
+        subscriptions: [], exceptions: [], renewalRequests: [],
+      }),
+    )
+    renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/students/k-1' })
+    expect(await screen.findByRole('heading', { level: 1, name: 'Child One' })).toBeInTheDocument()
+    const left = await waitFor(() => figure('Lessons left'))
+    expect(within(left).getByText('0')).toBeInTheDocument()
+    expect(left).toHaveClass('figure--urgent')
+    expect(within(figure('Lessons bought')).getByText('24')).toBeInTheDocument()
+    expect(within(figure('Next lesson')).getByText('16:30')).toHaveAttribute('dir', 'ltr')
+    // Overview says what waits: the lock, why, and the way to it.
+    const waiting = within(screen.getByRole('region', { name: 'Needs attention now' })).getAllByRole('listitem')
+    expect(waiting).toHaveLength(1)
+    expect(within(waiting[0]!).getByText('Locked')).toBeInTheDocument()
+    expect(within(waiting[0]!).getByText('lessons used up')).toBeInTheDocument()
+    await userEvent.click(within(waiting[0]!).getByRole('link', { name: 'Open subscription' }))
+    expect(screen.getByRole('tab', { name: 'Subscription' })).toHaveAttribute('aria-selected', 'true')
+  })
+
+  it('with no subscription answered, there are no lesson figures and no Subscription tab', async () => {
+    on('GET', /\/learners\/k-1\/profile$/, () => json(student()))
+    renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/students/k-1#subscription' })
+    expect(await screen.findByRole('heading', { level: 1, name: 'Child One' })).toBeInTheDocument()
+    await waitFor(() => expect(calls('GET', /\/learners\/k-1\/subscription$/).length).toBeGreaterThan(0))
+    expect(screen.queryByRole('tab', { name: 'Subscription' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Lessons left')).not.toBeInTheDocument()
+    expect(screen.queryByText('Next lesson')).not.toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByText('Nothing is waiting on this student.')).toBeInTheDocument()
   })
 
   it('says "Not set" rather than blank, and no parents section when the server sends none', async () => {
@@ -504,8 +552,11 @@ describe('the Student Profile', () => {
     renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/students/k-1' })
     const info = await screen.findByRole('region', { name: 'Student' })
     expect(within(info).getAllByText('Not set')).toHaveLength(3)
-    expect(within(info).getByText('No regular lesson times yet')).toBeInTheDocument()
+    // The empty schedule is said on the Schedule tab (and Overview lists it as something that waits).
+    expect(within(screen.getByRole('region', { name: 'Class schedule' })).getByText('No regular lesson times yet')).toBeInTheDocument()
+    expect(within(screen.getByRole('region', { name: 'Needs attention now' })).getByText('No teacher assigned yet')).toBeInTheDocument()
     expect(screen.queryByRole('region', { name: 'Parents' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: 'Family' })).not.toBeInTheDocument()
   })
 
   it('a student this viewer may not open is said plainly', async () => {
