@@ -326,7 +326,8 @@ function TrialDetail({
     {
       key: 'lesson',
       label: tx(TR.stepLesson),
-      state: called ? 'skipped' : missed ? 'problem' : held ? 'done' : 'current',
+      // A lesson nobody came to did not happen: that is not an error to fix, so it carries no terracotta.
+      state: called || missed ? 'skipped' : held ? 'done' : 'current',
       meta: (
         <>
           {formatWhen(t.startsAt, locale)} · {label(ATTENDANCE, t.attendance)}

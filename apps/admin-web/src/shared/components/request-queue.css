@@ -52,24 +52,31 @@
 /* A total, or a list outside the flow, stands apart behind a double rule, as a total does in a ledger. */
 .rq-strip__cell--apart + .rq-strip__cell--step, .rq-strip__cell--step + .rq-strip__cell--apart { border-inline-start: 3px double var(--hairline); }
 
-@media (max-width: 767px) {
-  /* One line that scrolls sideways: the queue stays near the top of a phone. */
+@media (max-width: 1099px) {
+  /* Without the room for every state side by side, the strip is one line that
+     scrolls sideways: each cell as wide as its words, none cut short, and the
+     queue still near the top of a phone. */
   .rq-strip.ledger {
+    --rq-bleed: var(--space-6);
     grid-auto-flow: column;
     grid-template-columns: none;
     grid-auto-columns: minmax(max-content, 1fr);
     overflow-x: auto;
     scrollbar-width: none;
     scroll-snap-type: inline proximity;
-    scroll-padding-inline: var(--space-4);
-    margin-inline: calc(-1 * var(--space-4));
-    padding-inline: var(--space-4);
+    scroll-padding-inline: var(--rq-bleed);
+    margin-inline: calc(-1 * var(--rq-bleed));
+    padding-inline: var(--rq-bleed);
   }
   .rq-strip.ledger::-webkit-scrollbar { display: none; }
-  .rq-strip.ledger .ledger__cell { min-block-size: 70px; min-inline-size: 92px; padding: 10px var(--space-4) 9px var(--space-3); border-block-start: 0; border-inline-start: 1px solid var(--hairline); scroll-snap-align: start; }
+  .rq-strip.ledger .ledger__cell { min-inline-size: 92px; padding-inline: var(--space-3) var(--space-4); border-block-start: 0; border-inline-start: 1px solid var(--hairline); scroll-snap-align: start; }
   .rq-strip.ledger .ledger__cell:first-child { border-inline-start: 0; padding-inline-start: 2px; }
   .rq-strip.ledger .rq-strip__cell--apart + .rq-strip__cell--step, .rq-strip.ledger .rq-strip__cell--step + .rq-strip__cell--apart { border-inline-start: 3px double var(--hairline); }
   .rq-strip .ledger__label { overflow: visible; }
+}
+@media (max-width: 767px) {
+  .rq-strip.ledger { --rq-bleed: var(--space-4); }
+  .rq-strip.ledger .ledger__cell { min-block-size: 70px; padding-block: 10px 9px; }
   .rq-strip .ledger__value { font-size: 24px; }
 }
 

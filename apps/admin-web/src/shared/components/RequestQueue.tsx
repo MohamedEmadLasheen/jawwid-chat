@@ -62,18 +62,50 @@ export interface RequestDetail {
   bare?: boolean
 }
 
-/** The head of a detail: its kind, its name in display type, its status. For a body that is `bare`. */
-export function DetailHead({ id, title, kind, status, children }: { id?: string; title: string; kind?: RequestDetail['kind']; status?: ReactNode; children?: ReactNode }) {
+/** What kind of request it is: its icon and a word. */
+function Kind({ kind }: { kind: NonNullable<RequestDetail['kind']> }) {
+  return (
+    <span className="rq-kind">
+      <Icon name={kind.icon} size={18} />
+      {kind.label}
+    </span>
+  )
+}
+
+/**
+ * The head of a detail: its kind, its name in display type, its status. The
+ * panel draws it; a body that is `bare` draws its own with this.
+ */
+export function DetailHead({
+  id,
+  title,
+  kind,
+  status,
+  onClose,
+  children,
+}: {
+  id?: string
+  title: string
+  kind?: RequestDetail['kind']
+  status?: ReactNode
+  /** Given, the head offers a close button. */
+  onClose?: () => void
+  children?: ReactNode
+}) {
+  const { locale } = useI18n()
   return (
     <header className="rq-panel__head">
-      {kind && (
+      {(kind || onClose) && (
         <div className="rq-panel__top">
-          <span className="rq-kind">
-            <Icon name={kind.icon} size={18} />
-            {kind.label}
-          </span>
+          {kind && <Kind kind={kind} />}
+          {onClose && (
+            <button type="button" className="btn btn--ghost btn--icon btn--sm rq-panel__close" onClick={onClose} aria-label={WORDS.close[locale]}>
+              <Icon name="close" size={16} />
+            </button>
+          )}
         </div>
       )}
+      {/* The name keeps its own direction; the heading keeps the page's alignment. */}
       <h2 className="rq-panel__title" id={id}><bdi>{title}</bdi></h2>
       {status && <div className="rq-lead__status">{status}</div>}
       {children}
@@ -94,28 +126,22 @@ export function RequestQueue({
   placeholder?: ReactNode
   children: ReactNode
 }) {
-  const { locale } = useI18n()
   const wide = useWidePane()
-  const lead = detail && (detail.kind || detail.status) ? (
-    <div className="rq-lead">
-      {detail.kind && (
-        <span className="rq-kind">
-          <Icon name={detail.kind.icon} size={18} />
-          {detail.kind.label}
-        </span>
-      )}
-      {detail.status && <span className="rq-lead__status">{detail.status}</span>}
-    </div>
-  ) : null
 
   if (!wide) {
+    // The sheet names the request in its own title bar; the kind and the status lead its body.
     return (
       <div className="rq">
         <div className="rq__queue">{children}</div>
         {detail && (
           <Dialog title={detail.title} onClose={detail.onClose} variant="sheet">
             <div className="rq-detail" key={detail.id}>
-              {lead}
+              {(detail.kind || detail.status) && (
+                <div className="rq-lead">
+                  {detail.kind && <Kind kind={detail.kind} />}
+                  {detail.status && <span className="rq-lead__status">{detail.status}</span>}
+                </div>
+              )}
               {detail.body}
             </div>
           </Dialog>
@@ -124,32 +150,11 @@ export function RequestQueue({
     )
   }
 
-  const panel = detail?.bare ? (
+  const panel = detail ? (
     <div className="rq-detail" key={detail.id}>
-      {detail.body}
-    </div>
-  ) : detail ? (
-    <div className="rq-detail" key={detail.id}>
-      <header className="rq-panel__head">
-        {(detail.kind || !detail.pinned) && (
-          <div className="rq-panel__top">
-            {detail.kind && (
-              <span className="rq-kind">
-                <Icon name={detail.kind.icon} size={18} />
-                {detail.kind.label}
-              </span>
-            )}
-            {!detail.pinned && (
-              <button type="button" className="btn btn--ghost btn--icon btn--sm rq-panel__close" onClick={detail.onClose} aria-label={WORDS.close[locale]}>
-                <Icon name="close" size={16} />
-              </button>
-            )}
-          </div>
-        )}
-        {/* The name keeps its own direction; the heading keeps the page's alignment. */}
-        <h2 className="rq-panel__title"><bdi>{detail.title}</bdi></h2>
-        {detail.status && <div className="rq-lead__status">{detail.status}</div>}
-      </header>
+      {!detail.bare && (
+        <DetailHead title={detail.title} kind={detail.kind} status={detail.status} onClose={detail.pinned ? undefined : detail.onClose} />
+      )}
       {detail.body}
     </div>
   ) : (
