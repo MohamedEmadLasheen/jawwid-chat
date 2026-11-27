@@ -201,7 +201,7 @@ export const messages = {
     'nav.stories': 'الحالات',
     'nav.settings': 'الإعدادات',
     'nav.profile': 'ملفي الشخصي',
-    'nav.teacher-profiles': 'ملفات المعلمين',
+    'nav.teacher-profiles': 'مؤهلات المعلمين',
     'nav.accounts': 'الحسابات',
     'tprofile.pending.title': 'شهادات بانتظار المراجعة',
     'tprofile.empty': 'لا يوجد ما ينتظر المراجعة.',
