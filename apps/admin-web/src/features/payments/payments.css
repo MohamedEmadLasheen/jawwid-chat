@@ -58,6 +58,21 @@
   .rq-page .rv-desk .rq__panel { overflow: hidden; padding-block-end: var(--space-4); }
   .rq-page .rv-desk .rq__panel > .rq-detail { block-size: 100%; min-block-size: 0; overflow-y: auto; scrollbar-width: thin; }
   .rq-page .pay-rules { margin-block: var(--space-3); }
+  /* The proof takes the room the sheet has left: the receipt at the sheet's width, read by scrolling inside its frame. */
+  .rq-page .rv-desk .rv__image { flex: 1 1 0; min-block-size: 180px; max-block-size: none; place-items: start center; overflow: auto; scrollbar-width: thin; }
+  .rq-page .rv-desk .rv__image img { inline-size: 100%; max-inline-size: 640px; max-block-size: none; }
+  .rq-page .rv-desk .rv__image--file { flex: none; place-items: center; }
+  /* The masthead gives the desk its height back: the figures sit on one short line. */
+  .rq-page .figures { margin-block-start: var(--space-4); }
+  .rq-page .figure { padding-block: 8px 10px; }
+  .rq-page .figure__n { font-size: 28px; }
+  .rq-page .mast__tabs { margin-block-start: var(--space-3); }
+  /* The sheet is the receipt: no word above its title, a smaller title, the amount on one line. */
+  .rv-desk .rq-kind { visibility: hidden; }
+  .rv-desk .rq-panel__top { min-block-size: 0; block-size: 0; }
+  .rv-desk .rq-panel__close { position: relative; inset-block-start: 14px; }
+  html .rv-desk .rq-panel__title { font-size: var(--fs-xl); margin-block: 0 4px; }
+  .rq-page .rv-desk .money--lg .money__n { font-size: 30px; }
 }
 .rv-queue { overflow: hidden; }
 .tx-sheet > .state, .rv-queue > .state, .rn > .state { padding: var(--space-5) var(--space-4); }
@@ -118,8 +133,10 @@
 .rv__amount .section-label { grid-column: 1 / -1; margin: 0; }
 .rv__amount .rv__sub { justify-self: end; padding-block-end: 6px; }
 .rv__sub { font-size: var(--fs-sm); color: var(--ink-muted); }
-.rv__facts { margin-block-start: calc(-1 * var(--space-2)); }
-.rv__facts .rq-field { border-block-end-color: var(--line-2); }
+/* The facts as a short band: each label over its value, side by side. */
+.rv__facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--space-2) var(--space-5); margin-block-start: calc(-1 * var(--space-2)); }
+.rv__facts .rq-field { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; padding: 0; border: 0; }
+.rv__facts .rq-field dt { font-size: var(--fs-xs); }
 /* What the parent wrote, set off as their words. */
 .rv__said { display: grid; gap: 4px; margin: 0; }
 .rv__said-who { font-size: var(--fs-xs); color: var(--ink-muted); }
@@ -362,7 +379,9 @@ fieldset:disabled .set-reminder label { cursor: default; }
   .table.tx-table--payments .tx-c-for { grid-column: 1; grid-row: 2; padding-inline-start: 38px !important; }
   .tx-table--payments .tx-c-for > .pay-sub, .tx-table--payments .tx-method__card, .tx-table--payments .tx-c-ref { display: none !important; }
   .table.tx-table--payments .tx-c-method { grid-column: 1; grid-row: 3; padding-inline-start: 38px !important; color: var(--ink-muted); }
-  .table.tx-table--payments td.cell-actions { grid-column: 2; grid-row: 2 / span 2; align-self: end; }
+  /* The row itself opens the payment (its sheet holds the invoice): no buttons on the row. */
+  .table.tx-table--payments td.cell-actions { position: absolute !important; inline-size: 1px; block-size: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .table.tx-table--payments .tx-c-amount { grid-row: 1 / span 3; }
   .tx-table .tx-c-who { grid-column: 1; grid-row: 1; }
   .tx-table .tx-c-amount { grid-column: 2; grid-row: 1; justify-self: end; }
   .tx-table .tx-states { flex-direction: column; align-items: flex-end; gap: 3px; }

@@ -138,7 +138,8 @@ export function PaymentsPage({ eyebrow }: { eyebrow?: string }) {
         ) : (
           <SettingsTab />
         )}
-        {!waiting && (tab === 'receipts' || tab === 'transactions') && <LedgerRules />}
+        {/* The ledger's rules sit under the ledger; the desk keeps its height for the receipt. */}
+        {!waiting && tab === 'transactions' && <LedgerRules />}
       </div>
     </div>
   )

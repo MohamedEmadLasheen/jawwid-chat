@@ -256,16 +256,7 @@ function ReceiptInspector({ receipt: r, onApprove, onReject }: { receipt: Receip
         <Money amountMinor={r.amountMinor} currency={r.currency} size="lg" />
         <span className="rv__sub">{tx(PAY.transferredLine, { date: formatDay(r.transferredOn, locale) })}</span>
       </div>
-      {/* What the parent wrote is read before the proof: it often explains a difference (another name, another account). */}
-      {r.note && (
-        <figure className="rv__said">
-          <figcaption className="rv__said-who">{r.uploadedBy ? tx(PAY.noteBy, { name: r.uploadedBy.name }) : tx(PAY.note)}</figcaption>
-          <blockquote className="rv__note" dir="auto">
-            {r.note}
-          </blockquote>
-        </figure>
-      )}
-      <ReceiptImage receipt={r} />
+      {/* The facts in one short band, so the receipt keeps the height of the sheet. */}
       <dl className="rq-fields rv__facts">
         <div className="rq-field">
           <dt>{tx(PAY.forWhat)}</dt>
@@ -302,6 +293,16 @@ function ReceiptInspector({ receipt: r, onApprove, onReject }: { receipt: Receip
           </div>
         )}
       </dl>
+      {/* What the parent wrote is read before the proof: it often explains a difference (another name, another account). */}
+      {r.note && (
+        <figure className="rv__said">
+          <figcaption className="rv__said-who">{r.uploadedBy ? tx(PAY.noteBy, { name: r.uploadedBy.name }) : tx(PAY.note)}</figcaption>
+          <blockquote className="rv__note" dir="auto">
+            {r.note}
+          </blockquote>
+        </figure>
+      )}
+      <ReceiptImage receipt={r} />
       {r.mimeType.startsWith('image/') && (
         <a className="rv__file" href={r.fileUrl} target="_blank" rel="noopener noreferrer">
           <Icon name="external" size={15} />
