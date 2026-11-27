@@ -112,8 +112,9 @@ export function StudentsPage() {
                       <td className="rw-meta">
                         <strong>{tx(SUSPENSION_REASON[s.reason] ?? { en: s.reason, ar: s.reason })}</strong>
                         {s.note && (
-                          <div className="rw-sub st-note" dir="auto" title={s.note}>
-                            {s.note}
+                          // The note takes its own direction but keeps the column's alignment.
+                          <div className="rw-sub st-note" title={s.note}>
+                            <bdi>{s.note}</bdi>
                           </div>
                         )}
                       </td>
