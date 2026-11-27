@@ -424,7 +424,7 @@ function TypedAvatar({ c, name, size }: { c: AdminConversation; name: string; si
       {c.title ?? c.familyName ? <Avatar name={name} seed={c.id} size={size} /> : <BlankMonogram size={size} />}
       {glyph && (
         <span className="typed-avatar__glyph" aria-hidden="true">
-          <Icon name={glyph} size={11} />
+          <Icon name={glyph} size={13} />
         </span>
       )}
     </span>
@@ -460,16 +460,7 @@ function ConversationRow({
               <bdi className="cw-line">{name}</bdi>
             </span>
             {isTrialGroup(c) && <TrialBadge />}
-            <time className="conv-row__time" dateTime={c.lastActivityAt} title={dateTime(c.lastActivityAt)}>
-              {listTime(c.lastActivityAt, locale)}
-            </time>
-          </span>
-          <span className="conv-row__bottom">
-            <span className="conv-row__sub">
-              {typeLabel(c.type)}
-              {separator(locale)}
-              {plural(PLURAL.members, c.liveMembers)}
-            </span>
+            {/* Waiting on us: how long is the row's one emphasised fact, in place of the time (as in Chat). */}
             {c.state === 'waiting_on_jawwid' ? (
               <span
                 className={`cw-row__waited cw-wait--${waitTone(c.lastActivityAt)}`}
@@ -480,8 +471,18 @@ function ConversationRow({
                 {waitedFor(c.lastActivityAt, locale)}
               </span>
             ) : (
-              <ConversationStateBadge state={c.state} />
+              <time className="conv-row__time" dateTime={c.lastActivityAt} title={dateTime(c.lastActivityAt)}>
+                {listTime(c.lastActivityAt, locale)}
+              </time>
             )}
+          </span>
+          <span className="conv-row__bottom">
+            <span className="conv-row__sub">
+              {typeLabel(c.type)}
+              {separator(locale)}
+              {plural(PLURAL.members, c.liveMembers)}
+            </span>
+            {c.state !== 'waiting_on_jawwid' && <ConversationStateBadge state={c.state} />}
           </span>
         </span>
       </Link>

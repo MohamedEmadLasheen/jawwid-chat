@@ -324,7 +324,8 @@ export const chatCopy = {
     famDue: 'المستحق',
     famNothingDue: 'لا مستحقات',
     famOverdue: (amount: string) => `منها ${amount} متأخرة`,
-    famLate: (n: number) => (n === 1 ? 'متأخر يومًا' : n === 2 ? 'متأخر يومين' : n <= 10 ? `متأخر ${n} أيام` : `متأخر ${n} يومًا`),
+    // Follows "منها … متأخرة": says since when, not "late" again.
+    famLate: (n: number) => (n === 1 ? 'منذ يوم' : n === 2 ? 'منذ يومين' : n <= 10 ? `منذ ${n} أيام` : `منذ ${n} يومًا`),
     famNextDue: (date: string) => `الاستحقاق القادم ${date}`,
     famOpenRequest: 'طلب مفتوح',
     famRecord: 'تسجيل دفعة مستلمة',

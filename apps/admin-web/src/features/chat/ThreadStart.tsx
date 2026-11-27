@@ -5,7 +5,8 @@ import type { ChatConversation } from './chatApi'
 import { Icon } from '@/shared/components/Icon'
 import { ConversationAvatar, conversationName, isGroup, previewParts } from './chatView'
 import { chatCopyFor } from './copy'
-import { waitTone, waitedFor, waitingFirst } from './queue'
+import { Badge } from '@/shared/components/Badge'
+import { asksViewer, isUnseenSummons, waitTone, waitedFor, waitingFirst } from './queue'
 
 export { waitingFirst } from './queue'
 
@@ -23,8 +24,9 @@ export function ThreadStart({ conversations, onOpen }: { conversations: ChatConv
   const copy = chatCopyFor(locale)
   const { staff } = useSession()
   const waiting = useMemo(() => waitingFirst(conversations), [conversations])
-  const needs = waiting.filter((c) => c.needsReply)
-  const unread = waiting.filter((c) => !c.needsReply)
+  // The same "needs" as the list's: owed an answer, or asked in (a summons).
+  const needs = waiting.filter(asksViewer)
+  const unread = waiting.filter((c) => !asksViewer(c))
   const queue = needs.length > 0 ? needs : unread
   const shown = queue.slice(0, SHOWN)
 
@@ -75,7 +77,9 @@ export function ThreadStart({ conversations, onOpen }: { conversations: ChatConv
                       <bdi className="cw-line">{said.text || (copy.kind[c.type] ?? c.type)}</bdi>
                     </p>
                   </div>
-                  {c.needsReply ? (
+                  {isUnseenSummons(c) && !c.needsReply ? (
+                    <Badge tone="waiting">{copy.mentionedBadge}</Badge>
+                  ) : c.needsReply ? (
                     <span className={`cw-queue__waited cw-wait--${waitTone(c.lastActivityAt)}`} title={dateTime(c.lastActivityAt)} aria-label={copy.waitedLabel(age)}>
                       <Icon name="hourglass" size={16} />
                       {age}
@@ -86,7 +90,7 @@ export function ThreadStart({ conversations, onOpen }: { conversations: ChatConv
                     </span>
                   )}
                   {/* One solid button on the pane: the conversation to take now. */}
-                  <button type="button" className={i === 0 ? 'btn btn--primary' : 'btn'} onClick={() => onOpen(c.id)} aria-label={`${copy.queueOpen}: ${name}`}>
+                  <button type="button" className={i === 0 ? 'btn btn--primary' : 'btn btn--ghost'} onClick={() => onOpen(c.id)} aria-label={`${copy.queueOpen}: ${name}`}>
                     {copy.queueOpen}
                   </button>
                 </li>
@@ -106,10 +110,6 @@ export function ThreadStart({ conversations, onOpen }: { conversations: ChatConv
         <span>
           <kbd className="kbd">Enter</kbd>
           {copy.keysOpen}
-        </span>
-        <span>
-          <kbd className="kbd">Esc</kbd>
-          {copy.keysBack}
         </span>
       </p>
     </div>

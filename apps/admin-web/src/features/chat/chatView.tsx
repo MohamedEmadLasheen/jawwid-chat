@@ -139,7 +139,7 @@ export function ConversationAvatar({
       {photo || hasOwnName(c, selfId) ? <Avatar name={name} seed={c.id} size={size} src={photo} /> : <BlankMonogram size={size} />}
       {glyph && (
         <span className="typed-avatar__glyph" aria-hidden="true">
-          <Icon name={glyph} size={11} />
+          <Icon name={glyph} size={13} />
         </span>
       )}
     </span>

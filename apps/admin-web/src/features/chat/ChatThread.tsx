@@ -683,8 +683,10 @@ export function ChatThread({
               const runStart =
                 newDay || !prev || prev.authorId !== m.authorId || sideOf(prev, staff?.id) !== side
               // A card Jawwid posted itself has no sender to picture or name.
+              // The viewer's own internal note sits on their side, unnamed, like their messages.
+              const ownNote = side === 'internal' && m.authorId === staff?.id
               const identity: Identity =
-                side === 'out' || side === 'system' || !showsSenders || m.authorKind === 'system' ? 'none' : runStart ? 'lead' : 'follow'
+                side === 'out' || ownNote || side === 'system' || !showsSenders || m.authorKind === 'system' ? 'none' : runStart ? 'lead' : 'follow'
               return (
                 <Fragment key={m.id}>
                   {newDay && (
@@ -1093,7 +1095,7 @@ function MessageItem({
 
   return (
     <li
-      className={`bubble-row ${SIDE_CLASS[side]} cw-msg${runStart ? ' cw-msg--run-start' : ''}${identity !== 'none' ? ' cw-msg--with-sender' : ''}${selectable ? ' cw-msg--selectable' : ''}${isSelected ? ' cw-msg--selected' : ''}${m.mentionsViewer && !m.deletedForAll ? ' cw-msg--mentions-me' : ''}${isCard ? ` cw-msg--card cw-msg--card-${edge}` : ''}`}
+      className={`bubble-row ${SIDE_CLASS[side]} cw-msg${mine ? ' cw-msg--mine' : ''}${runStart ? ' cw-msg--run-start' : ''}${identity !== 'none' ? ' cw-msg--with-sender' : ''}${selectable ? ' cw-msg--selectable' : ''}${isSelected ? ' cw-msg--selected' : ''}${m.mentionsViewer && !m.deletedForAll ? ' cw-msg--mentions-me' : ''}${isCard ? ` cw-msg--card cw-msg--card-${edge}` : ''}`}
       data-seq={m.seq ?? undefined}
       data-msg-id={m.id}
       onClick={selectable ? onToggleSelect : undefined}
@@ -1170,6 +1172,7 @@ function MessageItem({
                 ...(trialCard.level ? [copy.cardLevel(trialCard.level)] : []),
               ]}
               highlight={highlight}
+              tone="act"
             />
           ) : (
             <>
@@ -1183,6 +1186,7 @@ function MessageItem({
                   <FallbackCard
                     text={m.authorKind === 'system' ? westernDigits(cardFallbackText(m.body)) : cardFallbackText(m.body)}
                     highlight={highlight}
+                    tone={edge ?? 'info'}
                   />
                 ) : (
                   <span dir="auto">
@@ -1267,24 +1271,33 @@ function MessageItem({
 }
 
 /** A card drawn from its plain words: the first line is its title, the rest its facts. */
-function FallbackCard({ text, highlight }: { text: string; highlight?: string }) {
+function FallbackCard({ text, highlight, tone }: { text: string; highlight?: string; tone: CardTone }) {
   const [title = '', ...lines] = text.split('\n').filter((line) => line.trim() !== '')
-  return <PlainCard title={title} lines={lines} highlight={highlight} />
+  return <PlainCard title={title} lines={lines} highlight={highlight} tone={tone} />
 }
 
-/** A reference card in words: a title in the display face, then its facts line by line. */
-function PlainCard({ title, lines, highlight }: { title: string; lines: string[]; highlight?: string }) {
+type CardTone = ReturnType<typeof cardEdge>
+/** What a card is, said by its glyph's colour, never by a stripe: teal information, amber "asks someone to act", red a problem. */
+const CARD_GLYPH: Record<CardTone, 'info' | 'clock' | 'alert'> = { info: 'info', act: 'clock', problem: 'alert' }
+
+/** A reference card in words: its glyph, a title, then its facts line by line. */
+function PlainCard({ title, lines, highlight, tone }: { title: string; lines: string[]; highlight?: string; tone: CardTone }) {
   const show = (line: string) => (highlight ? <Highlighted text={line} query={highlight} /> : line)
   return (
-    <span className="cw-card">
-      <strong className="cw-card__title" dir="auto">
-        {show(title)}
-      </strong>
-      {lines.map((line, i) => (
-        <span key={i} className="cw-card__line" dir="auto">
-          {show(line)}
-        </span>
-      ))}
+    <span className={`cw-card cw-card--${tone}`}>
+      <span className="cw-card__glyph" aria-hidden="true">
+        <Icon name={CARD_GLYPH[tone]} size={18} />
+      </span>
+      <span className="cw-card__text">
+        <strong className="cw-card__title" dir="auto">
+          {show(title)}
+        </strong>
+        {lines.map((line, i) => (
+          <span key={i} className="cw-card__line" dir="auto">
+            {show(line)}
+          </span>
+        ))}
+      </span>
     </span>
   )
 }

@@ -17,7 +17,7 @@ import { chatCopyFor } from './copy'
 import { LabelChip, LabelsDialog } from './LabelsDialog'
 import { ConversationAvatar, conversationName, isGroup, isMuted, previewParts, toneOfKind } from './chatView'
 import { useConversationPreferences } from './useChatActions'
-import { groupQueue, waitTone, waitedFor } from './queue'
+import { asksViewer, groupQueue, isUnseenSummons, waitTone, waitedFor } from './queue'
 import { TrialBadge, isTrialGroup } from '@/shared/components/TrialBadge'
 
 export type View = 'all' | 'unread' | 'favorites' | 'groups' | 'joined' | 'archived' | 'waiting'
@@ -111,7 +111,8 @@ export function ConversationList({
   const rank = (c: ChatConversation) => (isUnseenSummons(c) ? 2 : c.viewerState?.pinned ? 1 : 0)
   // A work queue, not a flat inbox: owed an answer (longest wait first), then
   // unread, then the rest by recency. The tabs filter within this grouping.
-  const sections = groupQueue(inView(view), rank)
+  // A summons asks this viewer to act, so it sits with what is owed an answer.
+  const sections = groupQueue(inView(view), rank, asksViewer)
   const rows = sections.flatMap((s) => s.rows)
   // One quiet section alone needs no heading: it is simply the list.
   const headed = sections.length > 1 || (sections.length === 1 && sections[0]!.key !== 'rest')
@@ -251,11 +252,7 @@ export function ConversationList({
   )
 }
 
-/** PD-36: the viewer was asked into this chat and has not opened it since. */
-export function isUnseenSummons(c: ChatConversation): boolean {
-  const m = c.viewerState?.mention
-  return !!m && m.kind === 'summons' && m.state === 'pending' && !m.seen
-}
+export { isUnseenSummons } from './queue'
 
 function ConversationRow({
   c,

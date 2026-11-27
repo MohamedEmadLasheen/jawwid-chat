@@ -8,7 +8,8 @@ import { Dialog } from '@/shared/components/Dialog'
 import { Icon } from '@/shared/components/Icon'
 
 /**
- * The thread header's ONE primary control: Call.
+ * The thread header's one stated control: Call. It is outlined, not filled:
+ * the screen's one filled action is the family's ("Record a payment").
  *
  * The rules are those of ConversationCallControls (features/calls): the button
  * is ABSENT, not disabled, when the server's advisory answer is no, and that
@@ -25,7 +26,7 @@ export function CallButton({ conversationId, peerLabel, isGroup }: { conversatio
   return (
     <button
       type="button"
-      className="btn btn--primary cw-head__call"
+      className="btn cw-head__call"
       disabled={state.phase !== 'idle'}
       aria-label={label}
       title={label}
