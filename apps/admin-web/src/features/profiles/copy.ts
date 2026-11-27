@@ -1,5 +1,6 @@
 import { ApiError } from '@/core/api/errors'
 import type { Pair } from '@/features/organization/copy'
+import type { CountForms } from '@/features/instalments/copy'
 import { PhotoError } from '@/features/profile/photo'
 import type { PaymentMethod, TimelineStatus } from './api'
 import { PhotoUploadError } from './hooks'
@@ -202,7 +203,39 @@ export const P = {
   subscriptionState: { en: 'Subscription', ar: 'الاشتراك' },
   details: { en: 'Details', ar: 'البيانات' },
   weekly: { en: 'Weekly times', ar: 'المواعيد الأسبوعية' },
+
+  // The record: a masthead, tabs, and what waits now
+  tabOverview: { en: 'Overview', ar: 'نظرة عامة' },
+  tabMoney: { en: 'Money', ar: 'المدفوعات' },
+  tabHistory: { en: 'History', ar: 'السجل' },
+  tabSchedule: { en: 'Schedule', ar: 'الجدول' },
+  more: { en: 'More actions: {name}', ar: 'إجراءات أخرى: {name}' },
+  openRequests: { en: 'Open requests', ar: 'طلبات مفتوحة' },
+  overdueOf: { en: 'Overdue {amount}', ar: 'متأخر {amount}' },
+  attention: { en: 'Needs attention now', ar: 'يحتاج متابعة الآن' },
+  calmFamily: { en: 'Nothing is waiting on this family.', ar: 'لا شيء ينتظر هذه الأسرة.' },
+  calmStudent: { en: 'Nothing is waiting on this student.', ar: 'لا شيء ينتظر هذا الطالب.' },
+  openRequest: { en: 'Open request', ar: 'طلب مفتوح' },
+  view: { en: 'View', ar: 'عرض' },
+  comingUp: { en: 'Coming up', ar: 'القادم' },
+  allInstalments: { en: 'All instalments', ar: 'كل الأقساط' },
+  openFile: { en: 'Open file', ar: 'فتح الملف' },
+  totals: { en: 'Totals', ar: 'الإجماليات' },
+  nextLesson: { en: 'Next lesson', ar: 'الحصة القادمة' },
+  noTeacherYet: { en: 'No teacher assigned yet', ar: 'لم يُعيَّن معلم بعد' },
+  seeSubscription: { en: 'Open subscription', ar: 'فتح الاشتراك' },
+  seeSchedule: { en: 'Open schedule', ar: 'فتح الجدول' },
+  nextOn: { en: 'Next: {when}', ar: 'القادمة: {when}' },
+  lessonsLeftWord: { en: 'Lessons left', ar: 'الحصص المتبقية' },
+  lessonsUsedWord: { en: 'Lessons used', ar: 'الحصص المستخدمة' },
+  results: { en: 'Results', ar: 'النتائج' },
 } satisfies Record<string, Pair>
+
+/** Counted nouns, worded the way Arabic counts them (one, two, 3 to 10, 11 and up). */
+export const CHILDREN_COUNT: CountForms = {
+  en: ['{n} child', '{n} children'],
+  ar: ['طفل واحد', 'طفلان', '{n} أطفال', '{n} طفلًا'],
+}
 
 export const METHOD_LABEL: Record<PaymentMethod, Pair> = {
   invoice: { en: 'Invoice', ar: 'فاتورة' },

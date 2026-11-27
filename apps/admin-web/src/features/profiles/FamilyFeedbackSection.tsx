@@ -3,6 +3,7 @@ import { ApiError } from '@/core/api/errors'
 import { F, describeFeedbackError, useCopy } from '@/features/teacher-supervision/copy'
 import { FeedbackItem } from '@/features/teacher-supervision/FeedbackParts'
 import { useFamilyFeedback } from '@/features/teacher-supervision/hooks'
+import { Sheet } from './RecordParts'
 
 /**
  * PD-32 on the Parent File (PD-17): what this family sent from the app about
@@ -20,17 +21,11 @@ export function FamilyFeedbackSection({ familyId }: { familyId: string }) {
   if (list.isLoading) return null
   const rows = list.data?.feedback ?? []
   return (
-    <section className="card panel tf-section" aria-labelledby="pf-feedback">
-      <div className="tf-section__head">
-        <h2 id="pf-feedback" className="tf-section__title">
-          {tx(F.familyTitle)}
-        </h2>
-      </div>
-      <p className="field__hint">{tx(F.familyHint)}</p>
+    <Sheet id="pf-feedback" title={tx(F.familyTitle)} rule={tx(F.familyHint)}>
       {list.error ? (
-        <p className="tf-muted">{describeFeedbackError(list.error, locale)}</p>
+        <p className="rec-empty">{describeFeedbackError(list.error, locale)}</p>
       ) : rows.length === 0 ? (
-        <p className="tf-muted">{tx(F.familyEmpty)}</p>
+        <p className="rec-empty">{tx(F.familyEmpty)}</p>
       ) : (
         <ul className="tf-entries">
           {rows.map((f) => (
@@ -38,6 +33,6 @@ export function FamilyFeedbackSection({ familyId }: { familyId: string }) {
           ))}
         </ul>
       )}
-    </section>
+    </Sheet>
   )
 }

@@ -1,0 +1,316 @@
+/*
+ * A record: a parent's file, a student's file.
+ *
+ * The masthead says who it is, where things stand and the one thing done here
+ * most; its tabs split the file into short pages. Each tab is work on white
+ * sheets beside quiet facts on the canvas.
+ *
+ *   .rec-tabs / .rec-panel   the tabs on the masthead and their pages
+ *   .rec-split               work beside its context (the shared .split)
+ *   .rec-sheet               a headed sheet: title, count, one action, one rule line
+ *   .rec-list / .rec-attn    rows of what waits: what, a tag, one line, an amount, one action
+ *   .rec-group / .rec-facts  labelled facts on the canvas
+ *   .rec-note                the internal note, on gold paper under a lock
+ *
+ * Sections other features render inside a record (.tf-section) are given the
+ * same two looks from here: a sheet in the work column, a group in the margin.
+ */
+
+/* --------------------------------------------------------------- masthead */
+
+.rec .mast__row { align-items: center; }
+.rec .mast__lead { align-self: flex-start; }
+.rec .mast__lead .avatar, .rec-lead__img {
+  inline-size: 64px;
+  block-size: 64px;
+  border-radius: var(--radius-lg);
+  font-family: var(--display);
+  font-size: 25px;
+  font-weight: 600;
+}
+.rec-lead__img { display: block; object-fit: cover; }
+.rec .mast .page-header__title { overflow-wrap: anywhere; }
+.rec .mast .page-header__title .badge { font-family: var(--font); }
+html[lang='ar'] .rec .mast .page-header__title .badge { font-family: var(--font-ar); }
+/* On a record the line under the name is who they belong to: it stays on a phone. */
+.rec .mast .page-header__subtitle { display: block; max-inline-size: none; }
+.rec-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 4px var(--space-4); }
+.rec-lock { display: inline-flex; align-items: center; gap: 5px; color: var(--ink-muted); font-size: var(--fs-xs); }
+.rec-lock .icon { color: var(--gold-text); }
+.rec .mast .page-header__actions { align-self: flex-start; }
+.rec .figure__n > bdi { unicode-bidi: isolate; }
+
+.rec-tabs { overflow-x: auto; scrollbar-width: none; }
+.rec-tabs::-webkit-scrollbar { display: none; }
+.rec-tabs .seg__item { display: inline-flex; align-items: center; gap: 7px; flex: none; }
+.rec-tabs__count { display: inline-flex; }
+.rec-tabs .count { min-inline-size: 18px; block-size: 18px; padding-inline: 5px; font-size: 11px; }
+
+/* Every tab's page stays in the document; only the open one is shown. */
+.rec-panel[data-active='false'] { display: none; }
+
+@media (max-width: 767px) {
+  .rec .mast__lead .avatar, .rec-lead__img { inline-size: 48px; block-size: 48px; font-size: 19px; }
+  .rec .mast__row { align-items: flex-start; }
+  .rec .mast .page-header__text { flex-basis: 0; min-inline-size: 60%; }
+  .rec .mast .page-header__actions { inline-size: 100%; }
+  .rec .mast .page-header__actions > .btn--primary { flex: 1; }
+  .rec-tabs { margin-inline: calc(-1 * var(--space-4)); padding-inline: var(--space-4); gap: var(--space-4); }
+  .rec-tabs .seg__item { min-block-size: 44px; }
+}
+
+/* A chosen photo waits here for a yes: what it replaces, and the two answers. */
+.rec-photo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px var(--space-4);
+  margin-block-end: var(--space-4);
+  padding: 10px var(--space-4);
+  border: 1px solid var(--hairline);
+  border-inline-start: 3px solid var(--gold-line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-size: var(--fs-sm);
+}
+.rec-photo__hint { flex: 1 1 240px; color: var(--ink-muted); }
+.rec-photo__buttons { display: inline-flex; gap: var(--space-2); }
+
+/* ------------------------------------------------------------ composition */
+
+.rec-main { display: grid; gap: var(--space-4); min-inline-size: 0; align-content: start; }
+.rec-aside { min-inline-size: 0; }
+.rec-aside > * + * { margin-block-start: var(--space-5); padding-block-start: var(--space-5); border-block-start: 1px solid var(--hairline); }
+.rec-aside > .rec-note, .rec-aside > .rec-note + * { padding-block-start: 0; border-block-start: 0; }
+.rec-aside > .rec-slot:empty { display: none; }
+.rec-aside > .rec-slot:empty + * { margin-block-start: var(--space-5); }
+/* The context is written first and set at the end: on a narrow screen it leads. */
+@media (min-width: 1100px) {
+  .rec-split--lead > .rec-aside { grid-column: 2; grid-row: 1; }
+  .rec-split--lead > .rec-main { grid-column: 1; grid-row: 1; }
+}
+@media (max-width: 1099px) {
+  .rec-split > .rec-aside { padding-block-start: var(--space-2); }
+  .rec-split--lead > .rec-aside { padding-block: 0 var(--space-2); }
+}
+
+/* ------------------------------------------------------------------ sheet */
+
+.rec-sheet { min-inline-size: 0; scroll-margin-block-start: var(--space-4); }
+.rec-sheet > .sheet__head { flex-wrap: wrap; }
+.rec-sheet__title { display: flex; align-items: baseline; gap: 8px; min-inline-size: 0; }
+.rec-sheet__title .sheet__count { margin-inline-start: 0; font-size: var(--fs-sm); }
+.rec-sheet .sheet__title { font-size: var(--fs-md); font-weight: 600; line-height: 1.5; }
+/* A rule that protects people stays, in one quiet line under the heading. */
+.rec-sheet__rule { margin: 0; padding: 9px var(--space-4) 0; max-inline-size: 78ch; font-size: var(--fs-xs); line-height: 1.5; color: var(--ink-muted); }
+.rec-empty, .rec-sheet > .tf-muted { margin: 0; padding: 14px var(--space-4) 16px; font-size: var(--fs-sm); color: var(--ink-muted); }
+.rec-calm { display: flex; align-items: center; gap: 10px; margin: 0; padding: 18px var(--space-4); font-size: var(--fs-md); color: var(--ink); }
+.rec-calm .icon { flex: none; color: var(--success); }
+.rec-sheet > .state { padding-block: var(--space-5); }
+
+/* --------------------------------------------------------- what waits now */
+
+.rec-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; }
+.rec-list > li { grid-column: 1 / -1; }
+/* Every row shares the list's three columns, so amounts and actions line up down the sheet. */
+.rec-attn {
+  position: relative;
+  display: grid;
+  grid-template-columns: subgrid;
+  align-items: center;
+  gap: 4px var(--space-4);
+  min-block-size: 60px;
+  padding: 11px var(--space-4);
+  border-block-end: 1px solid var(--hairline-soft);
+}
+.rec-attn:last-child { border-block-end: 0; }
+/* A late row carries a terracotta edge, the way a problem row does everywhere. */
+.rec-attn--late::before { content: ''; position: absolute; inset-block: 0; inset-inline-start: 0; inline-size: 3px; background: var(--terracotta); }
+.rec-attn:last-child.rec-attn--late::before { border-end-start-radius: var(--radius-lg); }
+.rec-attn__what { display: grid; gap: 2px; min-inline-size: 0; }
+.rec-attn__line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+.rec-attn__title { font-weight: 600; overflow-wrap: anywhere; }
+/* The dot trails the fact before it, so a line that wraps never begins with one. */
+.rec-attn__sub { display: flex; flex-wrap: wrap; gap: 0 10px; font-size: var(--fs-xs); color: var(--ink-muted); line-height: 1.55; }
+.rec-attn__sub > :not(:last-child)::after { content: '·'; margin-inline-start: 10px; color: var(--border-control); font-weight: 400; }
+.rec-attn__more { font-size: var(--fs-xs); color: var(--ink-muted); line-height: 1.55; overflow-wrap: anywhere; }
+.rec-attn__label { font-weight: 500; }
+.rec-late { color: var(--terracotta); font-weight: 600; }
+.rec-attn__act { display: flex; justify-content: flex-end; min-inline-size: 0; }
+.rec-attn--plain { min-block-size: 52px; }
+/* Settled or struck out: said, not stressed. */
+.rec-attn--muted .rec-attn__title, .rec-attn--struck .rec-attn__title { font-weight: 500; }
+.rec-attn--muted .rec-amount, .rec-attn--struck .rec-amount { color: var(--ink-muted); }
+.rec-attn--struck { background: var(--paper); }
+.rec-attn--struck .rec-attn__title { color: var(--ink-muted); }
+.rec-attn--struck .rec-amount > bdi { text-decoration: line-through; }
+.rec-attn:last-child.rec-attn--struck { border-end-start-radius: var(--radius-lg); border-end-end-radius: var(--radius-lg); }
+.rec-attn__act > .pay-receipt__thumb { inline-size: 64px; }
+.rec-attn__act > .pay-receipt__thumb img { max-block-size: 64px; }
+
+.rec-attn > .rec-amount { grid-column: 2; justify-self: end; }
+.rec-attn > .rec-attn__act { grid-column: 3; }
+.rec-amount { display: inline-flex; align-items: baseline; gap: 5px; white-space: nowrap; font-family: var(--display); font-size: var(--fs-lg); font-weight: 600; font-variant-numeric: tabular-nums lining-nums; color: var(--ink); }
+.rec-amount__unit { font-family: var(--font); font-size: var(--fs-xs); font-weight: 400; color: var(--ink-muted); }
+html[lang='ar'] .rec-amount__unit { font-family: var(--font-ar); }
+.rec-amount--late { color: var(--terracotta); }
+
+@media (max-width: 640px) {
+  .rec-list { grid-template-columns: minmax(0, 1fr) auto; }
+  .rec-attn { padding-block: 12px; align-items: start; }
+  .rec-attn > .rec-attn__act { grid-column: 1 / -1; justify-content: flex-start; }
+  .rec-attn > .rec-attn__act:empty { display: none; }
+}
+
+/* ------------------------------------------------------- facts on canvas */
+
+.rec-group__head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); min-block-size: 30px; margin-block-end: 2px; }
+.rec-group__head .aside-group__title { margin: 0; }
+.rec-group__head .btn { margin-inline-end: -10px; }
+.rec-facts { display: grid; gap: 12px; margin: 6px 0 0; }
+.rec-fact { display: grid; gap: 1px; min-inline-size: 0; }
+.rec-fact > dt { display: flex; align-items: center; gap: 6px; font-size: var(--fs-xs); color: var(--ink-muted); }
+.rec-fact > dt .icon { flex: none; color: var(--border-control); }
+.rec-fact > dd { margin: 0; font-size: var(--fs-md); font-weight: 500; overflow-wrap: anywhere; }
+/* A fact nobody has recorded is said quietly: it must not weigh what a real value weighs. */
+.rec-missing, .rec-fact__quiet { font-size: var(--fs-sm); font-weight: 400; color: var(--ink-muted); }
+.rec-by { display: grid; gap: 2px; margin: 12px 0 0; font-size: var(--fs-xs); color: var(--ink-muted); }
+.rec-rule { margin: 12px 0 0; font-size: var(--fs-xs); line-height: 1.5; color: var(--ink-muted); }
+@media (max-width: 1099px) {
+  /* Off the margin, the facts have the page's width: set them side by side. */
+  .rec-facts { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px var(--space-5); }
+}
+
+/* Paid, outstanding, overdue: plain lines, the amount at the end. */
+.rec-totals { inline-size: 100%; margin-block-start: 14px; border-collapse: collapse; border-block-start: 1px solid var(--hairline); font-size: var(--fs-sm); }
+.rec-totals th, .rec-totals td { padding: 7px 0; border-block-end: 1px solid var(--hairline-soft); font-weight: 400; text-align: start; }
+.rec-totals th { color: var(--ink-muted); }
+.rec-totals td { text-align: end; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.rec-totals__cur { font-size: var(--fs-xs); }
+.rec-totals__late th, .rec-totals__late td { color: var(--terracotta); }
+
+/* Where each ledger is: quiet links, a count where something is open. */
+.rec-index { display: grid; gap: 0; }
+.rec-index__link { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); min-block-size: 34px; color: var(--ink); font-size: var(--fs-sm); font-weight: 500; text-decoration: none; }
+.rec-index__link:hover { color: var(--teal); }
+.rec-index__link:hover > span:first-child { text-decoration: underline; text-underline-offset: 3px; }
+@media (max-width: 1099px) {
+  .rec-index { display: flex; flex-wrap: wrap; gap: 6px; }
+  .rec-index__link { min-block-size: 36px; padding-inline: 12px; border: 1px solid var(--hairline); border-radius: var(--radius); background: var(--surface); gap: 8px; }
+}
+@media (max-width: 767px) {
+  .rec-index__link { min-block-size: 40px; }
+}
+
+/* ------------------------------------------------------ the internal note */
+
+/* Gold paper, as in the chat composer: this is never the parent's to read. */
+.rec-note { padding: 8px var(--space-4) 12px; border: 1px solid var(--gold-line); border-radius: var(--radius-lg); background: var(--gold-tint); }
+.rec-note__title { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-size: 12.5px; font-weight: 600; color: var(--gold-text); }
+.rec-note .btn--ghost { color: var(--gold-text); }
+.rec-note .btn--ghost:hover:not(:disabled) { background: var(--surface); color: var(--ink); }
+.rec-note .pf-note { margin-block-start: 4px; }
+.rec-note__empty { margin: 4px 0 0; font-size: var(--fs-sm); color: var(--gold-text); }
+.rec-note__rule { margin: 10px 0 0; padding-block-start: 8px; border-block-start: 1px solid var(--gold-line); font-size: var(--fs-xs); line-height: 1.5; color: var(--gold-text); }
+
+/* ----------------------------------------- ledgers: an entry is a ruled row */
+
+/* The lists another feature draws here (requests, payments received) take the same row:
+   what and its lines at the start, the amount closing the first line, the actions at the end. */
+.rec .rec-sheet .pf-timeline { margin: 0; }
+.rec .rec-sheet .pf-entry { padding: 13px var(--space-4) 14px; gap: 2px var(--space-4); }
+@media (min-width: 641px) {
+  .rec .rec-sheet .pf-entry > .pf-entry__head { grid-column: 1; }
+  .rec .rec-sheet .pf-entry > .tf-actions { grid-row: 1 / span 6; align-self: center; }
+}
+.rec .rec-sheet .pf-entry__head > .pf-amount { font-size: var(--fs-lg); }
+.rec .rec-sheet .pf-entry:last-child { border-block-end: 0; }
+.rec .rec-sheet .pf-entry--late::before { inset-block: 0; inset-inline-start: 0; inline-size: 3px; }
+.rec .rec-sheet .pf-entry--closed, .rec .rec-sheet .pf-entry--voided { background: var(--paper); }
+.rec .rec-sheet .pf-entry:last-child:is(.pf-entry--closed, .pf-entry--voided) { border-end-start-radius: var(--radius-lg); border-end-end-radius: var(--radius-lg); }
+.rec .pf-entry__meta .pf-overdue { font-weight: 600; }
+.rec .pf-entry > .tf-actions { align-items: center; }
+.rec .pf-entry > .tf-actions .btn--ghost { color: var(--ink-muted); }
+.rec .pf-entry > .tf-actions .btn--ghost:hover:not(:disabled) { color: var(--teal-dark); }
+.rec .pf-entry > .pay-receipt__thumb { margin-block-start: 6px; }
+@media (max-width: 640px) {
+  .rec .rec-sheet .pf-entry--late::before { inset-inline-start: 0; }
+}
+
+/* --------------------------------------------------------------- children */
+
+.rec-kid {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 6px var(--space-4);
+  min-block-size: 64px;
+  padding: 10px var(--space-4);
+  border-block-end: 1px solid var(--hairline-soft);
+}
+.rec-kid:last-child { border-block-end: 0; }
+.rec-kid { cursor: pointer; }
+.rec-kid:hover { background: var(--surface-hover); }
+.rec-kid:last-child:hover { border-end-start-radius: var(--radius-lg); border-end-end-radius: var(--radius-lg); }
+.rec-kid__name { justify-self: start; font-size: var(--fs-md); font-weight: 600; color: var(--ink); text-decoration: none; overflow-wrap: anywhere; }
+.rec-kid__name:hover { color: var(--teal); text-decoration: underline; text-underline-offset: 3px; }
+.rec-kid__standing { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-5); font-size: var(--fs-sm); }
+.rec-kid__lessons { display: grid; gap: 5px; inline-size: 220px; }
+.rec-kid__count { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
+.rec-kid__left { color: var(--ink-muted); }
+.rec-kid__standing .badge { min-inline-size: 5.5rem; }
+.rec-kid > .row-actions2:last-child { grid-column: -2; }
+@media (max-width: 767px) {
+  /* Name and state share the first line; the lessons line runs under them, full width. */
+  .rec-kid { grid-template-columns: auto minmax(0, 1fr) auto; padding-block: 12px; }
+  .rec-kid__standing { display: contents; }
+  .rec-kid__standing > .badge { grid-column: 3; grid-row: 1; min-inline-size: 0; justify-self: end; }
+  .rec-kid__lessons { grid-column: 1 / -1; grid-row: 2; inline-size: auto; }
+  /* The row is the target on a phone: the name opens the file, with no second button under it. */
+  .rec-kid > .row-actions2 { display: none; }
+  .rec-kid__name { display: inline-flex; align-items: center; min-block-size: 44px; }
+}
+
+/* ---------------------------------------------------------------- history */
+
+.rec-history { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: var(--space-4) var(--space-5); align-items: start; }
+.rec-slot:empty { display: none; }
+.rec-history > .rec-slot:only-child, .rec-history > .rec-slot:has(+ .rec-slot:empty), .rec-history > .rec-slot:empty + .rec-slot { max-inline-size: 760px; }
+
+/* A section another feature renders in the work column reads as a sheet. */
+.rec .rec-history .tf-section, .rec .rec-main .tf-section {
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+.rec .rec-history .tf-section__head, .rec .rec-main .tf-section__head { min-block-size: 48px; padding: 8px var(--space-4); border-block-end: 1px solid var(--hairline-soft); }
+.rec .rec-history .tf-section__title, .rec .rec-main .tf-section__title { font-family: var(--font); font-size: var(--fs-md); font-weight: 600; line-height: 1.5; color: var(--ink); }
+html[lang='ar'] .rec .rec-history .tf-section__title, html[lang='ar'] .rec .rec-main .tf-section__title { font-family: var(--font-ar); font-weight: 600; }
+.rec .rec-history .tf-section > .field__hint, .rec .rec-main .tf-section > .field__hint { margin: 0; padding: 9px var(--space-4) 0; max-inline-size: 78ch; }
+.rec .rec-history .tf-section > .tf-muted, .rec .rec-main .tf-section > .tf-muted { margin: 0; padding: 14px var(--space-4) 16px; }
+.rec .rec-history .pp-activity .pf-people, .rec .pp-activity .pf-people { margin: 0; padding: var(--space-4) var(--space-4) 4px; }
+.rec .pp-activity .pf-people > li::after { background: var(--surface); }
+.rec .pp-activity .pf-people > li:last-child::after { background: var(--teal); }
+.rec .rec-sheet .tf-entries { margin: 0; }
+.rec .rec-sheet .tf-entry { padding: 13px var(--space-4); }
+.rec .rec-sheet .tf-entry:last-child { border-block-end: 0; }
+
+/* The same section in the margin reads as a group of facts on the canvas. */
+.rec .rec-aside .tf-section { margin: 0; padding: 0; border: 0; border-radius: 0; background: none; }
+.rec .rec-aside .tf-section__head { min-block-size: 30px; padding: 0; border: 0; }
+.rec .rec-aside .tf-section__title { font-family: var(--font); font-size: 12.5px; font-weight: 600; line-height: 1.5; color: var(--ink-muted); }
+html[lang='ar'] .rec .rec-aside .tf-section__title { font-family: var(--font-ar); font-size: 12.5px; font-weight: 600; }
+.rec .rec-aside .tf-kv { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; margin-block-start: 6px; }
+.rec .rec-aside .tf-kv > dt { padding: 0; border: 0; font-size: var(--fs-xs); color: var(--ink-muted); }
+.rec .rec-aside .tf-kv > dd { margin-block-start: -11px; padding: 0; border: 0; font-size: var(--fs-md); font-weight: 500; }
+.rec .rec-aside .tf-kv .tf-muted { font-size: var(--fs-sm); font-weight: 400; }
+.rec .rec-aside .ns-inline { gap: 4px 8px; }
+.rec .rec-aside .ns-inline .btn { margin-inline-start: auto; }
+.rec .rec-aside .tf-section > .field__hint { margin: 6px 0 0; font-size: var(--fs-xs); }
+.rec .rec-aside .tf-byline { margin: 10px 0 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .rec-index__link { transition: none; }
+}
