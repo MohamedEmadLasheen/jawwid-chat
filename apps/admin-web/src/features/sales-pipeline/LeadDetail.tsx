@@ -3,7 +3,7 @@ import { useI18n } from '@/core/i18n/I18nProvider'
 import { Badge } from '@/shared/components/Badge'
 import { DialogCancelButton } from '@/shared/components/Dialog'
 import type { MenuItem } from '@/shared/components/Menu'
-import { Age, DetailCallout, DetailSection, FlowSteps, dayName, type FlowStep, type StepState } from '@/shared/components/RequestQueue'
+import { DetailCallout, DetailSection, FlowSteps, dayName, type FlowStep, type StepState } from '@/shared/components/RequestQueue'
 import { SearchableSelect } from '@/shared/components/SearchableSelect'
 import { QueryBoundary } from '@/shared/components/States'
 import { formatWhen } from '@/features/trials/copy'
@@ -184,15 +184,14 @@ function LeadBody({ lead }: { lead: Lead }) {
     <>
       <DetailCallout
         status={
-          <>
+          lead.followUpDue && lead.nextFollowUpOn && lead.stage !== 'lost' && !lead.convertedAt ? (
+            <>
+              <Badge tone="waiting" dot>{tx(P.followUpDue)}</Badge>
+              <span className="rq-age rq-age--late">{tx(P.sinceDate).replace('{date}', on(lead.nextFollowUpOn))}</span>
+            </>
+          ) : (
             <LeadStatus lead={lead} />
-            {lead.lastContactedAt && (
-              <span>
-                {tx(P.lastContactAge).split('{age}')[0]}
-                <Age iso={lead.lastContactedAt} />
-              </span>
-            )}
-          </>
+          )
         }
         state={state}
         primary={primary}

@@ -5,7 +5,8 @@
 /* Above the board: the search, and what it looks through. */
 .lead-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
 .lead-bar .search { flex: 1 1 14rem; max-inline-size: 360px; }
-.lead-bar__hint { font-size: var(--fs-xs); color: var(--ink-muted); }
+.lead-bar__hint { flex: 1 1 0; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-xs); color: var(--ink-muted); }
+.lead-bar .rq-bar__end { flex: none; }
 
 .lead-pager {
   display: flex;

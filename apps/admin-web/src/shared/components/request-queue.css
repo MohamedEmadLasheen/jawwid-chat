@@ -267,6 +267,8 @@ a.rq-open { text-decoration: none; }
 .rq-board__edge--end { inset-inline-end: 0; border-inline-start: 1px solid var(--line); }
 .rq-board__edge--start { inset-inline-start: 0; border-inline-end: 1px solid var(--line); }
 .rq-board__edge:hover { color: var(--teal); background: var(--surface-hover); }
+.rq-board__edge--end { justify-content: flex-start; align-items: flex-end; padding-inline-end: 20px; }
+.rq-board__edge--start { align-items: flex-start; padding-inline-start: 20px; }
 .rq-board__edge .icon { inline-size: 32px; block-size: 32px; padding: 7px; border: 1px solid var(--line-strong); border-radius: 50%; background: var(--surface); }
 .rq-board__back { display: inline-flex; transform: scaleX(-1); }
 /* Ended stages, one above the other in one narrower track. */
@@ -301,6 +303,8 @@ a.rq-open { text-decoration: none; }
 /* An isolated name wraps on the page's side, beside its icon. */
 [dir='rtl'] .rq-card__line > bdi { text-align: right; }
 [dir='ltr'] .rq-card__line > bdi { text-align: left; }
+/* A list of names breaks between names, never inside one. */
+.rq-names bdi { white-space: nowrap; }
 .rq-card__line .icon { flex: none; color: var(--ink-muted); }
 .rq-card__tags { display: flex; flex-wrap: wrap; gap: 6px; }
 /* The foot: how long it has waited, and its one action at the far edge. */

@@ -161,7 +161,8 @@ export function TrialsPage() {
   const n = (count: number) => (q.data ? count : null)
   const filters: Array<QueueFilter<Filter>> = [
     { key: 'all', label: tx(TR.filterAll), count: n(all.length) },
-    { key: 'decision', label: tx(TR.filterOutcome), count: n(waiting.length), urgent: late },
+    // The red count is the group's, beside the work; the filter's count stays quiet.
+    { key: 'decision', label: tx(TR.filterOutcome), count: n(waiting.length) },
     { key: 'upcoming', label: tx(TR.filterUpcoming), count: n(upcoming.length) },
     { key: 'recorded', label: tx(TR.filterRecorded), count: n(recorded.length) },
   ]
@@ -488,9 +489,10 @@ function TrialDetail({
         <dl className="rq-fields">
           {students.map((x, i) => (
             <div className="rq-field" key={i}>
-              <dt><bdi>{x.name}</bdi></dt>
+              <dt>{students.length > 1 ? `${tx(TR.student)} ${number(i + 1)}` : tx(TR.student)}</dt>
               <dd>
-                <bdi>{x.level ?? tx(TR.noLevel)}</bdi>
+                <bdi>{x.name}</bdi>
+                <span className="rq-sub"><bdi>{x.level ?? tx(TR.noLevel)}</bdi></span>
                 {x.note && <span className="rq-sub"><bdi>{x.note}</bdi></span>}
               </dd>
             </div>

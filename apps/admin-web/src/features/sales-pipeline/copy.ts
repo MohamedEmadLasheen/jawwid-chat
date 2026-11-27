@@ -109,6 +109,7 @@ export const P = {
   dueOn: { en: 'Follow-up was due on {date}', ar: 'كان موعد المتابعة {date}' },
   dueSince: { en: '{what} since {date}', ar: '{what} منذ {date}' },
   allStages: { en: 'All stages', ar: 'كل المراحل' },
+  sinceDate: { en: 'since {date}', ar: 'منذ {date}' },
   followUpOn: { en: 'Follow-up on {date}', ar: 'المتابعة في {date}' },
   noFollowUp: { en: 'No follow-up planned', ar: 'لا متابعة مخطط لها' },
   lastContactAge: { en: 'Last contact {age}', ar: 'آخر تواصل {age}' },

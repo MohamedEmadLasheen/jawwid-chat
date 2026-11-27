@@ -5,14 +5,14 @@ import { Badge } from '@/shared/components/Badge'
 import { FilterChips } from '@/shared/components/FilterChips'
 import { Icon } from '@/shared/components/Icon'
 import { PageHeader } from '@/shared/components/PageHeader'
-import { Age, Board, BoardCard, RequestQueue, useWidePane, waitedOvernight, type BoardStage } from '@/shared/components/RequestQueue'
+import { Age, Board, BoardCard, RequestQueue, useWidePane, type BoardStage } from '@/shared/components/RequestQueue'
 import { RowActions } from '@/shared/components/RowActions'
 import { SearchField } from '@/shared/components/SearchField'
 import { EmptyState, ErrorState, LoadingState } from '@/shared/components/States'
 import type { Certificate, CertificateAct, CertificateCategory, StateGroup } from './api'
 import { C, GROUPS, actLabel, groupLabel, useCopy } from './copy'
 import { useCertificate, useCertificateAccess, useCertificateBoard } from './hooks'
-import { CertificateDetail, actEnds, actIcon, certificateWhy, orderedActs } from './CertificateDetail'
+import { CertificateDetail, actEnds, actIcon, certificateLate, certificateWhy, orderedActs } from './CertificateDetail'
 import { RequestDialog } from './RequestDialog'
 import { TypesPanel } from './TypesPanel'
 import './certificates.css'
@@ -131,7 +131,7 @@ export function CertificatesPage() {
         status={story ? <Badge tone="info" dot>{tx(C.storyPublished)}</Badge> : undefined}
         fact={certificateWhy(c, tx, locale)}
         // An open request left since before today is late, as on the Requests hub.
-        age={<Age iso={c.requestedAt} late={group !== 'sent' && group !== 'closed' && waitedOvernight(c.requestedAt)} />}
+        age={<Age iso={c.requestedAt} late={certificateLate(c)} />}
         actions={
           <RowActions
             label={`${tx(C.moreActions)}: ${c.printedName}`}
@@ -235,6 +235,7 @@ export function CertificatesPage() {
             <div className="rq-bar cert-bar">
               <SearchField value={search} onChange={setSearch} label={tx(C.search)} clearLabel="×" />
               <button type="button" className="chip cert-bar__closed" aria-pressed={showClosed} onClick={() => setShowClosed((v) => !v)}>
+                <Icon name="archive" size={16} />
                 {tx(C.showClosed)}
               </button>
             </div>

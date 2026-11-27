@@ -129,7 +129,7 @@ export function NewStudentsPage() {
 
   /** The names of a family's children, as one phrase. */
   const childNames = (s: NewStudentDto) => (
-    <span>
+    <span className="rq-names">
       {s.children.map((c, i) => (
         <span key={i}>
           {i > 0 && (locale === 'ar' ? '، ' : ', ')}

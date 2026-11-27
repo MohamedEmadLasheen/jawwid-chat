@@ -94,8 +94,9 @@ describe('Trial lessons: the agenda', () => {
     await screen.findByText('Prospect Gamma')
     expect(figure(/^All/)).toHaveTextContent(/^All4$/)
     expect(figure(/^Needs an outcome/)).toHaveTextContent(/^Needs an outcome2$/)
-    // The count that asks for action is solid red once an outcome has waited since before today.
-    expect(figure(/^Needs an outcome/).querySelector('.count')).toHaveClass('count--urgent')
+    // The filter's count stays quiet: the red count is the group's, beside the work, never twice.
+    expect(figure(/^Needs an outcome/).querySelector('.count--urgent')).toBeNull()
+    expect(screen.getByRole('region', { name: 'Needs an outcome' }).querySelector('.count')).toHaveClass('count--urgent')
     expect(document.querySelector('.figures')).toBeNull()
     expect(figure(/^Upcoming/)).toHaveTextContent(/^Upcoming0$/)
     expect(figure(/^Recorded/)).toHaveTextContent(/^Recorded2$/)

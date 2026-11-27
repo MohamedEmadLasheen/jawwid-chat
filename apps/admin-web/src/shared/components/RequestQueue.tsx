@@ -420,13 +420,13 @@ export function Board<K extends string>({
           {tracks.map((t) => (t.length === 1 ? column(t[0]!) : <div key={t[0]!.key} className="rq-col-stack">{t.map(column)}</div>))}
         </div>
         {edges.start > 0 && (
-          <button type="button" className="rq-board__edge rq-board__edge--start" onClick={() => page(-1)}>
+          <button type="button" className="rq-board__edge rq-board__edge--start" style={{ inlineSize: Math.max(72, edges.startCover + 8) }} onClick={() => page(-1)}>
             <span className="rq-board__back"><Icon name="chevronForward" size={18} /></span>
             {WORDS.earlierColumns[locale].replace('{n}', number(edges.start))}
           </button>
         )}
         {edges.end > 0 && (
-          <button type="button" className="rq-board__edge rq-board__edge--end" onClick={() => page(1)}>
+          <button type="button" className="rq-board__edge rq-board__edge--end" style={{ inlineSize: Math.max(72, edges.endCover + 8) }} onClick={() => page(1)}>
             <Icon name="chevronForward" size={18} />
             {WORDS.moreColumns[locale].replace('{n}', number(edges.end))}
           </button>
@@ -465,7 +465,7 @@ export function Board<K extends string>({
  * from 0 to negative.
  */
 function useScrollEdges(ref: RefObject<HTMLElement>, enabled: boolean) {
-  const [edges, setEdges] = useState({ start: 0, end: 0 })
+  const [edges, setEdges] = useState({ start: 0, end: 0, startCover: 0, endCover: 0 })
   const update = () => {
     const el = ref.current
     if (!el) return
@@ -473,16 +473,27 @@ function useScrollEdges(ref: RefObject<HTMLElement>, enabled: boolean) {
     const rtl = getComputedStyle(el).direction === 'rtl'
     let start = 0
     let end = 0
-    // A column the pane does not show whole counts as hidden on its side.
+    // How far in from each side the edge must reach to cover every column it counts.
+    let startCover = 0
+    let endCover = 0
+    // A column the pane does not show whole counts as hidden on its side, and the edge covers all of it that shows.
     for (const child of Array.from(el.children)) {
       const r = child.getBoundingClientRect()
       if (r.width === 0) continue
+      const n = child.classList.contains('rq-col-stack') ? child.children.length : 1
       const pastEnd = rtl ? r.left < box.left - 1 : r.right > box.right + 1
       const beforeStart = rtl ? r.right > box.right + 1 : r.left < box.left - 1
-      if (pastEnd) end += child.classList.contains('rq-col-stack') ? child.children.length : 1
-      else if (beforeStart) start += child.classList.contains('rq-col-stack') ? child.children.length : 1
+      if (pastEnd) {
+        end += n
+        endCover = Math.max(endCover, rtl ? r.right - box.left : box.right - r.left)
+      } else if (beforeStart) {
+        start += n
+        startCover = Math.max(startCover, rtl ? box.right - r.left : r.right - box.left)
+      }
     }
-    setEdges((e) => (e.start === start && e.end === end ? e : { start, end }))
+    const round = (v: number) => Math.max(0, Math.ceil(v))
+    const next = { start, end, startCover: round(startCover), endCover: round(endCover) }
+    setEdges((e) => (e.start === next.start && e.end === next.end && e.startCover === next.startCover && e.endCover === next.endCover ? e : next))
   }
   // The columns change with the data, not only with the window: measure after every render.
   useEffect(update)
@@ -567,7 +578,7 @@ export interface QueueFilter<K extends string> {
   label: string
   /** Null until its list has arrived: the chip shows its name alone, never a zero. */
   count?: number | null
-  /** The count asks for action: solid red while it is above zero. */
+  /** The count asks for action and nothing below repeats it: solid red while it is above zero. */
   urgent?: boolean
 }
 

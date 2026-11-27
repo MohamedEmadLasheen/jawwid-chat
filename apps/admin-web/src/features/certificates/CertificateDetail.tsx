@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
+import { formatWhen } from '@/features/trials/copy'
 import { Badge } from '@/shared/components/Badge'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
 import { Icon, type IconName } from '@/shared/components/Icon'
@@ -74,6 +75,14 @@ const STAGE: Record<CertificateState, number> = {
   cancelled: 0,
   declined: 0,
 }
+
+/**
+ * A certificate is late when it has waited since before today on a step this
+ * desk takes (a decision on a suggestion, a review, a send). While the designer
+ * has it there is nothing to do here, so its age stays quiet.
+ */
+export const certificateLate = (c: Certificate): boolean =>
+  (c.state === 'proposed' || c.state === 'uploaded' || c.state === 'approved') && waitedOvernight(c.requestedAt)
 
 /** Who asked for a certificate (or suggested it), as the reader may see it. */
 const askerOf = (c: Certificate): string | null => (c.projection === 'full' ? (c.requestedBy?.name ?? c.suggestedBy?.name ?? null) : c.requesterName)
@@ -246,7 +255,7 @@ export function CertificateDetail({
 }) {
   const tx = useCopy()
   const navigate = useNavigate()
-  const { locale, dateTime } = useI18n()
+  const { locale } = useI18n()
   const one = useCertificate(certificateId)
   const act = useCertificateAct()
   const upload = useUploadDesign()
@@ -323,7 +332,7 @@ export function CertificateDetail({
               status={
                 <>
                   <CertificateStatus certificate={c} />
-                  <Age iso={c.requestedAt} late={c.state !== 'sent' && c.state !== 'cancelled' && c.state !== 'declined' && waitedOvernight(c.requestedAt)} />
+                  <Age iso={c.requestedAt} late={certificateLate(c)} />
                 </>
               }
               state={certificateState(c, tx, locale)}
@@ -358,7 +367,7 @@ export function CertificateDetail({
                 <Fact label={C.grade} value={c.grade} />
                 {c.projection === 'full' ? (
                   <>
-                    <Fact label={C.student} value={c.learner?.name} />
+                    {c.learner?.name !== c.printedName && <Fact label={C.student} value={c.learner?.name} />}
                     <Fact label={C.teacher} value={c.teacher?.name} />
                     <Fact label={C.signatory} value={c.signatoryTeacher?.name} />
                     <Fact label={C.requestedBy} value={c.requestedBy?.name ?? c.suggestedBy?.name} />
@@ -372,7 +381,7 @@ export function CertificateDetail({
                 )}
                 <Fact label={C.designerNote} value={c.designerNote} />
                 <Fact label={C.designer} value={c.assignedDesigner?.name} />
-                <Fact label={C.requested} value={dateTime(c.requestedAt)} />
+                <Fact label={C.requested} value={formatWhen(c.requestedAt, locale)} />
               </dl>
             </DetailSection>
 
@@ -399,7 +408,7 @@ export function CertificateDetail({
             )}
 
             <DetailSection title={tx(C.steps)}>
-              <FlowSteps steps={certificateSteps(c, tx, dateTime, locale === 'ar' ? '، ' : ', ')} label={tx(C.steps)} />
+              <FlowSteps steps={certificateSteps(c, tx, (iso) => formatWhen(iso, locale), locale === 'ar' ? '، ' : ', ')} label={tx(C.steps)} />
             </DetailSection>
 
             {c.history && c.history.length > 0 && (
@@ -409,7 +418,7 @@ export function CertificateDetail({
                     <li key={h.seq}>
                       <strong title={h.kind}>{historyLabel(h, tx)}</strong>
                       {h.actor?.name ? <>{locale === 'ar' ? '، ' : ', '}<bdi>{h.actor.name}</bdi></> : null}
-                      <span className="cert-history__when">{dateTime(h.at)}</span>
+                      <span className="cert-history__when">{formatWhen(h.at, locale)}</span>
                       {h.note ? <div className="cert-history__note"><bdi>{h.note}</bdi></div> : null}
                     </li>
                   ))}

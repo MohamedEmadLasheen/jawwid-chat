@@ -131,7 +131,7 @@ export function SalesPipelinePage() {
               <span className="sr-only">{tx(P.search)}</span>
               <input className="input" type="search" value={search} placeholder={tx(P.search)} aria-describedby="sp-search-hint" onChange={(e) => setSearch(e.target.value)} />
             </label>
-            <span id="sp-search-hint" className="lead-bar__hint">{tx(P.searchHint)}</span>
+            <span id="sp-search-hint" className="lead-bar__hint" title={tx(P.searchHint)}>{tx(P.searchHint)}</span>
             <div className="rq-bar__end">
               {stage !== 'all' && (
                 <button type="button" className="chip" onClick={() => setStage('all')}>{tx(P.allStages)}</button>
