@@ -107,7 +107,7 @@ describe('the instalments page', () => {
     const rows = (await screen.findAllByRole('row')).slice(1)
     expect(rows).toHaveLength(2)
     expect(within(rows[0]!).getByText('Parent Alpha')).toBeInTheDocument()
-    expect(within(rows[0]!).getByText('The family')).toBeInTheDocument()
+    expect(within(rows[0]!).getByText('The whole family')).toBeInTheDocument()
     expect(within(rows[0]!).getByText('Overdue')).toBeInTheDocument()
     expect(within(rows[0]!).getByText('9 days late')).toBeInTheDocument()
     expect(within(rows[0]!).getByText(/1,500/)).toBeInTheDocument()

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Avatar } from '@/shared/components/Avatar'
@@ -41,6 +41,7 @@ const DECIDED_LABEL: Record<'approved' | 'rejected', Pair> = {
  */
 export function PaymentsPage({ eyebrow }: { eyebrow?: string }) {
   const tx = useCopy()
+  const { locale } = useI18n()
   const [params, setParams] = useSearchParams()
   // The Stripe events tab is the reconcilers' only (the transactions list's `canReconcile`).
   const ledger = useLedgerAccess()
@@ -62,17 +63,37 @@ export function PaymentsPage({ eyebrow }: { eyebrow?: string }) {
     else p.set('tab', next)
     setParams(p, { replace: true })
   }
+  // On a narrow screen the tabs scroll: the open one is brought to the middle of the strip,
+  // again when the reconcilers' tab joins it and when the fonts settle the widths.
+  const tabsRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    let live = true
+    const centre = () => {
+      const strip = tabsRef.current?.querySelector<HTMLElement>('.seg')
+      const open = strip?.querySelector<HTMLElement>('[aria-pressed="true"]')
+      if (!live || !strip || !open) return
+      const s = strip.getBoundingClientRect()
+      const o = open.getBoundingClientRect()
+      strip.scrollLeft += o.left + o.width / 2 - (s.left + s.width / 2)
+    }
+    centre()
+    void document.fonts?.ready.then(centre)
+    return () => {
+      live = false
+    }
+  }, [tab, canReconcile, locale])
   return (
     <div className="page pay-page">
       <div className="page__inner">
         <PageHeader eyebrow={eyebrow} title={tx(PAY.title)} subtitle={tx(PAY.subtitle)} />
-        {cardPaused && (
+        {/* Settings says it once, in its Card payments group. */}
+        {cardPaused && tab !== 'settings' && (
           <div className="pay-paused" role="status" data-testid="card-paused-banner">
             <strong>{tx(PAY.cardPausedBanner)}</strong>
           </div>
         )}
         <FinanceLedger here="payments" />
-        <div className="pay-tabs">
+        <div className="pay-tabs" ref={tabsRef}>
           <FilterChips<Tab>
             variant="tabs"
             label={tx(PAY.tabs)}
@@ -162,7 +183,7 @@ function ReceiptsTab({ onSeeTransactions }: { onSeeTransactions: () => void }) {
         <QueryBoundary isLoading={list.isLoading} error={null} onRetry={() => void list.refetch()}>
           {!list.data || list.data.items.length === 0 ? (
             <EmptyState
-              title={tx(PAY.noReceipts)}
+              title={tx(status === 'pending' ? PAY.noReceipts : PAY.noDecided)}
               hint={tx(status === 'pending' ? PAY.noPendingHint : PAY.noDecidedHint)}
               action={
                 status === 'pending' ? (
@@ -575,9 +596,7 @@ function SettingsForm({ settings }: { settings: BillingSettings }) {
         <div className="set-card">
           <div className="set-card__state">
             {settings.cardPaused ? (
-              <Badge tone="danger" dot>
-                {tx(PAY.cardPausedBadge)}
-              </Badge>
+              <CardPausedNote />
             ) : (
               <Badge tone={settings.cardAvailable ? 'ok' : 'outline'} dot>
                 {tx(settings.cardAvailable ? PAY.cardOn : PAY.cardOff)}
@@ -692,6 +711,28 @@ function SettingsForm({ settings }: { settings: BillingSettings }) {
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+/**
+ * W63, on the Settings tab: that card payments are paused and what it means, said once, in the
+ * group that holds the switch. The same sentence as the banner the other tabs carry.
+ */
+function CardPausedNote() {
+  const tx = useCopy()
+  const state = tx(PAY.cardPausedBadge)
+  const whole = tx(PAY.cardPausedBanner)
+  // The sentence opens with the state's own words: those stand as the status, the rest beneath.
+  const rest = whole.startsWith(state) ? whole.slice(state.length) : ` ${whole}`
+  const joint = rest.match(/^[.،:;\s]*/)?.[0] ?? ''
+  return (
+    <div className="set-paused" role="status" data-testid="card-paused-banner">
+      <Badge tone="danger" dot>
+        {state}
+      </Badge>
+      <span className="sr-only">{joint}</span>
+      <span className="set-paused__why">{rest.slice(joint.length)}</span>
     </div>
   )
 }

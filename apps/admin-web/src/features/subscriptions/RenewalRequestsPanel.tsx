@@ -30,7 +30,8 @@ export function RenewalRequestsPanel() {
       <h2 id="pay-renewals" className="sr-only">
         {tx(S.renewalsTitle)}
       </h2>
-      <p className="rn__hint">{tx(S.renewalsHint)}</p>
+      {/* With a queue to work, what it is and what to do; an empty one says so itself. */}
+      {rows.length > 0 && <p className="rn__hint">{tx(S.renewalsHint)}</p>}
       {q.isLoading ? (
         <LoadingState compact />
       ) : q.error ? (

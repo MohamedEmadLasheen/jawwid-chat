@@ -33,6 +33,8 @@ interface Cell {
   note?: string
   to?: string
   late?: boolean
+  /** A figure of eleven characters or more is set a size down where the cell is narrow. */
+  long?: boolean
 }
 
 export function FinanceLedger({ here }: { here: 'instalments' | 'payments' }) {
@@ -76,6 +78,7 @@ export function FinanceLedger({ here }: { here: 'instalments' | 'payments' }) {
     return tx(FIN.also, { amounts: list.join(locale === 'ar' ? ' و' : ', ') })
   }
   const join = (...parts: Array<string | null>) => parts.filter(Boolean).join(' · ')
+  const isLong = (s: CurrencySum | undefined) => (s ? moneyParts(s.amountMinor, s.currency, locale).number.length > 10 : false)
 
   const cells: Cell[] = []
   const instalmentCell = (status: InstalmentStatus, label: string, late = false): void => {
@@ -91,6 +94,7 @@ export function FinanceLedger({ here }: { here: 'instalments' | 'payments' }) {
       note: sums[0] ? join(countWords(count, INSTALMENTS, locale), others(sums)) : undefined,
       to: here === 'instalments' ? undefined : (instalmentsPath ?? undefined),
       late: late && count > 0,
+      long: isLong(sums[0]),
     })
   }
   const receiptCell = (): void => {
@@ -111,6 +115,7 @@ export function FinanceLedger({ here }: { here: 'instalments' | 'payments' }) {
       value: sums[0] ? money(sums[0]) : number(0),
       note: sums[0] ? join(countWords(count, PAYMENTS, locale), others(sums)) : undefined,
       to: paymentsPath ? `${paymentsPath}?tab=transactions` : undefined,
+      long: isLong(sums[0]),
     })
   }
 
@@ -129,14 +134,14 @@ export function FinanceLedger({ here }: { here: 'instalments' | 'payments' }) {
   if (cells.length === 0) return null
 
   return (
-    <section className="fin" aria-label={tx(FIN.ledger)}>
+    <section className={`fin fin--${here}`} aria-label={tx(FIN.ledger)}>
       <div className="ledger fin__ledger">
         {cells.map((c) => {
           const className = c.late ? 'ledger__cell ledger__cell--late' : 'ledger__cell'
           const body = (
             <>
               <span className="ledger__label">{c.label}</span>
-              <span className="ledger__value fin__value">{c.value}</span>
+              <span className={c.long ? 'ledger__value fin__value fin__value--long' : 'ledger__value fin__value'}>{c.value}</span>
               {c.note && <span className="ledger__note">{c.note}</span>}
             </>
           )
