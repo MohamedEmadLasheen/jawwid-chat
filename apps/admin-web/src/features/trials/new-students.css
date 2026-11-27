@@ -16,19 +16,8 @@
 .ns-record__body { display: grid; min-inline-size: 0; }
 .ns-record__facts { display: grid; align-content: start; min-inline-size: 0; }
 
-/* In the panel the record's own actions stay at its foot while it scrolls. */
-.rq__panel .ns-record { min-block-size: 100%; }
-.rq__panel .ns-record__actions {
-  order: 2;
-  position: sticky;
-  inset-block-end: 0;
-  z-index: 1;
-  margin: auto 0 0;
-  padding-block: var(--space-3);
-  background: var(--paper);
-  border-block-start: 1px solid var(--hairline);
-}
-.rq__panel .ns-record__actions .btn { flex: 1 1 auto; min-block-size: var(--control-h); }
+/* The record's own actions sit under its head; what moves the family on is in its steps. */
+.rq__panel .ns-record { padding-block-end: var(--space-5); }
 
 /* With room, the steps sit beside the contact and the payment; the children run full width under them. */
 @container ns-record (min-width: 700px) {

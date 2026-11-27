@@ -94,7 +94,7 @@ function EnteredCard({ f, canAssign, canSuggest }: { f: EnteredFamily; canAssign
       <header className="ns-card__head">
         <div className="ns-card__who">
           <div className="ns-card__title-row">
-            <h3 id={headingId} className="ns-card__title" dir="auto">{f.parentName ?? '—'}</h3>
+            <h3 id={headingId} className="ns-card__title"><bdi>{f.parentName ?? '—'}</bdi></h3>
             {f.kind === 'added_children' && <Badge tone="info">{tx(OP.childAdded)}</Badge>}
             {f.needsOperationsSupervisor && <Badge tone="waiting" dot>{tx(OP.needs)}</Badge>}
           </div>
@@ -124,7 +124,7 @@ function EnteredCard({ f, canAssign, canSuggest }: { f: EnteredFamily; canAssign
           <dd>
             <ul className="ns-slots">
               {f.children.map((c) => (
-                <li key={c.id} dir="auto">{c.name ?? '—'}</li>
+                <li key={c.id}><bdi>{c.name ?? '—'}</bdi></li>
               ))}
             </ul>
           </dd>

@@ -153,7 +153,7 @@ function LeadBody({ lead }: { lead: Lead }) {
           {lead.level && (
             <div className="rq-field">
               <dt>{tx(P.level)}</dt>
-              <dd dir="auto">{lead.level}</dd>
+              <dd><bdi>{lead.level}</bdi></dd>
             </div>
           )}
           {lead.trial && (
@@ -169,7 +169,7 @@ function LeadBody({ lead }: { lead: Lead }) {
             </div>
           )}
         </dl>
-        {lead.note && <p className="rq-quote lead-note" dir="auto">{lead.note}</p>}
+        {lead.note && <p className="rq-quote lead-note"><bdi>{lead.note}</bdi></p>}
         {mayAssign && (
           <div className="field lead-reassign">
             <label className="field__label" htmlFor={`${uid}-owner`}>{tx(P.reassign)}</label>
@@ -205,7 +205,7 @@ function LeadBody({ lead }: { lead: Lead }) {
         ) : lead.contact ? (
           <>
             <dl className="rq-fields">
-              <div className="rq-field"><dt>{tx(P.parentName)}</dt><dd dir="auto">{lead.contact.parentName}</dd></div>
+              <div className="rq-field"><dt>{tx(P.parentName)}</dt><dd><bdi>{lead.contact.parentName}</bdi></dd></div>
               <div className="rq-field"><dt>{tx(P.phone)}</dt><dd>{lead.contact.phone ? <bdi dir="ltr" className="ns-ltr">{lead.contact.phone}</bdi> : <span className="ts-muted">—</span>}</dd></div>
               <div className="rq-field"><dt>{tx(P.whatsapp)}</dt><dd>{lead.contact.whatsapp ? <bdi dir="ltr" className="ns-ltr">{lead.contact.whatsapp}</bdi> : <span className="ts-muted">—</span>}</dd></div>
               <div className="rq-field"><dt>{tx(P.email)}</dt><dd>{lead.contact.email ? <bdi dir="ltr" className="ns-ltr">{lead.contact.email}</bdi> : <span className="ts-muted">—</span>}</dd></div>

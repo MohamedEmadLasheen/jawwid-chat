@@ -347,7 +347,7 @@ function TrialDetail({
       ) : t.outcome === 'upcoming' ? undefined : (
         tx(TR.noReportYet)
       ),
-      children: t.report?.note ? <p className="rq-quote" dir="auto">{t.report.note}</p> : undefined,
+      children: t.report?.note ? <p className="rq-quote"><bdi>{t.report.note}</bdi></p> : undefined,
     })
   }
   steps.push({
@@ -363,7 +363,7 @@ function TrialDetail({
           {d?.correctedAt && <> · {tx(TR.correctedOn).replace('{when}', formatWhen(d.correctedAt, locale))}</>}
         </>
       ),
-    children: d?.note ? <p className="rq-quote" dir="auto">{d.note}</p> : undefined,
+    children: d?.note ? <p className="rq-quote"><bdi>{d.note}</bdi></p> : undefined,
   })
   if (t.outcome === 'subscribed') {
     steps.push({

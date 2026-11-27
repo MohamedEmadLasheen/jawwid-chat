@@ -333,10 +333,10 @@ function FamilyRecord({
               <tbody>
                 {s.children.map((c, i) => (
                   <tr key={i}>
-                    <th scope="row" className="ns-c-name" dir="auto">{c.name}</th>
+                    <th scope="row" className="ns-c-name"><bdi>{c.name}</bdi></th>
                     <td className="ns-num ns-c-age" data-unit={tx(NS.years)}>{number(c.age)}</td>
-                    <td className="ns-c-course" dir="auto">{c.course}</td>
-                    <td className="ns-c-teacher" dir="auto">{c.teacher.name}</td>
+                    <td className="ns-c-course"><bdi>{c.course}</bdi></td>
+                    <td className="ns-c-teacher"><bdi>{c.teacher.name}</bdi></td>
                     <td className="ns-num ns-c-price" data-label={tx(TR.packagePrice)}>{money(c.packagePrice)}</td>
                     <td className="ns-num ns-c-price" data-label={tx(TR.lessonPrice)}>{money(c.lessonPrice)}</td>
                     <td className="ns-c-slots">

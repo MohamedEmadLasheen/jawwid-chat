@@ -134,7 +134,7 @@ export function certificateSteps(c: Certificate | null, tx: ReturnType<typeof us
       label: tx(stateLabel(c.state)),
       state: 'done',
       meta: c.state === 'cancelled' ? who(end?.by?.name, end?.at) : who(decided?.decidedBy?.name, decided?.decidedAt),
-      children: (end?.reason ?? decided?.declineReason) ? <p className="rq-quote" dir="auto">{end?.reason ?? decided?.declineReason}</p> : undefined,
+      children: (end?.reason ?? decided?.declineReason) ? <p className="rq-quote"><bdi>{end?.reason ?? decided?.declineReason}</bdi></p> : undefined,
     })
   }
   return steps
@@ -279,7 +279,7 @@ export function CertificateDetail({ certificateId }: { certificateId: string }) 
                       <strong title={h.kind}>{historyLabel(h, tx)}</strong>
                       {h.actor?.name ? <> · <span dir="auto">{h.actor.name}</span></> : null}
                       <span className="cert-history__when">{dateTime(h.at)}</span>
-                      {h.note ? <div className="cert-history__note" dir="auto">{h.note}</div> : null}
+                      {h.note ? <div className="cert-history__note"><bdi>{h.note}</bdi></div> : null}
                     </li>
                   ))}
                 </ol>
@@ -341,7 +341,7 @@ function Fact({ label, value }: { label: Pair; value: string | number | null | u
   return (
     <div className="rq-field">
       <dt>{tx(label)}</dt>
-      <dd dir="auto">{value}</dd>
+      <dd><bdi>{value}</bdi></dd>
     </div>
   )
 }
