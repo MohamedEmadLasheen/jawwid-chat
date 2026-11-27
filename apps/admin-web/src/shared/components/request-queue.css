@@ -285,6 +285,8 @@ a.rq-open { text-decoration: none; }
 .rq-card__age .rq-age { font-size: inherit; }
 .rq-card__age .rq-age--late { font-size: var(--fs-xs); }
 .rq-card__foot .row-actions2 { margin-inline-start: auto; }
+/* The open card is marked by its frame; its button keeps its resting look. */
+.rq-card .btn[aria-current='true'] { background: var(--surface); }
 /* Work that has ended: the name and one line, on the canvas's own tone. */
 .rq-card--quiet { gap: 2px; padding: 10px 12px; background: var(--surface-2); border-color: var(--line-2); }
 .rq-card--quiet .rq-card__title { font-family: var(--font); font-size: var(--fs-sm); color: var(--ink-2); }

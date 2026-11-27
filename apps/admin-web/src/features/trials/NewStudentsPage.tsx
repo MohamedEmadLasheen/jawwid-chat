@@ -129,7 +129,16 @@ export function NewStudentsPage() {
   }
 
   /** The names of a family's children, as one phrase. */
-  const childNames = (s: NewStudentDto) => s.children.map((c) => c.name).join(locale === 'ar' ? '، ' : ', ')
+  const childNames = (s: NewStudentDto) => (
+    <span>
+      {s.children.map((c, i) => (
+        <span key={i}>
+          {i > 0 && (locale === 'ar' ? '، ' : ', ')}
+          <bdi>{c.name}</bdi>
+        </span>
+      ))}
+    </span>
+  )
 
   /**
    * A family on the board: the parent, its status word where the stage alone
@@ -185,7 +194,7 @@ export function NewStudentsPage() {
       >
         <p className="rq-card__line">
           <Icon name="students" size={16} />
-          <bdi>{childNames(s)}</bdi>
+          {childNames(s)}
         </p>
         {e?.supervisor && status !== 'signed_up' && (
           <p className="rq-card__line">
