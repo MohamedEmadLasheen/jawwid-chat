@@ -2,7 +2,6 @@ import {
   Fragment,
   useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState,
   type FocusEvent,
@@ -10,31 +9,31 @@ import {
   type ReactNode,
   type RefObject,
 } from 'react'
-import { Link, NavLink, useLocation } from 'react-router-dom'
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { useSession } from '@/core/auth/SessionProvider'
-import { useLessonAccess } from '@/features/teachers/hooks'
-import { useInstalmentAccess } from '@/features/instalments/hooks'
-import { useMaterialsAccess } from '@/features/materials/hooks'
-import { useCertificateAccess } from '@/features/certificates/hooks'
-import { useLessonAudioAccess } from '@/features/lesson-audio/hooks'
-import { useTeacherRecordsAccess } from '@/features/teacher-records/hooks'
 import { useRealtime } from '@/core/realtime/RealtimeProvider'
-import { holdsAny, isSuperAdmin } from '@/core/permissions/capabilities'
+import { isSuperAdmin } from '@/core/permissions/capabilities'
 import { TEXT, useText } from '@/features/admin/copy'
+import { chatApi, chatKeys } from '@/features/chat/chatApi'
 import { NotificationBell } from '@/features/notification-center/NotificationBell'
+import { SearchPalette, useSearchShortcut } from '@/features/search/SearchPalette'
+import { S as SEARCH } from '@/features/search/copy'
 import { Avatar } from '@/shared/components/Avatar'
 import { BrandLogo } from '@/shared/components/BrandLogo'
 import { Icon } from '@/shared/components/Icon'
+import { Menu } from '@/shared/components/Menu'
 import { useMediaQuery } from '@/shared/hooks/useMediaQuery'
 import {
   destinationForPath,
-  destinationsFor,
+  entriesOf,
   soleEntry,
   type Destination,
   type DestinationKey,
   type NavEntry,
 } from './navigation'
+import { useDestinations, useEntryLabel } from './useDestinations'
 
 /* ------------------------------------------------------------- navigation */
 
@@ -43,49 +42,33 @@ import {
  * same destinations open as a drawer from the top bar's menu button.
  */
 const RAIL_QUERY = '(min-width: 1024px)'
+/** Below this the five most used destinations sit along the bottom edge. */
+const TABBAR_QUERY = '(max-width: 767px)'
 
-function useDestinations(): Destination[] {
-  const { staff } = useSession()
-  // Only operators need the answer; the super admin reaches statistics as a section.
-  const operator = staff !== null && !isSuperAdmin(staff.role)
-  const access = useLessonAccess(operator)
-  const billing = useInstalmentAccess(operator)
-  const lessonManager = access.data?.lessonManager === true
-  const billingReader = billing.data?.billingReader === true
-  const sales = access.data?.sales === true
-  const operations = access.data?.operations === true
-  const calendar = access.data?.calendar === true
-  const supervisionPage = access.data?.supervisionPage === true
-  // Educational materials: the library's managers, its authors and its reviewers (the super admin's entry is a section).
-  const materialsAccess = useMaterialsAccess(operator)
-  const materialsWorkspace = materialsAccess.data?.canOpen === true
-  // PD-41: the Certificates page, for whoever holds a certificates key (the Designer included).
-  const certificateAccess = useCertificateAccess(operator)
-  const certificates = certificateAccess.data?.canOpen === true
-  // PD-48: the Lesson audio page, for whoever may listen (the Pronunciation reviewer included).
-  const lessonAudioAccess = useLessonAudioAccess(operator)
-  const lessonAudio = lessonAudioAccess.data?.view === true
-  // PD-52: the teacher-records pages, on the server's basis-and-key answer.
-  const recordsAccess = useTeacherRecordsAccess(operator)
-  const teacherAttendance = recordsAccess.data?.attendance.view === true
-  const teacherGrants = recordsAccess.data?.grants.view === true
-  // PD-57: the moderation queue, on GET /me's permission keys (the super admin holds all).
-  const moderation = holdsAny(staff, ['moderation.view'])
-  return useMemo(
-    () =>
-      staff
-        ? destinationsFor(staff.role, { moderation, lessonManager, sales, operations, billingReader, materialsWorkspace, calendar, supervisionPage, certificates, lessonAudio, teacherAttendance, teacherGrants })
-        : [],
-    [staff, moderation, lessonManager, sales, operations, billingReader, materialsWorkspace, calendar, supervisionPage, certificates, lessonAudio, teacherAttendance, teacherGrants],
-  )
+/** The Today page: where the logo goes. */
+export const TODAY_PATH = '/today'
+const TODAY_LABEL = { en: 'Today', ar: 'اليوم' }
+const ACCOUNT_LABEL = { en: 'Account', ar: 'الحساب' }
+
+/** A hairline is drawn above these destinations: the rail's sections. */
+const RAIL_RULE_BEFORE: ReadonlySet<DestinationKey> = new Set<DestinationKey>(['people', 'certificates', 'finance'])
+
+/**
+ * Unread conversations, for the rail's badge. It only reads what the chat
+ * workspace has already loaded (it never asks the server itself), so the shell
+ * adds no request of its own.
+ */
+function useUnreadChats(): number {
+  const q = useQuery({ queryKey: chatKeys.list, queryFn: chatApi.list, enabled: false })
+  return (q.data ?? []).reduce((n, c) => n + ((c.unreadCount ?? 0) > 0 ? 1 : 0), 0)
 }
 
-function useEntryLabel() {
-  const { t } = useI18n()
-  const tx = useText()
-  return useCallback(
-    (entry: NavEntry) => ('text' in entry.label ? tx(entry.label.text) : t(entry.label.message)),
-    [t, tx],
+function RailBadge({ count }: { count: number }) {
+  if (count <= 0) return null
+  return (
+    <span className="rail__badge" aria-hidden="true">
+      {count > 99 ? '99+' : count}
+    </span>
   )
 }
 
@@ -222,15 +205,18 @@ function RailItem({
   const tx = useText()
   const entryLabel = useEntryLabel()
   const sole = soleEntry(d)
-  // More sits at the foot of the rail, apart from the everyday destinations.
-  const itemClass = d.key === 'admin' ? 'rail__item rail__item--end' : 'rail__item'
+  const unread = useUnreadChats()
+  const badge = d.key === 'conversations' ? unread : 0
+  // Admin & Settings sits at the foot of the rail, apart from the everyday destinations.
+  const itemClass = d.key === 'admin' ? 'rail__item rail__item--end' : RAIL_RULE_BEFORE.has(d.key) ? 'rail__item rail__item--rule' : 'rail__item'
 
   if (sole) {
     return (
       <li className={itemClass}>
         <NavLink to={sole.path} className="rail__link" data-destination={d.key}>
-          <Icon name={sole.icon} size={22} />
+          <Icon name={sole.icon} size={24} />
           <span className="rail__tip">{entryLabel(sole)}</span>
+          <RailBadge count={badge} />
           {sole.inDevelopment && <PendingMark />}
         </NavLink>
       </li>
@@ -264,8 +250,9 @@ function RailItem({
           }
         }}
       >
-        <Icon name={d.icon} size={22} />
+        <Icon name={d.icon} size={24} />
         <span className="rail__tip">{tx(d.label)}</span>
+        <RailBadge count={badge} />
       </button>
       <div className="rail__menu" id={menuId} hidden={!open} onKeyDown={onMenuKeyDown}>
         <p className="rail__menu-title" aria-hidden="true">
@@ -368,6 +355,10 @@ function Sidebar({
   if (rail) {
     return (
       <aside className="sidebar sidebar--rail" id="app-sidebar">
+        {/* The logo goes to Today. It sits outside the navigation landmark: it is not one of its destinations. */}
+        <Link to={TODAY_PATH} className="rail__home" aria-label={`Jawwid — ${tx(TODAY_LABEL)}`} title={tx(TODAY_LABEL)}>
+          <BrandLogo />
+        </Link>
         <RailNav />
       </aside>
     )
@@ -376,7 +367,7 @@ function Sidebar({
   return (
     <aside className="sidebar" id="app-sidebar">
       <div className="sidebar__brand">
-        <Link to="/" className="sidebar__brand-link" aria-label="Jawwid">
+        <Link to={TODAY_PATH} className="sidebar__brand-link" aria-label={`Jawwid — ${tx(TODAY_LABEL)}`}>
           <BrandLogo />
           <span className="sidebar__product">{superAdmin ? tx(TEXT.adminPortal) : tx(TEXT.operations)}</span>
         </Link>
@@ -424,30 +415,79 @@ function LanguageToggle() {
   return (
     <button
       type="button"
-      className="btn btn--ghost btn--sm"
+      className="btn btn--ghost btn--sm topbar__lang"
       onClick={() => setLocale(locale === 'ar' ? 'en' : 'ar')}
       aria-label={t('shell.switchLanguageLabel')}
       lang={locale === 'ar' ? 'en' : 'ar'}
     >
-      <Icon name="globe" size={16} />
-      {t('shell.switchLanguage')}
+      <Icon name="language" size={18} />
+      <span className="topbar__lang-text">{t('shell.switchLanguage')}</span>
     </button>
+  )
+}
+
+/** Where you are: the section, then the page. Read from the same navigation the rail draws. */
+function Where({ destinations }: { destinations: Destination[] }) {
+  const { t } = useI18n()
+  const tx = useText()
+  const entryLabel = useEntryLabel()
+  const { pathname } = useLocation()
+  let section: string | null = null
+  let page: string | null = null
+  if (pathname === TODAY_PATH) page = tx(TODAY_LABEL)
+  else if (pathname.startsWith('/profile')) page = t('nav.profile')
+  else if (pathname.startsWith('/notifications')) page = tx(SEARCH.notifications)
+  else {
+    // The longest path that matches is the page: /trials/new-students before /trials.
+    let best: { d: Destination; e: NavEntry } | null = null
+    for (const d of destinations) {
+      for (const e of entriesOf(d)) {
+        if ((pathname === e.path || pathname.startsWith(`${e.path}/`)) && (!best || e.path.length > best.e.path.length)) best = { d, e }
+      }
+    }
+    if (best) {
+      page = entryLabel(best.e)
+      section = soleEntry(best.d) ? null : tx(best.d.label)
+    } else {
+      const key = destinationForPath(destinations, pathname)
+      const d = destinations.find((x) => x.key === key)
+      if (d) page = tx(d.label)
+    }
+  }
+  if (!page) return <span className="topbar__where" />
+  return (
+    <p className="topbar__where">
+      {section && section !== page && (
+        <>
+          <span className="topbar__where-section">{section}</span>
+          <span className="topbar__where-sep" aria-hidden="true">
+            /
+          </span>
+        </>
+      )}
+      <span className="topbar__where-page">{page}</span>
+    </p>
   )
 }
 
 function Topbar({
   navOpen,
   onOpenNav,
+  onSearch,
   menuRef,
+  destinations,
 }: {
   navOpen: boolean
   onOpenNav: () => void
+  onSearch: () => void
   menuRef: RefObject<HTMLButtonElement>
+  destinations: Destination[]
 }) {
   const { t } = useI18n()
   const tx = useText()
+  const navigate = useNavigate()
   const { staff, signOut } = useSession()
-  const superAdmin = staff ? isSuperAdmin(staff.role) : false
+  const mac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform ?? '')
 
   return (
     <header className="topbar">
@@ -462,47 +502,63 @@ function Topbar({
       >
         <Icon name="menu" size={20} />
       </button>
-      {/* The rail has no room for the lockup, so the top bar carries it at every width. */}
-      <Link to="/" className="topbar__brand" aria-label="Jawwid">
-        <BrandLogo />
-        <span className="topbar__product" aria-hidden="true">
-          {superAdmin ? tx(TEXT.adminPortal) : tx(TEXT.operations)}
-        </span>
-      </Link>
-      <div className="topbar__spacer" />
-      {/* No "Read-only access" chip: the super admin has written in conversations
-          since PD-8 and publishes stories since 2026-10-17, so the claim was false. */}
+      <Where destinations={destinations} />
+      {staff && (
+        <button type="button" className="topbar__search" onClick={onSearch} aria-label={tx(SEARCH.open)} aria-keyshortcuts="Control+K Meta+K /">
+          <Icon name="search" size={18} />
+          <span className="topbar__search-text">{tx(SEARCH.placeholder)}</span>
+          <span className="kbd" aria-hidden="true">
+            {mac ? '⌘K' : 'Ctrl K'}
+          </span>
+        </button>
+      )}
+      <LanguageToggle />
       {/* PD-34: the staff member's own Notification Center. */}
       {staff && <NotificationBell />}
-      <LanguageToggle />
       {staff && (
-        <>
-          <span className="topbar__divider" aria-hidden="true" />
-          {/* The way to one's own profile: the person in the header, not a
-              module in the rail. */}
-          <Link
-            to="/profile"
-            className="topbar__user header__profile"
-            aria-label={`${staff.name} — ${t('nav.profile')}`}
-          >
-            <Avatar name={staff.name} seed={staff.id} size="sm" />
-            <span className="topbar__user-text">
-              <span className="topbar__user-name">{staff.name}</span>
-              {superAdmin && <span className="topbar__user-role">{t('role.super_admin')}</span>}
-            </span>
-          </Link>
-        </>
+        // One's own profile and the way out live behind one's own face, not in the rail.
+        <Menu
+          label={tx(ACCOUNT_LABEL)}
+          className="topbar__account"
+          trigger={<Avatar name={staff.name} seed={staff.id} size="md" />}
+          triggerClassName="topbar__me header__profile"
+          items={[
+            { key: 'profile', label: t('nav.profile'), icon: 'staff', onSelect: () => navigate('/profile') },
+            { key: 'signOut', label: t('common.signOut'), icon: 'signOut', onSelect: () => void signOut() },
+          ]}
+        />
       )}
-      <button
-        type="button"
-        className="btn btn--ghost btn--icon"
-        onClick={() => void signOut()}
-        aria-label={t('common.signOut')}
-        title={t('common.signOut')}
-      >
-        <Icon name="signOut" />
-      </button>
     </header>
+  )
+}
+
+/** Narrow screens: the first destinations along the bottom edge, and the rest behind More (the drawer). */
+function Tabbar({ destinations, onMore }: { destinations: Destination[]; onMore: () => void }) {
+  const { t } = useI18n()
+  const tx = useText()
+  const entryLabel = useEntryLabel()
+  const { pathname } = useLocation()
+  const unread = useUnreadChats()
+  const current = destinationForPath(destinations, pathname)
+  // Four places and More: the everyday ones first, in the rail's own order of use.
+  const order: DestinationKey[] = ['conversations', 'dashboard', 'finance', 'people', 'sales', 'scheduling', 'operations', 'certificates', 'materials', 'communication']
+  const picked = order.map((k) => destinations.find((d) => d.key === k)).filter((d): d is Destination => !!d).slice(0, 4)
+  return (
+    <nav className="tabbar" aria-label={tx({ en: 'Quick navigation', ar: 'تنقّل سريع' })}>
+      {picked.map((d) => {
+        const first = entriesOf(d)[0]!
+        const label = soleEntry(d) ? entryLabel(first) : tx(d.label)
+        return (
+          <Link key={d.key} to={first.path} className="tabbar__item" aria-label={label} aria-current={current === d.key ? 'true' : undefined}>
+            <Icon name={soleEntry(d) ? first.icon : d.icon} size={24} />
+            {d.key === 'conversations' && <RailBadge count={unread} />}
+          </Link>
+        )
+      })}
+      <button type="button" className="tabbar__item" onClick={onMore} aria-label={t('shell.openMenu')}>
+        <Icon name="menu" size={24} />
+      </button>
+    </nav>
   )
 }
 
@@ -511,8 +567,14 @@ function Topbar({
 export function AppShell({ children }: { children: ReactNode }) {
   const { pathname } = useLocation()
   const [navOpen, setNavOpen] = useState(false)
+  const [searching, setSearching] = useState(false)
   const menuRef = useRef<HTMLButtonElement>(null)
   const closeRef = useRef<HTMLButtonElement>(null)
+  const destinations = useDestinations()
+  const { staff } = useSession()
+  const tabbar = useMediaQuery(TABBAR_QUERY)
+  const openSearch = useCallback(() => setSearching(true), [])
+  useSearchShortcut(openSearch)
 
   const closeNav = useCallback(() => {
     setNavOpen(false)
@@ -537,12 +599,14 @@ export function AppShell({ children }: { children: ReactNode }) {
       <Sidebar onClose={closeNav} closeRef={closeRef} />
       <div className="sidebar-backdrop" onClick={closeNav} aria-hidden="true" />
       <div className="shell__main">
-        <Topbar navOpen={navOpen} onOpenNav={() => setNavOpen(true)} menuRef={menuRef} />
+        <Topbar navOpen={navOpen} onOpenNav={() => setNavOpen(true)} onSearch={openSearch} menuRef={menuRef} destinations={destinations} />
         <main className="shell__content">
           <ConnectionBanner />
           <div className="shell__view">{children}</div>
         </main>
+        {tabbar && staff && <Tabbar destinations={destinations} onMore={() => setNavOpen(true)} />}
       </div>
+      {searching && staff && <SearchPalette onClose={() => setSearching(false)} />}
     </div>
   )
 }

@@ -223,7 +223,7 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
   {
     key: 'teachers',
     group: 'people',
-    icon: 'users',
+    icon: 'teachers',
     // PD-10: the administration-only Teacher File, against /teacher-files.
     status: 'managed',
     label: { en: 'Teachers', ar: 'المعلمون' },
@@ -241,7 +241,7 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
   {
     key: 'instalments',
     group: 'operations',
-    icon: 'calendar',
+    icon: 'instalments',
     // PD-12 S3 / PD-17: the instalments recorded in Chat, as a queue.
     status: 'read_only',
     label: { en: 'Instalment payments', ar: 'الأقساط' },
@@ -257,7 +257,7 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
   {
     key: 'parents',
     group: 'operations',
-    icon: 'users',
+    icon: 'parents',
     // PD-17: contact information, the internal note, payments. Administration only.
     status: 'managed',
     label: { en: 'Parents', ar: 'أولياء الأمور' },
@@ -273,7 +273,7 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
   {
     key: 'payments',
     group: 'operations',
-    icon: 'tag',
+    icon: 'payments',
     // PD-27: bank-transfer receipts to verify, and the academy's payment settings.
     status: 'managed',
     label: { en: 'Payments', ar: 'المدفوعات' },

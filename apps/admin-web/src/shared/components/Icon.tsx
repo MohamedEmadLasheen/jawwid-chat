@@ -1,7 +1,8 @@
 import type { ReactElement } from 'react'
+import { DUOTONE, type DuotoneName } from './duotoneIcons'
 
 /**
- * One icon set, one stroke style (24px grid, 1.75 stroke, round joins), drawn
+ * One icon set on one grid (24px, 1.6 stroke, round joins), drawn
  * inline so there is no icon dependency and every glyph inherits currentColor.
  *
  * Icons are decorative by default (aria-hidden): the control they sit in owns
@@ -326,10 +327,19 @@ const PATHS = {
   ),
 } satisfies Record<string, ReactElement>
 
-export type IconName = keyof typeof PATHS
+export type IconName = keyof typeof PATHS | DuotoneName
 
 const DIRECTIONAL: ReadonlySet<IconName> = new Set<IconName>(['chevronForward', 'arrowBack', 'signOut', 'send', 'reply', 'forward'])
 
+function isDuotone(name: IconName): name is DuotoneName {
+  return name in DUOTONE
+}
+
+/**
+ * Place and primary-action icons are two-tone (duotoneIcons.tsx): the base
+ * stroke takes currentColor and one detail takes `--icon-accent`. A name drawn
+ * in both sets uses the two-tone drawing.
+ */
 export function Icon({
   name,
   size = 18,
@@ -340,6 +350,7 @@ export function Icon({
   /** Only for an icon that stands alone with no text beside it. */
   label?: string
 }) {
+  const duo = isDuotone(name) ? DUOTONE[name] : null
   return (
     <svg
       className={DIRECTIONAL.has(name) ? 'icon icon--directional' : 'icon'}
@@ -348,7 +359,7 @@ export function Icon({
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth={1.75}
+      strokeWidth={1.6}
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden={label ? undefined : true}
@@ -356,7 +367,14 @@ export function Icon({
       aria-label={label}
       focusable="false"
     >
-      {PATHS[name]}
+      {duo ? (
+        <>
+          {duo.base}
+          <g className="icon__accent">{duo.accent}</g>
+        </>
+      ) : (
+        PATHS[name as keyof typeof PATHS]
+      )}
     </svg>
   )
 }

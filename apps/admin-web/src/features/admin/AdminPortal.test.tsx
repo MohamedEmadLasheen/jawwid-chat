@@ -196,7 +196,9 @@ describe('Admin Portal registry and navigation', () => {
     const fetchMock = vi.fn(async (_url: string) => jsonResponse({ ok: true }))
     vi.stubGlobal('fetch', fetchMock)
     renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/admin/teams' })
-    await userEvent.click(await screen.findByRole('button', { name: 'Sign out' }))
+    // Sign out lives in the account menu, behind the avatar in the top bar.
+    await userEvent.click(await screen.findByRole('button', { name: 'Account' }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Sign out' }))
 
     expect(await screen.findByLabelText('Password')).toBeInTheDocument()
     expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/auth/logout'))).toBe(true)

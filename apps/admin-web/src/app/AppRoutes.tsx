@@ -14,6 +14,7 @@ import { StoryInsights } from '@/features/stories/StoryInsights'
 import { AdminSectionPage } from '@/features/admin/AdminSectionPage'
 import { adminSectionPath } from '@/features/admin/sections'
 import { ProfilePage } from '@/features/profile/ProfilePage'
+import { TodayPage } from '@/features/today/TodayPage'
 import { OrganizationPage } from '@/features/organization/OrganizationPage'
 import { TeacherStatsPage } from '@/features/teachers/TeacherStatsPage'
 import { NeedsActionPage } from '@/features/teachers/NeedsActionPage'
@@ -213,6 +214,9 @@ export function AppRoutes() {
         {/* PD-34: every staff member's own Notification Center; the server
             answers only for the caller. */}
         <Route path="/notifications" element={<NotificationsPage />} />
+        {/* Today: reached from the logo, every role. Each figure on it comes from a
+            list the account can already open; the server still answers each one. */}
+        <Route path="/today" element={<TodayPage />} />
         <Route path="/profile/:staffId" element={<ProfilePage />} />
         <Route
           path="/admin/:section"

@@ -29,6 +29,8 @@ export function Menu({
   header,
   align = 'end',
   className,
+  trigger,
+  triggerClassName,
 }: {
   label: string
   items: MenuItem[]
@@ -36,6 +38,10 @@ export function Menu({
   header?: (close: () => void) => ReactNode
   align?: 'start' | 'end'
   className?: string
+  /** What the button shows instead of an icon (the account menu's avatar). */
+  trigger?: ReactNode
+  /** The button's own classes, when it is not the usual small icon button. */
+  triggerClassName?: string
 }) {
   const [open, setOpen] = useState(false)
   const [up, setUp] = useState(false)
@@ -101,7 +107,7 @@ export function Menu({
       <button
         ref={button}
         type="button"
-        className="btn btn--ghost btn--icon btn--sm menu__button"
+        className={triggerClassName ? `${triggerClassName} menu__button` : 'btn btn--ghost btn--icon btn--sm menu__button'}
         aria-label={label}
         title={label}
         aria-haspopup="menu"
@@ -112,7 +118,7 @@ export function Menu({
           setOpen((v) => !v)
         }}
       >
-        <Icon name={icon} size={18} />
+        {trigger ?? <Icon name={icon} size={18} />}
       </button>
       {open && (
         <div

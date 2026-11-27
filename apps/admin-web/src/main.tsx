@@ -6,6 +6,8 @@ import '@/core/theme/app.css'
 // The design-system layer restyles app.css's shared components (see its header).
 import '@/core/theme/design-system.css'
 import '@/core/theme/portal.css'
+// The visual language: tokens and shared components, loaded last (see its header).
+import '@/core/theme/paper.css'
 import { App } from '@/app/App'
 
 const container = document.getElementById('root')
