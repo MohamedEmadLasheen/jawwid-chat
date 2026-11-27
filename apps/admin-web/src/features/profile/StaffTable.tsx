@@ -258,7 +258,7 @@ export function StaffTable({ rows, showManager, note }: { rows: StaffSummary[]; 
                       <span className="sp-cell-num__n">{number(r.workload.assignedFamilies)}</span>
                     </td>
                     <td className={awaiting > 0 ? 'sp-cell-await' : 'sp-cell-await sp-cell-await--none'} data-label={tx(T.colAwaiting)}>
-                      {awaiting > 0 ? <span className="count">{number(awaiting)}</span> : <span className="dir-none">{number(0)}</span>}
+                      {awaiting > 0 ? <span className="sp-await-n">{number(awaiting)}</span> : <span className="dir-none">{number(0)}</span>}
                     </td>
                     <td className="sp-cell-load">
                       {share !== null && (

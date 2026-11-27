@@ -241,7 +241,7 @@ export const P = {
   hlLastContact: { en: 'Last contact', ar: 'آخر تواصل' },
   hlNoChat: { en: 'No chat yet', ar: 'لا محادثة بعد' },
   hlSignIn: { en: 'Sign-in', ar: 'تسجيل الدخول' },
-  hlSignedIn: { en: 'Has a sign-in e-mail', ar: 'لديه بريد لتسجيل الدخول' },
+  hlSignedIn: { en: 'E-mail set', ar: 'بريد مسجّل' },
   hlNoSignIn: { en: 'Not set up', ar: 'لم يُعدّ بعد' },
   hlNothingDue: { en: 'Nothing due', ar: 'لا شيء مستحق' },
   calloutLate: { en: '{amount} overdue across {what}.', ar: 'متأخر على الأسرة {amount} في {what}.' },

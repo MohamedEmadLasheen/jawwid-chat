@@ -36,6 +36,8 @@
   font-weight: 600;
 }
 /* Initials take the shared avatar's one neutral tint (the class is stacked so this sheet's own rule above cannot win). */
+/* A chat waiting for a reply reads the same here as on the person's record: an amber figure. */
+.sp-await-n { font-weight: 600; color: var(--waiting); font-variant-numeric: tabular-nums; }
 .sp-avatar.avatar { background: #ece7dc; color: var(--ink-2); }
 /* Leading the masthead it is sized here, for each screen. */
 .sp-avatar--lead { inline-size: 64px; block-size: 64px; border-radius: var(--radius-lg); font-family: var(--font-head); font-size: 25px; }

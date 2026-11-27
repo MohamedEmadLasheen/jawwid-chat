@@ -58,8 +58,8 @@ const WEEKLY_COUNT: CountForms = {
 }
 
 // A pause is waiting on a return day (gold); a stop is said quietly: nothing here is a fault to chase.
-// Active is the usual state, said quietly; paused waits on a date; stopped is a fact.
-const TONE = { active: 'neutral', paused: 'warn', stopped: 'outline' } as const
+// Active reads as it does in a record's head; paused waits on a date; stopped is a fact.
+const TONE = { active: 'ok', paused: 'warn', stopped: 'outline' } as const
 const STATUSES: ReadonlyArray<StudentStatus | ''> = ['', 'active', 'paused', 'stopped']
 
 interface Group {
