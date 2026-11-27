@@ -49,7 +49,8 @@ const C = {
   approvals: { en: '{n} of {of} approvals', ar: '{n} من {of} اعتمادات' },
   attempt: { en: 'Attempt {n}', ar: 'المحاولة {n}' },
   noClip: { en: 'No clip yet.', ar: 'لا يوجد تسجيل بعد.' },
-  noUnits: { en: 'No clips to review yet. Each unit appears here once its clips are made.', ar: 'لا تسجيلات للمراجعة بعد. تظهر كل وحدة هنا عند صنع تسجيلاتها.' },
+  noUnits: { en: 'No clips to review yet.', ar: 'لا تسجيلات للمراجعة بعد.' },
+  noUnitsHint: { en: 'Each unit appears here once its clips are made.', ar: 'تظهر كل وحدة هنا عند صنع تسجيلاتها.' },
   unitApproved: { en: '{n} of {of} play', ar: 'يُشغَّل {n} من {of}' },
   unitWaiting: { en: '{n} waiting', ar: 'بانتظار: {n}' },
   unitDecide: { en: '{n} to decide', ar: 'للقرار: {n}' },
@@ -109,7 +110,7 @@ export function LessonAudioPage({ player: given }: { player?: ClipPlayer } = {})
     <div className="page lesson-audio">
       <div className="page__inner">
       <PageHeader title={tx(C.title)} subtitle={tx(C.subtitle)} />
-      <QueryBoundary isLoading={access.isLoading || summary.isLoading} error={access.error ?? summary.error} isEmpty={units.length === 0} emptyTitle={tx(C.noUnits)}>
+      <QueryBoundary isLoading={access.isLoading || summary.isLoading} error={access.error ?? summary.error} isEmpty={units.length === 0} emptyTitle={tx(C.noUnits)} emptyHint={tx(C.noUnitsHint)}>
         {summary.data && !summary.data.lessonApproved ? <p className="lesson-audio__note">{tx(C.pendingFile)}</p> : null}
         {/* The units as a ruled index: how many of each unit's words play, and a mark where something waits. */}
         <nav className="lesson-audio__units" aria-label={tx(C.unit)}>

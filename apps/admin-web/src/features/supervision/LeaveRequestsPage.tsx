@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { LESSONS, countLabel } from '@/core/i18n/counts'
+import '@/features/teachers/stack-table.css'
 import { Badge, type Tone } from '@/shared/components/Badge'
 import { FilterChips } from '@/shared/components/FilterChips'
 import { PageHeader } from '@/shared/components/PageHeader'
@@ -84,7 +85,7 @@ export function LeaveRequestsList({ basePath }: { basePath: string }) {
               <EmptyState title={tx(S.noLeave)} />
             ) : (
               <div className="table-wrap sv-table-wrap">
-                <table className="table">
+                <table className="table stack-table">
                   <thead>
                     <tr>
                       <th scope="col">{tx(S.teacher)}</th>
@@ -102,11 +103,11 @@ export function LeaveRequestsList({ basePath }: { basePath: string }) {
                       const lessons = r.collidingLessons?.length ?? 0
                       return (
                         <tr key={r.id}>
-                          <td dir="auto">
+                          <td>
                             <TeacherName basePath={basePath} teacher={r.teacher} />
                           </td>
-                          <td>{dates(r)}</td>
-                          <td>
+                          <td data-label={tx(S.dates)}>{dates(r)}</td>
+                          <td data-label={tx(S.days)}>
                             <div className="sv-cell-main">
                               <span>{number(r.days)}</span>
                               {/* Absent for Operations: the allowance is the Teachers department's (PD-26 amendment). */}
@@ -122,7 +123,7 @@ export function LeaveRequestsList({ basePath }: { basePath: string }) {
                               )}
                             </div>
                           </td>
-                          <td>
+                          <td className="stack-wide" data-label={tx(S.reason)}>
                             <div className="sv-cell-main">
                               <span dir="auto">{r.reason}</span>
                               {r.decisionNote && (
@@ -137,7 +138,7 @@ export function LeaveRequestsList({ basePath }: { basePath: string }) {
                               )}
                             </div>
                           </td>
-                          <td>
+                          <td className="stack-wide">
                             <div className="sv-actions">
                               {r.state === 'requested' ? (
                                 <>

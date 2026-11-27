@@ -1,5 +1,5 @@
 import { useId } from 'react'
-import { useI18n } from '@/core/i18n/I18nProvider'
+import { LOCALE_TAG, useI18n } from '@/core/i18n/I18nProvider'
 import { Icon } from '@/shared/components/Icon'
 import './teachers.css'
 
@@ -16,9 +16,12 @@ function shift(month: string, by: number): string {
 }
 
 /**
- * A month, as `YYYY-MM`: one step back, the month itself (typed or picked),
- * one step forward. Monthly pages are read month after month, so the step is
- * one click.
+ * A month, as `YYYY-MM`: one step back, the month itself, one step forward.
+ * Monthly pages are read month after month, so the step is one click.
+ *
+ * The month is written in the app's language ("نوفمبر 2026"), never in the
+ * browser's: the native month field lies over that text, unseen, and still
+ * takes the click, the keyboard and the picker.
  */
 export function MonthPicker({
   value,
@@ -33,6 +36,9 @@ export function MonthPicker({
 }) {
   const { locale } = useI18n()
   const id = useId()
+  const shown = /^\d{4}-\d{2}$/.test(value)
+    ? new Intl.DateTimeFormat(LOCALE_TAG[locale], { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${value}-01T00:00:00Z`))
+    : value
   return (
     <div className="monthpick">
       <label className={showLabel ? 'field__label monthpick__label' : 'sr-only'} htmlFor={id}>
@@ -48,7 +54,26 @@ export function MonthPicker({
         >
           <Icon name="chevronForward" size={16} />
         </button>
-        <input id={id} className="monthpick__input" type="month" value={value} onChange={(e) => e.target.value && onChange(e.target.value)} />
+        <span className="monthpick__field">
+          <span className="monthpick__text" aria-hidden="true">
+            {shown}
+          </span>
+          <input
+            id={id}
+            className="monthpick__input"
+            type="month"
+            value={value}
+            onChange={(e) => e.target.value && onChange(e.target.value)}
+            onClick={(e) => {
+              // Open the browser's own month list where it has one; typing still works where it does not.
+              try {
+                e.currentTarget.showPicker?.()
+              } catch {
+                /* not allowed here: the field keeps the focus */
+              }
+            }}
+          />
+        </span>
         <button
           type="button"
           className="monthpick__step"

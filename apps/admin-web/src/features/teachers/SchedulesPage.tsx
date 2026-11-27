@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { PageHeader } from '@/shared/components/PageHeader'
-import { QueryBoundary } from '@/shared/components/States'
+import { EmptyState, QueryBoundary } from '@/shared/components/States'
 import { ActionDialog } from './ActionDialog'
 import { TeachersAreaTabs } from './area'
 import { opsApi, type Availability } from './opsApi'
@@ -65,7 +65,7 @@ export function SchedulesPage() {
               <StudentScheduleDesk students={students} />
             </>
           )}
-          {!teacher && <p className="ts-muted ts-section__hint">{tx(O.pickTeacherFirst)}</p>}
+          {!teacher && <EmptyState title={tx(O.pickTeacher)} hint={tx(O.pickTeacherFirst)} />}
         </QueryBoundary>
       </div>
     </div>

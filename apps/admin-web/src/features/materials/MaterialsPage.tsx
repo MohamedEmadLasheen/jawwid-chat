@@ -205,7 +205,7 @@ function LibraryTab({ access }: { access: MaterialsAccess }) {
       ) : (
         <QueryBoundary isLoading={items.isLoading} error={null} onRetry={() => void items.refetch()}>
           {!items.data || items.data.items.length === 0 ? (
-            <EmptyState title={tx(filtered ? M.empty : M.emptyLibrary)} />
+            <EmptyState title={tx(filtered ? M.empty : M.emptyLibrary)} hint={tx(filtered ? M.emptyHint : M.emptyLibraryHint)} />
           ) : (
             <ul className="mt-items" aria-label={tx(M.tabLibrary)}>
               {items.data.items.map((item) => (
@@ -767,7 +767,7 @@ function ImportReportView({ report }: { report: ImportReport }) {
             <tr key={r.row} className={r.action === 'error' ? 'mt-table__error' : undefined}>
               <td>{r.row}</td>
               <td dir="ltr">{r.ref ?? '—'}</td>
-              <td dir="auto">{r.title ?? '—'}</td>
+              <td><bdi>{r.title ?? '—'}</bdi></td>
               <td>
                 <Badge tone={actionTone[r.action]}>{actionLabel[r.action]}</Badge>
               </td>

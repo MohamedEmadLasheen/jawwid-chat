@@ -94,7 +94,7 @@ export function TestimonialsSection({
       ) : (
         <QueryBoundary isLoading={list.isLoading} error={null} onRetry={() => void list.refetch()}>
           {rows.length === 0 ? (
-            <EmptyState title={tx(R.empty)} />
+            <EmptyState title={tx(R.empty)} hint={tx(R.emptyHint)} />
           ) : (
             <ul className="tf-entries th-complaints">
               {rows.map((t) => (

@@ -1,3 +1,4 @@
+import type { CountedNoun } from '@/core/i18n/counts'
 import { ApiError } from '@/core/api/errors'
 import type { Pair } from '@/features/organization/copy'
 
@@ -16,7 +17,9 @@ export const T = {
   },
   search: { en: 'Search a teacher', ar: 'ابحث عن معلم' },
   count: { en: '{n} teachers', ar: '{n} معلمًا' },
-  noTeachers: { en: 'No teacher matches. Clear the search or the filters to see every teacher.', ar: 'لا معلم يطابق. امسح البحث أو عوامل التصفية لعرض كل المعلمين.' },
+  filesTitle: { en: 'Teacher files', ar: 'ملفات المعلمين' },
+  noTeachers: { en: 'No teacher matches.', ar: 'لا معلم يطابق.' },
+  noTeachersHint: { en: 'Clear the search or the filters to see every teacher.', ar: 'امسح البحث أو عوامل التصفية لعرض كل المعلمين.' },
   name: { en: 'Teacher', ar: 'المعلم' },
   students: { en: 'Students', ar: 'الطلاب' },
   openComplaints: { en: 'Open complaints', ar: 'شكاوى مفتوحة' },
@@ -430,4 +433,10 @@ export function describeError(error: unknown, locale: 'ar' | 'en'): string {
     return error.localized(locale)
   }
   return pick({ en: 'Something went wrong. Try again.', ar: 'حدث خطأ. حاول مرة أخرى.' })
+}
+
+/** "10 معلمين", "11 معلمًا": the noun agrees with its number (core/i18n/counts). */
+export const TEACHERS: CountedNoun = {
+  en: { one: 'teacher', other: 'teachers' },
+  ar: { one: 'معلم واحد', two: 'معلمان', few: 'معلمين', many: 'معلمًا' },
 }

@@ -6,10 +6,12 @@ import { AwayBadge } from './Complaint'
 import { PageHeader } from '@/shared/components/PageHeader'
 import { SearchField } from '@/shared/components/SearchField'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
-import { T, useCopy } from './copy'
+import { countLabel } from '@/core/i18n/counts'
+import { T, TEACHERS, useCopy } from './copy'
 import { Refusal, isTeacherFileRefusal } from './Refusal'
 import { useTeacherList } from './hooks'
 import './teacher-files.css'
+import '@/features/teachers/stack-table.css'
 import { TeachersTabs } from '@/features/supervision/TeachersTabs'
 import { AddTeacherDialog } from './AddTeacherDialog'
 import type { TeacherSummary } from './api'
@@ -26,7 +28,7 @@ const assignSupervisorPath = (basePath: string) => `${basePath.startsWith('/admi
  */
 export function TeacherFilesPage({ basePath, eyebrow }: { basePath: string; eyebrow?: string }) {
   const tx = useCopy()
-  const { t, number } = useI18n()
+  const { t, number, locale } = useI18n()
   const list = useTeacherList()
   const [query, setQuery] = useState('')
   const [adding, setAdding] = useState(false)
@@ -55,7 +57,7 @@ export function TeacherFilesPage({ basePath, eyebrow }: { basePath: string; eyeb
         <TeachersTabs basePath={basePath} />
         <PageHeader
           eyebrow={eyebrow}
-          title={tx(T.title)}
+          title={tx(basePath.startsWith('/admin') ? T.title : T.filesTitle)}
           subtitle={tx(T.subtitle)}
           actions={
             offer?.canAdd && (
@@ -81,7 +83,7 @@ export function TeacherFilesPage({ basePath, eyebrow }: { basePath: string; eyeb
                   {tx(T.unsupervisedOnly)}
                 </label>
               )}
-              <span className="toolbar__count">{tx(T.count, { n: number(rows.length) })}</span>
+              <span className="toolbar__count">{countLabel(rows.length, number(rows.length), TEACHERS, locale)}</span>
               {assigns && unsupervised > 0 && (
                 <>
                   <Badge tone="warn" dot>
@@ -94,10 +96,10 @@ export function TeacherFilesPage({ basePath, eyebrow }: { basePath: string; eyeb
               )}
             </div>
             {rows.length === 0 ? (
-              <EmptyState title={tx(T.noTeachers)} />
+              <EmptyState title={tx(T.noTeachers)} hint={tx(T.noTeachersHint)} />
             ) : (
               <div className="table-wrap tf-table-wrap">
-                <table className="table">
+                <table className="table stack-table">
                   <thead>
                     <tr>
                       <th scope="col">{tx(T.name)}</th>
@@ -109,11 +111,11 @@ export function TeacherFilesPage({ basePath, eyebrow }: { basePath: string; eyeb
                   <tbody>
                     {rows.map((row) => (
                       <tr key={row.id}>
-                        <td dir="auto">
+                        <td>
                           <Link className="tf-name-link" to={`${basePath}/${encodeURIComponent(row.id)}`}>{row.name}</Link>
                         </td>
-                        <td className={row.studentCount > 0 ? 'tf-num' : 'tf-num tf-num--zero'}>{number(row.studentCount)}</td>
-                        <td className={row.openComplaints > 0 ? 'tf-num' : 'tf-num tf-num--zero'}>
+                        <td className={row.studentCount > 0 ? 'tf-num' : 'tf-num tf-num--zero'} data-label={tx(T.students)}>{number(row.studentCount)}</td>
+                        <td className={row.openComplaints > 0 ? 'tf-num' : 'tf-num tf-num--zero'} data-label={tx(T.openComplaints)}>
                           {row.openComplaints > 0 ? (
                             <Badge tone="warn" dot>
                               {number(row.openComplaints)}
@@ -122,7 +124,7 @@ export function TeacherFilesPage({ basePath, eyebrow }: { basePath: string; eyeb
                             number(0)
                           )}
                         </td>
-                        <td>
+                        <td className="stack-wide" data-label={tx(T.status)}>
                           <span className="tf-badges">
                             <Badge tone={row.isActive ? 'ok' : 'outline'} dot>
                               {tx(row.isActive ? T.active : T.inactive)}

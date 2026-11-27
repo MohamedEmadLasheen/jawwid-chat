@@ -13,7 +13,13 @@
 .th-defaults .table-wrap { border-block-start: 0; }
 .th-default-cell { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); font-variant-numeric: tabular-nums; }
 .th-amount { inline-size: 7rem; min-block-size: 34px; }
-.th-currency { max-inline-size: 14rem; }
+.th-nowrap { white-space: nowrap; }
+/* Adding a currency sits under the list it adds a row to. */
+.th-currency { display: grid; gap: 5px; justify-items: start; padding-block-start: var(--space-2); }
+.th-currency .field__label { margin: 0; }
+.th-currency__row { display: flex; align-items: center; gap: var(--space-2); }
+.th-currency__row .input { inline-size: 6.5rem; }
+.th-currency .field__hint { margin: 0; }
 .th-complaints { margin: 0; border-block-start: 1px solid var(--hairline); }
 /* PD-32 parent feedback (ParentFeedback.tsx). Logical properties only: the page is Arabic-first. */
 .th-filters { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); }

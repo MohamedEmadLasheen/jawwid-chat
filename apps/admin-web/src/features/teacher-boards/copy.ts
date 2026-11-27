@@ -16,7 +16,7 @@ export const B = {
   },
   teacher: { en: 'Teacher', ar: 'المعلم' },
   chooseTeacher: { en: 'Choose a teacher', ar: 'اختر معلمًا' },
-  chooseTeacherHint: { en: "Choose a teacher to see their boards.", ar: 'اختر معلمًا لعرض سبوراته.' },
+  chooseTeacherHint: { en: 'Their boards appear here.', ar: 'تظهر سبوراته هنا.' },
   departed: { en: '{name} (left)', ar: '{name} (غادر)' },
   noBoards: { en: 'No boards', ar: 'لا توجد سبورات' },
   noBoardsHint: { en: 'This teacher has no boards in use or kept.', ar: 'ليس لدى هذا المعلم سبورات مستخدمة أو محفوظة.' },

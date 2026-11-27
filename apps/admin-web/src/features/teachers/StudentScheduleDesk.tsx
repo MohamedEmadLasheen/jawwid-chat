@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useI18n } from '@/core/i18n/I18nProvider'
+import { EmptyState } from '@/shared/components/States'
 import { ActionDialog, type FieldSpec, type FieldValue } from './ActionDialog'
 import type { Pair } from './copy'
 import { opsApi, type Roster, type SuspensionReason, type WeeklySlot } from './opsApi'
@@ -9,6 +10,7 @@ import { ChangeTeacherDialog } from './ChangeTeacherDialog'
 import { AddLessonDialog, LessonsDialog } from './LessonDialogs'
 import { WeeklyChangeDialog } from './WeeklyChangeDialog'
 import './teachers.css'
+import './stack-table.css'
 
 export type ScheduleLearner = Roster['learners'][number]
 type Pending = { title: string; fields: FieldSpec[]; submit: (v: FieldValue) => Promise<unknown> } | null
@@ -40,10 +42,10 @@ export function StudentScheduleDesk({ students, teachers }: { students: Schedule
           {students.length > 0 && <span className="ts-section__count">{number(students.length)}</span>}
         </header>
         {students.length === 0 ? (
-          <p className="ts-muted ts-section__hint">{tx(O.noStudents)}</p>
+          <EmptyState compact title={tx(O.noStudents)} />
         ) : (
           <div className="table-wrap">
-            <table className="table ts-plain-rows">
+            <table className="table ts-plain-rows stack-table">
               <thead>
                 <tr>
                   <th scope="col">{tx(O.learner)}</th>
@@ -66,10 +68,10 @@ export function StudentScheduleDesk({ students, teachers }: { students: Schedule
                         </span>
                       )}
                     </th>
-                    <td>{l.family.displayName}</td>
-                    {teachers && <td>{teachers.find((t) => t.id === l.teacherId)?.name ?? <span className="ts-muted">{tx(O.none)}</span>}</td>}
-                    <td>{l.slots.length ? l.slots.map((s) => slotLabel(tx, s, locale)).join(' · ') : <span className="ts-muted">{tx(O.none)}</span>}</td>
-                    <td className="ts-actions-cell row-actions">
+                    <td data-label={tx(O.family)}>{l.family.displayName}</td>
+                    {teachers && <td data-label={tx(O.teacher)}>{teachers.find((t) => t.id === l.teacherId)?.name ?? <span className="ts-muted">{tx(O.none)}</span>}</td>}
+                    <td className="stack-wide" data-label={tx(O.regularTimes)}>{l.slots.length ? l.slots.map((s) => slotLabel(tx, s, locale)).join(' · ') : <span className="ts-muted">{tx(O.none)}</span>}</td>
+                    <td className="ts-actions-cell ts-actions-cell--quiet stack-actions">
                       <button type="button" className="btn btn--sm" onClick={() => setOpen({ kind: 'weekly', learner: l })}>{tx(O.editTimes)}</button>
                       <button type="button" className="btn btn--sm" onClick={() => setOpen({ kind: 'add', learner: l })}>{tx(O.addLesson)}</button>
                       <button type="button" className="btn btn--sm" onClick={() => setOpen({ kind: 'lessons', learner: l })}>{tx(O.lessons)}</button>

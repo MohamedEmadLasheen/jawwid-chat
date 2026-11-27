@@ -19,6 +19,7 @@ import { EmploymentSection, FinancialSummarySection, HistorySection, usePayroll 
 import { MonthlyKpis, TeacherScheduleSection, currentMonth, teacherAreaLinks, type TeacherWorkLinks } from './TeacherWork'
 import { ShiftSection } from '@/features/schedule/ShiftSection'
 import './teacher-files.css'
+import '@/features/teachers/stack-table.css'
 import { MonthPicker } from '@/features/teachers/MonthPicker'
 import { Icon } from '@/shared/components/Icon'
 import { studentPath } from '@/features/profiles/api'
@@ -336,7 +337,7 @@ function Students({ file }: { file: TeacherFile }) {
         <p className="tf-muted">{tx(T.noStudents)}</p>
       ) : (
         <div className="table-wrap tf-table-wrap">
-          <table className="table">
+          <table className="table stack-table">
             <thead>
               <tr>
                 <th scope="col">{tx(T.child)}</th>
@@ -348,13 +349,13 @@ function Students({ file }: { file: TeacherFile }) {
             <tbody>
               {rows.map((s) => (
                 <tr key={s.learnerId}>
-                  <td dir="auto">
+                  <td>
                     {/* PD-17: the child's Student Profile. */}
                     <Link to={studentPath(s.learnerId)}>{s.name}</Link>
                   </td>
-                  <td dir="auto">{s.level ?? tx(T.none)}</td>
-                  <td dir="auto">{s.family.displayName}</td>
-                  <td dir="auto">{s.supervisor?.name ?? tx(T.none)}</td>
+                  <td data-label={tx(T.level)}><bdi>{s.level ?? tx(T.none)}</bdi></td>
+                  <td data-label={tx(T.family)}><bdi>{s.family.displayName}</bdi></td>
+                  <td data-label={tx(T.supervisor)}><bdi>{s.supervisor?.name ?? tx(T.none)}</bdi></td>
                 </tr>
               ))}
             </tbody>

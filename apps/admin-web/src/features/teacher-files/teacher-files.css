@@ -21,7 +21,8 @@
 .tf-name-link { font-weight: 600; color: var(--ink); text-decoration: none; }
 .tf-name-link:hover { color: var(--teal-dark); text-decoration: underline; text-underline-offset: 3px; }
 .tf-num { font-variant-numeric: tabular-nums; }
-.tf-num--zero { color: var(--border-control); }
+.tf-num--zero { color: var(--ink-muted); }
+.tf-num:not(.tf-num--zero) { font-weight: 500; }
 
 /* The file: the person in a narrow column, the work in a wide one. */
 .tf-file { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 var(--space-7); align-items: start; }
@@ -43,7 +44,9 @@
 /* Sections other features bring into the file sit on the same rules. */
 .tf-file section.card { padding: 0; margin-block-end: var(--space-6); border-block-start: 0; }
 
-.tf-kv { display: grid; grid-template-columns: minmax(8rem, max-content) 1fr; gap: 0 var(--space-4); margin: 0; font-size: var(--fs-sm); }
+/* A label and its value on one continuous hairline: the gap is the label's own padding. */
+.tf-kv { display: grid; grid-template-columns: minmax(8rem, max-content) 1fr; gap: 0; margin: 0; font-size: var(--fs-sm); }
+.tf-kv dt { padding-inline-end: var(--space-4); }
 .tf-kv dt, .tf-kv dd { padding-block: 7px; border-block-end: 1px solid var(--hairline-soft); }
 .tf-kv dt { color: var(--ink-muted); }
 .tf-kv dd { margin: 0; font-weight: 500; overflow-wrap: anywhere; }

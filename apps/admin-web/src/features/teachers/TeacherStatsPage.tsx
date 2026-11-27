@@ -15,6 +15,7 @@ import { Icon } from '@/shared/components/Icon'
 import { MonthSummaryPanel, S } from '@/features/journey/MonthSummary'
 import { useJourneyCopy } from '@/features/journey/copy'
 import './teachers.css'
+import './stack-table.css'
 
 /**
  * PD-11 T5: teacher statistics, for the Teachers department and the super
@@ -97,11 +98,16 @@ function TeacherList({ month, onOpen }: { month: string; onOpen: (id: string) =>
       <div className="ts-toolbar">
         <SearchField value={query} onChange={setQuery} label={tx(T.search)} clearLabel={tx(T.search)} />
       </div>
+      {(q.data?.teachers.length ?? 0) > 0 && (
+        <p className="ts-key">
+          {tx(T.keyMakeups)} {tx(T.keyExcuses)}
+        </p>
+      )}
       {(q.data?.teachers.length ?? 0) === 0 ? (
         <EmptyState title={tx(T.noTeachers)} />
       ) : (
         <div className="table-wrap ts-table-wrap">
-          <table className="table ts-table">
+          <table className="table ts-table stack-table">
               <thead>
                 <tr>
                   <th scope="col">{tx(T.colTeacher)}</th>
@@ -111,8 +117,8 @@ function TeacherList({ month, onOpen }: { month: string; onOpen: (id: string) =>
                   <th scope="col" className="num">{tx(T.colUnreported)}</th>
                   <th scope="col" className="num">{tx(T.colAttendance)}</th>
                   <th scope="col" className="num">{tx(T.colOnTime)}</th>
-                  <th scope="col" className="num">{jx(S.makeups)}</th>
-                  <th scope="col" className="num">{jx(S.studentExcuses)}</th>
+                  <th scope="col" className="num" title={tx(T.keyMakeups)}>{jx(S.makeups)}</th>
+                  <th scope="col" className="num" title={tx(T.keyExcuses)}>{jx(S.studentExcuses)}</th>
                   <th scope="col" className="num">{jx(S.teacherExcuses)}</th>
                   <th scope="col" className="num">{tx(T.colTrials)}</th>
                   <th scope="col" className="num">{tx(T.colTrialsSubscribed)}</th>
@@ -128,20 +134,20 @@ function TeacherList({ month, onOpen }: { month: string; onOpen: (id: string) =>
                       </button>
                       {!r.teacher.isActive && <span className="ts-muted"> · {tx(T.inactive)}</span>}
                     </th>
-                    <td className={`${quiet(r.held.lessons)} ts-words`}>{fmt.lessonsHours(r.held)}</td>
-                    <td className={`${quiet(r.scheduled.lessons)} ts-words`}>{fmt.lessonsHours(r.scheduled)}</td>
-                    <td className={quiet(r.notHeld.lessons)}>{fmt.number(r.notHeld.lessons)}</td>
-                    <td className={r.unreported.lessons > 0 ? 'num ts-attention' : quiet(0)}>{fmt.number(r.unreported.lessons)}</td>
-                    <td className={quiet(r.attendanceRate)}>{fmt.percent(r.attendanceRate)}</td>
-                    <td className={quiet(r.reportsOnTimeRate)}>{fmt.percent(r.reportsOnTimeRate)}</td>
-                    <td className={quiet(r.summary?.makeups.total)}>{r.summary ? `${fmt.number(r.summary.makeups.completed)} / ${fmt.number(r.summary.makeups.total)}` : '—'}</td>
-                    <td className={quiet(r.summary ? r.summary.studentExcuses.beforeStart + r.summary.studentExcuses.afterStart : undefined)}>
-                      {r.summary ? `${fmt.number(r.summary.studentExcuses.beforeStart)} + ${fmt.number(r.summary.studentExcuses.afterStart)}` : '—'}
+                    <td className={quiet(r.held.lessons)} data-label={tx(T.colHeld)}>{fmt.lessonsHours(r.held)}</td>
+                    <td className={quiet(r.scheduled.lessons)} data-label={tx(T.colScheduled)}>{fmt.lessonsHours(r.scheduled)}</td>
+                    <td className={quiet(r.notHeld.lessons)} data-label={tx(T.colNotHeld)}>{fmt.number(r.notHeld.lessons)}</td>
+                    <td className={r.unreported.lessons > 0 ? 'num ts-attention' : quiet(0)} data-label={tx(T.colUnreported)}>{fmt.number(r.unreported.lessons)}</td>
+                    <td className={quiet(r.attendanceRate)} data-label={tx(T.colAttendance)}>{fmt.percent(r.attendanceRate)}</td>
+                    <td className={quiet(r.reportsOnTimeRate)} data-label={tx(T.colOnTime)}>{fmt.percent(r.reportsOnTimeRate)}</td>
+                    <td className={quiet(r.summary?.makeups.total)} data-label={jx(S.makeups)} title={tx(T.keyMakeups)}>{r.summary ? <span className="ltr">{`${fmt.number(r.summary.makeups.completed)} / ${fmt.number(r.summary.makeups.total)}`}</span> : '—'}</td>
+                    <td className={quiet(r.summary ? r.summary.studentExcuses.beforeStart + r.summary.studentExcuses.afterStart : undefined)} data-label={jx(S.studentExcuses)} title={tx(T.keyExcuses)}>
+                      {r.summary ? <span className="ltr">{`${fmt.number(r.summary.studentExcuses.beforeStart)} + ${fmt.number(r.summary.studentExcuses.afterStart)}`}</span> : '—'}
                     </td>
-                    <td className={quiet(r.summary?.teacherExcuses)}>{r.summary ? fmt.number(r.summary.teacherExcuses) : '—'}</td>
-                    <td className={quiet(r.trials?.total ?? 0)}>{fmt.number(r.trials?.total ?? 0)}</td>
-                    <td className={quiet(r.trials?.subscribed ?? 0)}>{fmt.number(r.trials?.subscribed ?? 0)}</td>
-                    <td className={quiet(r.movesByTeacher)}>{r.movesByTeacher === undefined ? '—' : fmt.number(r.movesByTeacher)}</td>
+                    <td className={quiet(r.summary?.teacherExcuses)} data-label={jx(S.teacherExcuses)}>{r.summary ? fmt.number(r.summary.teacherExcuses) : '—'}</td>
+                    <td className={quiet(r.trials?.total ?? 0)} data-label={tx(T.colTrials)}>{fmt.number(r.trials?.total ?? 0)}</td>
+                    <td className={quiet(r.trials?.subscribed ?? 0)} data-label={tx(T.colTrialsSubscribed)}>{fmt.number(r.trials?.subscribed ?? 0)}</td>
+                    <td className={quiet(r.movesByTeacher)} data-label={tx(T.colMoves)}>{r.movesByTeacher === undefined ? '—' : fmt.number(r.movesByTeacher)}</td>
                   </tr>
                 ))}
               </tbody>
