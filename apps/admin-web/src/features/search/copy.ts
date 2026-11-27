@@ -2,6 +2,7 @@ import type { Bilingual } from '@/features/admin/copy'
 
 export const S = {
   open: { en: 'Search', ar: 'بحث' },
+  short: { en: 'Search…', ar: 'بحث…' },
   placeholder: { en: 'Search people, chats and pages', ar: 'ابحث عن شخص أو محادثة أو صفحة' },
   input: { en: 'Name, phone or page', ar: 'اسم أو هاتف أو صفحة' },
   parents: { en: 'Parents', ar: 'أولياء الأمور' },

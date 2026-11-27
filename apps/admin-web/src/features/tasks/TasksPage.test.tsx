@@ -332,14 +332,14 @@ describe('the level colours', () => {
   })
 
   it('on the Tasks page a level is a word on the paper: its colour clears 4.5:1 on the page and on a selected row, light and dark', () => {
-    const paper = readFileSync(join(__dirname, '../../core/theme/paper.css'), 'utf8')
+    const paper = readFileSync(join(__dirname, '../../core/theme/system.css'), 'utf8')
     const light = paper.slice(paper.indexOf(':root {'), paper.indexOf('}', paper.indexOf(':root {')))
     const darkStart = paper.indexOf(":root:not([data-theme='light']) {")
     const dark = paper.slice(darkStart, paper.indexOf('}', darkStart))
     const value = (block: string, name: string): string => {
       const re = new RegExp(`--${name}:\\s*(#[0-9a-f]{6}|var\\(--([a-z0-9-]+)\\));`, 'i')
       const m = re.exec(block) ?? re.exec(light)
-      if (!m) throw new Error(`no --${name} in paper.css`)
+      if (!m) throw new Error(`no --${name} in system.css`)
       return m[2] ? value(block, m[2]) : m[1]!
     }
     for (const fg of ['danger', 'gold-700', 'text-muted']) {
