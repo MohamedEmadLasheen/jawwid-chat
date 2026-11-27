@@ -118,7 +118,7 @@ function TeacherRecord({ data, basePath }: { data: TeacherFile; basePath: string
   const tabOptions = FILE_TABS.map((t) => ({
     value: t,
     label: label[t],
-    count: t === 'students' ? data.assignedStudents.length : t === 'records' && openComplaints > 0 ? openComplaints : undefined,
+    count: t === 'students' && data.assignedStudents.length > 0 ? data.assignedStudents.length : t === 'records' && openComplaints > 0 ? openComplaints : undefined,
   }))
 
   return (
@@ -381,7 +381,7 @@ function Personal({ file, onEdit }: { file: TeacherFile; onEdit: () => void }) {
       id="tf-personal"
       title={tx(T.personal)}
       action={
-        file.access.canEditPersonal && (
+        file.access.canEditPersonal && file.teacher.isActive && (
           <button type="button" className="btn btn--sm" onClick={onEdit} aria-label={tx(T.editPersonal)}>
             {tx(T.edit)}
           </button>
@@ -512,7 +512,7 @@ function Monthly({
       <MonthlyKpis teacherId={file.teacher.id} month={month} links={links} />
       <div className="tf-section__head">
         <h3 className="tf-subtitle">{tx(T.comments)}</h3>
-        {file.access.canWriteSupervision && (
+        {file.access.canWriteSupervision && file.teacher.isActive && (
           <button type="button" className="btn btn--sm" onClick={() => onAdd({ kind: 'monthly_comment' })}>
             {tx(T.addMonthly)}
           </button>

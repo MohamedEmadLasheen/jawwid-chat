@@ -107,10 +107,10 @@ function Employment({
       title={tx(P.employment)}
       action={
         <>
-          {file.access.canEditPersonal && (
+          {file.access.canEditPersonal && file.teacher.isActive && (
             <button type="button" className="btn btn--sm" onClick={onEdit}>{tx({ en: 'Edit', ar: 'تعديل' })}</button>
           )}
-          {finance && (
+          {finance && file.teacher.isActive && (
             <button type="button" className="btn btn--sm" onClick={() => onOpen({ kind: 'terms' })}>{tx(P.setTerms)}</button>
           )}
         </>

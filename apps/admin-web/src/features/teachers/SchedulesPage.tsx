@@ -6,7 +6,7 @@ import { EmptyState, QueryBoundary } from '@/shared/components/States'
 import { ActionDialog } from './ActionDialog'
 import { TeachersAreaTabs } from './area'
 import { opsApi, type Availability } from './opsApi'
-import { O, WEEKDAY, describeOpsError } from './opsCopy'
+import { O, WEEKDAY, describeOpsError, formatDay } from './opsCopy'
 import { useAvailability, useOp, useRoster } from './opsHooks'
 import { StudentScheduleDesk, useTx } from './StudentScheduleDesk'
 import { SearchableSelect } from '@/shared/components/SearchableSelect'
@@ -27,7 +27,6 @@ const WEEKDAYS = [1, 2, 3, 4, 5, 6, 7]
  */
 export function SchedulesPage() {
   const tx = useTx()
-  const { number } = useI18n()
   const roster = useRoster()
   const [params, setParams] = useSearchParams()
   const teacherId = params.get('teacher')
@@ -52,25 +51,26 @@ export function SchedulesPage() {
         <PageHeader
           title={tx(O.schedulesTitle)}
           subtitle={tx(O.schedulesSubtitle)}
-          figures={teacher ? [{ key: 'students', label: tx(O.students), value: number(students.length), tone: 'key' }] : undefined}
+          actions={
+            /* Whose desk this is: the one control everything below answers to. */
+            <label className="ts-pick__field">
+              <span className="sr-only">{tx(O.chooseTeacher)}</span>
+              <SearchableSelect className="select" value={teacherId ?? ''} onValueChange={(v) => pickTeacher(v)} aria-label={tx(O.chooseTeacher)}>
+                <option value="">{tx(O.pickTeacher)}</option>
+                {teachers.map((t) => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+              </SearchableSelect>
+            </label>
+          }
           tabs={<TeachersAreaTabs />}
         />
         <QueryBoundary isLoading={roster.isLoading} error={roster.error} onRetry={() => void roster.refetch()}>
-          {/* Whose desk this is: the one control everything below answers to. */}
-          <div className="sheet ts-pick">
-            <div className="sheet-bar">
-              <label className="ts-pick__field">
-                <span className="field__label">{tx(O.chooseTeacher)}</span>
-                <SearchableSelect className="select" value={teacherId ?? ''} onValueChange={(v) => pickTeacher(v)} aria-label={tx(O.chooseTeacher)}>
-                  <option value="">{tx(O.pickTeacher)}</option>
-                  {teachers.map((t) => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
-                  ))}
-                </SearchableSelect>
-              </label>
+          {!teacher && (
+            <div className="sheet">
+              <EmptyState title={tx(O.pickTeacher)} hint={tx(O.pickTeacherFirst)} />
             </div>
-            {!teacher && <EmptyState title={tx(O.pickTeacher)} hint={tx(O.pickTeacherFirst)} />}
-          </div>
+          )}
           {teacher && (
             <div className="split split--wide-aside">
               <div>
@@ -153,7 +153,10 @@ function WorkingHours({ teacherId }: { teacherId: string }) {
         <ul className="ts-daysoff">
           {q.data?.daysOff.map((d) => (
             <li key={d.date}>
-              <span>{d.date}{d.reason ? ` — ${d.reason}` : ''}</span>
+              <span>
+                <bdi>{formatDay(d.date, locale)}</bdi>
+                {d.reason && <span className="ts-muted" dir="auto">{locale === 'ar' ? '، ' : ', '}{d.reason}</span>}
+              </span>
               <button type="button" className="btn btn--sm btn--ghost" onClick={() => removeOff.mutate(d.date)}>{tx(O.remove)}</button>
             </li>
           ))}

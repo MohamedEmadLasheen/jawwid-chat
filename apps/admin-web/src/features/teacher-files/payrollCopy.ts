@@ -51,8 +51,8 @@ export const P = {
     ar: 'تُحفَظ مشفّرة. بعدها يعرض الملف طريقة الصرف وآخر أربعة أحرف فقط.',
   },
   noKey: {
-    en: 'Payment accounts are switched off on this server (no encryption key). Ask the technical team to set TEACHER_PAYOUT_KEYS.',
-    ar: 'حسابات الصرف معطّلة على هذا الخادم (لا يوجد مفتاح تشفير). اطلب من الفريق التقني ضبط TEACHER_PAYOUT_KEYS.',
+    en: 'Payout accounts are switched off on this server for now; the technical team can turn them on.',
+    ar: 'حسابات الصرف غير متاحة على هذا الخادم حاليًا؛ يمكن للفريق التقني تفعيلها.',
   },
   method: { en: 'Method', ar: 'الطريقة' },
   provider: { en: 'Wallet provider', ar: 'مزوّد المحفظة' },

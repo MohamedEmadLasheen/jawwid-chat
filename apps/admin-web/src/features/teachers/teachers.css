@@ -185,7 +185,7 @@
 .ts-window { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); padding-block: 6px; border-block-end: 1px solid var(--hairline-soft); }
 .ts-window .ss, .ts-window > .input { inline-size: auto; }
 .ts-window .input, .ts-window .ss input { min-block-size: 34px; }
-.ts-window > .btn, .ts-daysoff .btn { border-color: transparent; background: none; color: var(--teal); }
+.ts-window > .btn, .ts-daysoff .btn { border-color: transparent; background: none; color: var(--ink-muted); }
 .ts-section > .field { margin-block-start: var(--space-3); }
 .ts-section > .ts-row__actions { margin-block-start: var(--space-3); }
 .ts-daysoff { list-style: none; padding: 0; margin: 0 0 var(--space-2); }
@@ -229,14 +229,15 @@
 .ts-pick { margin-block-end: var(--space-5); }
 .ts-pick .sheet-bar { align-items: flex-end; border-block-end: 0; }
 .ts-pick .sheet-bar:not(:last-child) { border-block-end: 1px solid var(--hairline-soft); }
-.ts-pick__field { display: grid; gap: 5px; inline-size: min(100%, 20rem); }
+.ts-pick__field { display: grid; gap: 5px; inline-size: min(100%, 18rem); }
 .ts-pick__field .field__label { margin: 0; }
 .ts-desk { display: grid; gap: var(--space-5); min-inline-size: 0; }
 .ts-desk .sheet + .sheet { margin-block-start: 0; }
 .ts-queue + .ts-queue { margin-block-start: var(--space-5); }
-.ts-hours .ts-window .input { min-inline-size: 0; }
-.ts-hours .ts-window { flex-wrap: nowrap; }
-.ts-hours .ts-window .ss { flex: 1 1 6rem; min-inline-size: 0; }
+/* A working window: the day on its own line, then from and to, then remove. Nothing clipped in a 380px aside. */
+.ts-hours .ts-window { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto; align-items: center; gap: 6px var(--space-2); }
+.ts-hours .ts-window > .ss, .ts-hours .ts-window > select { grid-column: 1 / -1; inline-size: 100%; }
+.ts-hours .ts-window .input { min-inline-size: 0; inline-size: 100%; }
 .ts-note { display: block; margin-block-start: 2px; color: var(--ink-muted); font-size: var(--fs-xs); }
 
 /* Needs action: one inbox. The queues are groups inside it, each named with its count and its rule. */

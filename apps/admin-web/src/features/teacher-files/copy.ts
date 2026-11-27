@@ -160,7 +160,7 @@ export const T = {
   kpiAttendance: { en: 'Student attendance', ar: 'حضور الطلاب' },
   kpiReliability: { en: 'Teacher reliability', ar: 'التزام المعلم' },
   kpiReportsOnTime: { en: 'Reports on time', ar: 'التقارير في موعدها' },
-  kpiReplies: { en: 'Family messages answered', ar: 'الرد على رسائل الأسر' },
+  kpiReplies: { en: 'Family replies', ar: 'الرد على رسائل الأسر' },
   kpiRepliesHint: { en: 'of {n} messages', ar: 'من {n} رسالة' },
   kpiWorkload: { en: 'Scheduled hours', ar: 'الساعات المجدولة' },
   kpiWorkloadHint: { en: 'of {h} available', ar: 'من {h} متاحة' },

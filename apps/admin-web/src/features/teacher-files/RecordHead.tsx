@@ -95,7 +95,7 @@ function useIdentitySentence(file: TeacherFile): ReactNode {
     if (named?.supervisor) {
       const [before, after] = tx(T.idSupervisedBy, { name: '\u0000' }).split('\u0000')
       parts.push(
-        <span key="sup">
+        <span key="sup" className="tf-nowrap">
           {before}
           <strong className="tf-head__person">
             <bdi>{named.supervisor.name}</bdi>
@@ -148,6 +148,7 @@ export function RecordHighlights({ file, onTab }: { file: TeacherFile; onTab: (t
       key: 'lessons',
       label: tx(T.hlLessons),
       value: d ? number(held) : pending,
+      tone: d && held === 0 ? 'quiet' : undefined,
       note: d?.summary ? tx(T.hlLessonsOf, { n: number(d.summary.totalScheduled) }) : undefined,
     })
   }
@@ -175,7 +176,7 @@ export function RecordHighlights({ file, onTab }: { file: TeacherFile; onTab: (t
       key: 'setup',
       label: tx(T.hlSetup),
       value: number(setup.missing),
-      unit: tx(T.hlSetupOf, { n: number(SETUP_KEYS.length) }),
+      note: tx(T.hlSetupOf, { n: number(SETUP_KEYS.length) }),
       onClick: () => onTab('overview'),
     })
   }

@@ -64,9 +64,9 @@ export function StudentSchedulesPage() {
           title={tx(COPY.title)}
           subtitle={tx(COPY.subtitle)}
           figures={
-            roster.data
+            /* Children with no teacher are the one thing this page must not let slip. */
+            roster.data && unassigned > 0
               ? [
-                  { key: 'students', label: tx(O.students), value: number(learners.length), tone: 'key' },
                   { key: 'none', label: tx(COPY.noTeacher), value: number(unassigned), tone: unassigned > 0 ? 'urgent' : 'quiet', onClick: () => set('teacher', teacherId === NONE ? '' : NONE), pressed: teacherId === NONE },
                 ]
               : undefined

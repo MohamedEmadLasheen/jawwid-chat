@@ -16,6 +16,7 @@
 html[dir='rtl'] .tf-head__name[dir='auto'] { text-align: right; }
 .tf-head__line { display: flex; align-items: baseline; gap: 8px; margin: 6px 0 0; font-size: var(--fs-md); color: var(--ink-2); }
 .tf-head__person { font-weight: 600; color: var(--ink); white-space: nowrap; }
+.tf-nowrap { white-space: nowrap; }
 .tf-head__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .tf-head__actions .field__error { flex-basis: 100%; }
 .tf-dot { flex: none; inline-size: 8px; block-size: 8px; border-radius: 50%; background: var(--done); transform: translateY(-1px); }
@@ -161,7 +162,7 @@ html[dir='rtl'] .tf-head__name[dir='auto'] { text-align: right; }
 .tf-kpi { display: grid; align-content: start; gap: 1px; padding: 4px 0; border: 0; border-radius: 0; }
 .tf-kpi dt { color: var(--ink-muted); font-size: var(--fs-xs); }
 .tf-kpi dd { margin: 0; display: grid; gap: 1px; }
-.tf-kpi dd strong { font-family: var(--font-head); font-size: var(--fs-xl); font-weight: 700; line-height: 1.2; font-variant-numeric: tabular-nums lining-nums; }
+.tf-kpi dd strong { font-family: var(--font-head); font-size: var(--fs-lg); font-weight: 600; line-height: 1.2; font-variant-numeric: tabular-nums lining-nums; }
 .tf-kpi__hint { font-size: var(--fs-xs); }
 
 /* PD-35: evaluations and improvement plans. */
