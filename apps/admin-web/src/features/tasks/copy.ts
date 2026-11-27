@@ -6,10 +6,9 @@ export { useCopy } from '@/features/organization/copy'
 /** PD-47: the Tasks page, Arabic and English side by side. */
 export const C = {
   title: { en: 'Tasks', ar: 'المهام' },
-  subtitle: {
-    en: 'A task leaves a list only when it is completed, removed or handed on.',
-    ar: 'لا تغادر المهمة القائمة إلا إذا أُنجزت أو أُزيلت أو أُسندت لغيره.',
-  },
+  // The order the queue is read in, named by need.
+  sortDue: { en: 'Overdue first, then soonest due', ar: 'المتأخرة أولًا، ثم الأقرب موعدًا' },
+  sortClosed: { en: 'Most recently closed first', ar: 'الأحدث إغلاقًا أولًا' },
   empty: { en: 'No open tasks in this list', ar: 'لا مهام مفتوحة في هذه القائمة' },
   emptyClosed: { en: 'No closed tasks yet', ar: 'لا مهام مغلقة بعد' },
   emptyAction: { en: 'Give someone a task', ar: 'إسناد مهمة لأحد' },
@@ -129,14 +128,14 @@ export const LEVEL_LABEL: Record<Level, Pair> = {
 
 /** Why the level was raised. A level a person set (`manual`) needs no reason. */
 export const REASON_LABEL = {
-  overdue: { en: 'Overdue', ar: 'متأخرة' },
-  due_soon: { en: 'Due soon', ar: 'قريبة الموعد' },
-  source: { en: 'Raised by its source', ar: 'رفعها مصدرها' },
+  overdue: { en: 'overdue', ar: 'متأخرة' },
+  due_soon: { en: 'due soon', ar: 'قريبة الموعد' },
+  source: { en: 'raised by its source', ar: 'رفعها مصدرها' },
 } satisfies Record<string, Pair>
 
 /** A source's own words for raising the level. */
 export const SOURCE_REASON: Partial<Record<SourceType, Pair>> = {
-  package_low: { en: 'Balance used up', ar: 'نفد رصيد الحصص' },
+  package_low: { en: 'balance used up', ar: 'نفد رصيد الحصص' },
 }
 
 export const FINANCE: Pair = { en: 'Finance', ar: 'مالية' }

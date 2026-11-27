@@ -38,6 +38,8 @@ import './tasks.css'
 
 type Tab = TaskView | 'closed'
 const LEVELS: Level[] = ['high', 'medium', 'low']
+/** The window before a task is due in which its time turns amber. */
+const SOON_MS = 24 * 60 * 60 * 1000
 
 const keys = {
   all: ['tasks'] as const,
@@ -229,7 +231,6 @@ export function TasksPage({ eyebrow }: { eyebrow?: string }) {
         <PageHeader
           eyebrow={eyebrow}
           title={tx(C.title)}
-          subtitle={tx(C.subtitle)}
           figures={figures}
           actions={
             canCreate ? (
@@ -266,6 +267,10 @@ export function TasksPage({ eyebrow }: { eyebrow?: string }) {
                 ))}
               </div>
               <div className="sheet-bar__end">
+                <span className="tq__sort">
+                  <Icon name="sort" size={16} />
+                  {tx(tab === 'closed' ? C.sortClosed : C.sortDue)}
+                </span>
                 {gone && (
                   <button type="button" className="chip tq__clear" aria-label={tx(C.clearFilter, { filter: tx(C.goneOnly) })} onClick={() => setGone(false)}>
                     {tx(C.goneOnly)}
@@ -384,24 +389,34 @@ function TaskRow({ task, showAssignee, selected, onOpen }: { task: TaskSummary; 
   const closed = task.state === 'completed' || task.state === 'removed'
   const link = sourceLink(task)
   const late = !closed && task.overdue
+  // The last day before it is due is the window: amber, as red is for overdue.
+  const soon = !closed && !late && !!task.dueAt && Date.parse(task.dueAt) - Date.now() < SOON_MS
   const name = title(task)
+  const sep = locale === 'ar' ? '، ' : ', '
   return (
-    <li className={`tq-row${selected ? ' tq-row--selected' : ''}${closed ? ' tq-row--closed' : ''}${late ? ' tq-row--late' : ''}`}>
+    <li className={`tq-row${selected ? ' tq-row--selected' : ''}${closed ? ' tq-row--closed' : ''}${late ? ' tq-row--late' : ''}${soon ? ' tq-row--soon' : ''}`}>
       <div className="tq-row__main">
         <button type="button" className="tasks__title" dir="auto" aria-current={selected ? 'true' : undefined} onClick={onOpen}>
           {name}
         </button>
         <div className="tq-row__sub">
-          {/* Where it came from: the kind of work for a system task, the person for one somebody gave. */}
-          {task.source ? (
-            <span className="tasks__source">{tx(SOURCE_LABEL[task.source.type])}</span>
-          ) : (
-            task.createdBy && <span className="tasks__source" dir="auto">{tx(C.createdBy, { name: task.createdBy.name })}</span>
-          )}
-          {showAssignee && <span dir="auto">{tx(C.assignedTo, { name: task.assigneeName })}</span>}
+          {/* Why it is here, in words: the kind of work for a system task, the person for one somebody gave, and whose it is. */}
+          <span className="tq-row__why">
+            {task.source ? (
+              <span className="tasks__source">{tx(SOURCE_LABEL[task.source.type])}</span>
+            ) : (
+              task.createdBy && <span className="tasks__source" dir="auto">{tx(C.createdBy, { name: task.createdBy.name })}</span>
+            )}
+            {showAssignee && (
+              <>
+                {(task.source || task.createdBy) && sep}
+                <span dir="auto">{tx(C.assignedTo, { name: task.assigneeName })}</span>
+              </>
+            )}
+          </span>
           {task.category === 'financial' && <FinanceTag />}
           {!closed && state !== 'open' && <Badge tone={STATE_TONE[state]}>{tx(STATE_LABEL[state])}</Badge>}
-          {task.needsReassignment && !closed && <Badge tone="danger">{tx(C.assigneeLeft)}</Badge>}
+          {task.needsReassignment && !closed && <Badge tone="danger">{tx(C.goneOnly)}</Badge>}
         </div>
       </div>
       {/* The one fact a queue is read for: how long until it is due, or how long since. */}
@@ -525,7 +540,7 @@ function TaskPanel({ id, onClose }: { id: string; onClose: () => void }) {
                 <div>
                   <dt>{tx(C.dueAt)}</dt>
                   <dd className={t.overdue && live ? 'insp__late' : undefined}>
-                    {t.dueAt ? when(t.dueAt) : tx(C.noDue)}
+                    <span className="insp__when">{t.dueAt ? when(t.dueAt) : tx(C.noDue)}</span>
                     {t.overdue && t.priorityReason !== 'overdue' && live && <OverdueMark />}
                   </dd>
                 </div>
@@ -543,7 +558,7 @@ function TaskPanel({ id, onClose }: { id: string; onClose: () => void }) {
               </dl>
 
               {t.instructions && t.state === 'open' && (
-                <div className="tasks__banner" role="note">
+                <div className="tasks__banner tasks__banner--waiting" role="note">
                   <p className="tasks__banner-title">{tx(C.instructions)}</p>
                   <p className="tasks__text" dir="auto">{t.instructions}</p>
                 </div>
@@ -729,8 +744,9 @@ function DueControl({ date, time, disabled, onSave }: { date: string; time: stri
 function History({ task }: { task: TaskDetail }) {
   const tx = useCopy()
   const when = useWhen()
+  const { dir, locale } = useI18n()
   // "before → after" reads in the page's direction.
-  const arrow = useI18n().dir === 'rtl' ? '←' : '→'
+  const arrow = dir === 'rtl' ? '←' : '→'
   return (
     <ol className="tasks__history">
       {task.history.map((e) => {
@@ -738,16 +754,19 @@ function History({ task }: { task: TaskDetail }) {
         const after = e.after as Record<string, string | null> | null
         return (
           <li key={e.id}>
-            <strong>{tx(EVENT_LABEL[e.kind])}</strong>
-            {e.kind === 'priority_changed' && before?.priority && after?.priority && (
-              <> — {tx(LEVEL_LABEL[before.priority as Level])} {arrow} {tx(LEVEL_LABEL[after.priority as Level])}</>
-            )}
-            {e.kind === 'due_changed' && (
-              <> — {before?.dueAt ? when(before.dueAt) : tx(C.noDue)} {arrow} {after?.dueAt ? when(after.dueAt) : tx(C.noDue)}</>
-            )}
+            <span>
+              <strong>{tx(EVENT_LABEL[e.kind])}</strong>
+              {e.kind === 'priority_changed' && before?.priority && after?.priority && (
+                <>: {tx(LEVEL_LABEL[before.priority as Level])} {arrow} {tx(LEVEL_LABEL[after.priority as Level])}</>
+              )}
+              {e.kind === 'due_changed' && (
+                <>: {before?.dueAt ? when(before.dueAt) : tx(C.noDue)} {arrow} {after?.dueAt ? when(after.dueAt) : tx(C.noDue)}</>
+              )}
+            </span>{' '}
             <span className="tasks__history-by">
-              {' · '}
-              <span dir="auto">{e.actor ? e.actor.name : tx(C.system)}</span> · <time dateTime={e.at}>{when(e.at)}</time>
+              <span dir="auto">{e.actor ? e.actor.name : tx(C.system)}</span>
+              {locale === 'ar' ? '، ' : ', '}
+              <time dateTime={e.at}>{when(e.at)}</time>
             </span>
             {e.body && <p className="tasks__text" dir="auto">{e.body}</p>}
           </li>

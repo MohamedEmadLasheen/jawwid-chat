@@ -13,6 +13,7 @@ import { RowActions } from '@/shared/components/RowActions'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
 import { describeError } from '@/features/teacher-files/copy'
 import { academyToday } from '@/features/schedule/viewState'
+import { ACADEMY_ZONE, dayMonthIn } from '@/core/time/academyTime'
 import { casesApi, type CaseDetail, type CaseStatus, type CaseSubjectKind, type CaseSummary, type CaseTab } from './api'
 import { C, EVENT_LABEL, GROUP_LABEL, STATUS_LABEL, SUBJECT_LABEL, TAB_LABEL, TARGET_LABEL, useCopy } from './copy'
 import { CASES_ACCESS_KEYS, TasksAreaTabs } from '@/features/tasks/TasksAreaTabs'
@@ -27,11 +28,12 @@ const keys = {
   owners: (id: string) => ['cases', 'owners', id] as const,
 }
 
-const STATUS_TONE: Record<CaseStatus, 'warn' | 'info' | 'ok' | 'neutral'> = {
-  open: 'warn',
+/** Not started is plain; being worked on is information; resolved is done. Urgency is the due day's to say. */
+const STATUS_TONE: Record<CaseStatus, 'info' | 'ok' | 'neutral' | 'outline'> = {
+  open: 'neutral',
   in_progress: 'info',
   resolved: 'ok',
-  cancelled: 'neutral',
+  cancelled: 'outline',
 }
 const SUBJECT_ICON: Record<CaseSubjectKind, IconName> = {
   teacher: 'teachers',
@@ -51,10 +53,22 @@ function groupOf(c: Pick<CaseSummary, 'status' | 'dueOn'>, today: string): Group
   return c.status === 'open' ? 'open' : 'progress'
 }
 
-/** A case's due day ("2026-11-29") as a date in the viewer's language. */
+/** A case's due day ("2026-11-29") as a date in the viewer's language: "29 November". */
 function useDay() {
-  const { date } = useI18n()
-  return (day: string) => date(`${day.slice(0, 10)}T12:00:00Z`)
+  const { locale } = useI18n()
+  return (day: string) => dayMonthIn(`${day.slice(0, 10)}T12:00:00Z`, ACADEMY_ZONE, locale)
+}
+
+/** Whole days from the academy's today to a due day: negative once it has passed. */
+function daysUntil(day: string, today: string): number {
+  return Math.round((Date.parse(`${day.slice(0, 10)}T12:00:00Z`) - Date.parse(`${today}T12:00:00Z`)) / 86_400_000)
+}
+
+/** "today", "tomorrow", "in 3 days", "3 days ago", in the viewer's language. */
+function useDaysWords() {
+  const { locale } = useI18n()
+  const f = new Intl.RelativeTimeFormat(locale === 'ar' ? 'ar-EG-u-nu-latn' : 'en-GB', { numeric: 'auto' })
+  return (days: number) => f.format(days, 'day')
 }
 
 /**
@@ -101,7 +115,7 @@ export function CasesPage({ header }: { header?: React.ReactNode }) {
   return (
     <div className="page cases">
       <div className="page__inner">
-        <PageHeader title={tx(C.title)} subtitle={tx(C.subtitle)} figures={figures} tabs={strip} />
+        <PageHeader title={tx(C.title)} figures={figures} tabs={strip} />
         <div className={openId ? 'tq tq--open' : 'tq'}>
           <div className="sheet tq__sheet">
             <div className="sheet-bar cases__bar">
@@ -123,6 +137,10 @@ export function CasesPage({ header }: { header?: React.ReactNode }) {
                 ))}
               </div>
               <div className="sheet-bar__end">
+                <span className="tq__sort">
+                  <Icon name="sort" size={16} />
+                  {tx(C.sortNeed)}
+                </span>
                 <label className="cases__closed">
                   <input type="checkbox" checked={closed} onChange={(e) => setClosed(e.target.checked)} /> {tx(C.showClosed)}
                 </label>
@@ -150,7 +168,7 @@ export function CasesPage({ header }: { header?: React.ReactNode }) {
                     </h2>
                     <ul className="tq-rows">
                       {rows.map((c) => (
-                        <CaseRow key={c.id} c={c} late={group === 'past'} selected={c.id === openId} onOpen={() => setOpenId(c.id)} />
+                        <CaseRow key={c.id} c={c} today={today} showStatus={group === 'past' || group === 'closed'} selected={c.id === openId} onOpen={() => setOpenId(c.id)} />
                       ))}
                     </ul>
                   </section>
@@ -165,36 +183,52 @@ export function CasesPage({ header }: { header?: React.ReactNode }) {
   )
 }
 
-function CaseRow({ c, late, selected, onOpen }: { c: CaseSummary; late: boolean; selected: boolean; onOpen: () => void }) {
+function CaseRow({ c, today, showStatus, selected, onOpen }: { c: CaseSummary; today: string; showStatus: boolean; selected: boolean; onOpen: () => void }) {
   const tx = useCopy()
+  const { locale } = useI18n()
   const day = useDay()
+  const words = useDaysWords()
+  const live = isLive(c)
+  const left = c.dueOn ? daysUntil(c.dueOn, today) : null
+  // Grey while there is time, amber on the day before and the day itself, red once it has passed.
+  const late = live && left !== null && left < 0
+  const soon = live && left !== null && left >= 0 && left <= 1
+  const sep = locale === 'ar' ? '، ' : ', '
   return (
-    <li className={`tq-row tq-row--case${selected ? ' tq-row--selected' : ''}${late ? ' tq-row--late' : ''}`}>
+    <li className={`tq-row tq-row--case${selected ? ' tq-row--selected' : ''}${late ? ' tq-row--late' : ''}${soon ? ' tq-row--soon' : ''}`}>
       <div className="tq-row__main">
         <button type="button" className="cases__title" dir="auto" aria-current={selected ? 'true' : undefined} onClick={onOpen}>
           {c.title}
         </button>
         <div className="tq-row__sub">
-          <span className="cases__about">
-            <Icon name={SUBJECT_ICON[c.subject.kind]} size={14} />
-            <span>{tx(SUBJECT_LABEL[c.subject.kind])}:</span> <bdi>{c.subject.label}</bdi>
+          {/* What it is about and whose it is, as one line of words. */}
+          <span className="tq-row__why">
+            {tx(SUBJECT_LABEL[c.subject.kind])}{' '}
+            <bdi>{c.subject.label}</bdi>
+            {sep}
+            {c.owner ? (
+              <>
+                {tx(C.owner)}{' '}
+                <bdi>{c.owner.name}</bdi>
+              </>
+            ) : (
+              tx(C.noOwner)
+            )}
           </span>
-          <span>{c.owner ? <bdi>{c.owner.name}</bdi> : tx(C.noOwner)}</span>
         </div>
       </div>
       <div className="tq-row__when">
-        {c.dueOn ? (
+        {c.dueOn && left !== null ? (
           <>
-            <span className="tq-row__age">{late ? tx(C.pastDue) : tx(C.dueOn, { date: day(c.dueOn) })}</span>
-            {late && <span className="tq-row__date">{tx(C.dueOn, { date: day(c.dueOn) })}</span>}
+            <span className="tq-row__age">{live ? tx(late ? C.wasDue : C.dueWhen, { when: words(left) }) : tx(C.dueOn, { date: day(c.dueOn) })}</span>
+            {live && <span className="tq-row__date">{day(c.dueOn)}</span>}
           </>
         ) : (
           <span className="tq-row__date">{tx(C.noDue)}</span>
         )}
       </div>
-      <div className="tq-row__level">
-        <Badge tone={STATUS_TONE[c.status]}>{tx(STATUS_LABEL[c.status])}</Badge>
-      </div>
+      {/* Where the group already says it (Open, In progress) the row does not repeat it. */}
+      <div className="tq-row__level">{showStatus && <Badge tone={STATUS_TONE[c.status]}>{tx(STATUS_LABEL[c.status])}</Badge>}</div>
     </li>
   )
 }
@@ -322,11 +356,14 @@ function CasePanel({ id, onClose }: { id: string; onClose: () => void }) {
               <ol className="cases__history">
                 {c.events.map((e) => (
                   <li key={e.id}>
-                    <strong>{tx(EVENT_LABEL[e.kind])}</strong>
-                    {e.kind === 'status' && e.after?.status ? <> — {tx(STATUS_LABEL[e.after.status as CaseStatus])}</> : null}
+                    <span>
+                      <strong>{tx(EVENT_LABEL[e.kind])}</strong>
+                      {e.kind === 'status' && e.after?.status ? <>: {tx(STATUS_LABEL[e.after.status as CaseStatus])}</> : null}
+                    </span>{' '}
                     <span className="cases__history-by">
-                      {' · '}
-                      <bdi>{e.actor.name}</bdi> · <time dateTime={e.at}>{dateTime(e.at)}</time>
+                      <bdi>{e.actor.name}</bdi>
+                      {locale === 'ar' ? '، ' : ', '}
+                      <time dateTime={e.at}>{dateTime(e.at)}</time>
                     </span>
                     {e.note && <p className="cases__text" dir="auto">{e.note}</p>}
                   </li>

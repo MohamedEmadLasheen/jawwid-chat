@@ -6,10 +6,7 @@ export { useCopy } from '@/features/organization/copy'
 /** PD-35 B5: escalation cases, Arabic and English side by side. */
 export const C = {
   title: { en: 'Escalations', ar: 'التصعيدات' },
-  subtitle: {
-    en: 'What a supervisor could not settle alone, escalated to the Teachers or the Operations department.',
-    ar: 'ما لم يستطع المشرف حله وحده، مُصعَّدًا إلى قسم المعلمين أو قسم العمليات.',
-  },
+  sortNeed: { en: 'Past due first, then not started', ar: 'المتجاوزة موعدها أولًا، ثم التي لم تبدأ' },
   empty: { en: 'No open escalations in this list', ar: 'لا تصعيدات مفتوحة في هذه القائمة' },
   emptyAll: { en: 'No escalations in this list', ar: 'لا تصعيدات في هذه القائمة' },
   emptyHint: {
@@ -35,6 +32,10 @@ export const C = {
   clearDue: { en: 'Clear', ar: 'مسح' },
   close: { en: 'Close', ar: 'إغلاق' },
   pastDue: { en: 'Past due', ar: 'تجاوزت موعدها' },
+  // The due day, relative to today: "Due tomorrow", "Was due 3 days ago".
+  dueWhen: { en: 'Due {when}', ar: 'موعدها {when}' },
+  wasDue: { en: 'Was due {when}', ar: 'تجاوزت موعدها {when}' },
+
   factOpenedBy: { en: 'Opened by', ar: 'فتحها' },
   moreActions: { en: 'More actions: {name}', ar: 'إجراءات أخرى: {name}' },
   // Opening

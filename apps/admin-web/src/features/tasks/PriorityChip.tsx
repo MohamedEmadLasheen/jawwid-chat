@@ -1,9 +1,11 @@
+import { useI18n } from '@/core/i18n/I18nProvider'
 import { Icon, type IconName } from '@/shared/components/Icon'
 import type { Level, TaskSummary } from './api'
 import { FINANCE, LEVEL_LABEL, useCopy } from './copy'
 import { reasonOf } from './format'
 
-const LEVEL_ICON: Record<Level, IconName> = { high: 'alert', medium: 'clock', low: 'chevronDown' }
+/** A level is an order, not an alarm: a neutral mark and a word. Urgency is the due time's to say. */
+const LEVEL_ICON: Record<Level, IconName> = { high: 'arrowUp', medium: 'minus', low: 'arrowDown' }
 
 /**
  * PD-47 priority amendment §4: never colour alone. An icon, the level's name
@@ -12,12 +14,15 @@ const LEVEL_ICON: Record<Level, IconName> = { high: 'alert', medium: 'clock', lo
  */
 export function PriorityChip({ task }: { task: Pick<TaskSummary, 'effectivePriority' | 'priorityReason' | 'source'> }) {
   const tx = useCopy()
+  const { locale } = useI18n()
   const reason = reasonOf(task, tx)
   return (
     <span className={`task-level task-level--${task.effectivePriority}`} data-testid="task-level">
       <Icon name={LEVEL_ICON[task.effectivePriority]} size={14} />
-      <span>{tx(LEVEL_LABEL[task.effectivePriority])}</span>
-      {reason && <span className="task-level__reason">{' · '}{reason}</span>}
+      <span>
+        {tx(LEVEL_LABEL[task.effectivePriority])}
+        {reason && <span className="task-level__reason">{locale === 'ar' ? '، ' : ', '}{reason}</span>}
+      </span>
     </span>
   )
 }
