@@ -18,26 +18,26 @@
 
 :root {
   /* Teal */
-  --teal: #1a5865;
-  --teal-dark: #123f4b;
-  --teal-deep: #0c2f38;
-  --teal-tint: #e6f2f2;
+  --teal: #0f4c5c;
+  --teal-dark: #0a3642;
+  --teal-deep: #06242c;
+  --teal-tint: #e2eff0;
   /* Gold */
-  --gold: #dfa855;
-  --gold-line: #b98530;
-  --gold-tint: #fbeccd;
-  --gold-text: #7a5716;
+  --gold: #e0a83f;
+  --gold-line: #c28a22;
+  --gold-tint: #fbefd2;
+  --gold-text: #7a5510;
   /* Paper */
-  --paper: #faf5e9;
-  --paper-dark: #f3ecda;
-  --hairline: #e4dac4;
-  --hairline-soft: #ede5d2;
-  --ink: #17262a;
-  --ink-muted: #5c6966;
+  --paper: #f3f5f4;
+  --paper-dark: #e8edeb;
+  --hairline: #d9e1df;
+  --hairline-soft: #e7ecea;
+  --ink: #0f2328;
+  --ink-muted: #54666a;
   /* States */
-  --terracotta: #a13c28;
-  --terracotta-tint: #f6e3da;
-  --success: #1e6a4e;
+  --terracotta: #b23a26;
+  --terracotta-tint: #f9e3dc;
+  --success: #17694b;
   --warning: #8a5a0e;
   --lilac-tint: #ece6f1;
   --lilac-text: #5a4674;
@@ -50,37 +50,37 @@
 
   /* The names the screens already read. */
   --brand-50: var(--teal-tint);
-  --brand-100: #d5e8e8;
-  --brand-200: #a9cdd0;
-  --brand-500: #2a7584;
-  --brand-600: #1f6573;
+  --brand-100: #cfe4e6;
+  --brand-200: #a3c9cd;
+  --brand-500: #1c7483;
+  --brand-600: #14606f;
   --brand-700: var(--teal);
   --brand-800: var(--teal-dark);
   --brand-900: var(--teal-deep);
 
-  --gold-50: #fdf6e4;
+  --gold-50: #fdf7e6;
   --gold-100: var(--gold-tint);
   --gold-400: var(--gold);
   --gold-700: var(--gold-text);
 
   --bg: var(--paper);
-  --surface: #fffefa;
-  --surface-sunken: #f5efdf;
-  --surface-hover: #f4eddb;
+  --surface: #ffffff;
+  --surface-sunken: #edf1f0;
+  --surface-hover: #eef3f2;
   --surface-selected: var(--teal-tint);
   --border: var(--hairline);
-  --border-strong: #d6cab0;
-  --border-control: #8d8468;
-  --overlay: rgba(23, 38, 42, 0.38);
+  --border-strong: #c3cfcd;
+  --border-control: #7d8e8d;
+  --overlay: rgba(6, 36, 44, 0.46);
 
-  --sidebar-bg: var(--paper);
-  --sidebar-fg: var(--ink);
-  --sidebar-muted: var(--teal);
-  --sidebar-subtle: var(--ink-muted);
-  --sidebar-hover: #f1e9d5;
-  --sidebar-active: var(--teal-tint);
-  --sidebar-line: var(--hairline);
-  --sidebar-focus: var(--teal);
+  --sidebar-bg: var(--teal-dark);
+  --sidebar-fg: #ffffff;
+  --sidebar-muted: #b9d2d6;
+  --sidebar-subtle: #8fb3b9;
+  --sidebar-hover: rgba(255, 255, 255, 0.08);
+  --sidebar-active: rgba(255, 255, 255, 0.13);
+  --sidebar-line: rgba(255, 255, 255, 0.13);
+  --sidebar-focus: var(--gold);
 
   --text: var(--ink);
   --text-muted: var(--ink-muted);
@@ -96,23 +96,23 @@
   --focus: var(--teal);
 
   --ok: var(--success);
-  --ok-soft: #e4efe7;
+  --ok-soft: #e1efe8;
   --warn: var(--warning);
   --warn-soft: var(--gold-tint);
   --danger: var(--terracotta);
   --danger-soft: var(--terracotta-tint);
 
-  --waiting: #3d5f69;
-  --waiting-soft: #e9eeea;
+  --waiting: #3a5d66;
+  --waiting-soft: #e6edec;
   --quiet: var(--ink-muted);
-  --quiet-soft: #f1ebdc;
+  --quiet-soft: #edf1f0;
   /* An internal note is gold paper: unmistakably not a message. */
   --internal: var(--gold-text);
   --internal-soft: var(--gold-tint);
 
   --chat-bg: var(--paper-dark);
   --bubble-in: var(--surface);
-  --bubble-out: #deedec;
+  --bubble-out: #d8ebec;
 
   --radius-sm: 4px;
   --radius: 6px;
@@ -222,7 +222,7 @@ body {
   font-size: var(--fs-md);
   line-height: var(--lh);
   /* Flat paper, a faint warmth at the very top and nothing else. */
-  background: linear-gradient(180deg, #f7efdc 0, var(--paper) 220px) fixed var(--paper);
+  background: var(--paper);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) body { background: var(--paper); }
@@ -986,7 +986,7 @@ html[lang='ar'] .dialog__title { font-weight: 700; }
   padding: 0;
   background: var(--paper);
 }
-.auth__brand { position: relative; display: grid; place-items: center; overflow: hidden; border-inline-end: 1px solid var(--hairline); background: #f6efdd; }
+.auth__brand { position: relative; display: grid; place-items: center; overflow: hidden; background: var(--teal-dark); }
 .auth__lattice { position: absolute; inset: 0; }
 .auth__mark { position: relative; display: grid; justify-items: center; gap: var(--space-4); padding: var(--space-6) var(--space-7); background: var(--paper); border: 1px solid var(--hairline); }
 .auth__mark .brand-logo { block-size: auto; inline-size: min(300px, 26vw); }
@@ -1083,3 +1083,287 @@ html[lang='ar'] .auth .login__title { font-weight: 700; line-height: 1.4; }
   .menu__item { min-block-size: 44px; }
   .topbar__lang, .topbar .nc-bell, .topbar__me { min-inline-size: 44px; min-block-size: 44px; }
 }
+
+/* ======================================================================== */
+/* Second pass: depth and emphasis.                                         */
+/*                                                                          */
+/* The frame is deep teal (the rail); work happens on white sheets set on a */
+/* cool canvas; each page opens with a white masthead. Emphasis is rationed: */
+/* a solid deep-teal control is the page's one primary action, a solid       */
+/* terracotta tag is a real problem, gold marks where you are and what is    */
+/* pending. Everything else stays ink and hairline.                          */
+/* ======================================================================== */
+
+/* -------------------------------------------------------------- the frame */
+
+.sidebar { background: var(--teal-dark); border-inline-end: 0; color: #fff; }
+.rail__home { border-block-end-color: var(--sidebar-line); }
+.rail__home .brand-logo { inline-size: 54px; }
+/* On the deep rail the lockup is the light one, in both schemes. */
+:root .sidebar .brand-logo--light { display: none; }
+:root .sidebar .brand-logo--dark { display: block; }
+.rail__item--rule::before { border-block-start-color: var(--sidebar-line); }
+.rail__link { color: var(--sidebar-muted); border-radius: var(--radius-lg); }
+.rail__link:hover, .rail__link[aria-expanded='true'] { background: var(--sidebar-hover); color: #fff; }
+.rail__link[aria-current] { background: var(--sidebar-active); color: var(--gold); }
+.rail__link[aria-current]::before { background: var(--gold); inset-inline-start: -15px; }
+.rail__link:focus-visible { outline-color: var(--gold); }
+.rail__badge { border-color: var(--teal-dark); background: var(--gold); color: var(--teal-deep); }
+.rail__tip { background: var(--ink); }
+.rail__menu { border-color: var(--hairline); }
+.rail__menu-link[aria-current='page'] { background: var(--teal-tint); color: var(--teal-dark); }
+.sidebar .rail__menu :focus-visible { outline-color: var(--teal); }
+
+/* The drawer is the same frame, spelled out. */
+.sidebar__brand { border-block-end-color: var(--sidebar-line); }
+.sidebar__product { color: var(--sidebar-muted); border-inline-start-color: var(--sidebar-line); }
+.sidebar .sidebar__close { color: var(--sidebar-muted); }
+.sidebar .sidebar__close:hover:not(:disabled) { background: var(--sidebar-hover); color: #fff; }
+.nav__group-toggle, .nav__group-label { color: var(--sidebar-subtle); }
+.nav__subgroup-label { color: var(--sidebar-subtle); }
+.nav__item { color: #e8f1f2; }
+.nav__item .icon { color: var(--sidebar-muted); }
+.nav__item:hover { background: var(--sidebar-hover); color: #fff; }
+.nav__item:hover .icon { color: #fff; }
+.nav__item[aria-current='page'] { background: var(--sidebar-active); color: #fff; }
+.nav__item[aria-current='page'] .icon { color: var(--gold); }
+.sidebar .status-ring, .sidebar__footer { color: var(--sidebar-subtle); }
+.sidebar__footer { border-block-start-color: var(--sidebar-line); }
+.sidebar :focus-visible { outline-color: var(--gold); }
+@media (max-width: 1023px) { .sidebar { border-inline-end: 0; } }
+
+.topbar { background: var(--surface); border-block-end: 1px solid var(--hairline); }
+.topbar__search { background: var(--paper); border-color: transparent; }
+.topbar__search:hover { border-color: var(--border-strong); }
+.topbar__me .avatar { --avatar-bg: var(--teal); --avatar-fg: #fff; }
+.topbar .nc-bell__count { box-shadow: 0 0 0 2px var(--surface); }
+.tabbar__item[aria-current] { color: var(--teal); }
+
+/* ------------------------------------------------------------ the masthead */
+
+/* A white band across the top of the page: where you are, what this page is
+   for, its key numbers, its one primary action, its tabs on the lower edge. */
+.page { overflow-x: clip; }
+.page-header.mast {
+  position: relative;
+  isolation: isolate;
+  display: block;
+  margin-block: calc(-1 * var(--space-6)) var(--space-5);
+  padding-block: var(--space-5) var(--space-5);
+}
+.page-header.mast::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset-block: 0;
+  inset-inline: -100vw;
+  background: var(--surface);
+  border-block-end: 1px solid var(--hairline);
+}
+.mast__row { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: var(--space-3) var(--space-5); }
+.mast__lead { flex: none; align-self: center; }
+.mast .page-header__text { flex: 1 1 320px; min-inline-size: 0; }
+.mast .page-header__eyebrow { display: block; margin-block-end: 4px; font-size: 12.5px; font-weight: 600; color: var(--teal); }
+.mast__back { display: inline-flex; align-items: center; gap: 6px; margin-block-end: 6px; color: var(--teal); font-size: var(--fs-sm); font-weight: 500; text-decoration: none; }
+.mast__back:hover { text-decoration: underline; }
+.mast .page-header__title { font-size: var(--fs-title); gap: 8px 14px; }
+.mast .page-header__subtitle { margin-block-start: 4px; max-inline-size: 68ch; }
+.mast .page-header__actions { flex: none; gap: 8px; }
+.mast--tabs { padding-block-end: 0; }
+.mast__tabs { margin-block-start: var(--space-4); }
+.mast__tabs .seg, .mast__tabs .ts-tabs { border-block-end: 0; }
+@media (max-width: 767px) {
+  .page-header.mast { margin-block: calc(-1 * var(--space-4)) var(--space-4); padding-block: var(--space-4); }
+  .mast--tabs { padding-block-end: 0; }
+  .mast .page-header__subtitle { display: none; }
+}
+
+/* Key numbers in the masthead: plain figures divided by hairlines. One may be
+   urgent (terracotta) and one may be the key figure (deep teal); the rest are ink. */
+.figures { display: flex; flex-wrap: wrap; gap: 0; margin: var(--space-4) 0 0; padding: 0; border-block-start: 1px solid var(--hairline-soft); }
+.mast--tabs .figures { border-block-end: 1px solid var(--hairline-soft); }
+.figure {
+  display: grid;
+  align-content: start;
+  gap: 1px;
+  min-inline-size: 132px;
+  padding: 12px var(--space-5) 12px 0;
+  padding-inline: 0 var(--space-5);
+  margin-inline-end: var(--space-5);
+  border: 0;
+  border-inline-end: 1px solid var(--hairline-soft);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  text-decoration: none;
+}
+.figure:last-child { border-inline-end: 0; margin-inline-end: 0; }
+.figure__label { font-size: 12.5px; color: var(--ink-muted); }
+.figure__value { margin: 0; display: flex; align-items: baseline; gap: 6px; }
+.figure__n { font-family: var(--display); font-size: 26px; font-weight: 600; line-height: 1.2; font-variant-numeric: tabular-nums lining-nums; color: var(--ink); unicode-bidi: isolate; }
+.figure__unit { font-size: var(--fs-xs); color: var(--ink-muted); }
+.figure__note { margin: 0; font-size: var(--fs-xs); color: var(--ink-muted); }
+.figure--key .figure__n { color: var(--teal); }
+.figure--urgent .figure__n, .figure--urgent .figure__note { color: var(--terracotta); }
+.figure--quiet .figure__n { color: var(--border-control); }
+.figure--link { cursor: pointer; border-radius: 0; }
+.figure--link:hover .figure__label { color: var(--teal); text-decoration: underline; }
+.figure--link[aria-pressed='true'] { box-shadow: inset 0 -2px 0 var(--teal); }
+@media (max-width: 767px) {
+  .figures { display: grid; grid-template-columns: 1fr 1fr; }
+  .figure { min-inline-size: 0; margin-inline-end: 0; padding-inline: 0 var(--space-3); border-inline-end: 0; }
+  .figure__n { font-size: 22px; }
+}
+
+/* ---------------------------------------------------------------- sheets */
+
+/* Work sits on white sheets; context and navigation sit on the canvas. */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4) var(--space-5) var(--space-5);
+}
+.card--flush { padding: 0; overflow: hidden; }
+.card--flush .card__header { padding: var(--space-4) var(--space-5) 0; }
+.card__title { font-family: var(--font); font-size: var(--fs-md); font-weight: 600; line-height: 1.4; }
+html[lang='ar'] .card__title { font-family: var(--font-ar); font-weight: 600; }
+.sheet { background: var(--surface); border: 1px solid var(--hairline); border-radius: var(--radius-lg); }
+.sheet__head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); min-block-size: 48px; padding: 8px var(--space-4); border-block-end: 1px solid var(--hairline-soft); }
+.sheet__title { margin: 0; font-size: var(--fs-md); font-weight: 600; }
+.sheet__count { margin-inline-start: 8px; color: var(--ink-muted); font-weight: 500; font-variant-numeric: tabular-nums; }
+.sheet__body { padding: var(--space-4); }
+.sheet__body--flush { padding: 0; }
+/* On the canvas: a labelled group with no surface of its own. */
+.aside-group { padding: 0; }
+.aside-group + .aside-group { margin-block-start: var(--space-5); padding-block-start: var(--space-5); border-block-start: 1px solid var(--hairline); }
+.aside-group__title { margin: 0 0 var(--space-2); font-size: 12.5px; font-weight: 600; color: var(--ink-muted); }
+
+/* A table is a sheet: white, hairline frame, a quiet head. */
+.table-wrap { background: var(--surface); border: 1px solid var(--hairline); border-radius: var(--radius-lg); }
+.table th { background: var(--paper); color: var(--ink-muted); font-weight: 600; border-block-end: 1px solid var(--hairline); padding-block: 10px; }
+.table th:first-child, .table td:first-child { padding-inline-start: var(--space-4); }
+.table th:last-child, .table td:last-child { padding-inline-end: var(--space-4); }
+.table td { padding-block: 11px; }
+.table tbody tr:last-child td { border-block-end: 0; }
+.table tbody tr:hover { background: var(--surface-hover); }
+.card:not(.card--flush) > .table th { background: var(--paper); }
+
+/* The ledger is a sheet too. */
+.ledger { background: var(--surface); border: 1px solid var(--hairline); border-radius: var(--radius-lg); }
+.ledger__cell:first-child { padding-inline-start: var(--space-4); }
+@media (max-width: 767px) { .ledger__cell:nth-child(odd) { padding-inline-start: var(--space-3); } }
+.kpi-grid, .grid--metrics, .status-tiles, .stat-row { background: var(--surface); border: 1px solid var(--hairline); border-radius: var(--radius-lg); overflow: hidden; }
+
+/* --------------------------------------------------------------- emphasis */
+
+/* The one primary action is solid deep teal. Secondary controls are white
+   with a hairline; tertiary ones are teal words. Nothing is outlined in gold. */
+.btn { background: var(--surface); border-color: var(--border-strong); color: var(--ink); font-weight: 500; }
+.btn:hover:not(:disabled) { background: var(--surface-hover); border-color: var(--border-control); }
+.btn--primary { background: var(--teal); border-color: var(--teal); color: #fff; font-weight: 600; }
+.btn--primary:hover:not(:disabled) { background: var(--teal-dark); border-color: var(--teal-dark); }
+.btn--primary:active:not(:disabled) { background: var(--teal-deep); }
+.btn--ghost { background: transparent; border-color: transparent; color: var(--teal); }
+.btn--ghost:hover:not(:disabled) { background: var(--teal-tint); border-color: transparent; color: var(--teal-dark); }
+.btn--danger { background: var(--surface); border-color: var(--terracotta); color: var(--terracotta); }
+.btn--danger:hover:not(:disabled) { background: var(--terracotta); color: #fff; }
+
+/* Statuses. A problem is a solid terracotta tag; something waiting on someone
+   is a gold tag; where things stand is a teal tag; the rest is a dot and a word. */
+.badge { font-size: var(--fs-sm); }
+.badge--now, .badge--danger {
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--terracotta) !important;
+  color: #fff;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+}
+.badge--now:not(:has(.badge__dot))::before, .badge--danger:not(:has(.badge__dot))::before { display: none; }
+.badge--now .badge__dot, .badge--danger .badge__dot { border-color: #fff; background: #fff; }
+.badge--today, .badge--warn, .badge--gold, .badge--internal {
+  gap: 6px;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--gold-tint) !important;
+  color: var(--gold-text);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  --dot: var(--gold-line);
+}
+.badge--today:not(:has(.badge__dot))::before, .badge--warn:not(:has(.badge__dot))::before, .badge--gold:not(:has(.badge__dot))::before,
+.badge--today .badge__dot, .badge--warn .badge__dot, .badge--gold .badge__dot { background: var(--gold-line); border-color: var(--gold-line); }
+.badge--info, .badge--coverage {
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--teal-tint) !important;
+  color: var(--teal-dark);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+}
+.badge--info:not(:has(.badge__dot))::before, .badge--coverage:not(:has(.badge__dot))::before { display: none; }
+.badge--ok { --dot: var(--success); color: var(--ink); }
+.badge--ok:not(:has(.badge__dot))::before, .badge--ok .badge__dot { background: var(--success); border-color: var(--success); }
+
+/* A count that asks for attention is solid; one that only informs is plain. */
+.count { display: inline-grid; place-items: center; min-inline-size: 20px; block-size: 20px; padding-inline: 6px; border-radius: 10px; background: var(--teal); color: #fff; font-size: 11.5px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1; }
+.count--urgent { background: var(--terracotta); }
+.count--quiet { background: var(--surface-sunken); color: var(--ink-muted); }
+
+.chip { background: var(--surface); border-color: var(--hairline); }
+.chip:hover { background: var(--surface); }
+.chip[aria-pressed='true'] { background: var(--teal); border-color: var(--teal); color: #fff; font-weight: 600; }
+.chip[aria-pressed='true'] .chip__count { color: rgba(255, 255, 255, 0.82); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .chip[aria-pressed='true'] { background: var(--accent); border-color: var(--accent); color: #fff; }
+}
+.seg__item[aria-pressed='true'], .seg__item[aria-selected='true'], .seg__item[aria-current] { color: var(--teal); border-block-end-color: var(--teal); }
+.seg__item[aria-pressed='true'] .seg__count { color: var(--teal); }
+
+.notice { background: var(--surface); border: 1px solid var(--hairline); border-inline-start: 3px solid var(--gold-line); border-radius: var(--radius); padding: 8px var(--space-3); }
+.notice--info { background: var(--surface); border-inline-start-color: var(--teal); }
+
+.input, .select, .textarea, .composer__input { background-color: var(--surface); border-color: var(--border-strong); }
+
+/* --------------------------------------------------------------- one row */
+
+/* One stated action, the rest behind "⋯". */
+.row-actions2 { display: inline-flex; align-items: center; justify-content: flex-end; gap: 4px; }
+.row-actions2 .btn--sm { min-block-size: 30px; padding-inline: 10px; }
+.row-actions2__more .menu__button { color: var(--ink-muted); }
+.row-actions2__more .menu__button:hover { color: var(--teal-dark); background: var(--teal-tint); }
+td.cell-actions, th.cell-actions { inline-size: 1%; white-space: nowrap; text-align: end; }
+[dir='rtl'] td.cell-actions { text-align: left; }
+@media (max-width: 767px) {
+  .row-actions2 .btn--sm { min-block-size: 40px; }
+  .row-actions2__more .menu__button { inline-size: 44px; min-block-size: 44px; }
+}
+
+/* -------------------------------------------------------- page compositions */
+
+/* Work beside its context: the main column on a sheet, a narrower column of
+   facts on the canvas. Collapses to one column below 1100px. */
+.split { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: var(--space-5) var(--space-6); align-items: start; }
+.split--wide-aside { grid-template-columns: minmax(0, 1fr) 380px; }
+.split > aside { position: sticky; inset-block-start: 0; }
+@media (max-width: 1099px) { .split, .split--wide-aside { grid-template-columns: minmax(0, 1fr); } .split > aside { position: static; } }
+
+/* A toolbar that belongs to the sheet under it. */
+.sheet-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px var(--space-3); padding: 10px var(--space-4); border-block-end: 1px solid var(--hairline-soft); }
+.sheet-bar .search { flex: 1 1 240px; max-inline-size: 340px; }
+.sheet-bar__end { margin-inline-start: auto; display: flex; align-items: center; gap: 8px; }
+
+/* The auth lockup card on the deep brand side. */
+.auth__mark { background: var(--surface); border: 0; border-radius: var(--radius-lg); }
+
+/* The lockup at the head of the rail sits on its own white tile, so it reads on the deep frame. */
+.rail__home .brand { display: grid; place-items: center; inline-size: 52px; block-size: 36px; border-radius: var(--radius); background: #fff; }
+.rail__home .brand-logo { inline-size: 44px; }
+:root .sidebar .rail__home .brand-logo--light { display: block; }
+:root .sidebar .rail__home .brand-logo--dark { display: none; }
+.sidebar__brand-link .brand { padding: 5px 8px; border-radius: var(--radius); background: #fff; }
+:root .sidebar .sidebar__brand-link .brand-logo--light { display: block; }
+:root .sidebar .sidebar__brand-link .brand-logo--dark { display: none; }

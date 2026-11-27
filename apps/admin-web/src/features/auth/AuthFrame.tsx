@@ -20,7 +20,7 @@ function Lattice() {
     <svg className="auth__lattice" aria-hidden="true" focusable="false" width="100%" height="100%">
       <defs>
         <pattern id={id} width="112" height="112" patternUnits="userSpaceOnUse">
-          <g fill="none" stroke="var(--teal)" strokeWidth="0.8" strokeOpacity="0.34">
+          <g fill="none" stroke="#a9d3d8" strokeWidth="0.8" strokeOpacity="0.3">
             {/* The star: an upright square and the same square turned. */}
             <rect x="32" y="32" width="48" height="48" />
             <path d="M56 22 90 56 56 90 22 56Z" />
