@@ -1,6 +1,6 @@
 import { ATTENDANCE_PATH, GRANTS_PATH } from '@/features/teacher-records/paths'
 import { SALES_PIPELINE_PATH } from '@/features/sales-pipeline/paths'
-import { isSuperAdmin, navAreas, type DepartmentAccess, type NavArea } from '@/core/permissions/capabilities'
+import { isManager, isSuperAdmin, navAreas, type DepartmentAccess, type NavArea } from '@/core/permissions/capabilities'
 import type { StaffRole } from '@/shared/types/domain'
 import {
   ADMIN_GROUPS,
@@ -214,6 +214,15 @@ const AREA_ICON: Record<OperatorArea, IconName> = {
   'teacher-grants': 'grants',
 }
 
+/**
+ * Team: the staff a manager (or the super admin) may list, each opening their
+ * profile. Not an area: like /profile it has no gate of its own, and the
+ * server's /staff-profiles answers decide what the page shows.
+ */
+export const TEAM_PATH = '/team'
+export const TEAM_LABEL: Bilingual = { en: 'Team', ar: 'الفريق' }
+const TEAM_ENTRY: NavEntry = { key: 'team', path: TEAM_PATH, icon: 'staff', label: { text: TEAM_LABEL }, inDevelopment: false }
+
 /** The super admin's name for /chat, distinct from the read-only section's. */
 export const ADMIN_CHAT_LABEL: Bilingual = { en: 'Chat', ar: 'الدردشة' }
 
@@ -337,6 +346,7 @@ function adminDestinations(): Map<DestinationKey, NavEntryGroup[]> {
       inDevelopment: false,
     })
   }
+  out.get('people')?.[0]?.entries.push({ ...TEAM_ENTRY })
   organizePeople(out)
   // A destination with one group needs no heading.
   for (const groups of out.values()) {
@@ -352,7 +362,7 @@ function adminDestinations(): Map<DestinationKey, NavEntryGroup[]> {
  * pages alone).
  */
 export const PEOPLE_GROUPS: readonly { key: string; label: Bilingual; members: readonly string[] }[] = [
-  { key: 'accounts', label: { en: 'Staff & accounts', ar: 'الموظفون والحسابات' }, members: ['accounts', 'users'] },
+  { key: 'accounts', label: { en: 'Staff & accounts', ar: 'الموظفون والحسابات' }, members: ['accounts', 'users', 'team'] },
   { key: 'teachers', label: { en: 'Teachers', ar: 'المعلمون' }, members: ['teachers', 'teacher-profiles', 'teacher-attendance', 'teacher-grants'] },
   { key: 'families', label: { en: 'Families', ar: 'العائلات' }, members: ['parents', 'students'] },
   { key: 'organization', label: { en: 'Organization', ar: 'الهيكل التنظيمي' }, members: ['teams', 'organization'] },
@@ -395,6 +405,12 @@ function operatorDestinations(role: StaffRole, access: DepartmentAccess): Map<De
       inDevelopment: false,
     })
     out.set(dest, groups)
+  }
+  // A manager lists their own team.
+  if (isManager(role)) {
+    const groups = out.get('people') ?? [{ key: 'people', label: null, entries: [] }]
+    groups[0]!.entries.push({ ...TEAM_ENTRY })
+    out.set('people', groups)
   }
   organizePeople(out)
   return out
