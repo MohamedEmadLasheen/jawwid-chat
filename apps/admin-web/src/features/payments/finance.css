@@ -1,5 +1,5 @@
 /* What Instalments and Payments share: an amount set as a numeral with its
-   currency small beside it, and the ledger at the head of both pages. */
+   currency small beside it, and the touch sizes of both pages on a phone. */
 
 .money { display: inline-flex; align-items: baseline; gap: 5px; white-space: nowrap; }
 .money__n { font-family: var(--display); font-size: 17px; font-weight: 600; line-height: 1.2; font-variant-numeric: tabular-nums lining-nums; color: var(--ink); }
@@ -10,41 +10,11 @@ html[lang='ar'] .money__c { font-size: 12.5px; }
 .money--lg .money__n { font-size: var(--fs-kpi); line-height: 1.15; }
 .money--lg .money__c { font-size: var(--fs-sm); }
 
-/* The numeral and its currency are two items in the page's own direction: the
-   numeral reads first, then its currency, and a long figure lets the currency wrap. */
-.fin { margin-block-end: var(--space-5); }
-.fin__ledger { margin-block-end: 0; }
-.fin .ledger__cell { min-block-size: 92px; }
-.fin__value { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 6px; }
-.fin__value .ledger__unit { margin-inline-start: 0; font-weight: 500; }
-.fin .ledger__note { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.fin a.ledger__cell { transition: background var(--dur-fast) var(--ease-out); }
-.fin a.ledger__cell:focus-visible { outline-offset: -2px; }
-
-/* Phone width: the ledger is a strip, not a screen. Small numerals, tight cells,
-   and the page's lists start above the fold. */
 @media (max-width: 767px) {
-  .pay-page .page-header, .in-page .page-header { margin-block-end: var(--space-3); }
-  .pay-page .page-header__subtitle, .in-page .page-header__subtitle { display: none; }
-  .fin { margin-block-end: var(--space-3); }
-  .fin .ledger__cell { min-block-size: 0; gap: 0; padding-block: 7px 6px; }
-  .fin .ledger__label { font-size: 12px; }
-  html[lang='ar'] .fin .ledger__label { font-size: 12.5px; }
-  .fin .ledger__value { font-size: 20px; line-height: 1.25; }
-  .fin .fin__value--long { font-size: 16px; }
-  .fin .ledger__unit { font-size: 11px; }
-  .fin .ledger__note { font-size: 11.5px; }
-  /* An odd last cell takes the whole row instead of leaving half of it empty. */
-  .fin--payments .ledger__cell:last-child:nth-child(odd) { grid-column: 1 / -1; }
-  /* Instalments has five: its own three across, the two from Payments beneath. */
-  .fin--instalments .ledger { grid-template-columns: repeat(6, minmax(0, 1fr)); }
-  .fin--instalments .ledger__cell { grid-column: span 2; padding-inline: var(--space-2); }
-  .fin--instalments .ledger__cell:nth-child(n + 4) { grid-column: span 3; }
-  .fin--instalments .ledger__cell:nth-child(4):last-child { grid-column: 1 / -1; }
-  .fin--instalments .ledger__cell:is(:nth-child(1), :nth-child(4)) { padding-inline-start: 3px; }
-  .fin--instalments .ledger__value { font-size: 18px; }
-  .fin--instalments .fin__value--long { font-size: 14px; }
-
+  /* The masthead's figures are a strip, not a screen: the lists start above the fold. */
+  :is(.pay-page, .in-page) .figures { margin-block-start: var(--space-3); }
+  :is(.pay-page, .in-page) .figure { padding-block: 8px; }
+  :is(.pay-page, .in-page) .figure__n { font-size: 20px; }
   /* Everything a thumb presses on these two pages is at least 44px tall. */
   :is(.pay-page, .in-page) :is(.chip, .btn, .btn--sm, .seg__item) { min-block-size: 44px; }
   :is(.pay-page, .in-page) .btn--icon, :is(.pay-page, .in-page) .btn--icon.btn--sm { min-inline-size: 44px; }

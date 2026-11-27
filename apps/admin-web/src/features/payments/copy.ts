@@ -45,7 +45,7 @@ export const PAY = {
   seeTransactions: { en: 'See transactions', ar: 'عرض المعاملات' },
   backToPending: { en: 'Back to pending', ar: 'العودة إلى قيد الانتظار' },
   transferredLine: { en: 'Transferred {date}', ar: 'حُوِّل {date}' },
-  viewReceipt: { en: 'View the receipt for {label}', ar: 'عرض إيصال {label}' },
+  keysMove: { en: 'move', ar: 'تنقّل' },
   imageFailed: { en: 'The image did not load. Open the file instead.', ar: 'تعذّر تحميل الصورة. افتح الملف بدلًا منها.' },
   // The ledger's rules, one line each.
   rules: { en: 'Ledger rules', ar: 'قواعد السجل' },
@@ -410,6 +410,10 @@ export const LED = {
   noTransactionsHint: { en: 'Card, bank transfer and cash alike. None is recorded yet.', ar: 'بالبطاقة أو بالتحويل البنكي أو نقدًا. لم تُسجَّل دفعة بعد.' },
   noTransactionsFiltered: { en: 'None fits these filters.', ar: 'لا دفعة توافق عوامل التصفية هذه.' },
   filtersOn: { en: 'Filters ({n})', ar: 'عوامل التصفية ({n})' },
+  removeFilter: { en: 'Remove the filter: {label}', ar: 'إزالة التصفية: {label}' },
+  open: { en: 'Open', ar: 'فتح' },
+  openPayment: { en: 'Open payment', ar: 'فتح الدفعة' },
+  more: { en: 'More actions: {name}', ar: 'إجراءات أخرى: {name}' },
   seeReceipts: { en: 'See receipts to confirm', ar: 'عرض الإيصالات بانتظار التأكيد' },
   refundedInline: { en: 'refunded', ar: 'المسترد' },
   transactions: { en: 'Transactions', ar: 'المعاملات' },
@@ -655,6 +659,13 @@ export function cardLabel(card: Transaction['card']): string | null {
   const last4 = card.last4 ? `•••• ${card.last4}` : ''
   const wallet = card.wallet ? ` (${WALLET[card.wallet] ?? card.wallet})` : ''
   return `${[brand, last4].filter(Boolean).join(' ')}${wallet}`
+}
+
+/** A day as a ledger heads it: "Thursday, 26 November 2026". The day is a calendar day, never shifted by the viewer's zone. */
+export function dayHeading(day: string, locale: 'ar' | 'en'): string {
+  return new Intl.DateTimeFormat(locale === 'ar' ? 'ar-EG-u-nu-latn' : 'en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }).format(
+    new Date(`${day}T00:00:00Z`),
+  )
 }
 
 /** Arabic counts days by number: يوم واحد، يومان، 3–10 أيام، 11+ يومًا. */

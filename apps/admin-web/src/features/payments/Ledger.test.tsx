@@ -165,6 +165,13 @@ afterEach(() => {
 })
 
 const tabs = () => screen.getByRole('group', { name: 'Payments' })
+/** The ledger's fields fold behind "Filters" and the choice is remembered: open them if they are folded. */
+async function openFilters() {
+  const filters = screen.getByRole('region', { name: 'Filters' })
+  const toggle = within(filters).getByRole('button', { name: /^Filters/ })
+  if (toggle.getAttribute('aria-expanded') !== 'true') await userEvent.click(toggle)
+  return filters
+}
 
 describe('Payments > Transactions', () => {
   it('adds Transactions and Card attempts beside the existing tabs; no Stripe events without canReconcile', async () => {
@@ -184,7 +191,9 @@ describe('Payments > Transactions', () => {
     renderWithProviders(<AppRoutes />, { staff: opsManager, route: '/payments?tab=transactions' })
     const table = await screen.findByRole('table', { name: 'Transactions' })
     expect(qs(listCalls()[0]!)).toBe('')
-    const [, alpha, beta] = within(table).getAllByRole('row')
+    // The ledger is grouped by day: after the column heads comes the day's heading, then its rows.
+    const [, day, alpha, beta] = within(table).getAllByRole('row')
+    expect(within(day!).getByRole('rowheader')).toHaveTextContent('21 October 2026')
     expect(within(alpha!).getByText('Family Alpha')).toBeInTheDocument()
     expect(within(alpha!).getByText('Child A1')).toBeInTheDocument()
     expect(within(alpha!).getByText('3-month subscription')).toBeInTheDocument()
@@ -212,7 +221,7 @@ describe('Payments > Transactions', () => {
     serve()
     renderWithProviders(<AppRoutes />, { staff: opsManager, route: '/payments?tab=transactions' })
     await screen.findByRole('table', { name: 'Transactions' })
-    const filters = screen.getByRole('region', { name: 'Filters' })
+    const filters = await openFilters()
     expect(filters.querySelector('select')).toBeNull()
     const status = within(filters).getByLabelText('Status')
     expect(status).toHaveAttribute('role', 'combobox')
@@ -235,7 +244,7 @@ describe('Payments > Transactions', () => {
     serve()
     renderWithProviders(<AppRoutes />, { staff: opsManager, route: '/payments?tab=transactions' })
     await screen.findByRole('table', { name: 'Transactions' })
-    const filters = screen.getByRole('region', { name: 'Filters' })
+    const filters = await openFilters()
     await userEvent.type(within(filters).getByLabelText('Paid from'), '2026-10-31')
     await userEvent.type(within(filters).getByLabelText('Paid to'), '2026-10-01')
     expect(await screen.findByText('The period ends before it starts.')).toBeInTheDocument()
@@ -251,10 +260,11 @@ describe('Payments > Transactions', () => {
     )
     renderWithProviders(<AppRoutes />, { staff: opsManager, route: '/payments?tab=transactions' })
     const table = await screen.findByRole('table', { name: 'Transactions' })
-    expect(within(table).getAllByRole('row')).toHaveLength(3)
+    // The column heads, the day's heading, and its two payments; the next page joins the same day.
+    expect(within(table).getAllByRole('row')).toHaveLength(4)
     await userEvent.click(screen.getByRole('button', { name: 'Load more' }))
     expect(await within(table).findByText('Family Gamma')).toBeInTheDocument()
-    expect(within(table).getAllByRole('row')).toHaveLength(4)
+    expect(within(table).getAllByRole('row')).toHaveLength(5)
     expect(within(table).getByText('Family Alpha')).toBeInTheDocument()
     expect(listCalls().map(qs)).toContain('cursor=cur-2')
     expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument()
@@ -395,7 +405,7 @@ describe('Payments > Transactions', () => {
     )
     renderWithProviders(<AppRoutes />, { staff: opsManager, route: '/payments?tab=transactions' })
     const table = await screen.findByRole('table', { name: 'Transactions' })
-    const [, alpha, beta] = within(table).getAllByRole('row')
+    const [, , alpha, beta] = within(table).getAllByRole('row')
     expect(within(alpha!).getByText('Overpaid: refund or credit')).toBeInTheDocument()
     expect(within(beta!).queryByText(/^Overpaid/)).not.toBeInTheDocument()
 
@@ -503,7 +513,7 @@ describe('Payments > Card attempts', () => {
     const filter = screen.getByRole('group', { name: 'Status' })
     expect(within(filter).getByRole('button', { name: 'Failed' })).toHaveAttribute('aria-pressed', 'true')
 
-    const [, alpha, beta, gamma] = within(table).getAllByRole('row')
+    const [, , alpha, beta, gamma] = within(table).getAllByRole('row')
     expect(within(alpha!).getByText('Family Alpha')).toBeInTheDocument()
     expect(within(alpha!).getByText('Renewal, 1 month')).toBeInTheDocument()
     expect(within(alpha!).getByText(/600\.00/)).toBeInTheDocument()
@@ -561,7 +571,7 @@ describe('Payments > Stripe events', () => {
     await userEvent.click(await within(tabs()).findByRole('button', { name: 'Stripe events' }))
     const table = await screen.findByRole('table', { name: 'Stripe events' })
     expect(qs(calls('GET', /\/stripe\/events/)[0]!)).toBe('')
-    const [, refund, completed] = within(table).getAllByRole('row')
+    const [, , refund, completed] = within(table).getAllByRole('row')
     expect(within(refund!).getByText('refund.created')).toBeInTheDocument()
     expect(within(refund!).getByText('Refund waiting for its payment')).toBeInTheDocument()
     expect(within(refund!).getByText('Live')).toBeInTheDocument()
@@ -569,7 +579,7 @@ describe('Payments > Stripe events', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Load more' }))
     expect(await within(table).findByText('charge.refunded')).toBeInTheDocument()
-    expect(within(table).getAllByRole('row')).toHaveLength(4)
+    expect(within(table).getAllByRole('row')).toHaveLength(5)
 
     const filters = screen.getByRole('region', { name: 'Filters' })
     await chooseOption(userEvent, within(filters).getByLabelText('Outcome'), 'refund_deferred')
