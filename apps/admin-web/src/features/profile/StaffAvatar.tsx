@@ -14,17 +14,19 @@ export function StaffAvatar({
 }: {
   name: string
   url: string | null
-  size?: number
+  /** A size in pixels, or `lead`: the record's masthead, sized by the stylesheet for each screen. */
+  size?: number | 'lead'
 }) {
   const tx = useCopy()
   const [failed, setFailed] = useState(false)
   useEffect(() => setFailed(false), [url])
 
-  const style = { inlineSize: size, blockSize: size, fontSize: Math.max(12, Math.round(size * 0.38)) }
+  const lead = size === 'lead'
+  const style = lead ? undefined : { inlineSize: size, blockSize: size, fontSize: Math.max(12, Math.round(size * 0.38)) }
   if (url && !failed) {
     return (
       <img
-        className="sp-avatar"
+        className={lead ? 'sp-avatar sp-avatar--lead' : 'sp-avatar'}
         src={url}
         alt={tx(T.avatarOf, { name })}
         style={style}
@@ -34,7 +36,12 @@ export function StaffAvatar({
     )
   }
   return (
-    <span className="sp-avatar sp-avatar--initials" style={style} role="img" aria-label={tx(T.avatarOf, { name })}>
+    <span
+      className={lead ? 'sp-avatar sp-avatar--initials sp-avatar--lead' : 'sp-avatar sp-avatar--initials'}
+      style={style}
+      role="img"
+      aria-label={tx(T.avatarOf, { name })}
+    >
       {initials(name)}
     </span>
   )

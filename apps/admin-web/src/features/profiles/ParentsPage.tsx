@@ -2,14 +2,16 @@ import { useDeferredValue, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Avatar } from '@/shared/components/Avatar'
+import { Badge } from '@/shared/components/Badge'
 import { Icon } from '@/shared/components/Icon'
-import { PageHeader } from '@/shared/components/PageHeader'
+import { PageHeader, type MastFigure } from '@/shared/components/PageHeader'
+import { RowActions } from '@/shared/components/RowActions'
 import { SearchField } from '@/shared/components/SearchField'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
-import { CountTabs } from './CountTabs'
+import { countWords } from '@/features/instalments/copy'
 import { parentPath, type ParentAccessFilter, type ParentLocationFilter } from './api'
 import { LocationText } from '@/shared/location/LocationPicker'
-import { P, describeError, isProfileRefusal, useCopy } from './copy'
+import { CHILDREN_COUNT, P, describeError, isProfileRefusal, useCopy } from './copy'
 import { useParents } from './hooks'
 import { IntakeDialog } from '@/features/intake/IntakeDialog'
 import { I } from '@/features/intake/copy'
@@ -19,10 +21,21 @@ import './profiles.css'
 /** The list answers at most this many rows; past it the count is a floor, not a total. */
 const LIST_LIMIT = 200
 
+const ACCESS: ReadonlyArray<{ value: ParentAccessFilter; label: keyof typeof P }> = [
+  { value: 'all', label: 'allParents' },
+  { value: 'locked', label: 'accessLocked' },
+  { value: 'grace', label: 'accessGrace' },
+]
+
 /**
  * PD-17: the parents this staff member may open -- every parent for the super
  * admin and the Operations Manager, the parents of the families they reach for
  * an Operations supervisor. The server decides the list.
+ *
+ * A directory: the masthead says how many are listed and holds "Add family";
+ * one sheet holds the list with the search and filters that narrow it. A row is
+ * who the parent is, their family and children in one line, and where they are;
+ * the whole row opens the file.
  */
 export function ParentsPage({ eyebrow }: { eyebrow?: string }) {
   const tx = useCopy()
@@ -56,18 +69,28 @@ export function ParentsPage({ eyebrow }: { eyebrow?: string }) {
   const intake = useIntakeOptions()
   const [adding, setAdding] = useState(false)
   const navigate = useNavigate()
-  // The list carries no totals per filter: only the open tab can say how many it holds.
-  const shown = list.data ? (list.data.truncated && items.length >= LIST_LIMIT ? `${number(items.length)}+` : number(items.length)) : undefined
-  const count = (tab: ParentAccessFilter) => (tab === access ? shown : undefined)
   const searching = deferred !== '' || access !== 'all' || location !== 'all'
 
+  // The list carries no totals per filter: the figure counts the list that is open.
+  const figures: MastFigure[] = list.data
+    ? [
+        {
+          key: 'count',
+          label: access === 'locked' ? tx(P.accessLocked) : access === 'grace' ? tx(P.accessGrace) : deferred !== '' || location !== 'all' ? tx(P.results) : tx(P.parentsTitle),
+          value: list.data.truncated && items.length >= LIST_LIMIT ? `${number(items.length)}+` : number(items.length),
+          tone: access === 'locked' && items.length > 0 ? 'urgent' : undefined,
+        },
+      ]
+    : []
+
   return (
-    <div className="page pp pp-list">
+    <div className="page dir">
       <div className="page__inner">
         <PageHeader
           eyebrow={eyebrow}
           title={tx(P.parentsTitle)}
           subtitle={tx(P.parentsSubtitle)}
+          figures={figures}
           actions={
             intake.data?.ready && (
               <button
@@ -77,103 +100,113 @@ export function ParentsPage({ eyebrow }: { eyebrow?: string }) {
                 aria-describedby={intake.data.noTeam ? 'add-family-no-team' : undefined}
                 onClick={() => setAdding(true)}
               >
+                <Icon name="plus" size={16} />
                 {tx(I.addFamily)}
               </button>
             )
           }
         />
         {intake.data?.ready && intake.data.noTeam && (
-          <p id="add-family-no-team" className="notice">
+          <p id="add-family-no-team" className="notice dir-notice">
             {tx(intake.data.standing === 'sales_manager' ? I.noTeamSales : intake.data.standing === 'operations_manager' ? I.noTeamOperations : I.noTeamAny)}
           </p>
         )}
-        <CountTabs<ParentAccessFilter>
-          label={tx(P.subscriptionFilter)}
-          value={access}
-          onChange={setAccess}
-          tabs={[
-            { value: 'all', label: tx(P.allParents), count: count('all') },
-            { value: 'locked', label: tx(P.accessLocked), count: count('locked') },
-            { value: 'grace', label: tx(P.accessGrace), count: count('grace') },
-          ]}
-        />
-        <div className="pp-tools">
-          <SearchField value={q} onChange={setQ} label={tx(P.search)} clearLabel={t('common.cancel')} />
-          {/* One filter, so one chip: pressed it narrows the list, pressed again it is removed. */}
-          <div className="chips" role="group" aria-label={tx(P.location)}>
-            <button
-              type="button"
-              className="chip"
-              aria-pressed={location === 'missing'}
-              onClick={() => setLocation(location === 'missing' ? 'all' : 'missing')}
-            >
-              {tx(P.missingLocation)}
-              {location === 'missing' && (
-                <span className="pp-chip-x" aria-hidden="true">
-                  <Icon name="close" size={13} />
-                </span>
-              )}
-            </button>
-          </div>
-        </div>
         {adding && intake.data && <IntakeDialog options={intake.data} initial={{ kind: 'new' }} onClose={() => setAdding(false)} />}
-        {isProfileRefusal(list.error) ? (
-          <EmptyState icon="lock" title={describeError(list.error, locale)} />
-        ) : (
-          <QueryBoundary
-            isLoading={list.isLoading}
-            error={list.error}
-            isEmpty={items.length === 0}
-            emptyTitle={tx(P.noParents)}
-            emptyHint={tx(searching ? P.noParentsFiltered : P.noParentsHint)}
-            onRetry={() => void list.refetch()}
-          >
-            <div className="table-wrap">
-              <table className="table pp-stack">
+        <section className="sheet dir-sheet">
+          <div className="sheet-bar">
+            <SearchField value={q} onChange={setQ} label={tx(P.search)} clearLabel={t('common.cancel')} />
+            <div className="chips" role="group" aria-label={tx(P.subscriptionFilter)}>
+              {ACCESS.map((a) => (
+                <button key={a.value} type="button" className="chip" aria-pressed={access === a.value} onClick={() => setAccess(a.value)}>
+                  {tx(P[a.label])}
+                </button>
+              ))}
+            </div>
+            {/* One filter, so one chip: pressed it narrows the list, pressed again it is removed. */}
+            <div className="chips sheet-bar__end" role="group" aria-label={tx(P.location)}>
+              <button type="button" className="chip" aria-pressed={location === 'missing'} onClick={() => setLocation(location === 'missing' ? 'all' : 'missing')}>
+                <Icon name="mapPin" size={14} />
+                {tx(P.missingLocation)}
+                {location === 'missing' && (
+                  <span className="pp-chip-x" aria-hidden="true">
+                    <Icon name="close" size={13} />
+                  </span>
+                )}
+              </button>
+            </div>
+          </div>
+          {isProfileRefusal(list.error) ? (
+            <EmptyState icon="lock" title={describeError(list.error, locale)} />
+          ) : (
+            <QueryBoundary
+              isLoading={list.isLoading}
+              error={list.error}
+              isEmpty={items.length === 0}
+              emptyTitle={tx(P.noParents)}
+              emptyHint={tx(searching ? P.noParentsFiltered : P.noParentsHint)}
+              onRetry={() => void list.refetch()}
+            >
+              <table className="dir-table">
                 <thead>
                   <tr>
                     <th scope="col">{tx(P.parent)}</th>
-                    <th scope="col">{tx(P.family)}</th>
-                    <th scope="col" className="num">{tx(P.children)}</th>
+                    {access !== 'all' && <th scope="col">{tx(P.subscriptionFilter)}</th>}
                     <th scope="col">{tx(P.location)}</th>
-                    <th scope="col" aria-hidden="true" />
+                    <th scope="col" className="cell-actions" aria-hidden="true" />
                   </tr>
                 </thead>
                 <tbody>
                   {items.map((p) => (
                     <tr
                       key={p.id}
-                      className="pp-rowlink"
+                      className="dir-row"
                       onClick={(e) => {
                         // The whole row opens the file; the name is the link the keyboard uses.
                         if (!(e.target as HTMLElement).closest('a, button, input')) navigate(parentPath(p.id))
                       }}
                     >
-                      <td>
-                        <Link to={parentPath(p.id)} className="pp-cell-who">
-                          <Avatar name={p.name} seed={p.id} src={p.avatarUrl} size="sm" />
-                          <bdi>{p.name}</bdi>
-                        </Link>
-                      </td>
-                      <td data-label={tx(P.family)}><bdi>{p.family.name}</bdi></td>
-                      <td className="num" data-label={tx(P.children)}>{p.childrenCount}</td>
-                      <td data-label={tx(P.location)}>{p.location ? <LocationText value={p.location} /> : '—'}</td>
-                      <td className="pp-cell-end">
-                        {/* The name is the link; this is only a larger target for the pointer. */}
-                        <span className="row-actions" aria-hidden="true">
-                          <Link to={parentPath(p.id)} className="pp-go" tabIndex={-1}>
-                            <Icon name="chevronForward" size={16} />
-                          </Link>
+                      <td className="dir-cell-who">
+                        <span className="dir-who">
+                          <Avatar name={p.name} seed={p.id} src={p.avatarUrl} />
+                          <span className="dir-who__text">
+                            <Link to={parentPath(p.id)} className="dir-name">
+                              <bdi>{p.name}</bdi>
+                            </Link>
+                            <span className="dir-sub">
+                              <bdi>{p.family.name}</bdi>
+                              <span>{countWords(p.childrenCount, CHILDREN_COUNT, locale)}</span>
+                            </span>
+                          </span>
                         </span>
+                      </td>
+                      {/* The list says nothing of a family's state by itself: only the filter that was asked for. */}
+                      {access !== 'all' && (
+                        <td className="dir-cell-state">
+                          <Badge tone={access === 'locked' ? 'danger' : 'warn'}>{tx(access === 'locked' ? P.accessLocked : P.accessGrace)}</Badge>
+                        </td>
+                      )}
+                      <td className={p.location?.countryCode ? 'dir-cell-quiet' : 'dir-cell-quiet dir-cell-quiet--none'} data-label={tx(P.location)}>
+                        {p.location ? <LocationText value={p.location} /> : '—'}
+                      </td>
+                      <td className="cell-actions">
+                        <RowActions
+                          label={tx(P.more, { name: p.name })}
+                          primary={
+                            // The name is the link; this is only a larger target for the pointer.
+                            <Link to={parentPath(p.id)} className="btn btn--sm" tabIndex={-1} aria-hidden="true">
+                              {tx(P.open)}
+                            </Link>
+                          }
+                        />
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </div>
-            {list.data?.truncated && <p className="pp-rule">{tx(P.truncated)}</p>}
-          </QueryBoundary>
-        )}
+              {list.data?.truncated && <p className="dir-foot dir-foot--note">{tx(P.truncated)}</p>}
+            </QueryBoundary>
+          )}
+        </section>
       </div>
     </div>
   )

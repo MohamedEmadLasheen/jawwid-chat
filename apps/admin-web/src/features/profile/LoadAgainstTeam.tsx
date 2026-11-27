@@ -1,4 +1,5 @@
 import { useI18n } from '@/core/i18n/I18nProvider'
+import { Sheet } from '@/features/profiles/RecordParts'
 import type { StaffProfile, StaffSummary } from './api'
 import { T, useCopy } from './copy'
 import { useOrganization, useTeam } from './hooks'
@@ -40,26 +41,25 @@ export function LoadAgainstTeam({ profile }: { profile: StaffProfile }) {
   const averageText = number(Math.round(average * 10) / 10)
 
   return (
-    <section className="pp-sec sp-load" aria-labelledby="sp-load">
-      <div className="pp-sec__head">
-        <h2 id="sp-load" className="pp-sec__title">{tx(T.loadTitle)}</h2>
+    <Sheet id="sp-load" section="load" title={tx(T.loadTitle)}>
+      <div className="sp-load">
+        <p className="sp-load__line">
+          <span className="numeral sp-load__n">{number(mine)}</span>
+          <span>{tx(T.loadFamilies)}</span>
+          <span className="sp-load__share">{tx(T.loadShare, { pct: number(share) })}</span>
+        </p>
+        {/* A scale reads from its start in both languages; it is a picture, described in the line above. */}
+        <div className="sp-load__bar" aria-hidden="true">
+          <span className="sp-load__fill" style={{ inlineSize: `${share}%` }} />
+          <span className="sp-load__avg" style={{ insetInlineStart: `${averageAt}%` }} />
+        </div>
+        <p className="sp-load__legend">
+          <span className="sp-load__key" aria-hidden="true" />
+          <span>{tx(T.teamAverage, { n: averageText })}</span>
+          <span>{tx(T.heaviest, { n: number(heaviest) })}</span>
+          <span className="sp-load__peers">{tx(T.peers, { n: number(active.length) })}</span>
+        </p>
       </div>
-      <p className="sp-load__line">
-        <span className="numeral sp-load__n">{number(mine)}</span>
-        <span>{tx(T.loadFamilies)}</span>
-        <span className="sp-load__share">{tx(T.loadShare, { pct: number(share) })}</span>
-      </p>
-      {/* A scale reads from its start in both languages; it is a picture, described in the line above. */}
-      <div className="sp-load__bar" aria-hidden="true">
-        <span className="sp-load__fill" style={{ inlineSize: `${share}%` }} />
-        <span className="sp-load__avg" style={{ insetInlineStart: `${averageAt}%` }} />
-      </div>
-      <p className="sp-load__legend">
-        <span className="sp-load__key" aria-hidden="true" />
-        <span>{tx(T.teamAverage, { n: averageText })}</span>
-        <span>{tx(T.heaviest, { n: number(heaviest) })}</span>
-      </p>
-      <p className="pp-rule">{tx(T.peers, { n: number(active.length) })}</p>
-    </section>
+    </Sheet>
   )
 }

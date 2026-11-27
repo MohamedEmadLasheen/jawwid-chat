@@ -1,25 +1,80 @@
-/* PD-23 devices & sessions: one hairline table; the profile's second tab. */
-@import '../profiles/people.css';
+/*
+ * PD-23 devices & sessions.
+ *
+ * One sheet of devices, a row each: the device and its kind, when it signed in
+ * and was last active as one quiet line, one action. The same sheet is the
+ * page at /profile/devices and the "Devices & sessions" tab of My profile; the
+ * Accounts page shows another account's list in a side panel (compact).
+ *
+ *   .dev-mine / .dev-sheet   one's own devices: the sheet, its head and rule
+ *   .dev-list / .dev-table   the rows (compact: framed, times under the device)
+ *   .dev-section, .dev-toolbar   the Accounts page's panel around the list
+ */
 
-.dev-page { display: flex; flex-direction: column; gap: var(--space-3); }
-.dev-page .page-header { margin-block-end: var(--space-2); }
-.dev-tabs { padding-inline: 0; margin-block-end: var(--space-3); }
-.dev-tabs .seg__item { text-decoration: none; }
-.dev-name { display: flex; flex-wrap: wrap; gap: 2px var(--space-3); align-items: center; }
-.dev-name strong { font-weight: 600; }
+.dev-page { min-inline-size: 0; }
+/* A short list does not need the page's width. */
+.dev-mine { max-inline-size: 960px; min-inline-size: 0; }
+.dev-notice { margin: 0 0 var(--space-4); }
+.dev-sheet { min-inline-size: 0; }
+.dev-sheet > .sheet__head { flex-wrap: wrap; }
+.dev-sheet__title { display: flex; align-items: baseline; gap: 8px; min-inline-size: 0; }
+.dev-sheet__title .sheet__count { margin-inline-start: 0; font-size: var(--fs-sm); }
+/* What the list is for stays, in one quiet line under the heading. */
+.dev-sheet__rule { margin: 0; padding: 9px var(--space-4) 10px; border-block-end: 1px solid var(--hairline-soft); font-size: var(--fs-xs); line-height: 1.5; color: var(--ink-muted); }
+.dev-sheet > .state { padding-block: var(--space-5); }
+
+/* The Accounts page's panel. */
 .dev-toolbar { display: flex; flex-wrap: wrap; gap: var(--space-2); justify-content: flex-end; align-items: center; }
 .dev-section { margin-block-start: var(--space-2); }
-.dev-meta { display: flex; flex-direction: column; gap: 2px; margin-block-start: var(--space-1); }
-.dev-table .field__hint { font-size: var(--fs-xs); }
-@media (min-width: 768px) {
-  .dev-table td:last-child { inline-size: 1%; white-space: nowrap; }
-}
-/* Signing a device out is a word at the row's end: quiet at rest, terracotta under the
-   pointer or the keyboard, never a red box on every row. */
-.dev-signout.btn--ghost { color: var(--ink-muted); }
-.dev-table tr:hover .dev-signout.btn--ghost,
-.dev-table tr:focus-within .dev-signout.btn--ghost { color: var(--terracotta); }
-.dev-signout.btn--ghost:hover:not(:disabled) { color: var(--terracotta); background: var(--terracotta-tint); }
-@media (hover: none) {
-  .dev-signout.btn--ghost { color: var(--terracotta); }
+
+.dev-list { min-inline-size: 0; }
+.dev-table { inline-size: 100%; border-collapse: collapse; font-size: var(--fs-md); }
+/* The column names are said, not drawn: a row reads by itself. */
+.dev-table > thead { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); }
+.dev-table td { padding: 13px var(--space-3); border-block-end: 1px solid var(--hairline-soft); text-align: start; vertical-align: middle; }
+.dev-table td:first-child { padding-inline-start: var(--space-4); }
+.dev-table td:last-child { padding-inline-end: var(--space-4); }
+.dev-table > tbody > tr:last-child > td { border-block-end: 0; }
+.dev-cell-when { inline-size: 44%; }
+
+.dev-what { display: flex; align-items: center; gap: 12px; min-inline-size: 0; }
+.dev-icon { flex: none; display: inline-flex; color: var(--border-control); }
+/* The device in use is the one drawn in the accent. */
+.dev-row--current .dev-icon { color: var(--teal); }
+.dev-what__text { display: grid; gap: 2px; min-inline-size: 0; }
+.dev-name { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+.dev-name strong { font-weight: 600; overflow-wrap: anywhere; }
+.dev-kind, .dev-when { display: flex; flex-wrap: wrap; gap: 0 10px; font-size: var(--fs-xs); line-height: 1.55; color: var(--ink-muted); }
+/* The dot trails the fact before it, so a line that wraps never begins with one. */
+.dev-kind > :not(:last-child)::after, .dev-when > :not(:last-child)::after { content: '·'; margin-inline-start: 10px; color: var(--border-control); }
+.dev-when time { font-variant-numeric: tabular-nums; }
+
+/* Signing a device out is the row's one action: plain at rest, terracotta under the pointer. */
+.dev-signout.btn:hover:not(:disabled), .dev-signout.btn:focus-visible { border-color: var(--terracotta); background: var(--surface); color: var(--terracotta); }
+
+/* In a side panel the times sit under the device, so the action keeps its place at the end. */
+.dev-list--compact .dev-table, .dev-list--compact .dev-table > tbody { display: block; }
+.dev-list--compact .dev-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 3px var(--space-3); padding: 12px var(--space-4); border-block-end: 1px solid var(--hairline-soft); }
+.dev-list--compact .dev-row:last-child { border-block-end: 0; }
+.dev-list--compact .dev-row > td { display: block; inline-size: auto; padding: 0; border: 0; }
+.dev-list--compact .dev-row > .dev-cell-what { grid-column: 1; grid-row: 1; }
+.dev-list--compact .dev-row > td.cell-actions { grid-column: 2; grid-row: 1; }
+.dev-list--compact .dev-row > .dev-cell-when { grid-column: 1 / -1; padding-inline-start: 34px; }
+/* Stacked, each time has a line of its own and needs no dot. */
+.dev-list--compact .dev-when { display: grid; gap: 0; }
+.dev-list--compact .dev-when > :not(:last-child)::after { content: none; }
+
+/* On a phone every list reads that way. */
+@media (max-width: 767px) {
+  .dev-table, .dev-table > tbody { display: block; }
+  .dev-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 3px var(--space-3); padding: 12px var(--space-4); border-block-end: 1px solid var(--hairline-soft); }
+  .dev-row:last-child { border-block-end: 0; }
+  .dev-table .dev-row > td { display: block; inline-size: auto; padding: 0; border: 0; }
+  .dev-row > .dev-cell-what { grid-column: 1; grid-row: 1; }
+  .dev-table .dev-row > td.cell-actions { grid-column: 2; grid-row: 1; }
+  .dev-table .dev-row > .dev-cell-when { grid-column: 1 / -1; padding-inline-start: 34px; }
+  .dev-when { display: grid; gap: 0; }
+  .dev-when > :not(:last-child)::after { content: none; }
+  .dev-sheet > .sheet__head > .btn { flex: 1 1 100%; min-block-size: 44px; }
+  .dev-signout.btn { min-block-size: 44px; }
 }

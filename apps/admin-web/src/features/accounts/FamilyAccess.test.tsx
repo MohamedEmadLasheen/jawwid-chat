@@ -96,7 +96,8 @@ describe('ADMIN-002: exceptional access on the Accounts page', () => {
     on('POST', /\/admin\/family-access-grants$/, () => json(grant(), 201))
     renderWithProviders(<AppRoutes />, { staff, route: '/accounts' })
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Temporary access' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'More actions: Parent Alpha' }))
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Temporary access' }))
     const dialog = await screen.findByRole('dialog', { name: 'Temporary access to Family Alpha' })
     const confirm = within(dialog).getByRole('button', { name: 'Grant access' })
     expect(confirm).toBeDisabled()
@@ -146,6 +147,10 @@ describe('ADMIN-002: exceptional access on the Accounts page', () => {
     expect(await screen.findByRole('heading', { name: 'Your temporary access' })).toBeInTheDocument()
     expect(screen.getByText('parent locked out while their supervisor is away')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Temporary access' })).toBeNull()
+    // Nor in the row's "more" menu, where the grant is offered to a grantor.
+    await userEvent.click(screen.getByRole('button', { name: 'More actions: Parent Alpha' }))
+    expect(screen.getByRole('menuitem', { name: 'Devices' })).toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: 'Temporary access' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Revoke' })).toBeNull()
     view.unmount()
 

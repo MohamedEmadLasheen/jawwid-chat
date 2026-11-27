@@ -50,6 +50,9 @@ function person(over: Partial<StaffSummary> = {}): StaffSummary {
 
 const me = (viewer: { team: boolean; organizationOverview: boolean }) => ({ staffId: 'me', viewer })
 
+/** One of the masthead's key numbers, by its label. */
+const figure = (label: string) => screen.getByText(label, { selector: '.figure__label' }).closest('.figure') as HTMLElement
+
 let asked: string[]
 function serve(routes: Record<string, unknown>) {
   asked = []
@@ -88,9 +91,14 @@ describe('the Team page', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'Team' })).toBeInTheDocument()
     expect(await screen.findByRole('link', { name: 'Admin A' })).toHaveAttribute('href', '/profile/admin_a')
     expect(screen.getByRole('link', { name: 'Admin X' })).toHaveAttribute('href', '/profile/admin_x')
-    const totals = screen.getByLabelText('Team totals')
-    expect(within(totals).getByText('Families').previousSibling).toHaveTextContent('4')
+    // The team's sums are the masthead's figures; the distinct teachers are the note under the students.
+    expect(within(figure('Families')).getByText('4')).toBeInTheDocument()
+    expect(within(figure('Students')).getByText('Teachers: 3')).toBeInTheDocument()
     expect(screen.getByText('2 people')).toBeInTheDocument()
+    // One row a person: what they carry, and one way in.
+    const row = screen.getByRole('link', { name: 'Admin A' }).closest('tr')!
+    expect(within(row).getByText('2')).toBeInTheDocument()
+    expect(within(row).getByText('You can edit')).toBeInTheDocument()
     // The whole directory is the super admin's: a manager's page never asks for it.
     expect(asked).not.toContain('/staff-profiles/organization')
   })
@@ -106,6 +114,15 @@ describe('the Team page', () => {
     expect(screen.getByRole('link', { name: 'Admin A' })).toBeInTheDocument()
     expect(screen.getByText('Showing the first 500 staff accounts.')).toBeInTheDocument()
     expect(asked).not.toContain('/staff-profiles/team')
+    // The directory is set out under each reporting manager; whoever has no manager comes last.
+    const groups = screen.getAllByRole('rowgroup').slice(1)
+    expect(groups).toHaveLength(2)
+    expect(within(groups[0]!).getByRole('rowheader')).toHaveTextContent('Reports toManager C1')
+    expect(within(groups[0]!).getByRole('link', { name: 'Admin A' })).toBeInTheDocument()
+    expect(within(groups[1]!).getByRole('rowheader')).toHaveTextContent('No manager1')
+    expect(within(groups[1]!).getByRole('link', { name: 'Manager C' })).toBeInTheDocument()
+    expect(within(figure('Staff accounts')).getByText('2')).toBeInTheDocument()
+    expect(within(figure('No manager')).getByText('1')).toBeInTheDocument()
   })
 
   it('says plainly when the viewer may list nobody, and asks for no list', async () => {

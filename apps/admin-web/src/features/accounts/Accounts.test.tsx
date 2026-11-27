@@ -98,7 +98,10 @@ describe('PD-21: the Accounts page', () => {
     )
     renderWithProviders(<AppRoutes />, { staff: finance, route: '/accounts' })
     await screen.findByText('Parent Alpha')
-    expect(screen.getByRole('button', { name: 'Reactivate' })).toBeInTheDocument()
+    // The row states one action (the reset); the rest wait behind its "more" menu.
+    await userEvent.click(screen.getByRole('button', { name: 'More actions: Parent Alpha' }))
+    expect(screen.getByRole('menuitem', { name: 'Reactivate' })).toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: 'Set inactive' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Set inactive' })).not.toBeInTheDocument()
     expect(screen.getByText('Inactive')).toBeInTheDocument()
   })
@@ -165,7 +168,8 @@ describe('PD-21: the Accounts page', () => {
       json({ error: { code: 'COMM.ACCOUNT_ADMIN_DENIED', message: 'only the super admin administers a staff member\'s account' } }, 403),
     )
     renderWithProviders(<AppRoutes />, { staff: finance, route: '/accounts' })
-    await userEvent.click(await screen.findByRole('button', { name: 'Set inactive' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'More actions: Parent Alpha' }))
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Set inactive' }))
     const dialog = screen.getByRole('dialog', { name: 'Set Parent Alpha inactive' })
     await userEvent.type(within(dialog).getByRole('textbox'), 'left the academy')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Set inactive' }))

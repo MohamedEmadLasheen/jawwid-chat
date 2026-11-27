@@ -1,28 +1,32 @@
 import { useDeferredValue, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { useSession } from '@/core/auth/SessionProvider'
 import { isSuperAdmin } from '@/core/permissions/capabilities'
 import { Avatar } from '@/shared/components/Avatar'
-import { Badge, type Tone } from '@/shared/components/Badge'
+import { Badge } from '@/shared/components/Badge'
 import { Dialog } from '@/shared/components/Dialog'
 import { FilterChips } from '@/shared/components/FilterChips'
+import type { MenuItem } from '@/shared/components/Menu'
 import { PageHeader } from '@/shared/components/PageHeader'
+import { RowActions } from '@/shared/components/RowActions'
 import { SearchField } from '@/shared/components/SearchField'
 import { QueryBoundary } from '@/shared/components/States'
 import { ReasonDialog } from '@/shared/components/ReasonDialog'
 import { ApiError } from '@/core/api/errors'
-import type { AccountStatus, AccountSummary, IssuedReset } from './api'
-import { A, KIND, STATUS, describeError, useCopy } from './copy'
+import { countWords } from '@/features/instalments/copy'
+import { Sheet } from '@/features/profiles/RecordParts'
+import type { AccountSummary, IssuedReset } from './api'
+import { A, ACCOUNTS_COUNT, KIND, STATUS, describeError, useCopy } from './copy'
 import { useAccounts, useIssueReset, useReactivate, useSuspend } from './hooks'
-import { supportAdminApi, supportKeys, supportTokens } from '@/features/support/api'
-import { S, describeError as describeSupportError } from '@/features/support/copy'
+import { supportAdminApi, supportKeys, supportTokens, type SupportSession } from '@/features/support/api'
+import { S, SESSIONS_COUNT, describeError as describeSupportError } from '@/features/support/copy'
 import { accountSessionsApi, sessionKeys, type SessionDto } from '@/features/devices/api'
 import { D, isSessionGone } from '@/features/devices/copy'
 import { SessionList, useDeviceName } from '@/features/devices/SessionList'
 import '@/features/devices/devices.css'
-import { AccountsTabs } from '@/features/staff-accounts/AccountsTabs'
+import { useAccountsTabs } from '@/features/staff-accounts/AccountsTabs'
 import { FamilyAccessRecord, GrantFamilyAccessDialog, useFamilyAccess } from './FamilyAccess'
 import { F } from './familyAccessCopy'
 import './accounts.css'
@@ -39,25 +43,25 @@ export type AccountPending =
   | { act: 'revokeSession'; account: AccountSummary; session: SessionDto }
   | { act: 'revokeAll'; account: AccountSummary }
 
-const STATUS_TONE: Record<AccountStatus, Tone> = {
-  provisioned: 'outline',
-  active: 'ok',
-  suspended: 'danger',
-  deactivated: 'neutral',
-}
-
 /**
  * PD-21: account administration. Staff find a parent (by the parent's, the
  * family's or a child's name) or a teacher, and reset the password or set the
  * account inactive; the super admin also other staff. PD-40: which kinds is
  * the server's answer (`administers`) -- parents for Operations and Sales,
  * teachers for the Teachers department. The server decides the list and every
- * action; the chips and buttons follow its answer, which is advisory.
+ * action; the chips and the row's actions follow its answer, which is advisory.
+ *
+ * One sheet of people with one action each: the masthead carries the area's
+ * tabs, the sheet its own search and kinds, and a row says who the account
+ * belongs to, where it stands, and offers the reset beside a "more" menu.
+ * Two records follow on sheets of their own: support sessions and exceptional
+ * access.
  */
 export function AccountsPage({ eyebrow }: { eyebrow?: string }) {
   const tx = useCopy()
-  const { t, dateTime } = useI18n()
+  const { t, dateTime, locale } = useI18n()
   const { staff } = useSession()
+  const tabs = useAccountsTabs()
   const [q, setQ] = useState('')
   const [kind, setKind] = useState<Kind>('all')
   const [pending, setPending] = useState<AccountPending | null>(null)
@@ -68,6 +72,7 @@ export function AccountsPage({ eyebrow }: { eyebrow?: string }) {
   const deferred = useDeferredValue(q.trim())
   const list = useAccounts(deferred, kind)
   const accounts = list.data?.accounts ?? []
+  const actionsOf = useAccountActions()
 
   const administers = list.data?.administers
   const fallback: Kind[] = staff && isSuperAdmin(staff.role) ? ['family', 'teacher', 'staff'] : ['family', 'teacher']
@@ -75,82 +80,83 @@ export function AccountsPage({ eyebrow }: { eyebrow?: string }) {
   const noneAdministered = administers !== undefined && administers.length === 0
 
   return (
-    <div className="page pp pp-list acct-page">
+    <div className="page dir acct-page">
       <div className="page__inner">
-        <AccountsTabs />
-        <PageHeader eyebrow={eyebrow} title={tx(A.title)} subtitle={tx(A.subtitle)} />
-        <div className="pp-tools">
-          <SearchField value={q} onChange={setQ} label={tx(A.search)} clearLabel={t('common.cancel')} />
-          <FilterChips
-            label={tx(A.show)}
-            value={kind}
-            onChange={setKind}
-            options={kinds.map((k) => ({ value: k, label: k === 'all' ? tx(A.all) : tx(KIND[k]) }))}
-          />
-        </div>
-        <QueryBoundary
-          isLoading={list.isLoading}
-          error={list.error}
-          isEmpty={accounts.length === 0}
-          emptyTitle={tx(noneAdministered ? A.noneAdministered : A.empty)}
-          onRetry={() => void list.refetch()}
-        >
-          <div className="table-wrap">
-            <table className="table pp-stack">
+        <PageHeader eyebrow={eyebrow} title={tx(A.title)} subtitle={tx(A.subtitle)} tabs={tabs ?? undefined} />
+        <section className="sheet dir-sheet acct-sheet" aria-label={tx(A.title)}>
+          <div className="sheet-bar">
+            <SearchField value={q} onChange={setQ} label={tx(A.search)} clearLabel={t('common.cancel')} />
+            <FilterChips
+              label={tx(A.show)}
+              value={kind}
+              onChange={setKind}
+              options={kinds.map((k) => ({ value: k, label: k === 'all' ? tx(A.all) : tx(KIND[k]) }))}
+            />
+            {list.data && accounts.length > 0 && !list.data.truncated && (
+              <span className="sheet-bar__end dir-total">{countWords(accounts.length, ACCOUNTS_COUNT, locale)}</span>
+            )}
+          </div>
+          <QueryBoundary
+            isLoading={list.isLoading}
+            error={list.error}
+            isEmpty={accounts.length === 0}
+            emptyTitle={tx(noneAdministered ? A.noneAdministered : A.empty)}
+            onRetry={() => void list.refetch()}
+          >
+            <table className="dir-table acct-table">
               <thead>
                 <tr>
                   <th scope="col">{tx(A.person)}</th>
                   <th scope="col">{tx(A.status)}</th>
                   <th scope="col">{tx(A.lastLogin)}</th>
-                  <th scope="col">{tx(A.actions)}</th>
+                  <th scope="col" className="cell-actions">
+                    <span className="sr-only">{tx(A.actions)}</span>
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {accounts.map((a) => (
-                  <tr key={a.accountId}>
-                    <td>
-                      <span className="pp-cell-two">
-                        <Avatar name={a.name} seed={a.accountId} size="sm" />
-                        <span>
-                          <span className="acct-who">
-                            <strong><bdi>{a.name}</bdi></strong> <span className="acct-kind">{tx(KIND[a.kind])}</span>
+                  <tr key={a.accountId} className="dir-row">
+                    <td className="dir-cell-who">
+                      <span className="dir-who">
+                        <Avatar name={a.name} seed={a.accountId} />
+                        <span className="dir-who__text">
+                          <strong className="dir-name">
+                            <bdi>{a.name}</bdi>
+                          </strong>
+                          <span className="acct-sub">
+                            <span>{tx(KIND[a.kind])}</span>
+                            {a.familyName && (
+                              <span>
+                                <bdi>{a.familyName}</bdi>
+                              </span>
+                            )}
+                            {a.children.length > 0 && <span>{tx(A.children, { names: a.children.join('، ') })}</span>}
                           </span>
-                          {a.familyName && (
-                            <span className="pp-cell-sub">
-                              {a.familyName}
-                              {a.children.length > 0 && ` · ${tx(A.children, { names: a.children.join('، ') })}`}
-                            </span>
-                          )}
                         </span>
                       </span>
                     </td>
-                    <td data-at="end">
-                      <Badge tone={STATUS_TONE[a.status]} dot>
-                        {tx(STATUS[a.status])}
-                      </Badge>{' '}
-                      {!a.hasLogin && <Badge tone="outline">{tx(A.noLogin)}</Badge>}{' '}
-                      {a.lockedUntil && <Badge tone="warn">{tx(A.locked)}</Badge>}
+                    <td className="dir-cell-state">
+                      <AccountState account={a} />
                     </td>
-                    <td className="cell-nowrap" data-label={tx(A.lastLogin)}>{a.lastLoginAt ? <time dateTime={a.lastLoginAt}>{dateTime(a.lastLoginAt)}</time> : <span className="acct-never">{tx(A.never)}</span>}</td>
-                    <td data-wide="">
-                      <div className="acct-cell-actions">
-                        <AccountActionButtons account={a} onAct={setPending} />
-                        {grantees && a.kind === 'family' && a.familyId && (
-                          <button type="button" className="btn btn--sm btn--ghost acct-act" onClick={() => setGranting(a)}>
-                            {tx(F.grantButton)}
-                          </button>
-                        )}
-                      </div>
+                    <td className={a.lastLoginAt ? 'dir-cell-quiet' : 'dir-cell-quiet dir-cell-quiet--none'} data-label={tx(A.lastLogin)}>
+                      {a.lastLoginAt ? <time dateTime={a.lastLoginAt}>{dateTime(a.lastLoginAt)}</time> : <span className="dir-none">{tx(A.never)}</span>}
+                    </td>
+                    <td className="cell-actions">
+                      <OneActionAndMore
+                        label={tx(A.more, { name: a.name })}
+                        actions={actionsOf(a, setPending, grantees && a.kind === 'family' && a.familyId ? () => setGranting(a) : undefined)}
+                      />
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
-          {list.data?.truncated && <p className="pp-rule">{tx(A.truncated)}</p>}
-        </QueryBoundary>
-        <FamilyAccessRecord />
+            {list.data?.truncated && <p className="dir-foot dir-foot--note">{tx(A.truncated)}</p>}
+          </QueryBoundary>
+        </section>
         <SupportRecord />
+        <FamilyAccessRecord />
       </div>
 
       <AccountActionDialogs pending={pending} onChange={setPending} />
@@ -161,37 +167,59 @@ export function AccountsPage({ eyebrow }: { eyebrow?: string }) {
   )
 }
 
-/** The actions the server allows on an account (`allowed`), as buttons. */
-export function AccountActionButtons({ account: a, onAct }: { account: AccountSummary; onAct: (p: AccountPending) => void }) {
+/**
+ * Where an account stands, as tags. What stops a person signing in is said
+ * loudest: a lock is a solid tag, a missing password a gold one; an account
+ * set inactive is a quiet word, and an active one a green dot.
+ */
+export function AccountState({ account: a }: { account: AccountSummary }) {
   const tx = useCopy()
   return (
-    <div className="acct-actions">
-      {a.allowed.resetPassword && (
-        <button type="button" className="btn btn--sm btn--ghost acct-act acct-act--main" onClick={() => onAct({ act: 'reset', account: a })}>
-          {tx(A.resetPassword)}
-        </button>
+    <span className="acct-state">
+      {a.lockedUntil && <Badge tone="danger">{tx(A.locked)}</Badge>}
+      {!a.hasLogin && <Badge tone="gold">{tx(A.noLogin)}</Badge>}
+      {a.status === 'active' ? (
+        // An active account that cannot sign in is told by its other tag alone.
+        !a.lockedUntil && a.hasLogin && <Badge tone="ok" dot>{tx(STATUS.active)}</Badge>
+      ) : (
+        <Badge tone={a.status === 'suspended' ? 'neutral' : 'outline'}>{tx(STATUS[a.status])}</Badge>
       )}
-      {a.allowed.suspend && (
-        <button type="button" className="btn btn--sm btn--ghost acct-act acct-danger" onClick={() => onAct({ act: 'suspend', account: a })}>
-          {tx(A.suspend)}
+    </span>
+  )
+}
+
+/**
+ * The actions the server allows on an account (`allowed`), in the order a row
+ * offers them: the reset first (the everyday one), then its devices, a
+ * temporary access to its family where the page may grant one, opening it as
+ * the person, and last the two that change whether the person can sign in.
+ */
+export function useAccountActions() {
+  const tx = useCopy()
+  return (a: AccountSummary, onAct: (p: AccountPending) => void, onGrant?: () => void): MenuItem[] => [
+    ...(a.allowed.resetPassword ? [{ key: 'reset', label: tx(A.resetPassword), icon: 'password' as const, onSelect: () => onAct({ act: 'reset', account: a }) }] : []),
+    ...(a.allowed.signOut === true ? [{ key: 'devices', label: tx(D.devicesButton), icon: 'device' as const, onSelect: () => onAct({ act: 'devices', account: a }) }] : []),
+    ...(onGrant ? [{ key: 'grant', label: tx(F.grantButton), icon: 'hourglass' as const, onSelect: onGrant }] : []),
+    ...(a.allowed.impersonate ? [{ key: 'impersonate', label: tx(S.open, { name: a.name }), icon: 'headset' as const, onSelect: () => onAct({ act: 'impersonate', account: a }) }] : []),
+    ...(a.allowed.reactivate ? [{ key: 'reactivate', label: tx(A.reactivate), icon: 'undo' as const, onSelect: () => onAct({ act: 'reactivate', account: a }) }] : []),
+    ...(a.allowed.suspend ? [{ key: 'suspend', label: tx(A.suspend), icon: 'prohibit' as const, danger: true, onSelect: () => onAct({ act: 'suspend', account: a }) }] : []),
+  ]
+}
+
+/** The first action stated as the row's one button, the rest behind "more". No action, nothing drawn. */
+export function OneActionAndMore({ actions, label }: { actions: MenuItem[]; label: string }) {
+  const [first, ...rest] = actions
+  if (!first) return null
+  return (
+    <RowActions
+      label={label}
+      primary={
+        <button type="button" className="btn btn--sm" onClick={first.onSelect}>
+          {first.label}
         </button>
-      )}
-      {a.allowed.impersonate && (
-        <button type="button" className="btn btn--sm acct-act acct-as" onClick={() => onAct({ act: 'impersonate', account: a })}>
-          {tx(S.open, { name: a.name })}
-        </button>
-      )}
-      {a.allowed.signOut === true && (
-        <button type="button" className="btn btn--sm btn--ghost acct-act" onClick={() => onAct({ act: 'devices', account: a })}>
-          {tx(D.devicesButton)}
-        </button>
-      )}
-      {a.allowed.reactivate && (
-        <button type="button" className="btn btn--sm btn--ghost acct-act acct-act--main" onClick={() => onAct({ act: 'reactivate', account: a })}>
-          {tx(A.reactivate)}
-        </button>
-      )}
-    </div>
+      }
+      more={rest}
+    />
   )
 }
 
@@ -463,11 +491,14 @@ function RevokeSessionDialog({
 function StartSupportDialog({ account, onClose }: { account: AccountSummary; onClose: () => void }) {
   const tx = useCopy()
   const navigate = useNavigate()
+  const client = useQueryClient()
   const start = useMutation({
     mutationFn: (reason: string) => supportAdminApi.start(account.accountId, reason),
     onSuccess: (token) => {
       // In memory only: the token never reaches a URL, history state or storage.
       supportTokens.set(token)
+      // The record has a new session: whoever comes back to Accounts without ending it reads it live.
+      void client.invalidateQueries({ queryKey: supportKeys.record() })
       navigate(`/support/${encodeURIComponent(token.session.id)}`)
     },
   })
@@ -487,51 +518,72 @@ function StartSupportDialog({ account, onClose }: { account: AccountSummary; onC
 
 /**
  * PD-21: the record of support sessions -- the super admin's whole
- * organization, anyone else their own. Who, whom, why, when, how many requests.
+ * organization, anyone else their own. Who, by whom, why, when, how many
+ * requests. A live one is tagged, and the administrator who opened it may go
+ * back in: the page at /support/:id asks for a fresh token with their own
+ * session (the token itself is never kept), and the server decides again.
  */
 function SupportRecord() {
   const tx = useCopy()
-  const { dateTime } = useI18n()
+  const { dateTime, number, locale } = useI18n()
+  const { staff } = useSession()
   const record = useQuery({ queryKey: supportKeys.record(), queryFn: () => supportAdminApi.list() })
   const sessions = record.data ?? []
+  // Read once a render: a session past its time is no longer one to go back into.
+  const now = Date.now()
+  const live = (s: SupportSession) => !s.endedAt && Date.parse(s.expiresAt) > now
   return (
-    <section className="acct-record" aria-labelledby="acct-record-title">
-      <h2 id="acct-record-title" className="acct-record__title">
-        {tx(S.recordTitle)}
-      </h2>
+    <Sheet id="acct-record-title" title={tx(S.recordTitle)} count={sessions.length > 0 ? countWords(sessions.length, SESSIONS_COUNT, locale) : undefined}>
       {record.data && sessions.length === 0 ? (
-        <p className="pp-empty">{tx(S.noRecord)}</p>
+        <p className="rec-empty">{tx(S.noRecord)}</p>
       ) : (
-        <ul className="pp-rows acct-sessions">
+        <ul className="rec-list acct-sessions">
           {sessions.map((s) => (
-            <li key={s.id} className="acct-session">
-              <div className="acct-session__who">
-                <strong dir="auto">{s.target.name}</strong>
-                <span className="acct-kind">
-                  {tx(S.recordBy)} <bdi>{s.staff.name}</bdi>
+            <li key={s.id} className={live(s) ? 'rec-attn acct-session acct-session--live' : 'rec-attn acct-session'}>
+              <div className="rec-attn__what">
+                <span className="rec-attn__line">
+                  <strong className="rec-attn__title">
+                    <bdi>{s.target.name}</bdi>
+                  </strong>
+                  {live(s) ? <Badge tone="now">{tx(S.recordLive)}</Badge> : !s.endedAt && <Badge tone="outline">{tx(S.recordTimedOut)}</Badge>}
+                </span>
+                <span className="acct-session__why">
+                  <bdi>{s.reason}</bdi>
+                </span>
+                <span className="rec-attn__sub">
+                  <span>
+                    {tx(S.recordBy)} <bdi>{s.staff.name}</bdi>
+                  </span>
+                  <span>
+                    {tx(S.recordStarted)} <time dateTime={s.startedAt}>{dateTime(s.startedAt)}</time>
+                  </span>
+                  {s.endedAt && (
+                    <span>
+                      {tx(S.recordEnded)} <time dateTime={s.endedAt}>{dateTime(s.endedAt)}</time>
+                    </span>
+                  )}
+                  <span>
+                    {tx(S.recordActions)} <span className="ltr">{number(s.actions)}</span>
+                  </span>
                 </span>
               </div>
-              <p className="acct-session__why" dir="auto">{s.reason}</p>
-              <div className="acct-session__when">
-                <span>
-                  {tx(S.recordStarted)} <time dateTime={s.startedAt}>{dateTime(s.startedAt)}</time>
-                </span>
-                {s.endedAt ? (
-                  <span>
-                    {tx(S.recordEnded)} <time dateTime={s.endedAt}>{dateTime(s.endedAt)}</time>
-                  </span>
-                ) : (
-                  <Badge tone="danger">{tx(S.recordLive)}</Badge>
+              <div className="rec-attn__act">
+                {live(s) && staff?.id === s.staff.id && (
+                  <RowActions
+                    label={tx(A.more, { name: s.target.name })}
+                    primary={
+                      <Link to={`/support/${encodeURIComponent(s.id)}`} className="btn btn--sm">
+                        {tx(S.openSession)}
+                      </Link>
+                    }
+                  />
                 )}
-                <span>
-                  {tx(S.recordActions)} <span className="ltr">{s.actions}</span>
-                </span>
               </div>
             </li>
           ))}
         </ul>
       )}
-    </section>
+    </Sheet>
   )
 }
 

@@ -1,4 +1,5 @@
 import { ApiError } from '@/core/api/errors'
+import type { CountForms } from '@/features/instalments/copy'
 import type { Pair } from '@/features/organization/copy'
 
 export { useCopy, type Pair } from '@/features/organization/copy'
@@ -18,13 +19,20 @@ export const S = {
   start: { en: 'Open the account', ar: 'فتح الحساب' },
   reason: { en: 'Reason', ar: 'السبب' },
 
-  banner: { en: 'Support session: acting as {name} ({kind})', ar: 'جلسة دعم: تتصرف بحساب {name} ({kind})' },
+  tag: { en: 'Support session', ar: 'جلسة دعم' },
+  acting: {
+    en: 'You are acting as {name} ({kind}). Everything you do is recorded with your name.',
+    ar: 'تتصرف بحساب {name} ({kind}). يُسجَّل كل ما تفعله باسمك.',
+  },
+  left: { en: '{time} left', ar: 'المتبقي: {time}' },
   until: { en: 'Until {time}', ar: 'حتى {time}' },
   extend: { en: 'Keep working', ar: 'متابعة العمل' },
   exit: { en: 'Exit', ar: 'خروج' },
   ended: { en: 'This support session has ended.', ar: 'انتهت جلسة الدعم هذه.' },
   backToAccounts: { en: 'Back to Accounts', ar: 'العودة إلى الحسابات' },
 
+  tabsLabel: { en: "{name}'s account", ar: 'حساب {name}' },
+  backToChats: { en: 'Back to the chats', ar: 'العودة إلى المحادثات' },
   tabChats: { en: 'Chats', ar: 'المحادثات' },
   tabProfile: { en: 'Profile', ar: 'الملف الشخصي' },
   noChats: { en: 'No chats.', ar: 'لا توجد محادثات.' },
@@ -59,8 +67,14 @@ export const S = {
   recordEnded: { en: 'Ended', ar: 'النهاية' },
   recordActions: { en: 'Requests', ar: 'الطلبات' },
   recordLive: { en: 'Live', ar: 'جارية' },
+  recordTimedOut: { en: 'Timed out', ar: 'انتهت مدتها' },
+  openSession: { en: 'Open session', ar: 'فتح الجلسة' },
   noRecord: { en: 'No support sessions yet.', ar: 'لا توجد جلسات دعم بعد.' },
 } satisfies Record<string, Pair>
+
+/** The time a session has left, in whole minutes. */
+export const MINUTES: CountForms = { en: ['{n} minute', '{n} minutes'], ar: ['دقيقة واحدة', 'دقيقتان', '{n} دقائق', '{n} دقيقة'] }
+export const SESSIONS_COUNT: CountForms = { en: ['{n} session', '{n} sessions'], ar: ['جلسة واحدة', 'جلستان', '{n} جلسات', '{n} جلسة'] }
 
 export const KIND_LABEL: Record<'family' | 'teacher', Pair> = {
   family: { en: 'parent', ar: 'ولي أمر' },

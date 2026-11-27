@@ -1,36 +1,22 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useId, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useI18n } from '@/core/i18n/I18nProvider'
+import { Fact, Sheet } from '@/features/profiles/RecordParts'
 import { ABOUT_MAX, DISPLAY_NAME_MAX, JOB_TITLE_MAX, profileKeys, staffProfileApi, type StaffProfile } from './api'
 import { ACCOUNT_STATUS_LABEL, MISSING_LABEL, ROLE_LABEL, T, useCopy } from './copy'
 import { describeError, isConflict } from './errors'
 import { useAvatarRemove, useAvatarUpload, useUpdateProfile } from './hooks'
 import { preparePhoto, type PreparedPhoto } from './photo'
-import { StaffAvatar } from './StaffAvatar'
 
 /**
- * Who this is, at a glance: the photo or monogram, the name in display type,
- * the title they gave themselves, then one line of official facts -- active or
- * not, role, who they report to, when they joined. A photo is chosen, then
- * previewed, then saved, or taken away; the current one stays until the new
- * one is saved. Each control renders only when the server's `access` flag for
- * it is true, and the server refuses the write anyway when it is not.
+ * The photo. Choosing one is choose -> preview -> use, or cancel; the current
+ * photo stays until the new one is saved. The actions live in the file's "more"
+ * menu; the preview takes the monogram's place in the masthead and its two
+ * answers sit in a bar under it. Offered only when the server's `canEditPhoto`
+ * says so, and the server refuses the write anyway when it is not.
  */
-export function ProfileHead({
-  profile,
-  refKey,
-  heading,
-  actions,
-}: {
-  profile: StaffProfile
-  refKey: string
-  /** The page's own name ("My profile", "Staff profile"): it stays the page heading. */
-  heading: string
-  actions?: ReactNode
-}) {
+export function usePhotoDraft(profile: StaffProfile, refKey: string) {
   const tx = useCopy()
-  const { locale, date } = useI18n()
   const inputId = useId()
   const fileRef = useRef<HTMLInputElement>(null)
   const upload = useAvatarUpload(refKey)
@@ -39,9 +25,12 @@ export function ProfileHead({
   const [problem, setProblem] = useState<unknown>(null)
   const [notice, setNotice] = useState<string | null>(null)
 
-  useEffect(() => () => {
-    if (prepared) URL.revokeObjectURL?.(prepared.previewUrl)
-  }, [prepared])
+  useEffect(
+    () => () => {
+      if (prepared) URL.revokeObjectURL?.(prepared.previewUrl)
+    },
+    [prepared],
+  )
 
   const choose = async (file: File | undefined) => {
     setProblem(null)
@@ -56,117 +45,95 @@ export function ProfileHead({
     }
   }
 
-  const canPhoto = profile.access.canEditPhoto
-  const busy = upload.isPending || remove.isPending
-  const error = problem ?? upload.error ?? remove.error
-  const manager = profile.reportingManager
+  return {
+    inputId,
+    fileRef,
+    prepared,
+    notice,
+    /** The file input's name, and the menu item that opens it. */
+    label: tx(profile.avatarUrl ? T.photoReplace : T.photoChoose),
+    busy: upload.isPending || remove.isPending,
+    uploading: upload.isPending,
+    error: problem ?? upload.error ?? remove.error,
+    choose,
+    pick: () => fileRef.current?.click(),
+    cancel: () => setPrepared(null),
+    use: () => {
+      if (!prepared) return
+      upload.mutate(prepared.blob, {
+        onSuccess: () => {
+          setPrepared(null)
+          setNotice(tx(T.photoSaved))
+        },
+      })
+    },
+    remove: () => {
+      setProblem(null)
+      setNotice(null)
+      remove.mutate(undefined, { onSuccess: () => setNotice(tx(T.photoRemoved)) })
+    },
+  }
+}
 
+/**
+ * The file input the menu opens and, while a photo waits or after one was
+ * saved or refused, the bar under the masthead that says so.
+ */
+export function PhotoBar({ photo }: { photo: ReturnType<typeof usePhotoDraft> }) {
+  const tx = useCopy()
+  const { locale } = useI18n()
+  const hintId = `${photo.inputId}-hint`
   return (
-    <header className="pp-head sp-head">
-      <div className="pp-head__mark">
-        {prepared ? (
-          <img className="sp-avatar" src={prepared.previewUrl} alt={tx(T.photoPreview)} style={{ inlineSize: 76, blockSize: 76 }} />
-        ) : (
-          <StaffAvatar name={profile.displayName} url={profile.avatarUrl} size={76} />
-        )}
-      </div>
-      <div className="pp-head__text">
-        <h1 className="pp-head__eyebrow">{heading}</h1>
-        <p className="pp-head__name"><bdi>{profile.displayName}</bdi></p>
-        {/* A missing title is named once, in the completeness line; the head stays clean. */}
-        {profile.jobTitle && <p className="sp-head__title"><bdi>{profile.jobTitle}</bdi></p>}
-        <p className="pp-head__meta">
-          {profile.isActive ? (
-            <span className="badge badge--ok">{tx(T.active)}</span>
-          ) : (
-            <span className="badge badge--danger">{tx(T.inactive)}</span>
-          )}
-          <span>{tx(ROLE_LABEL[profile.role] ?? { en: profile.role, ar: profile.role })}</span>
-          {manager && (
-            <span>
-              {tx(T.reportsToLine)}{' '}
-              {/* Only whoever sees the whole organization can be sure to open a manager's profile. */}
-              {profile.viewer.organizationOverview ? (
-                <Link to={`/profile/${manager.staffId}`} className="sp-head__link">{manager.displayName}</Link>
-              ) : (
-                <strong>{manager.displayName}</strong>
-              )}
-            </span>
-          )}
-          <span>{tx(T.joinedLine, { date: date(profile.joinedAt) })}</span>
-        </p>
-      </div>
-      {(canPhoto || actions) && (
-        <div className="pp-head__actions pp-head__actions--stack">
-          <div className="pp-head__buttons">
-            {canPhoto && prepared && (
-              <>
-                <button
-                  type="button"
-                  className="btn btn--primary btn--sm"
-                  disabled={busy}
-                  onClick={() =>
-                    upload.mutate(prepared.blob, {
-                      onSuccess: () => {
-                        setPrepared(null)
-                        setNotice(tx(T.photoSaved))
-                      },
-                    })
-                  }
-                >
-                  {upload.isPending ? tx(T.photoUploading) : tx(T.photoUse)}
+    <>
+      <input
+        ref={photo.fileRef}
+        id={photo.inputId}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        className="sp-file-input"
+        aria-label={photo.label}
+        aria-describedby={photo.prepared ? hintId : undefined}
+        tabIndex={-1}
+        disabled={photo.busy}
+        onChange={(e) => void photo.choose(e.target.files?.[0])}
+      />
+      {(photo.prepared || photo.error || photo.notice) && (
+        <div className="rec-photo" role="group" aria-label={tx(T.photo)}>
+          {photo.prepared && (
+            <>
+              <span id={hintId} className="rec-photo__hint">
+                {tx(T.photoHint)}
+              </span>
+              <span className="rec-photo__buttons">
+                <button type="button" className="btn btn--sm" disabled={photo.busy} onClick={photo.use}>
+                  {photo.uploading ? tx(T.photoUploading) : tx(T.photoUse)}
                 </button>
-                <button type="button" className="btn btn--sm" disabled={busy} onClick={() => setPrepared(null)}>
+                <button type="button" className="btn btn--sm btn--ghost" disabled={photo.busy} onClick={photo.cancel}>
                   {tx(T.cancel)}
                 </button>
-              </>
-            )}
-            {canPhoto && !prepared && (
-              <>
-                <label htmlFor={inputId} className="btn btn--sm btn--ghost sp-file-label">
-                  {profile.avatarUrl ? tx(T.photoReplace) : tx(T.photoChoose)}
-                </label>
-                <input
-                  ref={fileRef}
-                  id={inputId}
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  className="sp-file-input"
-                  aria-describedby={`${inputId}-hint`}
-                  disabled={busy}
-                  onChange={(e) => void choose(e.target.files?.[0])}
-                />
-                {profile.avatarUrl && (
-                  <button
-                    type="button"
-                    className="btn btn--sm btn--ghost"
-                    disabled={busy}
-                    onClick={() => remove.mutate(undefined, { onSuccess: () => setNotice(tx(T.photoRemoved)) })}
-                  >
-                    {tx(T.photoRemove)}
-                  </button>
-                )}
-              </>
-            )}
-            {!prepared && actions}
-          </div>
-          {canPhoto && <span id={`${inputId}-hint`} className="pp-head__hint">{tx(T.photoHint)}</span>}
-          {error ? (
-            <span className="field__error" role="alert">{describeError(error, locale)}</span>
-          ) : notice ? (
-            <span className="sp-ok" role="status">{notice}</span>
+              </span>
+            </>
+          )}
+          {photo.error ? (
+            <span className="field__error" role="alert">
+              {describeError(photo.error, locale)}
+            </span>
+          ) : photo.notice ? (
+            <span className="sp-ok" role="status">
+              {photo.notice}
+            </span>
           ) : null}
         </div>
       )}
-    </header>
+    </>
   )
 }
 
 /**
- * Section B: the introduction, in their own words, and the form that edits it.
- * Saving sends ONLY the fields in the form plus the version it was loaded at,
- * so two editors (the person and their manager) cannot silently overwrite each
- * other. "Edit" is on the file's head; this section shows the form it opens.
+ * The introduction, in their own words, and the form that edits it: a sheet of
+ * the Overview. Saving sends ONLY the fields in the form plus the version it
+ * was loaded at, so two editors (the person and their manager) cannot silently
+ * overwrite each other. "Edit" is in the masthead; this sheet shows the form it opens.
  */
 export function PersonalSection({
   profile,
@@ -185,28 +152,25 @@ export function PersonalSection({
   const someoneElse = access.relation !== 'self'
 
   return (
-    <section className="pp-sec" aria-labelledby="sp-personal">
-      <div className="pp-sec__head">
-        <h2 id="sp-personal" className="pp-sec__title">{tx(T.personal)}</h2>
-      </div>
-
+    <Sheet
+      id="sp-personal"
+      section="personal"
+      title={tx(T.personal)}
+      rule={someoneElse && access.canEditProfessional ? tx(T.editingFor, { name: profile.displayName }) : undefined}
+    >
       {editing ? (
         <ProfessionalForm profile={profile} refKey={refKey} onDone={onDone} />
       ) : profile.about ? (
         <p className="sp-about" dir="auto">{profile.about}</p>
       ) : (
-        <p className="pp-empty">{tx(T.aboutEmpty)}</p>
+        <p className="rec-empty">{tx(T.aboutEmpty)}</p>
       )}
-
       {profile.profileUpdatedAt && profile.profileUpdatedBy && (
-        <p className="pp-rule">
+        <p className="sp-sheet__foot">
           {tx(T.lastUpdated, { when: dateTime(profile.profileUpdatedAt), who: profile.profileUpdatedBy.displayName })}
         </p>
       )}
-      {someoneElse && access.canEditProfessional && (
-        <p className="pp-rule">{tx(T.editingFor, { name: profile.displayName })}</p>
-      )}
-    </section>
+    </Sheet>
   )
 }
 
@@ -368,48 +332,49 @@ function ProfessionalForm({ profile, refKey, onDone }: { profile: StaffProfile; 
 }
 
 /**
- * Account facts: read-only for everyone, because they are official fields.
- * Profile completeness closes the section as one line over a thin rule.
+ * Account facts, on the canvas beside the work: read-only for everyone,
+ * because they are official fields. Profile completeness closes the group as
+ * one line over a thin rule, then the two rules that protect people.
  */
-export function AccountSection({ profile, action }: { profile: StaffProfile; action?: ReactNode }) {
+export function AccountGroup({ profile }: { profile: StaffProfile }) {
   const tx = useCopy()
   const { dateTime, locale } = useI18n()
   const status = profile.account.status
   const { complete, total, missing } = profile.completeness
   const pct = total === 0 ? 100 : Math.round((complete / total) * 100)
   return (
-    <section className="pp-sec" aria-labelledby="sp-account">
-      <div className="pp-sec__head">
-        <h2 id="sp-account" className="pp-sec__title">{tx(T.accountFacts)}</h2>
-        {action}
+    <section className="aside-group rec-group" aria-labelledby="sp-account" data-section="account">
+      <div className="rec-group__head">
+        <h2 id="sp-account" className="aside-group__title">{tx(T.accountFacts)}</h2>
       </div>
-      <dl className="tf-kv sp-account">
-        <dt>{tx(T.role)}</dt>
-        <dd>{tx(ROLE_LABEL[profile.role] ?? { en: profile.role, ar: profile.role })}</dd>
-        <dt>{tx(T.status)}</dt>
-        <dd>
-          {!profile.account.hasLogin
-            ? tx(T.noLogin)
-            : status
-              ? tx(ACCOUNT_STATUS_LABEL[status] ?? { en: status, ar: status })
-              : tx(T.never)}
-        </dd>
+      <dl className="rec-facts">
+        <Fact icon="briefcase" label={tx(T.role)}>
+          {tx(ROLE_LABEL[profile.role] ?? { en: profile.role, ar: profile.role })}
+        </Fact>
+        <Fact icon="userCheck" label={tx(T.status)}>
+          {!profile.account.hasLogin ? (
+            tx(T.noLogin)
+          ) : status ? (
+            tx(ACCOUNT_STATUS_LABEL[status] ?? { en: status, ar: status })
+          ) : (
+            <span className="rec-missing">{tx(T.never)}</span>
+          )}
+        </Fact>
         {!profile.reportingManager && (
-          <>
-            <dt>{tx(T.reportsTo)}</dt>
-            <dd><span className="sp-muted">{tx(T.noManager)}</span></dd>
-          </>
+          <Fact icon="user" label={tx(T.reportsTo)}>
+            <span className="rec-missing">{tx(T.noManager)}</span>
+          </Fact>
         )}
-        <dt>{tx(T.lastActivity)}</dt>
-        <dd>{profile.lastActivityAt ? dateTime(profile.lastActivityAt) : tx(T.never)}</dd>
+        <Fact icon="history" label={tx(T.lastActivity)}>
+          {profile.lastActivityAt ? dateTime(profile.lastActivityAt) : <span className="rec-missing">{tx(T.never)}</span>}
+        </Fact>
         {profile.signInIdentity && (
-          <>
-            <dt>{tx(T.signIn)}</dt>
-            <dd dir="ltr" className="sp-ltr">{profile.signInIdentity}</dd>
-          </>
+          <Fact icon="mail" label={tx(T.signIn)}>
+            <span dir="ltr" className="sp-ltr">{profile.signInIdentity}</span>
+          </Fact>
         )}
       </dl>
-      <div className="sp-completeness" role="status">
+      <div className="sp-completeness">
         <span>
           {tx(T.completeness)}: {tx(T.completeCount, { done: complete, total })}
           {missing.length > 0 && (
@@ -420,8 +385,8 @@ export function AccountSection({ profile, action }: { profile: StaffProfile; act
           <span style={{ inlineSize: `${pct}%` }} />
         </span>
       </div>
-      <p className="pp-rule">{tx(T.officialFieldsNote)}</p>
-      <p className="pp-rule">{tx(T.contactNote)}</p>
+      <p className="rec-rule">{tx(T.officialFieldsNote)}</p>
+      <p className="rec-rule">{tx(T.contactNote)}</p>
     </section>
   )
 }

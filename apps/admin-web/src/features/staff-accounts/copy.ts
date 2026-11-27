@@ -38,6 +38,10 @@ export const SA = {
   anyDepartment: { ar: 'كل الأقسام', en: 'Any department' },
   filterRole: { ar: 'تصفية حسب الدور', en: 'Filter by role' },
   filterDepartment: { ar: 'تصفية حسب القسم', en: 'Filter by department' },
+  search: { ar: 'ابحث بالاسم', en: 'Search by name' },
+  backToList: { ar: 'كل حسابات الموظفين', en: 'All staff accounts' },
+  notInList: { ar: 'هذا الحساب ليس في قائمتك.', en: 'This account is not in your list.' },
+  openProfile: { ar: 'فتح الملف الشخصي', en: 'Open profile' },
 
   newTitle: { ar: 'حساب موظف جديد', en: 'New staff account' },
   stepIdentity: { ar: 'الخطوة 1 من 3: الهوية', en: 'Step 1 of 3: identity' },
@@ -162,6 +166,8 @@ export const SA = {
   },
   newRole: { ar: 'دور جديد', en: 'New role' },
   noRolesYet: { ar: 'لا توجد أدوار بعد.', en: 'No roles yet.' },
+  backToRoles: { ar: 'كل الأدوار', en: 'All roles' },
+  roleNotInList: { ar: 'هذا الدور ليس في القائمة.', en: 'This role is not in the list.' },
   role: { ar: 'الدور', en: 'Role' },
   roleKey: { ar: 'المعرّف', en: 'Key' },
   maxTier: { ar: 'أعلى مستوى', en: 'Highest tier' },
@@ -236,7 +242,7 @@ export const RISK: Partial<Record<string, Pair>> = {
   family_contact: { ar: 'تواصل مع الأسر', en: 'Family contact' },
 }
 
-/** The catalogue's pages (the key's prefix). An unknown page shows its key. */
+/** The catalogue's pages (the key's prefix); see `pageLabel` for a page this list does not know. */
 export const PAGE: Record<string, Pair> = {
   access_roles: { ar: 'الأدوار', en: 'Roles' },
   accounts: { ar: 'الحسابات', en: 'Accounts' },
@@ -266,9 +272,32 @@ export const PAGE: Record<string, Pair> = {
   teacher_supervision: { ar: 'الإشراف على المعلمين', en: 'Teacher supervision' },
   teachers: { ar: 'المعلمون', en: 'Teachers' },
   trials: { ar: 'الحصص التجريبية', en: 'Trials' },
+  // Pages the catalogue gained since: named here so a sheet never shows a key as a heading.
+  conversation: { ar: 'المحادثات', en: 'Conversations' },
+  lesson_audio: { ar: 'تسجيلات نطق الدروس', en: 'Lesson voice-over' },
+  lesson_content: { ar: 'محتوى الدروس', en: 'Lesson content' },
+  message: { ar: 'الرسائل', en: 'Messages' },
+  moderation: { ar: 'مراجعة الرسائل', en: 'Moderation' },
+  org_profiles: { ar: 'ملفات موظفي المؤسسة', en: 'Organization staff profiles' },
+  org_responsibilities: { ar: 'مسؤوليات موظفي المؤسسة', en: 'Organization responsibilities' },
+  profile_audit: { ar: 'سجل تغييرات الملفات', en: 'Profile history' },
+  reporting_lines: { ar: 'التبعية الإدارية', en: 'Reporting lines' },
+  tasks: { ar: 'المهام', en: 'Tasks' },
+  teacher_attendance: { ar: 'الحضور والشكاوى', en: 'Attendance and complaints' },
+  teacher_grants: { ar: 'المنح والشهادات الطيبة', en: 'Grants and testimonials' },
+  team_profiles: { ar: 'ملفات الفريق', en: 'Team profiles' },
+  team_responsibilities: { ar: 'مسؤوليات الفريق', en: 'Team responsibilities' },
+  whiteboards: { ar: 'السبورات', en: 'Whiteboards' },
 }
 
-export const pageLabel = (page: string): Pair => PAGE[page] ?? { ar: page, en: page }
+/** A page's name; one the list above does not know yet is its key set as words, never the raw key. */
+export const pageLabel = (page: string): Pair => {
+  const known = PAGE[page]
+  if (known) return known
+  const words = page.replace(/_/g, ' ')
+  const label = words.charAt(0).toUpperCase() + words.slice(1)
+  return { ar: label, en: label }
+}
 
 const BY_CODE: Record<string, Pair> = {
   'COMM.STAFF_ACCOUNT_DENIED': {

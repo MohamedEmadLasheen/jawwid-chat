@@ -113,6 +113,12 @@ afterEach(() => {
 })
 
 const rowOf = async (name: string) => (await screen.findByText(name, { selector: 'strong' })).closest('tr')!
+/** A role's sheet beside the list: its row's name opens it. Edit and Archive live there. */
+const open = async (name: string) => {
+  const row = await rowOf(name)
+  await userEvent.click(within(row).getByRole('button', { name }))
+  return screen.findByRole('region', { name })
+}
 
 describe('PD-40: the Roles page', () => {
   it('lists the roles with member counts, and badges a template only while the server says it is one', async () => {
@@ -195,8 +201,8 @@ describe('PD-40: the Roles page', () => {
       ),
     )
     renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/accounts/roles' })
-    const row = await rowOf('Designer')
-    await userEvent.click(within(row).getByRole('button', { name: 'Edit' }))
+    const sheet = await open('Designer')
+    await userEvent.click(within(sheet).getByRole('button', { name: 'Edit' }))
     const dialog = screen.getByRole('dialog', { name: 'Edit Designer' })
     expect(within(dialog).queryByLabelText('Key')).not.toBeInTheDocument()
     const view = await within(dialog).findByRole('checkbox', { name: /View certificates/ })
@@ -220,8 +226,9 @@ describe('PD-40: the Roles page', () => {
   it('archives a role with a reason', async () => {
     on('POST', /\/admin\/access-roles\/r-2\/archive$/, () => json({ role: role({ id: 'r-2', archived: true }) }))
     renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/accounts/roles' })
-    const row = await rowOf('Billing reader')
-    await userEvent.click(within(row).getByRole('button', { name: 'Archive' }))
+    const sheet = await open('Billing reader')
+    await userEvent.click(within(sheet).getByRole('button', { name: 'More actions: Billing reader' }))
+    await userEvent.click(within(sheet).getByRole('menuitem', { name: 'Archive' }))
     const dialog = screen.getByRole('dialog', { name: 'Archive Billing reader' })
     await userEvent.type(within(dialog).getByRole('textbox'), 'no longer used')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Archive' }))
@@ -236,6 +243,11 @@ describe('PD-40: the Roles page', () => {
     expect(screen.queryByRole('button', { name: 'New role' })).not.toBeInTheDocument()
     expect(within(row).queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument()
     expect(within(row).queryByRole('button', { name: 'Archive' })).not.toBeInTheDocument()
+    // Nor on the role's sheet, where the super admin edits and archives.
+    const sheet = await open('Designer')
+    expect(within(sheet).queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument()
+    expect(within(sheet).queryByRole('button', { name: /More actions/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: 'Archive' })).not.toBeInTheDocument()
   })
 })
 
@@ -243,9 +255,13 @@ describe('PD-40: review of #239', () => {
   it('says what a template is in text, not only in a tooltip', async () => {
     renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/accounts/roles' })
     const designer = await rowOf('Designer')
-    expect(within(designer).getByText('Seeded from a template; it is edited like any role.')).toBeInTheDocument()
     expect(designer.querySelector('[title]')).toBeNull()
-    const billing = await rowOf('Billing reader')
+    // The sentence is on the role's sheet, in plain text.
+    const sheet = await open('Designer')
+    const hint = within(sheet).getByText('Seeded from a template; it is edited like any role.')
+    expect(hint).toBeInTheDocument()
+    expect(hint.closest('[title]')).toBeNull()
+    const billing = await open('Billing reader')
     expect(within(billing).queryByText(/Seeded from a template/)).not.toBeInTheDocument()
   })
 
@@ -253,8 +269,8 @@ describe('PD-40: review of #239', () => {
     on('GET', /\/admin\/access-roles$/, () => json({ roles: [role({ permissions: ['certificates.view', 'retired.key'] })] }))
     on('POST', /\/admin\/access-roles\/r-1$/, () => json({ role: role() }))
     renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/accounts/roles' })
-    const row = await rowOf('Designer')
-    await userEvent.click(within(row).getByRole('button', { name: 'Edit' }))
+    const sheet = await open('Designer')
+    await userEvent.click(within(sheet).getByRole('button', { name: 'Edit' }))
     const dialog = screen.getByRole('dialog', { name: 'Edit Designer' })
     const other = await within(dialog).findByRole('group', { name: 'Not in the checklist' })
     const held = within(other).getByRole('checkbox', { name: /retired\.key/ })
@@ -283,8 +299,8 @@ describe('PD-40: review of #239', () => {
       ),
     )
     renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/accounts/roles' })
-    const row = await rowOf('Designer')
-    await userEvent.click(within(row).getByRole('button', { name: 'Edit' }))
+    const sheet = await open('Designer')
+    await userEvent.click(within(sheet).getByRole('button', { name: 'Edit' }))
     const dialog = screen.getByRole('dialog', { name: 'Edit Designer' })
     await userEvent.click(await within(dialog).findByRole('checkbox', { name: /View instalments/ }))
     await userEvent.type(within(dialog).getByLabelText('Reason'), 'wider')
