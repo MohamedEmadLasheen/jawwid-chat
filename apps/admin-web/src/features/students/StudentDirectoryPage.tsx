@@ -57,9 +57,9 @@ const WEEKLY_COUNT: CountForms = {
   ar: ['موعد أسبوعي واحد', 'موعدان أسبوعيان', '{n} مواعيد أسبوعية', '{n} موعدًا أسبوعيًا'],
 }
 
-// A pause is waiting on a return day (gold); a stop is said quietly: nothing here is a fault to chase.
-// Active reads as it does in a record's head; paused waits on a date; stopped is a fact.
-const TONE = { active: 'ok', paused: 'warn', stopped: 'outline' } as const
+// Active is the usual state, so it is a quiet word with no colour; paused waits on a return day (amber);
+// stopped is a fact (outline). Colour is kept for the rows that differ.
+const TONE = { paused: 'warn', stopped: 'outline' } as const
 const STATUSES: ReadonlyArray<StudentStatus | ''> = ['', 'active', 'paused', 'stopped']
 
 interface Group {
@@ -176,7 +176,7 @@ export function StudentDirectoryPage() {
               emptyHint={tx(S.noneHint)}
               onRetry={() => void list.refetch()}
             >
-              <table className="dir-table dir-table--grouped">
+              <table className="dir-table dir-table--grouped dir-table--students">
                 <thead>
                   <tr>
                     <th scope="col">{tx(S.student)}</th>
@@ -199,8 +199,8 @@ export function StudentDirectoryPage() {
                           ) : (
                             <Badge tone="waiting">{tx(S.noTeacher)}</Badge>
                           )}
-                          <span className="count count--quiet" title={tx(S.onThisPage, { n: number(g.rows.length) })}>
-                            {number(g.rows.length)}
+                          <span className="dir-group__count" title={tx(S.onThisPage, { n: number(g.rows.length) })}>
+                            {countWords(g.rows.length, STUDENTS_COUNT, locale)}
                           </span>
                         </span>
                       </th>
@@ -234,9 +234,11 @@ export function StudentDirectoryPage() {
                           {s.weeklySlots > 0 ? countWords(s.weeklySlots, WEEKLY_COUNT, locale) : <span className="dir-none">{tx(S.noWeekly)}</span>}
                         </td>
                         <td className="dir-cell-state">
-                          <Badge tone={TONE[s.status]} dot={s.status === 'active'}>
-                            {tx(S[s.status])}
-                          </Badge>
+                          {s.status === 'active' ? (
+                            <span className="dir-state-quiet">{tx(S.active)}</span>
+                          ) : (
+                            <Badge tone={TONE[s.status]}>{tx(S[s.status])}</Badge>
+                          )}
                           {s.status === 'paused' && s.returnOn && <span className="dir-state__note">{tx(S.until, { day: s.returnOn })}</span>}
                         </td>
                         <td className="cell-actions">

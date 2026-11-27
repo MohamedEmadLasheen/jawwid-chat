@@ -97,10 +97,23 @@ export function UsersView({ section }: { section: AdminSection }) {
   return (
     <div className="page adm-users">
       <div className="page__inner">
-        {/* The directory's counts are the masthead's figures; the top bar already says where this page sits. */}
+        {/* The directory's counts are the masthead's figures, whatever the filters; a zero is quiet,
+            and the inactive count, when there is one, is also the way to list them. */}
         <PageHeader
           title={tx(section.label)}
-          figures={query.data && users.length > 0 ? summary.map((m, i) => ({ key: m.key, label: m.label, value: number(m.value), tone: i === 0 ? ('key' as const) : m.value === 0 ? ('quiet' as const) : undefined })) : undefined}
+          figures={
+            query.data && users.length > 0
+              ? summary.map((m) => ({
+                  key: m.key,
+                  label: m.label,
+                  value: number(m.value),
+                  tone: m.value === 0 ? ('quiet' as const) : undefined,
+                  ...(m.key === 'inactive' && m.value > 0
+                    ? { onClick: () => setStatus(status === 'inactive' ? 'all' : 'inactive'), pressed: status === 'inactive' }
+                    : {}),
+                }))
+              : undefined
+          }
           actions={
             <RefreshAction
               updatedAt={query.dataUpdatedAt}
@@ -146,9 +159,10 @@ export function UsersView({ section }: { section: AdminSection }) {
                   onValueChange={(v) => setSort(v as SortKey)}
                   aria-label={tx(TEXT.sortBy)}
                 >
-                  <option value="name">{tx(TEXT.sortName)}</option>
-                  <option value="signin">{tx(TEXT.sortSignIn)}</option>
-                  <option value="newest">{tx(TEXT.sortNewestAdded)}</option>
+                  {/* The chosen order reads as an order, not as a filter: "Sort: Name". */}
+                  <option value="name">{tx(TEXT.sortBy)}: {tx(TEXT.sortName)}</option>
+                  <option value="signin">{tx(TEXT.sortBy)}: {tx(TEXT.sortSignIn)}</option>
+                  <option value="newest">{tx(TEXT.sortBy)}: {tx(TEXT.sortNewestAdded)}</option>
                 </SearchableSelect>
               </div>
             </div>
@@ -167,13 +181,14 @@ export function UsersView({ section }: { section: AdminSection }) {
               />
             ) : (
               <table className="rowlist">
+                {/* The columns' names, shown once over the rows on a wide screen. */}
                 <thead>
                   <tr>
-                    <th>{tx(TEXT.name)}</th>
-                    <th>{tx(TEXT.role)}</th>
-                    <th>{tx(TEXT.status)}</th>
-                    <th>{tx(TEXT.lastSignIn)}</th>
-                    <th>{tx(TEXT.details)}</th>
+                    <th scope="col" className="rw-who">{tx(TEXT.name)}</th>
+                    <th scope="col" className="rw-meta">{tx(TEXT.lastSignIn)}</th>
+                    <th scope="col" className="cell-actions">
+                      <span className="sr-only">{tx(TEXT.details)}</span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -183,17 +198,22 @@ export function UsersView({ section }: { section: AdminSection }) {
                         <Avatar name={u.displayName} seed={u.id} />
                         <span className="rw-who__text">
                           {/* The keyboard path to the row's details. */}
-                          <button
-                            type="button"
-                            className="rw-name"
-                            title={u.displayName}
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setOpenKey(userKey(u))
-                            }}
-                          >
-                            {u.displayName}
-                          </button>
+                          <span className="adm-user__name">
+                            <button
+                              type="button"
+                              className="rw-name"
+                              title={u.displayName}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setOpenKey(userKey(u))
+                              }}
+                            >
+                              {u.displayName}
+                            </button>
+                            {/* Active with a working login is the usual case and is left unsaid; the rest is tagged beside the name. */}
+                            {!u.isActive && <ActiveBadge active={false} />}
+                            {!u.hasLogin ? <Badge tone="outline">{tx(TEXT.noLogin)}</Badge> : u.accountStatus !== 'active' ? <Badge tone="warn">{label(ACCOUNT_STATUS, u.accountStatus)}</Badge> : null}
+                          </span>
                           <span className="rw-sub">
                             {label(PRINCIPAL_KIND, u.principalKind)}
                             {roleLabel(u.staffRole) ? `${locale === 'ar' ? '، ' : ', '}${roleLabel(u.staffRole)}` : ''}
@@ -202,11 +222,7 @@ export function UsersView({ section }: { section: AdminSection }) {
                       </td>
                       <td className="rw-meta">
                         <span className="rw-fact__label">{tx(TEXT.lastSignIn)}</span>
-                        <div>{u.lastLoginAt ? listTime(u.lastLoginAt, locale) : u.hasLogin ? tx(TEXT.never) : tx(TEXT.dash)}</div>
-                      </td>
-                      <td className="rw-tags">
-                        <ActiveBadge active={u.isActive} />
-                        {!u.hasLogin ? <Badge tone="outline">{tx(TEXT.noLogin)}</Badge> : u.accountStatus !== 'active' ? <Badge tone="warn">{label(ACCOUNT_STATUS, u.accountStatus)}</Badge> : null}
+                        <div>{u.lastLoginAt ? <strong>{listTime(u.lastLoginAt, locale)}</strong> : u.hasLogin ? tx(TEXT.never) : tx(TEXT.dash)}</div>
                       </td>
                       <td className="cell-actions">
                         <RowActions

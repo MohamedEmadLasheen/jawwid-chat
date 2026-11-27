@@ -78,9 +78,10 @@ function TotalLine({ label, value, strong }: { label: string; value: string; str
 }
 
 /**
- * The same sums as the Team page's masthead: the four that matter, with the
- * distinct teachers and the conversations waiting for us as the notes under
- * the figures they belong to.
+ * The same sums as the Team page's masthead. What waits for the team's reply
+ * leads (the open conversations it is out of are the note under it), then what
+ * the team carries (the distinct teachers under the students), then what waits
+ * on an approval.
  */
 export function useTeamFigures(team: Team | undefined): MastFigure[] {
   const tx = useCopy()
@@ -89,19 +90,19 @@ export function useTeamFigures(team: Team | undefined): MastFigure[] {
   const label = (key: (typeof METRICS)[number]['key']) => tx(METRICS.find((m) => m.key === key)!.label)
   const { totals } = team
   return [
+    {
+      key: 'awaiting',
+      label: label('awaitingReply'),
+      value: number(totals.awaitingReply),
+      note: totals.openConversations > 0 ? tx(T.openOfNote, { n: number(totals.openConversations) }) : undefined,
+      tone: totals.awaitingReply > 0 ? 'key' : 'quiet',
+    },
     { key: 'families', label: tx(T.colFamilies), value: number(totals.assignedFamilies) },
     {
       key: 'students',
       label: tx(T.colStudents),
       value: number(totals.studentsInAssignedFamilies),
       note: tx(T.teachersNote, { n: number(team.distinctTeachers) }),
-    },
-    {
-      key: 'open',
-      label: label('openConversations'),
-      value: number(totals.openConversations),
-      note: totals.openConversations > 0 || totals.awaitingReply > 0 ? tx(T.awaitingNote, { n: number(totals.awaitingReply) }) : undefined,
-      tone: totals.awaitingReply > 0 ? 'key' : undefined,
     },
     {
       key: 'approvals',

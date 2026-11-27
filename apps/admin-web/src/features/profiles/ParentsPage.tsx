@@ -11,7 +11,7 @@ import { EmptyState, QueryBoundary } from '@/shared/components/States'
 import { countWords } from '@/features/instalments/copy'
 import { parentPath, type ParentAccessFilter, type ParentLocationFilter } from './api'
 import { LocationText } from '@/shared/location/LocationPicker'
-import { CHILDREN_COUNT, P, describeError, isProfileRefusal, useCopy } from './copy'
+import { CHILDREN_COUNT, P, PARENTS_COUNT, describeError, isProfileRefusal, useCopy } from './copy'
 import { useParents } from './hooks'
 import { fill, useRememberWalk } from './RecordHead'
 import { IntakeDialog } from '@/features/intake/IntakeDialog'
@@ -74,8 +74,9 @@ export function ParentsPage({ eyebrow }: { eyebrow?: string }) {
   const navigate = useNavigate()
   const searching = deferred !== '' || access !== 'all' || location !== 'all'
 
-  // The list carries no totals per filter: the count is of the list that is open, said once in the sheet's bar.
-  const count = list.data ? (list.data.truncated && items.length >= LIST_LIMIT ? `${number(items.length)}+` : number(items.length)) : null
+  // The list carries no totals per filter: the count is of the list that is open, said once in the sheet's bar,
+  // in words like every other roster's count ("30 parents"); past the limit it is a floor ("200+ shown").
+  const floor = list.data?.truncated === true && items.length >= LIST_LIMIT
 
   return (
     <div className="page dir">
@@ -117,7 +118,6 @@ export function ParentsPage({ eyebrow }: { eyebrow?: string }) {
             {/* One filter, so one chip: pressed it narrows the list, pressed again it is removed. */}
             <div className="chips" role="group" aria-label={tx(P.location)}>
               <button type="button" className="chip" aria-pressed={location === 'missing'} onClick={() => setLocation(location === 'missing' ? 'all' : 'missing')}>
-                <Icon name="mapPin" size={14} />
                 {tx(P.missingLocation)}
                 {location === 'missing' && (
                   <span className="pp-chip-x" aria-hidden="true">
@@ -126,9 +126,9 @@ export function ParentsPage({ eyebrow }: { eyebrow?: string }) {
                 )}
               </button>
             </div>
-            {count !== null && (
+            {list.data && (
               <span className="dir-count" role="status">
-                {fill(tx(P.listCount), { n: <strong>{count}</strong> })}
+                {floor ? fill(tx(P.listCount), { n: `${number(items.length)}+` }) : countWords(items.length, PARENTS_COUNT, locale)}
               </span>
             )}
           </div>
