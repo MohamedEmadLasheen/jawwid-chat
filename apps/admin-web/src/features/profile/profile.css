@@ -35,6 +35,8 @@
   color: var(--text-link);
   font-weight: 600;
 }
+/* Initials take the shared avatar's one neutral tint (the class is stacked so this sheet's own rule above cannot win). */
+.sp-avatar.avatar { background: #ece7dc; color: var(--ink-2); }
 /* Leading the masthead it is sized here, for each screen. */
 .sp-avatar--lead { inline-size: 64px; block-size: 64px; border-radius: var(--radius-lg); font-family: var(--font-head); font-size: 25px; }
 .sp-head__link { font-weight: 600; color: var(--teal-dark); text-decoration: underline; text-decoration-color: var(--brand-200); text-underline-offset: 3px; }

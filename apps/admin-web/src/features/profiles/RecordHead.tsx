@@ -27,6 +27,8 @@ export interface Highlight {
   tone?: 'urgent' | 'waiting' | 'quiet'
   /** Where the highlight leads (a tab, a section). */
   to?: string
+  /** A value that is words, not a figure: set in the reading face, at reading weight. */
+  text?: boolean
 }
 
 export interface Callout {
@@ -158,7 +160,7 @@ function Highlights({ items }: { items: Highlight[] }) {
   return (
     <dl className="figures rec-hl" aria-label={tx(C.highlights)} data-count={items.length}>
       {items.map((h) => {
-        const cls = `figure rec-hl__item${h.tone === 'urgent' ? ' figure--urgent' : h.tone === 'quiet' ? ' figure--quiet' : h.tone === 'waiting' ? ' rec-hl__item--waiting' : ''}`
+        const cls = `figure rec-hl__item${h.tone === 'urgent' ? ' figure--urgent' : h.tone === 'quiet' ? ' figure--quiet' : h.tone === 'waiting' ? ' rec-hl__item--waiting' : ''}${h.text ? ' rec-hl__item--text' : ''}`
         const body = (
           <>
             <dt className="figure__label">

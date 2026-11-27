@@ -114,7 +114,16 @@ export function Calm({ children, icon = 'checkCircle' }: { children: ReactNode; 
  * reads here as a phrase with a comma, the way every other line on a record does.
  */
 export function plainLabel(label: string, locale: 'ar' | 'en'): string {
-  return label.replace(/\s+·\s+/g, locale === 'ar' ? '، ' : ', ')
+  // The comma follows the label's own script, so an Arabic label keeps its Arabic comma in English too.
+  const arabic = /[\u0600-\u06FF]/.test(label) || locale === 'ar'
+  return label.replace(/\s+·\s+/g, arabic ? '، ' : ', ')
+}
+
+/** A calendar day with its month in words ("19 December 2026", "19 ديسمبر 2026"), Western digits. */
+export function longDay(day: string, locale: 'ar' | 'en'): string {
+  return new Intl.DateTimeFormat(locale === 'ar' ? 'ar-EG-u-nu-latn' : 'en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }).format(
+    new Date(`${day.slice(0, 10)}T00:00:00Z`),
+  )
 }
 
 /** A labelled fact on the canvas: a quiet label with its icon, the value under it. */

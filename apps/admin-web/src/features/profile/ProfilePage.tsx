@@ -15,6 +15,7 @@ import { Icon } from '@/shared/components/Icon'
 import { Menu, type MenuItem } from '@/shared/components/Menu'
 import { PageHeader } from '@/shared/components/PageHeader'
 import { RecordHead, fill, useWalk, type Callout, type Highlight } from '@/features/profiles/RecordHead'
+import { longDay } from '@/features/profiles/RecordParts'
 import { countWords, type CountForms } from '@/features/instalments/copy'
 import { EmptyState, ErrorState } from '@/shared/components/States'
 import type { StaffProfile } from './api'
@@ -23,7 +24,7 @@ import { useActivity, useStaffProfile } from './hooks'
 import { AccountGroup, PersonalSection, PhotoBar, usePhotoDraft } from './PersonalSection'
 import { ResponsibilitiesSection } from './ResponsibilitiesSection'
 import { NumbersGroup, WORKLOAD_LABEL } from './WorkloadSection'
-import { LoadAgainstTeam } from './LoadAgainstTeam'
+import { useTeamLoadNote } from './LoadAgainstTeam'
 import { ActivitySection } from './ActivitySection'
 import { ActionLogSection } from './ActionLogSection'
 import { TeamSection } from './TeamSection'
@@ -114,7 +115,7 @@ export function ProfilePage() {
 
 function StaffFile({ profile, refKey }: { profile: StaffProfile; refKey: string }) {
   const tx = useCopy()
-  const { date, locale, number } = useI18n()
+  const { locale, number } = useI18n()
   const { access, viewer } = profile
   const own = access.relation === 'self'
   const activity = useActivity(refKey, access.canReadAudit)
@@ -128,7 +129,7 @@ function StaffFile({ profile, refKey }: { profile: StaffProfile; refKey: string 
   const [logReadable, setLogReadable] = useState<boolean | null>(null)
 
   const showReports = profile.role === 'manager' || profile.role === 'super_admin' || profile.workload.directReports > 0
-  const highlights = useStaffHighlights(profile, showReports)
+  const highlights = useStaffHighlights(profile, showReports, own)
 
   const showActivity = access.canReadAudit || (logReadable ?? access.relation !== 'none')
   const showTeam = own && viewer.team && profile.role === 'manager'
@@ -179,14 +180,18 @@ function StaffFile({ profile, refKey }: { profile: StaffProfile; refKey: string 
   // The chat the callout opens is not offered twice.
   const showEdit = mayEdit && !editing
   const showChat = !!conversation && callout?.uses !== 'chat'
-  const roleLabel = tx(ROLE_LABEL[profile.role] ?? { en: profile.role, ar: profile.role })
   const sep = locale === 'ar' ? '، ' : ', '
+  const titled = !!profile.jobTitle
   const line = (
     <>
-      {profile.jobTitle ? <bdi>{profile.jobTitle}</bdi> : roleLabel}
-      {sep}
+      {titled && (
+        <>
+          <bdi>{profile.jobTitle}</bdi>
+          {sep}
+        </>
+      )}
       {manager
-        ? fill(tx(T.lineReportsTo), {
+        ? fill(tx(titled ? T.lineReportsTo : T.lineReportsToFirst), {
             // Only whoever sees the whole organization can be sure to open a manager's profile.
             name: viewer.organizationOverview ? (
               <Link to={`/profile/${manager.staffId}`}>
@@ -198,9 +203,9 @@ function StaffFile({ profile, refKey }: { profile: StaffProfile; refKey: string 
               </strong>
             ),
           })
-        : tx(T.lineNoManager)}
+        : tx(titled ? T.lineNoManager : T.lineNoManagerFirst)}
       {sep}
-      {tx(T.lineJoined, { date: date(profile.joinedAt) })}
+      {tx(T.lineJoined, { date: longDay(profile.joinedAt, locale) })}
     </>
   )
 
@@ -255,13 +260,12 @@ function StaffFile({ profile, refKey }: { profile: StaffProfile; refKey: string 
       <RecordPanel name="sf" tab="overview" value={tab}>
         <div className="split rec-split">
           <div className="rec-main">
-            {!own && <LoadAgainstTeam profile={profile} />}
             <ResponsibilitiesSection profile={profile} refKey={refKey} />
             <PersonalSection profile={profile} refKey={refKey} editing={editing} onDone={() => setEditing(false)} />
           </div>
           <aside className="rec-aside">
-            <AccountGroup profile={profile} completenessInHead={callout?.uses === 'edit'} />
             <NumbersGroup workload={profile.workload} asOf={profile.generatedAt} title={own ? T.workload : T.workloadOf} showDirectReports={showReports} />
+            <AccountGroup profile={profile} completenessShown={own && callout?.uses !== 'edit'} />
           </aside>
         </div>
       </RecordPanel>
@@ -335,6 +339,10 @@ function useStaffChat(staffId: string, wanted: boolean): ChatConversation | null
 }
 
 const FAMILIES: CountForms = { en: ['{n} family', '{n} families'], ar: ['أسرة واحدة', 'أسرتين', '{n} أسر', '{n} أسرة'] }
+const OPEN_CHATS: CountForms = {
+  en: ['{n} open conversation', '{n} open conversations'],
+  ar: ['محادثة مفتوحة واحدة', 'محادثتين مفتوحتين', '{n} محادثات مفتوحة', '{n} محادثة مفتوحة'],
+}
 const CHATS: CountForms = { en: ['{n} family chat', '{n} family chats'], ar: ['محادثة واحدة', 'محادثتان', '{n} محادثات', '{n} محادثة'] }
 
 /**
@@ -344,29 +352,42 @@ const CHATS: CountForms = { en: ['{n} family chat', '{n} family chats'], ar: ['�
  * direct reports. Overdue tasks have no per-person source yet; they are not
  * shown rather than shown as a nought.
  */
-function useStaffHighlights(profile: StaffProfile, showReports: boolean): Highlight[] {
+function useStaffHighlights(profile: StaffProfile, showReports: boolean, own: boolean): Highlight[] {
   const tx = useCopy()
-  const { number, duration } = useI18n()
+  const { number, duration, locale } = useI18n()
   const w = profile.workload
+  // How their families compare with the people beside them (a manager's view): one line, not a chart.
+  const load = useTeamLoadNote(profile)
   const out: Highlight[] = [
-    { key: 'assignedFamilies', icon: 'parents', label: tx(WORKLOAD_LABEL.assignedFamilies), value: number(w.assignedFamilies), tone: w.assignedFamilies === 0 ? 'quiet' : undefined },
+    {
+      key: 'assignedFamilies',
+      icon: 'parents',
+      label: tx(WORKLOAD_LABEL.assignedFamilies),
+      value: number(w.assignedFamilies),
+      note: own ? undefined : (load ?? undefined),
+      tone: w.assignedFamilies === 0 ? 'quiet' : undefined,
+    },
     { key: 'students', icon: 'students', label: tx(WORKLOAD_LABEL.studentsInAssignedFamilies), value: number(w.studentsInAssignedFamilies), tone: w.studentsInAssignedFamilies === 0 ? 'quiet' : undefined },
     {
       key: 'awaiting',
       icon: 'conversations',
       label: tx(T.hlAwaiting),
       value: number(w.awaitingReply),
-      note: w.openConversations > 0 ? tx(T.hlAwaitingOf, { n: number(w.openConversations) }) : undefined,
+      note: w.openConversations > 0 ? tx(T.hlAwaitingOf, { n: countWords(w.openConversations, OPEN_CHATS, locale) }) : undefined,
       tone: w.awaitingReply > 0 ? 'waiting' : 'quiet',
     },
-    {
+  ]
+  // One's own last activity is now; it is a fact about someone else.
+  if (!own) {
+    out.push({
       key: 'active',
       icon: 'history',
       label: tx(T.hlLastActive),
       value: profile.lastActivityAt ? duration(profile.lastActivityAt) : <span className="rec-hl__none">{tx(T.hlNoActivity)}</span>,
-    },
-    { key: 'role', icon: 'briefcase', label: tx(T.hlRole), value: tx(ROLE_LABEL[profile.role] ?? { en: profile.role, ar: profile.role }) },
-  ]
+      text: true,
+    })
+  }
+  out.push({ key: 'role', icon: 'briefcase', label: tx(T.hlRole), value: tx(ROLE_LABEL[profile.role] ?? { en: profile.role, ar: profile.role }), text: true })
   if (showReports) {
     out.push({ key: 'reports', icon: 'teams', label: tx(WORKLOAD_LABEL.directReports), value: number(w.directReports), tone: w.directReports === 0 ? 'quiet' : undefined })
   }

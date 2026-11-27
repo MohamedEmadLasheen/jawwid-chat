@@ -201,7 +201,7 @@ describe('the Parent Profile', () => {
     const timeline = screen.getByRole('region', { name: 'Payment timeline' })
     const entries = within(timeline).getAllByRole('listitem')
     expect(entries.map((e) => within(e).getByText(/term|twice/).textContent)).toEqual(['Autumn term', 'Summer term', 'Entered twice'])
-    expect(within(entries[1]!).getByText(/Paid .* by Invoice · recorded by Supervisor One/)).toBeInTheDocument()
+    expect(within(entries[1]!).getByText(/Paid .* by Invoice, recorded by Supervisor One/)).toBeInTheDocument()
     expect(within(entries[2]!).getByText('Voided by Supervisor One: duplicate')).toBeInTheDocument()
     // A paid or voided instalment cannot be paid again; a voided one cannot be voided again.
     expect(within(entries[0]!).getByRole('button', { name: 'Record payment' })).toBeInTheDocument()
@@ -363,11 +363,12 @@ describe('the Parent Profile is a record: a masthead and tabs', () => {
     on('GET', /\/families\/f-1\/billing$/, () => json(b))
   }
 
-  it('the masthead says where the money stands; Outstanding is the urgent figure while anything is overdue', async () => {
+  it('the masthead says where the money stands; the overdue part of Outstanding is flagged while anything is overdue', async () => {
     serve()
     renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1' })
     const outstanding = await waitFor(() => figure('Outstanding'))
-    expect(outstanding).toHaveClass('figure--urgent')
+    // The balance itself is not the breach: the overdue line under it carries the urgent colour.
+    expect(within(outstanding).getByText(/^Overdue /)).toHaveClass('rec-hl__late')
     expect(within(outstanding).getByText('1,250.50')).toHaveAttribute('dir', 'ltr')
     expect(within(outstanding).getByText(/^Overdue .*1,250\.50$/)).toBeInTheDocument()
     // What was paid is set out with the family's money, on the Money tab.
@@ -391,7 +392,7 @@ describe('the Parent Profile is a record: a masthead and tabs', () => {
     )
     renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1' })
     const outstanding = await waitFor(() => figure('Outstanding'))
-    expect(outstanding).not.toHaveClass('figure--urgent')
+    expect(outstanding.querySelector('.rec-hl__late')).toBeNull()
     expect(within(outstanding).queryByText(/Overdue/)).not.toBeInTheDocument()
     expect(within(screen.getByRole('region', { name: 'Needs attention now' })).getByText('Nothing is waiting on this family.')).toBeInTheDocument()
     // What falls due next is said under it.

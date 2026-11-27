@@ -4,15 +4,16 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Avatar } from '@/shared/components/Avatar'
 import { Badge, type Tone } from '@/shared/components/Badge'
-import { PageHeader, type MastFigure } from '@/shared/components/PageHeader'
+import { PageHeader } from '@/shared/components/PageHeader'
 import { RowActions } from '@/shared/components/RowActions'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
 import { formatDay } from '@/features/instalments/copy'
 import { WEEKDAY } from '@/features/trials/copy'
-import { parentPath, profileKeys, type StudentProfile } from './api'
+import { parentPath, profileKeys, studentPath, type StudentProfile } from './api'
 import { P, describeError, isProfileRefusal, useCopy } from './copy'
 import { useStudent } from './hooks'
 import { AttentionRow, Calm, Fact, Sheet } from './RecordParts'
+import { RecordHead, fill, useWalk, type Callout, type Highlight } from './RecordHead'
 import { RecordPanel, RecordTabs, useRecordTab, type RecordTab } from './RecordTabs'
 import { dayMonthIn, familyTime, weekdayIn, zoneLabel } from '@/core/time/academyTime'
 import { SubscriptionPanel } from '@/features/subscriptions/SubscriptionPanel'
@@ -104,52 +105,35 @@ function StudentFile({ s }: { s: StudentProfile }) {
     .filter((x): x is typeof x & { nextStartsAt: string } => !!x.nextStartsAt)
     .sort((a, b) => a.nextStartsAt.localeCompare(b.nextStartsAt))[0]
 
-  const figures: MastFigure[] = []
-  if (standing) {
-    if (standing.lessonsIncluded !== null) figures.push({ key: 'bought', label: tx(S.included), value: number(standing.lessonsIncluded), to: '#subscription' })
-    if (standing.lessonsUsed !== null) figures.push({ key: 'used', label: tx(P.lessonsUsedWord), value: number(standing.lessonsUsed), to: '#subscription' })
-    if (standing.lessonsLeft !== null) {
-      figures.push({
-        key: 'left',
-        label: tx(P.lessonsLeftWord),
-        value: number(standing.lessonsLeft),
-        tone: standing.state === 'locked' ? 'urgent' : 'key',
-        note: standing.state === 'grace' && standing.graceLeft !== null ? tx(S.graceLeft, { n: standing.graceLeft }) : undefined,
-        to: '#subscription',
-      })
-    }
-  }
-  if (next) {
-    figures.push({
-      key: 'next',
-      label: tx(P.nextLesson),
-      // The hour as the weekly time states it: the teacher's wall clock.
-      value: <bdi dir="ltr">{next.start}</bdi>,
-      unit: `${weekdayIn(next.nextStartsAt, next.timezone, locale)} ${dayMonthIn(next.nextStartsAt, next.timezone, locale)}`,
-      note: zoneLabel(next.timezone, locale),
-      to: '#schedule',
-    })
-  }
+  const walk = useWalk('students', s.id, studentPath)
+  const highlights = useStudentHighlights(s, standing, next)
+  const callout = studentCallout(s, standing, tx, locale)
+  const sep = locale === 'ar' ? '، ' : ', '
+  const line = (
+    <>
+      {s.family ? fill(tx(P.lineStudentIn), { family: <bdi>{s.family.name}</bdi> }) : tx(P.lineStudent)}
+      {sep}
+      {s.teacher ? fill(tx(P.lineTaughtBy), { name: <strong><bdi>{s.teacher.name}</bdi></strong> }) : tx(P.lineNoTeacher)}
+    </>
+  )
 
   return (
     <>
-      <PageHeader
-        eyebrow={tx(P.studentEyebrow)}
+      <RecordHead
+        back={walk ? { to: '/students', label: tx(P.studentsTitle) } : undefined}
+        walk={walk}
         lead={<Avatar name={s.name} seed={s.id} src={s.avatarUrl} size="lg" />}
-        title={s.name}
-        subtitle={
-          (s.family || standing) && (
-            <span className="rec-sub">
-              {s.family && <bdi>{s.family.name}</bdi>}
-              {standing && (
-                <Badge tone={ACCESS_TONE[standing.state]} dot={standing.state === 'open'}>
-                  {standing.state === 'open' ? tx(P.subscriptionOpen) : tx(STATE_LABEL[standing.state])}
-                </Badge>
-              )}
-            </span>
+        name={s.name}
+        status={
+          standing && (
+            <Badge tone={ACCESS_TONE[standing.state]} dot={standing.state === 'open'}>
+              {standing.state === 'open' ? tx(P.subscriptionOpen) : tx(STATE_LABEL[standing.state])}
+            </Badge>
           )
         }
-        figures={figures}
+        line={line}
+        highlights={highlights}
+        callout={callout}
         actions={
           mayChangeTeacher &&
           s.teacher && (
@@ -218,6 +202,88 @@ function StudentFile({ s }: { s: StudentProfile }) {
       )}
     </>
   )
+}
+
+type NextSlot = StudentProfile['schedule'][number] & { nextStartsAt: string }
+
+/**
+ * A student's highlights: the next lesson, the lessons left (and used) and
+ * bought, the teacher, the course and the age. Lesson counts are drawn only
+ * when the server answers the subscription for this viewer.
+ */
+function useStudentHighlights(s: StudentProfile, standing: Standing | undefined, next: NextSlot | undefined): Highlight[] {
+  const tx = useCopy()
+  const { locale, number } = useI18n()
+  const none = (text: string) => <span className="rec-hl__none">{text}</span>
+  const out: Highlight[] = []
+  if (next) {
+    out.push({
+      key: 'next',
+      icon: 'calendar',
+      label: tx(P.nextLesson),
+      // The hour as the weekly time states it: the teacher's wall clock.
+      value: <bdi dir="ltr">{next.start}</bdi>,
+      note: `${weekdayIn(next.nextStartsAt, next.timezone, locale)} ${dayMonthIn(next.nextStartsAt, next.timezone, locale)}`,
+      to: '#schedule',
+    })
+  }
+  if (standing) {
+    if (standing.lessonsLeft !== null) {
+      out.push({
+        key: 'left',
+        icon: 'hourglass',
+        label: tx(P.lessonsLeftWord),
+        value: number(standing.lessonsLeft),
+        tone: standing.state === 'locked' ? 'urgent' : standing.state === 'grace' ? 'waiting' : undefined,
+        note:
+          standing.state === 'grace' && standing.graceLeft !== null
+            ? tx(S.graceLeft, { n: standing.graceLeft })
+            : standing.lessonsUsed !== null
+              ? tx(P.hlUsed, { n: number(standing.lessonsUsed) })
+              : undefined,
+        to: '#subscription',
+      })
+    }
+    if (standing.lessonsIncluded !== null) out.push({ key: 'bought', icon: 'stack', label: tx(S.included), value: number(standing.lessonsIncluded), to: '#subscription' })
+  }
+  out.push({ key: 'teacher', icon: 'teachers', label: tx(P.teacher), value: s.teacher ? <bdi>{s.teacher.name}</bdi> : none(tx(P.notSet)) })
+  out.push({ key: 'course', icon: 'book', label: tx(P.course), value: s.course ? <bdi>{s.course.name}</bdi> : none(tx(P.notSet)) })
+  out.push({ key: 'age', icon: 'user', label: tx(P.age), value: s.age === null ? none(tx(P.notSet)) : tx(P.years, { n: s.age }) })
+  return out
+}
+
+/**
+ * The one thing on this student that needs a person: a locked or closing
+ * subscription first, then no teacher, then no regular times.
+ */
+function studentCallout(s: StudentProfile, standing: Standing | undefined, tx: ReturnType<typeof useCopy>, locale: 'ar' | 'en'): Callout | null {
+  const sep = locale === 'ar' ? '، ' : ', '
+  if (standing && standing.state !== 'open') {
+    const why = standing.lockReasons.map((r) => tx(REASON_LABEL[r])).join(sep)
+    return {
+      tone: standing.state === 'locked' ? 'urgent' : 'waiting',
+      title: tx(standing.state === 'locked' ? P.stCalloutLocked : P.stCalloutGrace),
+      body: why ? tx(P.stCalloutWhy, { why }) : standing.state === 'grace' && standing.graceLeft !== null ? tx(S.graceLeft, { n: standing.graceLeft }) : undefined,
+      action: (
+        <Link className="btn btn--sm" to="#subscription">
+          {tx(P.seeSubscription)}
+        </Link>
+      ),
+    }
+  }
+  if (!s.teacher) return { tone: 'waiting', title: tx(P.noTeacherYet) }
+  if (s.schedule.length === 0) {
+    return {
+      tone: 'waiting',
+      title: tx(P.noSchedule),
+      action: (
+        <Link className="btn btn--sm" to="#schedule">
+          {tx(P.seeSchedule)}
+        </Link>
+      ),
+    }
+  }
+  return null
 }
 
 /**

@@ -1,26 +1,21 @@
 import { useI18n } from '@/core/i18n/I18nProvider'
-import { Sheet } from '@/features/profiles/RecordParts'
+import type { ReactNode } from 'react'
 import type { StaffProfile, StaffSummary } from './api'
 import { T, useCopy } from './copy'
 import { useOrganization, useTeam } from './hooks'
 
 /**
- * One bar: this person's assigned families against the people who report to
- * the same manager, with a gold marker at the team's average.
- *
- * The system records no capacity, so the bar's full length is the heaviest
- * load in the team, and the caption says so. It is drawn only for a viewer who
- * can already read the team (their manager, via /staff-profiles/team; the super
- * admin, via the organization directory); for anyone else, and for a team of
- * one, there is nothing to compare against and nothing is shown.
+ * This person's assigned families against the people who report to the same
+ * manager, as one quiet line for the families highlight: the team's average and
+ * its heaviest load. The system records no capacity. Drawn only for a viewer who
+ * can already read the team; null where there is nothing to compare against.
  */
-export function LoadAgainstTeam({ profile }: { profile: StaffProfile }) {
+export function useTeamLoadNote(profile: StaffProfile): ReactNode {
   const tx = useCopy()
-  const { number } = useI18n()
+  const { number, locale } = useI18n()
   const relation = profile.access.relation
   const team = useTeam(relation === 'team')
   const organization = useOrganization(relation === 'organization' && profile.viewer.organizationOverview)
-
   const managerId = profile.reportingManager?.staffId
   const peers: StaffSummary[] =
     relation === 'team'
@@ -30,36 +25,9 @@ export function LoadAgainstTeam({ profile }: { profile: StaffProfile }) {
         : []
   const active = peers.filter((s) => s.isActive)
   if (active.length < 2 || !active.some((s) => s.staffId === profile.staffId)) return null
-
-  const mine = profile.workload.assignedFamilies
-  const loads = active.map((s) => (s.staffId === profile.staffId ? mine : s.workload.assignedFamilies))
+  const loads = active.map((s) => (s.staffId === profile.staffId ? profile.workload.assignedFamilies : s.workload.assignedFamilies))
   const heaviest = Math.max(...loads)
   if (heaviest === 0) return null
-  const average = loads.reduce((a, b) => a + b, 0) / loads.length
-  const share = Math.round((mine / heaviest) * 100)
-  const averageAt = Math.min(100, (average / heaviest) * 100)
-  const averageText = number(Math.round(average * 10) / 10)
-
-  return (
-    <Sheet id="sp-load" section="load" title={tx(T.loadTitle)}>
-      <div className="sp-load">
-        <p className="sp-load__line">
-          <span className="numeral sp-load__n">{number(mine)}</span>
-          <span>{tx(T.loadFamilies)}</span>
-          <span className="sp-load__share">{tx(T.loadShare, { pct: number(share) })}</span>
-        </p>
-        {/* A scale reads from its start in both languages; it is a picture, described in the line above. */}
-        <div className="sp-load__bar" aria-hidden="true">
-          <span className="sp-load__fill" style={{ inlineSize: `${share}%` }} />
-          <span className="sp-load__avg" style={{ insetInlineStart: `${averageAt}%` }} />
-        </div>
-        <p className="sp-load__legend">
-          <span className="sp-load__key" aria-hidden="true" />
-          <span>{tx(T.teamAverage, { n: averageText })}</span>
-          <span>{tx(T.heaviest, { n: number(heaviest) })}</span>
-          <span className="sp-load__peers">{tx(T.peers, { n: number(active.length) })}</span>
-        </p>
-      </div>
-    </Sheet>
-  )
+  const average = Math.round((loads.reduce((a, b) => a + b, 0) / loads.length) * 10) / 10
+  return `${tx(T.teamAverage, { n: number(average) })}${locale === 'ar' ? '، ' : ', '}${tx(T.heaviest, { n: number(heaviest) })}`
 }

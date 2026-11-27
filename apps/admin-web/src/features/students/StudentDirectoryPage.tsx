@@ -13,6 +13,7 @@ import { studentPath } from '@/features/profiles/api'
 import { describeError, isProfileRefusal, useCopy, type Pair } from '@/features/profiles/copy'
 import { STUDENTS_PAGE_SIZE, type StudentQuery, type StudentRow, type StudentStatus } from './api'
 import { useStudentList } from './hooks'
+import { useRememberWalk } from '@/features/profiles/RecordHead'
 import '@/features/profiles/profiles.css'
 
 const S = {
@@ -127,6 +128,8 @@ export function StudentDirectoryPage() {
   const query: StudentQuery = { q: deferred, teacher, supervisor, status, page }
   const list = useStudentList(query)
   const data = list.data
+  // A student's file walks this page of the list in the order it is shown.
+  useRememberWalk('students', data?.students)
   const pages = data ? Math.max(1, Math.ceil(data.total / (data.limit || STUDENTS_PAGE_SIZE))) : 1
   const groups = byTeacher(data?.students ?? [], locale)
 

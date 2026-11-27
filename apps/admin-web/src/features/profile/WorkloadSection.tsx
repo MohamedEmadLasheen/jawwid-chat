@@ -80,15 +80,14 @@ export function NumbersGroup({
           </Fact>
         ))}
       </dl>
-      <p className="rec-rule">
-        {tx(T.asOf, { when: dateTime(asOf) })}. {tx(T.workloadHint)}
-      </p>
-      <p className="rec-rule" role="note">
-        <strong>{tx(T.notTracked)}</strong>
-        <span>: {tx(T.notTrackedBody)}</span>
-      </p>
+      <p className="rec-rule">{tx(T.asOf, { when: dateTime(asOf) })}</p>
       <details className="sp-defs">
         <summary>{tx(T.whatCounts)}</summary>
+        <p className="rec-rule">{tx(T.workloadHint)}</p>
+        <p className="rec-rule" role="note">
+          <strong>{tx(T.notTracked)}</strong>
+          <span>: {tx(T.notTrackedBody)}</span>
+        </p>
         <ul>
           {metrics.map((m) => (
             <li key={m.key}>

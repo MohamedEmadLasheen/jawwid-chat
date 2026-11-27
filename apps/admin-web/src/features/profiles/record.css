@@ -41,6 +41,8 @@
 .rec-head__line a:hover { color: var(--teal); text-decoration: underline; text-underline-offset: 3px; }
 .rec-head__line strong { font-weight: 600; color: var(--ink); }
 .rec-head__actions { flex: none; align-self: flex-start; }
+/* The one solid action always comes first, whichever it is for this record. */
+.rec-head__actions > .btn--primary { order: -1; }
 .rec-lock { display: inline-flex; align-items: center; gap: 4px; margin-inline-start: 10px; color: var(--ink-muted); font-size: var(--fs-xs); white-space: nowrap; vertical-align: 1px; }
 .rec-lock .icon { color: var(--ink-muted); }
 .rec-head__tabs { margin-block-start: var(--space-4); }
@@ -61,6 +63,8 @@
 .rec-hl .figure__note { font-size: var(--fs-xs); line-height: 1.45; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rec-hl .figure--key .figure__n { color: var(--ink); }
 .rec-hl__item--waiting .figure__n, .rec-hl__item--waiting .figure__note { color: var(--waiting); }
+.rec-hl__late { color: var(--urgent); font-weight: 600; }
+.rec-hl__item--text .figure__n { font-family: var(--font); font-size: var(--fs-md); font-weight: 600; }
 .rec-hl__none { font-family: var(--font); font-size: var(--fs-sm); font-weight: 400; color: var(--ink-muted); }
 @media (max-width: 1199px) {
   .figures.rec-hl, .rec-hl[data-count] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -78,8 +82,10 @@
   border: 1px solid transparent;
   border-radius: var(--radius-lg);
 }
-.rec-callout--urgent { background: var(--urgent-tint); border-color: var(--urgent-line); }
-.rec-callout--waiting { background: var(--waiting-tint); border-color: #f0dcb4; }
+/* White, like the work: the icon and a soft edge say how pressing it is; no wash of colour. */
+.rec-callout { background: var(--surface); }
+.rec-callout--urgent { border-color: var(--urgent-line); }
+.rec-callout--waiting { border-color: var(--line-strong); }
 .rec-callout__icon { flex: none; display: grid; place-items: center; }
 .rec-callout--urgent .rec-callout__icon { color: var(--urgent); }
 .rec-callout--waiting .rec-callout__icon { color: var(--waiting); }
@@ -90,7 +96,9 @@
 
 @media (max-width: 767px) {
   .rec-head__bar { margin-block-end: var(--space-2); }
-  .rec-walk__at { display: none; }
+  .rec-walk__at { font-size: var(--fs-xs); }
+  .rec-hl .figure__n { font-size: var(--fs-md); }
+  .rec-hl .figure__note { white-space: normal; }
   .rec-head__row { flex-wrap: wrap; align-items: flex-start; gap: var(--space-3); }
   .rec-head__lead .avatar, .rec-lead__img { inline-size: 48px; block-size: 48px; font-size: 17px; border-radius: 10px; }
   .rec-head__who { flex-basis: calc(100% - 64px); }
@@ -199,7 +207,7 @@
 html[lang='ar'] .rec-attn__sub > :not(:last-child)::after, html[lang='ar'] .rec-slot-row__more > :not(:last-child)::after { content: '،'; }
 .rec-attn__more { font-size: var(--fs-xs); color: var(--ink-muted); line-height: 1.55; overflow-wrap: anywhere; }
 .rec-attn__label { font-weight: 500; }
-.rec-late { color: var(--urgent); font-weight: 600; }
+.rec-late { color: var(--ink-2); }
 .rec-attn__act { display: flex; justify-content: flex-end; min-inline-size: 0; }
 .rec-attn--plain { min-block-size: 52px; }
 /* Settled or struck out: said, not stressed. */
@@ -217,7 +225,8 @@ html[lang='ar'] .rec-attn__sub > :not(:last-child)::after, html[lang='ar'] .rec-
 .rec-amount { display: inline-flex; align-items: baseline; gap: 5px; white-space: nowrap; font-family: var(--font-head); font-size: var(--fs-lg); font-weight: 600; font-variant-numeric: tabular-nums lining-nums; color: var(--ink); }
 .rec-amount__unit { font-family: var(--font); font-size: var(--fs-xs); font-weight: 400; color: var(--ink-muted); }
 html[lang='ar'] .rec-amount__unit { font-family: var(--font); }
-.rec-amount--late { color: var(--urgent); }
+/* A late amount stays in ink: the tag beside the title already says it is late. */
+.rec-amount--late { color: var(--ink); }
 
 @media (max-width: 640px) {
   .rec-list { grid-template-columns: minmax(0, 1fr) auto; }

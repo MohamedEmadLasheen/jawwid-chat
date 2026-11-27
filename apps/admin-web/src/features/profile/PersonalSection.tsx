@@ -336,7 +336,7 @@ function ProfessionalForm({ profile, refKey, onDone }: { profile: StaffProfile; 
  * because they are official fields. Profile completeness closes the group as
  * one line over a thin rule, then the two rules that protect people.
  */
-export function AccountGroup({ profile, completenessInHead = false }: { profile: StaffProfile; completenessInHead?: boolean }) {
+export function AccountGroup({ profile, completenessShown = false }: { profile: StaffProfile; completenessShown?: boolean }) {
   const tx = useCopy()
   const { locale } = useI18n()
   const status = profile.account.status
@@ -344,6 +344,19 @@ export function AccountGroup({ profile, completenessInHead = false }: { profile:
   const pct = total === 0 ? 100 : Math.round((complete / total) * 100)
   // The role, the status word and the last activity are in the record's head; the margin keeps the rest.
   const statusNeedsSaying = !profile.account.hasLogin || (status !== null && status !== 'active')
+  const rules = (
+    <details className="sp-defs">
+      <summary>{tx(T.aboutFields)}</summary>
+      <ul>
+        <li>{tx(T.officialFieldsNote)}</li>
+        <li>{tx(T.contactNote)}</li>
+      </ul>
+    </details>
+  )
+  // Nothing of their own to say here (a manager reading an active colleague): only the rules, quietly.
+  if (!profile.signInIdentity && !statusNeedsSaying && status && profile.reportingManager && !completenessShown) {
+    return <div className="aside-group rec-group" data-section="account">{rules}</div>
+  }
   return (
     <section className="aside-group rec-group" aria-labelledby="sp-account" data-section="account">
       <div className="rec-group__head">
@@ -372,7 +385,8 @@ export function AccountGroup({ profile, completenessInHead = false }: { profile:
           </Fact>
         )}
       </dl>
-      {!completenessInHead && (
+      {/* A nudge for the person themselves; a manager reads the profile, not its upkeep. */}
+      {completenessShown && (
         <div className="sp-completeness">
           <span>
             {tx(T.completeness)}: {tx(T.completeCount, { done: complete, total })}
@@ -385,8 +399,7 @@ export function AccountGroup({ profile, completenessInHead = false }: { profile:
           </span>
         </div>
       )}
-      <p className="rec-rule">{tx(T.officialFieldsNote)}</p>
-      <p className="rec-rule">{tx(T.contactNote)}</p>
+      {rules}
     </section>
   )
 }

@@ -158,8 +158,8 @@ export const T = {
   loadTitle: { en: 'Load against the team', ar: 'العبء مقارنةً بالفريق' },
   loadFamilies: { en: 'Assigned families', ar: 'الأسر المسندة' },
   loadShare: { en: '{pct}% of the heaviest load in the team', ar: '{pct}% من أعلى عبء في الفريق' },
-  teamAverage: { en: 'Team average {n}', ar: 'متوسط الفريق {n}' },
-  heaviest: { en: 'Heaviest {n}', ar: 'الأعلى {n}' },
+  teamAverage: { en: 'team average {n}', ar: 'متوسط الفريق {n}' },
+  heaviest: { en: 'highest {n}', ar: 'الأعلى {n}' },
   peers: { en: 'Among {n} people who report to the same manager.', ar: 'بين {n} ممن يتبعون المدير نفسه.' },
 
   // Team
@@ -271,12 +271,15 @@ export const T = {
   awaitingNote: { en: '{n} awaiting our reply', ar: '{n} بانتظار ردّنا' },
   // The record's head (V3)
   hlAwaiting: { en: 'Awaiting reply', ar: 'بانتظار الرد' },
-  hlAwaitingOf: { en: 'of {n} open conversations', ar: 'من {n} محادثات مفتوحة' },
+  hlAwaitingOf: { en: 'of {n}', ar: 'من {n}' },
   hlLastActive: { en: 'Last active', ar: 'آخر نشاط' },
   hlNoActivity: { en: 'No activity yet', ar: 'لا نشاط بعد' },
   hlRole: { en: 'Role', ar: 'الدور' },
   lineReportsTo: { en: 'reports to {name}', ar: 'يتبع {name}' },
+  lineReportsToFirst: { en: 'Reports to {name}', ar: 'يتبع {name}' },
   lineNoManager: { en: 'no reporting line yet', ar: 'بلا مدير مباشر بعد' },
+  lineNoManagerFirst: { en: 'No reporting line yet', ar: 'بلا مدير مباشر بعد' },
+  aboutFields: { en: 'About these fields', ar: 'عن هذه الحقول' },
   lineJoined: { en: 'joined {date}', ar: 'انضم في {date}' },
   calloutInactiveFamilies: { en: 'Inactive, yet still the supervisor of {n}.', ar: 'غير نشط، ولا يزال مشرفًا على {n}.' },
   calloutInactiveBody: { en: 'Hand them to someone active so no family waits.', ar: 'سلّمها إلى موظف نشط حتى لا تنتظر أسرة.' },
