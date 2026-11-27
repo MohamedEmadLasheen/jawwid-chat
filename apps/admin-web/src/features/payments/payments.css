@@ -128,6 +128,8 @@
 
 .tx-sheet { position: relative; }
 .tx-filters__toggle { gap: 6px; }
+/* The search names four things to look for: room for all of them. */
+.tx-filters .sheet-bar .search { flex: 1 1 420px; max-inline-size: 520px; }
 .tx-filters__toggle[aria-expanded='true'] { background: var(--teal-tint); border-color: var(--teal-tint-2); color: var(--teal-dark); }
 .tx-filters__fields { --control-h: 36px; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); align-items: end; gap: var(--space-3); padding: var(--space-3) var(--space-4) var(--space-4); border-block-end: 1px solid var(--line-2); background: var(--surface-2); }
 .tx-filters__fields[hidden] { display: none; }
@@ -349,6 +351,11 @@ fieldset:disabled .set-reminder label { cursor: default; }
   .table.tx-table tbody tr td, .table.tx-table tbody tr th { display: block; padding: 0; border: 0; inline-size: auto; max-inline-size: none; }
   .table.tx-table tr.tx-day { display: block; padding: 8px var(--space-4); background: var(--surface-2); }
   .table.tx-table .tx-day th { background: none; border: 0; padding: 0; }
+  /* Payments on a phone: who and how much; what for and how, one line each; the invoice waits in the payment's sheet. */
+  .table.tx-table--payments .tx-c-for { grid-column: 1; grid-row: 2; padding-inline-start: 38px !important; }
+  .tx-table--payments .tx-c-for > .pay-sub, .tx-table--payments .tx-method__card, .tx-table--payments .tx-c-ref { display: none !important; }
+  .table.tx-table--payments .tx-c-method { grid-column: 1; grid-row: 3; padding-inline-start: 38px !important; color: var(--ink-muted); }
+  .table.tx-table--payments td.cell-actions { grid-column: 2; grid-row: 2 / span 2; align-self: end; }
   .tx-table .tx-c-who { grid-column: 1; grid-row: 1; }
   .tx-table .tx-c-amount { grid-column: 2; grid-row: 1; justify-self: end; }
   .tx-table .tx-states { flex-direction: column; align-items: flex-end; gap: 3px; }

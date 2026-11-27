@@ -268,7 +268,8 @@ function SettingsForm({ settings }: { settings: BillingSettings }) {
           )}
         </div>
 
-        {editable && (
+        {/* The card switch is its own confirmed act: its group carries no Save unless another group waits to be saved. */}
+        {editable && (group !== 'card' || editedNames.length > 0) && (
           <div className="set-save">
             <button type="button" className="btn btn--primary" disabled={save.isPending || editedNames.length === 0} onClick={submit}>
               {save.isPending ? tx(PAY.saving) : tx(PAY.save)}
