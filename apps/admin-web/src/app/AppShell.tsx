@@ -26,6 +26,7 @@ import { Icon } from '@/shared/components/Icon'
 import { Menu } from '@/shared/components/Menu'
 import { useMediaQuery } from '@/shared/hooks/useMediaQuery'
 import {
+  AREA_PATH,
   destinationForPath,
   entriesOf,
   soleEntry,
@@ -452,6 +453,13 @@ function Where({ destinations }: { destinations: Destination[] }) {
       const key = destinationForPath(destinations, pathname)
       const d = destinations.find((x) => x.key === key)
       if (d) page = tx(d.label)
+      else {
+        // A page reached by a link rather than from this role's rail still says its name.
+        const area = (Object.keys(AREA_PATH) as Array<keyof typeof AREA_PATH>)
+          .filter((a) => pathname === AREA_PATH[a] || pathname.startsWith(`${AREA_PATH[a]}/`))
+          .sort((a, b) => AREA_PATH[b].length - AREA_PATH[a].length)[0]
+        if (area) page = t(`nav.${area}`)
+      }
     }
   }
   if (!page) return <span className="topbar__where" />
