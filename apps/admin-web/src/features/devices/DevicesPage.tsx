@@ -4,6 +4,7 @@ import { useI18n } from '@/core/i18n/I18nProvider'
 import { useSession } from '@/core/auth/SessionProvider'
 import { ApiError } from '@/core/api/errors'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
+import { Icon } from '@/shared/components/Icon'
 import { PageHeader } from '@/shared/components/PageHeader'
 import { QueryBoundary } from '@/shared/components/States'
 import { mySessionsApi, sessionKeys, type SessionDto } from './api'
@@ -63,12 +64,12 @@ export function MyDevices() {
             {sessions.length > 0 && <span className="sheet__count">{number(sessions.length)}</span>}
           </div>
           {others > 0 && (
-            <button type="button" className="btn btn--sm btn--danger" onClick={() => setPending({ act: 'others' })}>
+            <button type="button" className="btn btn--sm dev-signout-others" onClick={() => setPending({ act: 'others' })}>
+              <Icon name="signOut" size={16} />
               {tx(D.signOutOthers)}
             </button>
           )}
         </div>
-        <p className="dev-sheet__rule">{tx(D.subtitle)}</p>
         <QueryBoundary
           isLoading={list.isLoading}
           error={list.error}

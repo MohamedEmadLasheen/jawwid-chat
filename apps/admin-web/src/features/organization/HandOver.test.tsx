@@ -93,7 +93,7 @@ describe('"I\'m away": the supervisor hands over in one step', () => {
     expect(select).toHaveAttribute('data-value', 'bk-1')
     const options = await optionsOf(userEvent, select)
     expect(options.map((o) => [o.label, o.disabled])).toEqual([
-      ['Backup Amira · linked backup', false],
+      ['Backup Amira (linked backup)', false],
       ['Backup Dalia — already covers 2 supervisors', true],
       // "I'm away" offers only a backup a manager linked (PD-8 canConfigureBackup).
       ['Backup Hala — not linked to you — ask your manager', true],
@@ -104,7 +104,7 @@ describe('"I\'m away": the supervisor hands over in one step', () => {
 
     const confirm = await screen.findByRole('dialog', { name: 'Confirm the hand-over' })
     expect(within(confirm).getByText(/^12 families, 9 groups and 4 open items move to Backup Amira until /)).toBeInTheDocument()
-    expect(within(confirm).getByText(/Parent chats: 11 · Awaiting approval: 1 · Open instalments: 2 · New students: 1/)).toBeInTheDocument()
+    expect(within(confirm).getByText(/Parent chats: 11, awaiting approval: 1, open instalments: 2, new students: 1/)).toBeInTheDocument()
     expect(sent('POST', /\/org\/covers$/)).toEqual([])
 
     await userEvent.click(within(confirm).getByRole('button', { name: 'Hand over' }))

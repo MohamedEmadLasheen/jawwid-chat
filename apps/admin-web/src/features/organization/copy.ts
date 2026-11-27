@@ -31,10 +31,8 @@ export function useCopy() {
 
 export const T = {
   title: { en: 'Organization', ar: 'الهيكل التنظيمي' },
-  subtitle: {
-    en: 'Who supervises each child, and who covers whom. Every change is checked and recorded with its reason.',
-    ar: 'من يشرف على كل طفل، ومن ينوب عن من. يُراجَع كل تغيير ويُسجَّل مع سببه.',
-  },
+  /** Names in a sentence are parted by the reader's comma. */
+  listComma: { en: ', ', ar: '، ' },
   tabChildren: { en: 'Children & supervisors', ar: 'الأطفال والمشرفون' },
   tabStructure: { en: 'Departments & backups', ar: 'الأقسام والبدلاء' },
   // PD-35: teachers and their supervisors.
@@ -151,11 +149,11 @@ export const T = {
   confirmTitle: { en: 'Confirm the hand-over', ar: 'تأكيد التسليم' },
   summary: {
     en: '{families} families, {groups} groups and {items} open items move to {backup} until {date}.',
-    ar: 'تنتقل إلى {backup} حتى {date}: الأسر {families} · المجموعات {groups} · المهام المفتوحة {items}.',
+    ar: 'تنتقل إلى {backup} حتى {date}: الأسر {families}، والمجموعات {groups}، والمهام المفتوحة {items}.',
   },
   summaryDetail: {
-    en: 'Parent chats: {directs} · Awaiting approval: {approvals} · Open instalments: {instalments} · New students: {newStudents}',
-    ar: 'محادثات أولياء الأمور: {directs} · بانتظار الموافقة: {approvals} · أقساط مفتوحة: {instalments} · طلاب جدد: {newStudents}',
+    en: 'Parent chats: {directs}, awaiting approval: {approvals}, open instalments: {instalments}, new students: {newStudents}.',
+    ar: 'محادثات أولياء الأمور: {directs}، بانتظار الموافقة: {approvals}، أقساط مفتوحة: {instalments}، طلاب جدد: {newStudents}.',
   },
   summaryKeep: {
     en: '{name} keeps every chat and can still reply; notifications go to {backup}. A line is posted in each group so families know who answers.',

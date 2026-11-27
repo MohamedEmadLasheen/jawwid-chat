@@ -16,10 +16,6 @@ export const SA = {
   tabRoles: { ar: 'الأدوار', en: 'Roles' },
 
   title: { ar: 'حسابات الموظفين', en: 'Staff accounts' },
-  subtitle: {
-    ar: 'حسابات القسم وأدوارها. يُراجَع كل إجراء، ويتطلب سببًا ويُسجَّل.',
-    en: 'Department accounts and their roles. Every action is checked, needs a reason and is recorded.',
-  },
   newAccount: { ar: 'حساب جديد', en: 'New account' },
   empty: { ar: 'لا توجد حسابات موظفين لعرضها.', en: 'No staff accounts to show.' },
   name: { ar: 'الاسم', en: 'Name' },
@@ -160,10 +156,6 @@ export const SA = {
   noSignIn: { ar: 'لا يوجد حساب دخول لهذا الموظف.', en: 'This staff member has no sign-in.' },
 
   rolesTitle: { ar: 'الأدوار', en: 'Roles' },
-  rolesSubtitle: {
-    ar: 'مجموعات صلاحيات مسمّاة. يعرّفها مدير النظام وحده، ويمنحها المدير لمتخصصي قسمه.',
-    en: 'Named bundles of permissions. Only the super admin defines them; a manager grants them to their specialists.',
-  },
   newRole: { ar: 'دور جديد', en: 'New role' },
   noRolesYet: { ar: 'لا توجد أدوار بعد.', en: 'No roles yet.' },
   backToRoles: { ar: 'كل الأدوار', en: 'All roles' },

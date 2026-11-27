@@ -15,6 +15,7 @@ import { countWords } from '@/features/instalments/copy'
 import { CHILDREN_COUNT } from '@/features/profiles/copy'
 import { studentPath } from '@/features/profiles/api'
 import { SupervisorColors } from '@/features/schedule/SupervisorColors'
+import { useDay } from '@/features/devices/when'
 import type { BackupLink, BackupStatus, Cover, Department, DepartmentMember, LearnerAssignment, TeacherAssignment } from './api'
 import { CHILDREN_WAITING, DEPARTMENT_LABEL, POSITION_LABEL, STATUS_LABEL, T, TEACHERS_WAITING, describeError, useCopy } from './copy'
 import { useAssignTeacher, useCovers, useEndCover, useExtendCover, useLearners, useStructure, useTeacherAssignments } from './hooks'
@@ -86,7 +87,6 @@ export function OrganizationPage() {
       <div className="page__inner">
         <PageHeader
           title={tx(T.title)}
-          subtitle={tx(T.subtitle)}
           tabs={
             structure.data && (
               <div className="org-tabs" role="tablist" aria-label={tx(T.title)}>
@@ -132,7 +132,7 @@ export function OrganizationPage() {
   )
 }
 
-/** The head of a group of rows: who the group belongs to (or a gold tag when nobody), how many, and what applies to them. */
+/** The head of a group of rows: who the group belongs to (or the words "no supervisor", with the amber dot of a group nobody holds), how many, and what applies to them. */
 function GroupHead({ columns, who, count, children }: { columns: number; who: ReactNode; count: number; children?: ReactNode }) {
   const { number } = useI18n()
   return (
@@ -203,10 +203,10 @@ function TeachersTab() {
         <section className="sheet dir-sheet org-sheet" aria-label={tx(T.tabTeachers)}>
           <div className="sheet-bar org-bar">
             <p className={view.unassigned > 0 ? 'org-rule org-rule--waiting' : 'org-rule'} role="status">
-              <strong>{view.unassigned > 0 ? countWords(view.unassigned, TEACHERS_WAITING, locale) : tx(T.teachersAllAssigned)}</strong>{' '}
+              <strong>{view.unassigned > 0 ? `${countWords(view.unassigned, TEACHERS_WAITING, locale)}.` : tx(T.teachersAllAssigned)}</strong>{' '}
               {tx(view.strictScope ? T.scopeOn : T.scopeOff)}
             </p>
-            <span className="sheet-bar__end dir-total">{plural(PLURAL.teachers, view.teachers.length)}</span>
+            <span className="dir-count">{plural(PLURAL.teachers, view.teachers.length)}</span>
           </div>
           {assign.error && <p className="field__error org-error" role="alert">{describeError(assign.error, locale)}</p>}
           {view.teachers.length === 0 ? (
@@ -233,7 +233,7 @@ function TeachersTab() {
                           </Link>
                         </>
                       ) : g.kind === 'unassigned' ? (
-                        <Badge tone="gold">{tx(T.unassigned)}</Badge>
+                        <span>{tx(T.unassigned)}</span>
                       ) : (
                         <span className="dir-group__label">{tx(T.inactiveTeacher)}</span>
                       )
@@ -373,7 +373,7 @@ function ChildrenTab({ operations }: { operations: Department }) {
               ))}
             </SearchableSelect>
           </div>
-          <span className="sheet-bar__end dir-total">{countWords(rows.length, CHILDREN_COUNT, locale)}</span>
+          <span className="dir-count">{countWords(rows.length, CHILDREN_COUNT, locale)}</span>
         </div>
         {rows.length === 0 ? (
           <EmptyState title={tx(T.noChildren)} />
@@ -402,7 +402,7 @@ function ChildrenTab({ operations }: { operations: Department }) {
                         </Link>
                       </>
                     ) : (
-                      <Badge tone="gold">{tx(T.unassigned)}</Badge>
+                      <span>{tx(T.unassigned)}</span>
                     )
                   }
                 >
@@ -468,7 +468,7 @@ function ChildrenTab({ operations }: { operations: Department }) {
 // Departments & backups
 // ---------------------------------------------------------------------------
 
-/** A link in force is where things stand (a teal tag); one that ran out waits on someone (gold); the rest is a quiet word. */
+/** A link in force is where things stand (a teal tag); one that ran out waits on someone (amber); the rest is a quiet word. */
 const STATUS_TONE: Record<BackupStatus, Tone> = {
   active: 'info',
   dormant: 'neutral',
@@ -617,7 +617,7 @@ function coverOf(member: DepartmentMember, covers: Cover[]) {
  */
 function CoverTags({ member, covers }: { member: DepartmentMember; covers: Cover[] }) {
   const tx = useCopy()
-  const { date } = useI18n()
+  const date = useDay()
   const { away, covering } = coverOf(member, covers)
   if (away) {
     return (
@@ -705,7 +705,7 @@ function CoverControl({
 /** One backup link: who covers whom, where it stands, and its actions: activating or stopping it stated, ending it behind "more". */
 function BackupRow({ link, canManage, onAct }: { link: BackupLink; canManage: boolean; onAct: (a: BackupAction) => void }) {
   const tx = useCopy()
-  const { date } = useI18n()
+  const date = useDay()
   const names = { backup: link.backup?.name ?? '', primary: link.primary?.name ?? '' }
   const sentence = tx(T.covers, names)
   return (

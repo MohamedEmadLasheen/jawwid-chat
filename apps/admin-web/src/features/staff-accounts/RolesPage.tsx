@@ -71,7 +71,6 @@ export function RolesPage() {
       <div className="page__inner">
         <PageHeader
           title={tx(SA.rolesTitle)}
-          subtitle={tx(SA.rolesSubtitle)}
           tabs={tabs ?? undefined}
           actions={
             canDefine && (

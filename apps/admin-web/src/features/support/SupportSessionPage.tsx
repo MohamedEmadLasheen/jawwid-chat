@@ -10,13 +10,15 @@ import { PageHeader } from '@/shared/components/PageHeader'
 import { EmptyState, LoadingState } from '@/shared/components/States'
 import { countWords } from '@/features/instalments/copy'
 import { bySeq, type ChatConversation } from '@/features/chat/chatApi'
+import { useWhen } from '@/features/devices/when'
+import { plainLabel } from '@/features/profiles/RecordParts'
 import { supportAdminApi, supportClient, supportKeys, supportTokens, type SupportSession } from './api'
 import { KIND_LABEL, MINUTES, S, describeError, isEnded, useCopy } from './copy'
 import './support.css'
 
 type Tab = 'chats' | 'profile'
 
-/** The session's last minutes are said in terracotta, so the end is not a surprise. */
+/** The session's last minutes are said in red, so the end is not a surprise. */
 const LAST_MINUTES = 5
 
 /**
@@ -32,7 +34,7 @@ const LAST_MINUTES = 5
  * are sent), sending a message (labelled "Sent by support"), the person's own
  * profile. The rest is refused there whatever this page offers.
  *
- * The masthead says whose account this is and never leaves the screen: a gold
+ * The masthead says whose account this is and never leaves the screen: an amber
  * tag, the person's name, the time left, "Keep working" and the way out. Under
  * it the person's chats are a workspace in the chat's own language (the list,
  * the open thread, a composer), one pane at a time on a phone.
@@ -117,7 +119,7 @@ export function SupportSessionPage() {
         <PageHeader
           lead={<Avatar name={session.target.name} seed={session.target.accountId} size="lg" />}
           title={session.target.name}
-          status={<Badge tone="gold">{tx(S.tag)}</Badge>}
+          status={<Badge tone="waiting">{tx(S.tag)}</Badge>}
           subtitle={tx(S.acting, { name: session.target.name, kind })}
           actions={
             <>
@@ -218,7 +220,7 @@ function Chats({ id, client, session, onEnded }: { id: string; client: Client; s
           {list.error && !isEnded(list.error) && <li className="support-list__note support-list__note--error">{describeError(list.error, locale)}</li>}
           {list.data && conversations.length === 0 && <li className="support-list__note">{tx(S.noChats)}</li>}
           {conversations.map((c) => {
-            const title = titleOf(c, tx(S.untitled))
+            const title = titleOf(c, tx(S.untitled), locale)
             const last = c.lastMessage && !c.lastMessage.deleted && !c.lastMessage.systemKind ? c.lastMessage.text : null
             return (
               <li key={c.id}>
@@ -246,14 +248,14 @@ function Chats({ id, client, session, onEnded }: { id: string; client: Client; s
           })}
         </ul>
       </section>
-      <section className="support-thread" aria-label={current ? titleOf(current, tx(S.untitled)) : tx(S.pickChat)}>
+      <section className="support-thread" aria-label={current ? titleOf(current, tx(S.untitled), locale) : tx(S.pickChat)}>
         {open ? (
           <Thread
             key={open}
             id={id}
             client={client}
             conversationId={open}
-            title={current ? titleOf(current, tx(S.untitled)) : tx(S.untitled)}
+            title={current ? titleOf(current, tx(S.untitled), locale) : tx(S.untitled)}
             person={session.target}
             onBack={() => setOpen(null)}
             onEnded={onEnded}
@@ -288,6 +290,7 @@ function Thread({
 }) {
   const tx = useCopy()
   const { locale, dateTime, number } = useI18n()
+  const when = useWhen()
   const queryClient = useQueryClient()
   const [draft, setDraft] = useState('')
   const body = useRef<HTMLDivElement>(null)
@@ -358,8 +361,8 @@ function Thread({
                       <Icon name="paperclip" size={15} /> <span className="ltr">{number(m.attachments.length)}</span>
                     </span>
                   ) : null}
-                  <time className="support-bubble__meta" dateTime={m.createdAt}>
-                    {dateTime(m.createdAt)}
+                  <time className="support-bubble__meta" dateTime={m.createdAt} title={dateTime(m.createdAt)}>
+                    {when(m.createdAt, { start: true })}
                   </time>
                 </div>
               </li>
@@ -480,9 +483,10 @@ function ParentProfile({ id, client, onEnded }: { id: string; client: Client; on
   )
 }
 
-function titleOf(c: ChatConversation, fallback: string): string {
-  if (c.title) return c.title
+function titleOf(c: ChatConversation, fallback: string, locale: 'ar' | 'en'): string {
+  // A title the server composed with middle dots reads here as names parted by commas.
+  if (c.title) return plainLabel(c.title, locale)
   if (c.learner?.name) return c.learner.name
   const names = (c.members ?? []).map((m) => m.displayName).filter(Boolean)
-  return names.length ? names.join('، ') : fallback
+  return names.length ? names.join(locale === 'ar' ? '، ' : ', ') : fallback
 }

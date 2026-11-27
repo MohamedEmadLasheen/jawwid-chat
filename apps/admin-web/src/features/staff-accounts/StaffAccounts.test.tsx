@@ -341,7 +341,7 @@ describe('PD-40: the Staff accounts page', () => {
     const detail = await screen.findByRole('region', { name: 'Specialist One' })
     const list = await within(detail).findByRole('list', { name: 'What this account can open' })
     expect(within(list).getByText('Design and upload certificates')).toBeInTheDocument()
-    expect(within(list).getByText(/Role: Certificate designer · granted by The Owner on/)).toBeInTheDocument()
+    expect(within(list).getByText(/Role: Certificate designer, granted by The Owner on/)).toBeInTheDocument()
     expect(within(list).getByText(/Default for its tier and department/)).toBeInTheDocument()
     // Read-only: reading it writes nothing.
     expect(calls('POST', /\/access/)).toHaveLength(0)
@@ -418,7 +418,7 @@ describe('PD-40: the Staff accounts page', () => {
       const detail = await open({ ...ACCESS, pages: [{ page: 'materials', keys: [{ ...ACCESS.pages[0]!.keys[0]!, denied: true }] }] })
       expect(await within(detail).findByText('Restricted')).toBeInTheDocument()
       expect(within(detail).queryByRole('button', { name: 'Restrict materials.author for Specialist One' })).not.toBeInTheDocument()
-      expect(await within(detail).findByText(/repeated late drafts · by Manager One/)).toBeInTheDocument()
+      expect(await within(detail).findByText(/repeated late drafts, by Manager One/)).toBeInTheDocument()
       await userEvent.click(within(detail).getByRole('button', { name: 'Lift the restriction on materials.author' }))
       const dialog = await screen.findByRole('dialog', { name: 'Lift the restriction on materials.author' })
       await userEvent.type(within(dialog).getByRole('textbox'), 'resolved')

@@ -78,7 +78,7 @@ describe('PD-21: the Accounts page', () => {
     renderWithProviders(<AppRoutes />, { staff: finance, route: '/accounts' })
     expect(await screen.findByRole('heading', { level: 1, name: 'Accounts' })).toBeInTheDocument()
     expect(await screen.findByText('Parent Alpha')).toBeInTheDocument()
-    expect(screen.getByText(/Child One، Child Two/)).toBeInTheDocument()
+    expect(screen.getByText(/Child One, Child Two/)).toBeInTheDocument()
     expect(screen.getByText('Teacher Omega')).toBeInTheDocument()
     const nav = screen.getByRole('navigation', { name: 'Jawwid Operations' })
     expect(within(nav).getByRole('link', { name: 'Accounts' })).toHaveAttribute('href', '/accounts')

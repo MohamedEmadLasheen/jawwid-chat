@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { useSession } from '@/core/auth/SessionProvider'
+import { useDay } from '@/features/devices/when'
 import type { Cover } from './api'
 import { T, describeError, useCopy } from './copy'
 import { useEndCover, useExtendCover, useMyCover } from './hooks'
@@ -43,7 +44,7 @@ export function CoverActions({ cover }: { cover: Cover }) {
  */
 export function MyCoverBanner() {
   const tx = useCopy()
-  const { date } = useI18n()
+  const date = useDay()
   const { staff } = useSession()
   // Supervisors (admin) and backup supervisors (coverage); managers act from the Organization page.
   const enabled = !!staff && (staff.role === 'admin' || staff.role === 'coverage')

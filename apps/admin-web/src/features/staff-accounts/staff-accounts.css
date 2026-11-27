@@ -65,17 +65,13 @@
 .md-table .dir-cell-state { inline-size: 1%; text-align: end; vertical-align: top; padding-block-start: 14px; }
 .md-table .acct-state { justify-content: flex-end; }
 .md-row { position: relative; }
-/* The open row: tinted, with the gold edge that marks where you are. */
+/* The open row is the selection: the teal tint, its name in the accent. Gold is kept for "now". */
 .md-row--current > td { background: var(--teal-tint); }
 .md-row--current:hover > td { background: var(--teal-tint); }
-.md-row--current > td:first-child { box-shadow: inset 3px 0 0 var(--gold); }
-[dir='rtl'] .md-row--current > td:first-child { box-shadow: inset -3px 0 0 var(--gold); }
 .md-row--past .sa-name { color: var(--ink-muted); font-weight: 500; }
 @media (max-width: 767px) {
   .md-table .dir-cell-state { inline-size: auto; padding-block-start: 0; }
-  .md-row--current { background: var(--teal-tint); box-shadow: inset 3px 0 0 var(--gold); }
-  [dir='rtl'] .md-row--current { box-shadow: inset -3px 0 0 var(--gold); }
-  .md-row--current > td:first-child, [dir='rtl'] .md-row--current > td:first-child { box-shadow: none; }
+  .md-row--current { background: var(--teal-tint); }
   .md-row--current > td { background: none; }
   .sa-page .md-table .sa-name { min-block-size: 32px; }
 }
@@ -83,7 +79,7 @@
 /* A role in the list: its name and what kind it is on one line, its key under it. */
 .sa-role { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; }
 .sa-role__key { display: block; line-height: 1.4; }
-.sa-key { display: inline-block; padding: 0 5px; border: 1px solid var(--line); border-radius: var(--radius-sm); font-family: var(--font-mono, ui-monospace, monospace); font-size: 11.5px; line-height: 1.6; color: var(--ink-muted); vertical-align: middle; overflow-wrap: anywhere; }
+.sa-key { display: inline-block; padding: 0 5px; border: 1px solid var(--line); border-radius: var(--radius-sm); font-family: var(--font-mono, ui-monospace, monospace); font-size: var(--fs-xs); line-height: 1.5; color: var(--ink-muted); vertical-align: middle; overflow-wrap: anywhere; }
 .sa-members { display: inline-flex; align-items: center; gap: 5px; font-size: var(--fs-sm); font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ink); white-space: nowrap; }
 .sa-members .icon { color: var(--ink-muted); }
 .sa-members--none { font-weight: 400; color: var(--border-control); }
@@ -127,8 +123,8 @@ html[lang='ar'] .md-pane__title { line-height: 1.45; }
 .md-check__label { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; font-size: var(--fs-md); overflow-wrap: anywhere; }
 .md-check__src { font-size: var(--fs-xs); line-height: 1.5; color: var(--ink-muted); overflow-wrap: anywhere; }
 .md-check__act { flex: none; margin-block: -2px; }
-/* A restricted permission is held and switched off: struck through, its mark terracotta. */
-.md-check--off > .icon { color: var(--urgent); }
+/* A restricted permission is held and switched off: struck through, its mark amber like its "Restricted" tag. */
+.md-check--off > .icon { color: var(--waiting); }
 .md-struck { text-decoration: line-through; color: var(--ink-muted); }
 .md-check--past > .icon { color: var(--border-control); }
 .md-people .md-check { align-items: center; }
@@ -168,12 +164,11 @@ html[lang='ar'] .md-pane__title { line-height: 1.45; }
 .sa-check { display: flex; gap: var(--space-2); align-items: flex-start; }
 .sa-check input, .sa-checklist input { accent-color: var(--teal); }
 .sa-preview { margin-block: var(--space-3); padding: 2px var(--space-3) var(--space-2); border: 0; border-inline-start: 2px solid var(--teal); border-radius: 0; }
-.sa-preview__title { font-size: 12.5px; font-weight: 500; color: var(--ink-muted); margin: 0 0 var(--space-2); }
+.sa-preview__title { font-size: var(--fs-xs); font-weight: 500; color: var(--ink-muted); margin: 0 0 var(--space-2); }
 .sa-preview ul { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
 .sa-preview__keys { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-3); margin-block-start: var(--space-1); }
 
-.sa-section__title { margin: var(--space-5) 0 var(--space-2); padding-block-end: 6px; border-block-end: 1px solid var(--line); font-size: 12.5px; font-weight: 500; color: var(--ink-muted); }
-html[lang='ar'] .sa-section__title { font-size: 13.5px; }
+.sa-section__title { margin: var(--space-5) 0 var(--space-2); padding-block-end: 6px; border-block-end: 1px solid var(--line); font-size: var(--fs-sm); font-weight: 600; color: var(--ink-muted); }
 
 .sa-checklist { display: grid; gap: var(--space-4); margin-block: var(--space-2); }
 .sa-checklist fieldset { border: 0; border-block-start: 1px solid var(--line); border-radius: 0; padding: var(--space-2) 0 0; margin: 0; }

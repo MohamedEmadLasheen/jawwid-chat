@@ -25,6 +25,7 @@ import { S, SESSIONS_COUNT, describeError as describeSupportError } from '@/feat
 import { accountSessionsApi, sessionKeys, type SessionDto } from '@/features/devices/api'
 import { D, isSessionGone } from '@/features/devices/copy'
 import { SessionList, useDeviceName } from '@/features/devices/SessionList'
+import { useWhen } from '@/features/devices/when'
 import '@/features/devices/devices.css'
 import { useAccountsTabs } from '@/features/staff-accounts/AccountsTabs'
 import { FamilyAccessRecord, GrantFamilyAccessDialog, useFamilyAccess } from './FamilyAccess'
@@ -71,8 +72,9 @@ export function AccountsPage({ eyebrow }: { eyebrow?: string }) {
   const grantees = access.data?.canGrant === true ? (access.data.grantees ?? []) : null
   const deferred = useDeferredValue(q.trim())
   const list = useAccounts(deferred, kind)
-  const accounts = list.data?.accounts ?? []
+  const accounts = needFirst(list.data?.accounts ?? [])
   const actionsOf = useAccountActions()
+  const when = useWhen()
 
   const administers = list.data?.administers
   const fallback: Kind[] = staff && isSuperAdmin(staff.role) ? ['family', 'teacher', 'staff'] : ['family', 'teacher']
@@ -82,7 +84,7 @@ export function AccountsPage({ eyebrow }: { eyebrow?: string }) {
   return (
     <div className="page dir acct-page">
       <div className="page__inner">
-        <PageHeader eyebrow={eyebrow} title={tx(A.title)} subtitle={tx(A.subtitle)} tabs={tabs ?? undefined} />
+        <PageHeader eyebrow={eyebrow} title={tx(A.title)} tabs={tabs ?? undefined} />
         <section className="sheet dir-sheet acct-sheet" aria-label={tx(A.title)}>
           <div className="sheet-bar">
             <SearchField value={q} onChange={setQ} label={tx(A.search)} clearLabel={t('common.cancel')} />
@@ -93,7 +95,7 @@ export function AccountsPage({ eyebrow }: { eyebrow?: string }) {
               options={kinds.map((k) => ({ value: k, label: k === 'all' ? tx(A.all) : tx(KIND[k]) }))}
             />
             {list.data && accounts.length > 0 && !list.data.truncated && (
-              <span className="sheet-bar__end dir-total">{countWords(accounts.length, ACCOUNTS_COUNT, locale)}</span>
+              <span className="dir-count">{countWords(accounts.length, ACCOUNTS_COUNT, locale)}</span>
             )}
           </div>
           <QueryBoundary
@@ -131,8 +133,12 @@ export function AccountsPage({ eyebrow }: { eyebrow?: string }) {
                                 <bdi>{a.familyName}</bdi>
                               </span>
                             )}
-                            {a.children.length > 0 && <span>{tx(A.children, { names: a.children.join('، ') })}</span>}
                           </span>
+                          {a.children.length > 0 && (
+                            <span className="acct-children">
+                              {tx(A.childrenLabel)} <bdi>{a.children.join(locale === 'ar' ? '، ' : ', ')}</bdi>
+                            </span>
+                          )}
                         </span>
                       </span>
                     </td>
@@ -140,7 +146,7 @@ export function AccountsPage({ eyebrow }: { eyebrow?: string }) {
                       <AccountState account={a} />
                     </td>
                     <td className={a.lastLoginAt ? 'dir-cell-quiet' : 'dir-cell-quiet dir-cell-quiet--none'} data-label={tx(A.lastLogin)}>
-                      {a.lastLoginAt ? <time dateTime={a.lastLoginAt}>{dateTime(a.lastLoginAt)}</time> : <span className="dir-none">{tx(A.never)}</span>}
+                      {a.lastLoginAt ? <time dateTime={a.lastLoginAt} title={dateTime(a.lastLoginAt)}>{when(a.lastLoginAt, { start: true })}</time> : <span className="dir-none">{tx(A.never)}</span>}
                     </td>
                     <td className="cell-actions">
                       <OneActionAndMore
@@ -168,19 +174,32 @@ export function AccountsPage({ eyebrow }: { eyebrow?: string }) {
 }
 
 /**
+ * The accounts whose sign-in needs a hand come first, in the server's order
+ * within each: locked out, then no password yet; the rest keep their place.
+ */
+function needFirst(accounts: AccountSummary[]): AccountSummary[] {
+  const need = (a: AccountSummary) => (a.lockedUntil ? 0 : !a.hasLogin ? 1 : 2)
+  return accounts
+    .map((a, i) => [a, i] as const)
+    .sort(([a, i], [b, j]) => need(a) - need(b) || i - j)
+    .map(([a]) => a)
+}
+
+/**
  * Where an account stands, as tags. What stops a person signing in is said
- * loudest: a lock is a solid tag, a missing password a gold one; an account
- * set inactive is a quiet word, and an active one a green dot.
+ * loudest: a lock is the urgent tag, a missing password an amber word; an
+ * account set inactive is a quiet word, and so is an active one: a list of
+ * thirty green dots would hide the two that need someone.
  */
 export function AccountState({ account: a }: { account: AccountSummary }) {
   const tx = useCopy()
   return (
     <span className="acct-state">
       {a.lockedUntil && <Badge tone="danger">{tx(A.locked)}</Badge>}
-      {!a.hasLogin && <Badge tone="gold">{tx(A.noLogin)}</Badge>}
+      {!a.hasLogin && <Badge tone="waiting">{tx(A.noLogin)}</Badge>}
       {a.status === 'active' ? (
         // An active account that cannot sign in is told by its other tag alone.
-        !a.lockedUntil && a.hasLogin && <Badge tone="ok" dot>{tx(STATUS.active)}</Badge>
+        !a.lockedUntil && a.hasLogin && <Badge tone="neutral">{tx(STATUS.active)}</Badge>
       ) : (
         <Badge tone={a.status === 'suspended' ? 'neutral' : 'outline'}>{tx(STATUS[a.status])}</Badge>
       )}
@@ -527,6 +546,7 @@ function SupportRecord() {
   const tx = useCopy()
   const { dateTime, number, locale } = useI18n()
   const { staff } = useSession()
+  const when = useWhen()
   const record = useQuery({ queryKey: supportKeys.record(), queryFn: () => supportAdminApi.list() })
   const sessions = record.data ?? []
   // Read once a render: a session past its time is no longer one to go back into.
@@ -545,7 +565,7 @@ function SupportRecord() {
                   <strong className="rec-attn__title">
                     <bdi>{s.target.name}</bdi>
                   </strong>
-                  {live(s) ? <Badge tone="now">{tx(S.recordLive)}</Badge> : !s.endedAt && <Badge tone="outline">{tx(S.recordTimedOut)}</Badge>}
+                  {live(s) ? <Badge tone="info">{tx(S.recordLive)}</Badge> : !s.endedAt && <Badge tone="outline">{tx(S.recordTimedOut)}</Badge>}
                 </span>
                 <span className="acct-session__why">
                   <bdi>{s.reason}</bdi>
@@ -555,11 +575,11 @@ function SupportRecord() {
                     {tx(S.recordBy)} <bdi>{s.staff.name}</bdi>
                   </span>
                   <span>
-                    {tx(S.recordStarted)} <time dateTime={s.startedAt}>{dateTime(s.startedAt)}</time>
+                    {tx(S.recordStarted)} <time dateTime={s.startedAt} title={dateTime(s.startedAt)}>{when(s.startedAt)}</time>
                   </span>
                   {s.endedAt && (
                     <span>
-                      {tx(S.recordEnded)} <time dateTime={s.endedAt}>{dateTime(s.endedAt)}</time>
+                      {tx(S.recordEnded)} <time dateTime={s.endedAt} title={dateTime(s.endedAt)}>{when(s.endedAt)}</time>
                     </span>
                   )}
                   <span>

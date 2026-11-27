@@ -12,10 +12,6 @@ export { useCopy, type Pair } from '@/features/organization/copy'
  */
 export const A = {
   title: { en: 'Accounts', ar: 'الحسابات' },
-  subtitle: {
-    en: 'Reset a password or set an account inactive. Every action needs a reason and is recorded.',
-    ar: 'أعد تعيين كلمة المرور أو أوقف حسابًا. يتطلب كل إجراء سببًا ويُسجَّل.',
-  },
   search: { en: 'Search a person, a family or a student', ar: 'ابحث عن شخص أو أسرة أو طالب' },
   show: { en: 'Show', ar: 'عرض' },
   all: { en: 'All', ar: 'الكل' },
@@ -27,7 +23,7 @@ export const A = {
   never: { en: 'Never', ar: 'لم يسجّل الدخول' },
   noLogin: { en: 'No password yet', ar: 'لا توجد كلمة مرور بعد' },
   locked: { en: 'Locked', ar: 'مقفل مؤقتًا' },
-  children: { en: 'Children: {names}', ar: 'الأطفال: {names}' },
+  childrenLabel: { en: 'Children:', ar: 'الأطفال:' },
   empty: { en: 'No accounts to show.', ar: 'لا توجد حسابات لعرضها.' },
   noneAdministered: {
     en: 'Your department does not administer accounts. Ask the Operations or Teachers department.',

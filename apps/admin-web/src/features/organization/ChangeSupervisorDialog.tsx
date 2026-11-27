@@ -74,7 +74,7 @@ export function ChangeSupervisorDialog({
           {tx(T.currentSupervisor)}: <strong dir="auto">{current.name}</strong>
         </p>
       )}
-      {childNames && childNames.length > 0 && <p dir="auto">{tx(T.movesChildren, { names: childNames.join(' · ') })}</p>}
+      {childNames && childNames.length > 0 && <p dir="auto">{tx(T.movesChildren, { names: childNames.join(tx(T.listComma)) })}</p>}
       <div className="field">
         <label className="field__label" htmlFor={`${id}-sup`}>{tx(T.assignTo)}</label>
         <SearchableSelect
@@ -113,5 +113,5 @@ export function ChangeSupervisorDialog({
 /** The sentence a caller shows after a transfer. */
 export function transferNotice(tx: ReturnType<typeof useCopy>, result: TransferResult, supervisorName: string): string {
   if (!result.changed) return tx(T.transferUnchanged)
-  return tx(T.transferred, { names: result.learners.map((l) => l.name).join(' · '), supervisor: supervisorName })
+  return tx(T.transferred, { names: result.learners.map((l) => l.name).join(tx(T.listComma)), supervisor: supervisorName })
 }

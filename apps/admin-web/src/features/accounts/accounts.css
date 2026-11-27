@@ -23,10 +23,13 @@
 .acct-table strong.dir-name:hover { text-decoration: none; }
 .acct-table .dir-cell-who { inline-size: 46%; }
 /* The line under the name runs as text, so a long list of children wraps inside itself
-   and never leaves the family alone on a line. The dot trails the fact before it and
-   carries the place a line may break. */
-.acct-sub { display: block; font-size: var(--fs-xs); line-height: 1.55; color: var(--ink-muted); overflow-wrap: anywhere; }
-.acct-sub > :not(:last-child)::after { content: '·\200B'; margin-inline: 8px; color: var(--border-control); }
+   and never leaves the family alone on a line. The facts are parted by commas, never by
+   dots; the comma trails the fact before it and carries the place a line may break. */
+.acct-sub { display: block; font-size: var(--fs-sm); line-height: 1.55; color: var(--ink-muted); overflow-wrap: anywhere; }
+.acct-sub > :not(:last-child)::after { content: ',\200B'; margin-inline-end: 5px; }
+html[lang='ar'] .acct-sub > :not(:last-child)::after { content: '،\200B'; }
+/* A family's children: a line of their own under who the account is. */
+.acct-children { display: block; font-size: var(--fs-xs); line-height: 1.55; color: var(--ink-muted); overflow-wrap: anywhere; }
 .acct-state { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
 .acct-table time { font-variant-numeric: tabular-nums; }
 /* The stated action is plain until the row is under the pointer, as in every directory. */
@@ -35,16 +38,14 @@
 /* A support session: whose account, why it was opened, then by whom and when. */
 .acct-session__why { font-size: var(--fs-sm); line-height: 1.5; color: var(--ink); overflow-wrap: anywhere; }
 .acct-session .rec-attn__sub time, .acct-session .rec-attn__sub .ltr { font-variant-numeric: tabular-nums; }
-/* A live session is the one to see first: a terracotta edge, as a problem row carries everywhere. */
-.acct-session--live::before { content: ''; position: absolute; inset-block: 0; inset-inline-start: 0; inline-size: 3px; background: var(--urgent); }
-.acct-session--live:last-child::before { border-end-start-radius: var(--radius-lg); }
+/* A live session is said by its tag ("Live", a teal dot and the word), never by an edge. */
 .acct-session > .rec-attn__act { grid-column: 2 / -1; }
 
 /* Exceptional access: a grant that is over is said, not stressed. */
 .acct-grants { margin-block-start: 8px; border-block-start: 1px solid var(--line-2); }
 .acct-grant--over .dir-name { font-weight: 500; color: var(--ink-muted); }
 .acct-cell-person { color: var(--ink); font-weight: 500; }
-/* Ending someone's access is plain at rest and terracotta under the pointer. */
+/* Ending someone's access is plain at rest and red only under the pointer. */
 .acct-revoke.btn:hover:not(:disabled), .acct-revoke.btn:focus-visible { border-color: var(--urgent); background: var(--surface); color: var(--urgent); }
 .acct-table .dir-row:hover .row-actions2 > .acct-revoke.btn { border-color: var(--urgent); color: var(--urgent); }
 
