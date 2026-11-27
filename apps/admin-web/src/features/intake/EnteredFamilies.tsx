@@ -120,7 +120,7 @@ function EnteredRow({ f, canAssign, canSuggest }: { f: EnteredFamily; canAssign:
         <div className="ef-row__title">
           <h3 id={headingId} className="ef-row__name"><bdi>{name}</bdi></h3>
           {f.kind === 'added_children' && <Badge tone="info">{tx(OP.childAdded)}</Badge>}
-          {f.needsOperationsSupervisor && <Badge tone="gold">{tx(OP.needs)}</Badge>}
+          {f.needsOperationsSupervisor && <Badge tone="waiting" dot>{tx(OP.needs)}</Badge>}
         </div>
         <ul className="ef-row__children" aria-label={tx(OP.children)}>
           {f.children.map((c) => (
@@ -128,7 +128,7 @@ function EnteredRow({ f, canAssign, canSuggest }: { f: EnteredFamily; canAssign:
           ))}
         </ul>
         <p className="ef-row__byline">
-          {tx(OP.enteredBy)} {f.enteredBy.name ?? '—'} · <time dateTime={f.enteredAt}>{formatWhen(f.enteredAt, locale)}</time>
+          {tx(OP.enteredBy)} <bdi>{f.enteredBy.name ?? tx(OP.none)}</bdi>{locale === 'ar' ? '، ' : ', '}<time dateTime={f.enteredAt}>{formatWhen(f.enteredAt, locale)}</time>
         </p>
       </div>
       <dl className="ef-row__facts">
@@ -139,7 +139,7 @@ function EnteredRow({ f, canAssign, canSuggest }: { f: EnteredFamily; canAssign:
             {f.needsOperationsSupervisor && f.suggestion && (
               <span className="ts-muted ef-row__note"> {tx(OP.suggested)} <bdi>{f.suggestion.name}</bdi></span>
             )}
-            {f.needsOperationsSupervisor && !f.supervisor && !f.suggestion && <span className="ts-muted">—</span>}
+            {f.needsOperationsSupervisor && !f.supervisor && !f.suggestion && <span className="ts-muted">{tx(OP.none)}</span>}
           </dd>
         </div>
         <div>

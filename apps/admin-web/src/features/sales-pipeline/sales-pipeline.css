@@ -25,5 +25,5 @@
 .lead-note { margin-block-start: var(--space-3); }
 .lead-reassign { margin: var(--space-3) 0 0; }
 .lead-add { margin-block-start: var(--space-2); }
-.lead-convert-hint { margin: 0 0 var(--space-3); padding-block-start: var(--space-3); border-block-start: 1px solid var(--hairline); }
+.lead-convert-hint { margin: 0 0 var(--space-3); padding-block-start: var(--space-3); border-block-start: 1px solid var(--line); }
 .lead-losing { display: grid; gap: var(--space-3); }

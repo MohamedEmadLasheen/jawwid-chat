@@ -3,7 +3,7 @@ import { useI18n } from '@/core/i18n/I18nProvider'
 import { Badge } from '@/shared/components/Badge'
 import { DialogCancelButton } from '@/shared/components/Dialog'
 import type { MenuItem } from '@/shared/components/Menu'
-import { DetailFoot, DetailSection, FlowSteps, type FlowStep, type StepState } from '@/shared/components/RequestQueue'
+import { Age, DetailCallout, DetailSection, FlowSteps, dayName, type FlowStep, type StepState } from '@/shared/components/RequestQueue'
 import { SearchableSelect } from '@/shared/components/SearchableSelect'
 import { QueryBoundary } from '@/shared/components/States'
 import { formatWhen } from '@/features/trials/copy'
@@ -28,9 +28,8 @@ export function LeadStatus({ lead }: { lead: Pick<Lead, 'stage' | 'lostReason' |
   return (
     <>
       <Badge tone={stage.tone} dot>{tx(stage.label)}</Badge>
-      {lead.lostReason && lead.stage === 'lost' && <span className="ts-muted">{lostText(lead.lostReason, locale)}</span>}
-      {lead.followUpDue && <Badge tone="danger" dot>{tx(P.followUpDue)}</Badge>}
-      {lead.convertedAt && <Badge tone="ok">{tx(P.handedOver)}</Badge>}
+      {lead.followUpDue && <Badge tone="waiting">{tx(P.followUpDue)}</Badge>}
+      {lead.convertedAt && <Badge tone="ok" dot>{tx(P.handedOver)}</Badge>}
     </>
   )
 }
@@ -52,7 +51,7 @@ function leadSteps(lead: Lead, tx: (p: { en: string; ar: string }) => string, lo
     new_lead: when(lead.createdAt),
     contacted: when(lead.lastContactedAt),
     trial_booked: when(lead.trial?.startsAt),
-    converted: lead.convertedAt ? <>{tx(P.handedOver)} · {when(lead.convertedAt)}</> : undefined,
+    converted: lead.convertedAt ? <>{tx(P.handedOver)}{locale === 'ar' ? '، ' : ', '}{when(lead.convertedAt)}</> : undefined,
   }
   const steps: FlowStep[] = WALK.map((s, i) => {
     const state: StepState = lost ? (seen[s] ? 'done' : 'skipped') : i < at || s === 'converted' && at === i ? 'done' : i === at ? 'current' : 'todo'
@@ -158,15 +157,47 @@ function LeadBody({ lead }: { lead: Lead }) {
     ...(first !== 'reopen' && manual && lead.stage === 'lost' ? [{ key: 'reopen', label: tx(P.reopen), icon: 'undo' as const, onSelect: reopen }] : []),
     ...(manual && lead.stage !== 'lost' && !losing ? [{ key: 'lost', label: tx(P.markLost), icon: 'xCircle' as const, danger: true, onSelect: () => setLosing(true) }] : []),
   ]
+  // Where the lead stands, in one sentence: what is overdue first, then what can be done now.
+  const on = (d: string) => dayName(d, locale)
+  const state =
+    lead.stage === 'lost'
+      ? lead.lostReason ? tx(P.stateLost).replace('{reason}', lostText(lead.lostReason, locale)) : tx(P.stateLostPlain)
+      : lead.convertedAt || lead.stage === 'converted'
+        ? tx(P.stateConverted)
+        : lead.followUpDue && lead.nextFollowUpOn
+          ? tx(P.stateDue).replace('{date}', on(lead.nextFollowUpOn))
+          : lead.canConvert
+            ? tx(P.stateConvert)
+            : lead.stage === 'trial_booked'
+              ? tx(P.stateTrial)
+              : !lead.lastContactedAt
+                ? tx(P.stateNew)
+                : lead.nextFollowUpOn
+                  ? tx(P.stateNext).replace('{date}', on(lead.nextFollowUpOn))
+                  : tx(P.stateNoNext)
   return (
     <>
-      {error && <div className="banner banner--danger" role="alert">{describePipelineError(error, locale)}</div>}
-      {message && <div className="banner banner--ok" role="status">{message}</div>}
-
-      <DetailSection title={tx(P.steps)}>
-        <FlowSteps steps={leadSteps(lead, tx, locale)} label={tx(P.steps)} />
-        {!manual && lead.stage !== 'converted' && <p className="field__hint lead-derived">{tx(P.stageDerived)}</p>}
-      </DetailSection>
+      <DetailCallout
+        status={
+          <>
+            <LeadStatus lead={lead} />
+            {lead.lastContactedAt && (
+              <span>
+                {tx(P.lastContactAge).split('{age}')[0]}
+                <Age iso={lead.lastContactedAt} />
+              </span>
+            )}
+          </>
+        }
+        state={state}
+        note={lead.canConvert ? tx(P.convertHint) : undefined}
+        primary={primary}
+        more={more}
+        label={`${tx(P.moreActions)}: ${lead.displayName}`}
+      >
+        {error && <div className="banner banner--danger" role="alert">{describePipelineError(error, locale)}</div>}
+        {message && <div className="banner banner--ok" role="status">{message}</div>}
+      </DetailCallout>
 
       <DetailSection title={tx(P.about)}>
         <dl className="rq-fields">
@@ -230,9 +261,9 @@ function LeadBody({ lead }: { lead: Lead }) {
           <>
             <dl className="rq-fields">
               <div className="rq-field"><dt>{tx(P.parentName)}</dt><dd><bdi>{lead.contact.parentName}</bdi></dd></div>
-              <div className="rq-field"><dt>{tx(P.phone)}</dt><dd>{lead.contact.phone ? <bdi dir="ltr" className="ns-ltr">{lead.contact.phone}</bdi> : <span className="ts-muted">—</span>}</dd></div>
-              <div className="rq-field"><dt>{tx(P.whatsapp)}</dt><dd>{lead.contact.whatsapp ? <bdi dir="ltr" className="ns-ltr">{lead.contact.whatsapp}</bdi> : <span className="ts-muted">—</span>}</dd></div>
-              <div className="rq-field"><dt>{tx(P.email)}</dt><dd>{lead.contact.email ? <bdi dir="ltr" className="ns-ltr">{lead.contact.email}</bdi> : <span className="ts-muted">—</span>}</dd></div>
+              <div className="rq-field"><dt>{tx(P.phone)}</dt><dd>{lead.contact.phone ? <bdi dir="ltr" className="ns-ltr">{lead.contact.phone}</bdi> : <span className="ts-muted">{tx(P.noChannel)}</span>}</dd></div>
+              <div className="rq-field"><dt>{tx(P.whatsapp)}</dt><dd>{lead.contact.whatsapp ? <bdi dir="ltr" className="ns-ltr">{lead.contact.whatsapp}</bdi> : <span className="ts-muted">{tx(P.noChannel)}</span>}</dd></div>
+              <div className="rq-field"><dt>{tx(P.email)}</dt><dd>{lead.contact.email ? <bdi dir="ltr" className="ns-ltr">{lead.contact.email}</bdi> : <span className="ts-muted">{tx(P.noChannel)}</span>}</dd></div>
             </dl>
             <p className="field__hint lead-logged">{tx(P.contactLogged)}</p>
             <button type="button" className="btn btn--sm" onClick={() => setEditingContact(true)}>{tx(P.edit)}</button>
@@ -289,8 +320,10 @@ function LeadBody({ lead }: { lead: Lead }) {
         </section>
       )}
 
-      {lead.canConvert && <p className="field__hint lead-convert-hint">{tx(P.convertHint)}</p>}
-      <DetailFoot primary={primary} more={more} label={`${tx(P.moreActions)}: ${lead.displayName}`} />
+      <DetailSection title={tx(P.steps)}>
+        <FlowSteps steps={leadSteps(lead, tx, locale)} label={tx(P.steps)} />
+        {!manual && lead.stage !== 'converted' && <p className="field__hint lead-derived">{tx(P.stageDerived)}</p>}
+      </DetailSection>
 
       {handing && intake.data && (
         <IntakeDialog

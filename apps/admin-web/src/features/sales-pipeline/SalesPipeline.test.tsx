@@ -136,7 +136,7 @@ describe('the Sales pipeline page', () => {
     const alpha = (await screen.findByText('Lead Alpha')).closest('article')!
     expect(within(alpha.closest('section')!).getByRole('heading', { name: 'Contacted' })).toBeInTheDocument()
     expect(within(alpha).getByText('Follow-up due')).toBeInTheDocument()
-    expect(within(alpha).getByText('Phone · E-mail')).toBeInTheDocument()
+    expect(within(alpha).getByText('Phone, E-mail')).toBeInTheDocument()
     const beta = screen.getByText('Lead Beta').closest('article')!
     expect(within(beta.closest('section')!).getByRole('heading', { name: 'Trial booked' })).toBeInTheDocument()
     expect(within(beta).getByText('None')).toBeInTheDocument()

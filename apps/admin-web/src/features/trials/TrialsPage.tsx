@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Badge, type Tone } from '@/shared/components/Badge'
@@ -10,7 +10,7 @@ import { SlotPicker } from '@/shared/components/SlotPicker'
 import { PageHeader, type MastFigure } from '@/shared/components/PageHeader'
 import {
   Age,
-  DetailFoot,
+  DetailCallout,
   DetailSection,
   FlowSteps,
   QueueGroup,
@@ -21,6 +21,7 @@ import {
   useWidePane,
   waitedOvernight,
   type FlowStep,
+  sentence,
 } from '@/shared/components/RequestQueue'
 import { RowActions } from '@/shared/components/RowActions'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
@@ -191,12 +192,33 @@ export function TrialsPage() {
   // Beside the agenda the inspector always shows a trial: the one picked, else the first listed.
   const open = rows.find((t) => t.id === openId) ?? (wide ? rows[0] ?? null : null)
 
-  /** One trial as a row: its time leads, then who, the teacher, where it stands, and its one action. */
+  /** Why a trial is on the agenda, in one sentence that names the teacher. */
+  const why = (t: TrialDto): ReactNode => {
+    const teacher = t.teacher.name
+    const reason = t.outcomeDetail?.reason
+    switch (t.outcome) {
+      case 'awaiting':
+        return sentence(tx(TR.whyAwaiting), { teacher })
+      case 'upcoming':
+        return sentence(tx(TR.whyUpcoming), { teacher, length: formatMinutes(t.durationMinutes, locale) })
+      case 'subscribed':
+        return sentence(tx(TR.whySubscribed), { teacher })
+      case 'not_subscribed':
+        return reason
+          ? sentence(tx(TR.whyNotSubscribedBecause), { reason: tx(NOT_SUBSCRIBED_REASON[reason] ?? { en: reason, ar: reason }) })
+          : sentence(tx(TR.whyNotSubscribed), { teacher })
+      case 'no_show':
+        return sentence(tx(TR.whyNoShow), { teacher })
+      case 'cancelled':
+        return tx(TR.whyCancelled)
+      default:
+        return <bdi>{teacher}</bdi>
+    }
+  }
+
+  /** One trial as a row: its time leads, then who and why it is here, the one fact set apart, and its one action. */
   const row = (t: TrialDto, dated: boolean) => {
     const a = acts(t)
-    const reason = t.outcomeDetail?.reason
-    // The attendance repeats the outcome for a trial that is upcoming, missed or called off.
-    const attendance = t.attendance === t.outcome || t.outcome === 'cancelled' ? null : ATTENDANCE[t.attendance] ?? { en: t.attendance, ar: t.attendance }
     const more: MenuItem[] = [
       { key: 'group', label: tx(TR.openGroup), icon: 'conversations', onSelect: () => void openGroup(t.teacher.id) },
       ...(a.cancel ? [{ key: 'cancel', label: tx(TR.cancel), icon: 'calendarX' as const, danger: true, onSelect: () => cancel(t) }] : []),
@@ -213,19 +235,16 @@ export function TrialsPage() {
           </span>
         }
         title={t.prospect.displayName}
-        sub={t.prospect.level ? <bdi>{t.prospect.level}</bdi> : undefined}
-        fact={
-          <>
-            <bdi>{t.teacher.name}</bdi>
-            {attendance && <span className="rq-sub">{tx(attendance)}</span>}
-            {reason && <span className="rq-sub">{tx(NOT_SUBSCRIBED_REASON[reason] ?? { en: reason, ar: reason })}</span>}
-          </>
-        }
+        sub={why(t)}
         tag={
-          <>
+          // The one fact set apart: how long an outcome has waited, when the lesson starts, or what was recorded.
+          t.outcome === 'awaiting' ? (
+            <Age iso={t.endsAt} late={outcomeLate(t)} />
+          ) : t.outcome === 'upcoming' ? (
+            <Age iso={t.startsAt} />
+          ) : (
             <Badge tone={OUTCOME_TONE[t.outcome] ?? 'neutral'} dot>{tx(OUTCOME[t.outcome] ?? { en: t.outcome, ar: t.outcome })}</Badge>
-            {t.outcome === 'awaiting' && <span className="rq-sub"><Age iso={t.endsAt} late={outcomeLate(t)} /></span>}
-          </>
+          )
         }
         actions={
           <RowActions
@@ -252,7 +271,6 @@ export function TrialsPage() {
       <div className="page__inner">
         <PageHeader
           title={tx(TR.trialsTitle)}
-          subtitle={tx(TR.trialsSubtitle)}
           figures={figures}
           tabs={offered ? <TrialsAreaTabs /> : undefined}
           actions={
@@ -272,12 +290,6 @@ export function TrialsPage() {
               id: open.id,
               title: open.prospect.displayName,
               kind: { icon: 'trials', label: tx(TR.kind) },
-              status: (
-                <>
-                  <Badge tone={OUTCOME_TONE[open.outcome] ?? 'neutral'} dot>{tx(OUTCOME[open.outcome] ?? { en: open.outcome, ar: open.outcome })}</Badge>
-                  <Age iso={open.outcome === 'upcoming' ? open.startsAt : open.endsAt} late={outcomeLate(open)} />
-                </>
-              ),
               pinned: true,
               onClose: () => setOpenId(null),
               body: (
@@ -364,6 +376,7 @@ function TrialDetail({
   const { locale, number } = useI18n()
   const tx = (p: Pair) => (locale === 'ar' ? p.ar : p.en)
   const label = (map: Record<string, Pair>, key: string) => tx(map[key] ?? { en: key, ar: key })
+  const sep = locale === 'ar' ? '، ' : ', '
   const called = t.outcome === 'cancelled'
   const held = t.attendance === 'attended'
   const missed = t.attendance === 'no_show' || t.outcome === 'no_show'
@@ -378,7 +391,7 @@ function TrialDetail({
       state: called || missed ? 'skipped' : held ? 'done' : 'current',
       meta: (
         <>
-          {formatWhen(t.startsAt, locale)} · {label(ATTENDANCE, t.attendance)}
+          {formatWhen(t.startsAt, locale)}{sep}{label(ATTENDANCE, t.attendance)}
         </>
       ),
     },
@@ -391,7 +404,7 @@ function TrialDetail({
       meta: t.report ? (
         <>
           <bdi>{t.report.covered}</bdi>
-          {t.report.rating !== null && <> · {tx(TR.rating).replace('{n}', number(t.report.rating))}</>}
+          {t.report.rating !== null && <>{sep}{tx(TR.rating).replace('{n}', number(t.report.rating))}</>}
         </>
       ) : t.outcome === 'upcoming' ? undefined : (
         tx(TR.noReportYet)
@@ -407,12 +420,11 @@ function TrialDetail({
       t.outcome === 'upcoming' ? undefined : (
         <>
           {label(OUTCOME, t.outcome)}
-          {d?.reason && <> · {label(NOT_SUBSCRIBED_REASON, d.reason)}</>}
-          {d && <> · {tx(TR.recordedOn).replace('{when}', formatWhen(d.recordedAt, locale))}</>}
-          {d?.correctedAt && <> · {tx(TR.correctedOn).replace('{when}', formatWhen(d.correctedAt, locale))}</>}
+          {d?.reason && <>{sep}{label(NOT_SUBSCRIBED_REASON, d.reason)}</>}
+          {d && <>{sep}{tx(TR.recordedOn).replace('{when}', formatWhen(d.recordedAt, locale))}</>}
+          {d?.correctedAt && <>{sep}{tx(TR.correctedOn).replace('{when}', formatWhen(d.correctedAt, locale))}</>}
         </>
       ),
-    children: d?.note ? <p className="rq-quote"><bdi>{d.note}</bdi></p> : undefined,
   })
   if (t.outcome === 'subscribed') {
     steps.push({
@@ -420,14 +432,24 @@ function TrialDetail({
       label: tx(TR.stepHandover),
       state: 'done',
       meta: tx(TR.handedOver),
-      children: newStudents ? (
-        <Link className="card__link" to={`${TRIALS_AREA_BASE}/new-students`}>{tx(TR.openNewStudents)}</Link>
-      ) : undefined,
     })
   }
 
   const students = t.students?.length ? t.students : [{ name: t.prospect.displayName, level: t.prospect.level, note: null }]
-  // The foot carries the one thing this trial needs now; the rest is behind "⋯", what ends it last.
+  const reason = d?.reason ? label(NOT_SUBSCRIBED_REASON, d.reason) : null
+  const state =
+    t.outcome === 'awaiting'
+      ? tx(TR.stateAwaiting).replace('{age}', ageText(t.endsAt, locale))
+      : t.outcome === 'upcoming'
+        ? sentence(tx(TR.stateUpcoming), { teacher: t.teacher.name, when: formatWhen(t.startsAt, locale) })
+        : t.outcome === 'subscribed'
+          ? tx(TR.stateSubscribed)
+          : t.outcome === 'not_subscribed'
+            ? reason ? tx(TR.stateNotSubscribedBecause).replace('{reason}', reason) : tx(TR.stateNotSubscribed)
+            : t.outcome === 'no_show'
+              ? tx(TR.stateNoShow)
+              : tx(TR.stateCancelled)
+  // The callout carries the one thing this trial needs now; the rest is behind "⋯", what ends it last.
   const primary = acts.record ? (
     <button type="button" className="btn btn--primary" onClick={onRecord}>{tx(TR.recordOutcome)}</button>
   ) : acts.correct ? (
@@ -438,8 +460,40 @@ function TrialDetail({
   const more: MenuItem[] = acts.cancel ? [{ key: 'cancel', label: tx(TR.cancel), icon: 'calendarX', danger: true, onSelect: onCancel }] : []
   return (
     <>
-      <DetailSection title={tx(TR.steps)}>
-        <FlowSteps steps={steps} label={tx(TR.steps)} />
+      <DetailCallout
+        status={
+          <>
+            <Badge tone={OUTCOME_TONE[t.outcome] ?? 'neutral'} dot>{label(OUTCOME, t.outcome)}</Badge>
+            {(t.outcome === 'awaiting' || t.outcome === 'upcoming') && (
+              <Age iso={t.outcome === 'upcoming' ? t.startsAt : t.endsAt} late={outcomeLate(t)} />
+            )}
+          </>
+        }
+        state={state}
+        note={d?.note ? <bdi>{d.note}</bdi> : undefined}
+        primary={primary}
+        more={more}
+        label={`${tx(TR.moreActions)}: ${t.prospect.displayName}`}
+      >
+        {newStudents && t.outcome === 'subscribed' && (
+          <Link className="card__link" to={`${TRIALS_AREA_BASE}/new-students`}>{tx(TR.openNewStudents)}</Link>
+        )}
+      </DetailCallout>
+      <DetailSection title={tx(TR.details)}>
+        <dl className="rq-fields">
+          <div className="rq-field">
+            <dt>{tx(TR.when)}</dt>
+            <dd><time dateTime={t.startsAt}>{formatWhen(t.startsAt, locale)}</time></dd>
+          </div>
+          <div className="rq-field">
+            <dt>{tx(TR.teacher)}</dt>
+            <dd><bdi>{t.teacher.name}</bdi></dd>
+          </div>
+          <div className="rq-field">
+            <dt>{tx(TR.length)}</dt>
+            <dd>{formatMinutes(t.durationMinutes, locale)}</dd>
+          </div>
+        </dl>
       </DetailSection>
       <DetailSection title={tx(TR.students)}>
         <dl className="rq-fields">
@@ -447,15 +501,11 @@ function TrialDetail({
             <div className="rq-field" key={i}>
               <dt><bdi>{x.name}</bdi></dt>
               <dd>
-                <bdi>{x.level ?? '—'}</bdi>
+                <bdi>{x.level ?? tx(TR.noLevel)}</bdi>
                 {x.note && <span className="rq-sub"><bdi>{x.note}</bdi></span>}
               </dd>
             </div>
           ))}
-          <div className="rq-field">
-            <dt>{tx(TR.length)}</dt>
-            <dd>{formatMinutes(t.durationMinutes, locale)}</dd>
-          </div>
         </dl>
       </DetailSection>
       <DetailSection title={tx(TR.chat)}>
@@ -469,7 +519,9 @@ function TrialDetail({
           </button>
         </div>
       </DetailSection>
-      <DetailFoot primary={primary} more={more} label={`${tx(TR.moreActions)}: ${t.prospect.displayName}`} />
+      <DetailSection title={tx(TR.steps)}>
+        <FlowSteps steps={steps} label={tx(TR.steps)} />
+      </DetailSection>
     </>
   )
 }
@@ -561,7 +613,7 @@ function BookTrialDialog({ onClose, editing }: { onClose: () => void; editing?: 
         <p className="tj-trial-head">
           <span className="ts-muted">{tx(TR.currentTime)}:</span>
           <strong>{formatWhen(editing.startsAt, locale)}</strong>
-          <span className="ts-muted">· {editing.teacher.name}</span>
+          <span className="ts-muted">{editing.teacher.name}</span>
         </p>
       ) : (
         <fieldset className="tj-fieldset">

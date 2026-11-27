@@ -161,8 +161,10 @@ describe('Trial lessons: the detail of a trial', () => {
       'Booked (done)', 'Trial lesson (done)', "Teacher's report (done)", 'Outcome (done)',
     ])
     // The reason and the note stay with Sales: here, never in the group.
-    expect(steps[3]).toHaveTextContent('Did not subscribe · Price')
-    expect(steps[3]).toHaveTextContent('asked about a discount')
+    expect(steps[3]).toHaveTextContent('Did not subscribe, Price')
+    // The outcome's note leads the sheet, under where the trial stands.
+    expect(sheet.querySelector('.rq-callout')).toHaveTextContent('Did not subscribe. The reason given: Price.')
+    expect(sheet.querySelector('.rq-callout')).toHaveTextContent('asked about a discount')
     expect(within(sheet).getByText('shy at first')).toBeInTheDocument()
     expect(within(sheet).getByRole('button', { name: 'Correct outcome' })).toBeInTheDocument()
     expect(within(sheet).getByRole('button', { name: 'Trial group' })).toBeInTheDocument()
@@ -233,7 +235,7 @@ describe('New students: the board and the family beside it', () => {
     // A card: the family, its children, who looks after it, and the one next step.
     const delta = within(within(board).getByRole('region', { name: 'Not assigned' })).getByRole('heading', { name: 'Parent Delta' }).closest('article')!
     expect(within(delta).getByText('Child of Parent Delta')).toBeInTheDocument()
-    expect(within(delta).getByText('No supervisor')).toBeInTheDocument()
+    expect(delta).toHaveTextContent(/needs a supervisor/)
     expect([...delta.querySelectorAll('.row-actions2 > .btn')].map((b) => b.textContent)).toEqual(['Assign supervisor'])
     const echo = within(within(board).getByRole('region', { name: 'Waiting for the parent' })).getByRole('heading', { name: 'Parent Echo' }).closest('article')!
     expect(within(echo).getByText('Supervisor One')).toBeInTheDocument()

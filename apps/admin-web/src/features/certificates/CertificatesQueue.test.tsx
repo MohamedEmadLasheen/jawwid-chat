@@ -130,8 +130,9 @@ describe('the board of states', () => {
     expect(screen.getAllByRole('menuitem').map((i) => i.textContent)).toEqual(['Ask for a redesign', 'Cancel request'])
     await userEvent.keyboard('{Escape}')
     expect(stated(cardOf('Child Beta'))).toEqual(['Edit request'])
-    // A certificate with nothing left to do opens, and offers nothing else.
-    expect(stated(cardOf('Child Omega'))).toEqual(['Open'])
+    // A certificate with nothing left to do is a quiet card: it opens from its name, and offers nothing else.
+    expect(stated(cardOf('Child Omega'))).toEqual([])
+    expect(within(cardOf('Child Omega')).getByRole('button', { name: 'Child Omega' })).toBeInTheDocument()
     expect(within(cardOf('Child Omega')).queryByRole('button', { name: /More actions/ })).not.toBeInTheDocument()
   })
 

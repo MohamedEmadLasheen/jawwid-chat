@@ -127,7 +127,7 @@ export function TrialCardDialog(
       <div className="tj-options">
         <p className="tj-trial-head">
           <strong dir="auto">{t.prospect.displayName}</strong>
-          <span className="ts-muted">{formatWhen(t.startsAt, locale)} · {formatMinutes(t.durationMinutes, locale)}</span>
+          <span className="ts-muted">{formatWhen(t.startsAt, locale)}{locale === 'ar' ? '، ' : ', '}{formatMinutes(t.durationMinutes, locale)}</span>
         </p>
         {correcting && (
           <p className="tj-current">

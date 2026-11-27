@@ -30,7 +30,7 @@ export const NS = {
     ar: 'يتوقف الرمز فورًا، ويطلب ولي الأمر رمزًا جديدًا من التطبيق.',
   },
   invalidated: { en: 'Code invalidated.', ar: 'أُلغي الرمز.' },
-  wrongTries: { en: 'Wrong codes in the last 24 hours', ar: 'رموز خاطئة خلال ٢٤ ساعة' },
+  wrongTries: { en: 'Wrong codes in the last 24 hours', ar: 'رموز خاطئة خلال 24 ساعة' },
   lockedNote: {
     en: 'Locked: the parent entered too many wrong codes. Check with them, then reset.',
     ar: 'مقفل: أدخل ولي الأمر رموزًا خاطئة كثيرة. تحقق منه ثم أعد التعيين.',
@@ -58,6 +58,24 @@ export const NS = {
     ar: 'تظهر الأسرة هنا عندما يسجّل قسم المبيعات «الطالب اشترك» على حصة تجريبية، أو عندما يُدخلها مشرفها يدويًا.',
   },
   openTrials: { en: 'Open Trial lessons', ar: 'فتح الحصص التجريبية' },
+  rule: { en: 'Contact and payment details are shown here only.', ar: 'بيانات التواصل والدفع تظهر هنا فقط.' },
+  // A card's waiting fact: why the family stands in its column now
+  factUnassigned: { en: 'Subscribed {age}; needs a supervisor', ar: 'اشتركت {age}، وتحتاج مشرفًا' },
+  factNoGroup: { en: 'The family group is not created yet', ar: 'لم تُنشأ مجموعة الأسرة بعد' },
+  factNotStarted: { en: 'The parent has not signed up yet', ar: 'ولي الأمر لم يُنشئ حسابه بعد' },
+  factCode: { en: 'Asked for a code; send it on WhatsApp', ar: 'طلب رمزًا، أرسله إليه عبر واتساب' },
+  factLocked: { en: 'Locked after too many wrong codes', ar: 'قُفل بعد رموز خاطئة كثيرة' },
+  factSignedUp: { en: 'Signed up; the family is set up', ar: 'أنشأ حسابه واكتمل التجهيز' },
+  // The inspector's state, in one sentence
+  stateUnassigned: { en: 'Subscribed {age}. Assign the supervisor who will look after this family.', ar: 'اشتركت {age}. عيّن المشرف الذي سيتابع هذه الأسرة.' },
+  stateUnassignedOther: { en: 'Subscribed {age}. The Operations manager assigns its supervisor.', ar: 'اشتركت {age}. يعيّن مدير التشغيل مشرفها.' },
+  stateNoGroup: { en: '{supervisor} looks after it. Create the family group next.', ar: 'يتابعها {supervisor}. الخطوة التالية: إنشاء مجموعة الأسرة.' },
+  stateNotStarted: { en: '{supervisor} looks after it. The parent has not signed up in the app yet.', ar: 'يتابعها {supervisor}. ولي الأمر لم يُنشئ حسابه في التطبيق بعد.' },
+  stateCode: { en: 'The parent asked for a sign-up code. Send it to them on WhatsApp.', ar: 'طلب ولي الأمر رمز التسجيل. أرسله إليه عبر واتساب.' },
+  stateLocked: { en: 'Sign-up is locked after too many wrong codes. Check with the parent, then reset the attempts.', ar: 'قُفل التسجيل بعد رموز خاطئة كثيرة. تحقق من ولي الأمر ثم أعد تعيين المحاولات.' },
+  stateSignedUp: { en: 'The parent signed up. The family is set up.', ar: 'أنشأ ولي الأمر حسابه، واكتمل تجهيز الأسرة.' },
+  itsSupervisor: { en: 'Its supervisor', ar: 'مشرفها' },
+  none: { en: 'None given', ar: 'لم يُذكر' },
 } satisfies Record<string, Pair>
 
 export type NewStudentStatus = 'unassigned' | 'waiting' | 'locked' | 'signed_up'
@@ -74,7 +92,7 @@ export function newStudentStatus(s: NewStudentDto): NewStudentStatus {
 export const STATUS: Record<NewStudentStatus, { label: Pair; tone: 'waiting' | 'info' | 'danger' | 'ok' }> = {
   unassigned: { label: { en: 'Not assigned', ar: 'لم يُعيَّن' }, tone: 'waiting' },
   waiting: { label: { en: 'Waiting for the parent', ar: 'بانتظار ولي الأمر' }, tone: 'info' },
-  locked: { label: { en: 'Sign-up locked', ar: 'التسجيل مقفل' }, tone: 'danger' },
+  locked: { label: { en: 'Sign-up locked', ar: 'التسجيل مقفل' }, tone: 'waiting' },
   signed_up: { label: { en: 'Parent signed up', ar: 'أنشأ ولي الأمر حسابه' }, tone: 'ok' },
 }
 

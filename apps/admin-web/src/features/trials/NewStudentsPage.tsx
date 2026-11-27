@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { useSession } from '@/core/auth/SessionProvider'
@@ -156,12 +156,32 @@ export function NewStudentsPage() {
     setIntent({ id: s.trialId, act })
   }
 
-  /** A family on the board: who, the children, who looks after it, how long it has waited, and its next step. */
+  /** The names of a family's children, as one phrase. */
+  const childNames = (s: NewStudentDto) => s.children.map((c) => c.name).join(locale === 'ar' ? '، ' : ', ')
+
+  /**
+   * A family on the board: the parent, its status word where the stage alone
+   * does not say it (a code asked for, a lock), the waiting fact, the children
+   * and who looks after them, how long it has waited, and its one next step.
+   * A family that finished its setup is a quiet card.
+   */
   const card = (s: NewStudentDto) => {
     const status = statusOf(s)
     const e = s.enrolment ?? null
     const group = e?.groupConversationId ?? null
     const codeWaiting = e?.parentSignup.state === 'code_waiting'
+    const late = assignLate(s, status)
+    const fact = !e
+      ? tx(NS.factUnassigned).replace('{age}', ageText(s.recordedAt, locale))
+      : status === 'locked'
+        ? tx(NS.factLocked)
+        : codeWaiting
+          ? tx(NS.factCode)
+          : status === 'signed_up'
+            ? tx(NS.factSignedUp)
+            : !group && e.canCreateGroup
+              ? tx(NS.factNoGroup)
+              : tx(NS.factNotStarted)
     const primary =
       !e && canAssign ? (
         <button type="button" className="btn btn--sm" onClick={() => openWith(s, 'assign')}>{tx(NS.assignSupervisor)}</button>
@@ -180,25 +200,27 @@ export function NewStudentsPage() {
         title={s.parent.name}
         selected={open?.trialId === s.trialId}
         onOpen={() => setOpenId(s.trialId)}
-        age={<Age iso={since(s)} late={assignLate(s, status)} />}
+        quiet={status === 'signed_up' && !!group}
+        status={
+          status === 'locked' ? <Badge tone="waiting">{tx(STATUS.locked.label)}</Badge>
+            : codeWaiting ? <Badge tone="waiting">{tx(NS.codeAsked)}</Badge>
+            : undefined
+        }
+        fact={fact}
+        late={late}
+        age={<Age iso={since(s)} late={late} />}
         actions={<RowActions label={`${tx(NS.moreActions)}: ${s.parent.name}`} primary={primary} more={more(s)} />}
       >
         <p className="rq-card__line">
-          <Icon name="students" size={15} />
-          <bdi>{s.children.map((c) => c.name).join(' · ')}</bdi>
+          <Icon name="students" size={16} />
+          <bdi>{childNames(s)}</bdi>
         </p>
-        <div className="rq-card__tags">
-          {e?.supervisor ? (
-            <span className="rq-card__line">
-              <Icon name="user" size={15} />
-              <bdi>{e.supervisor.name}</bdi>
-            </span>
-          ) : (
-            <Badge tone="gold">{tx(NS.noSupervisor)}</Badge>
-          )}
-          {status === 'locked' && <Badge tone="danger">{tx(STATUS.locked.label)}</Badge>}
-          {codeWaiting && status !== 'locked' && <Badge tone="warn">{tx(NS.codeAsked)}</Badge>}
-        </div>
+        {e?.supervisor && status !== 'signed_up' && (
+          <p className="rq-card__line">
+            <Icon name="user" size={16} />
+            <bdi>{e.supervisor.name}</bdi>
+          </p>
+        )}
       </BoardCard>
     )
   }
@@ -214,6 +236,7 @@ export function NewStudentsPage() {
       label: tx(STATUS[stage].label),
       count: families.length,
       urgent: stage === 'unassigned' ? late : stage === 'waiting' && locked > 0,
+      quiet: stage === 'signed_up',
       cards: families.map(card),
       empty: tx(NS.stageEmpty),
     }
@@ -225,7 +248,7 @@ export function NewStudentsPage() {
       <div className="page__inner">
         <PageHeader
           title={tx(TR.newTitle)}
-          subtitle={tx(TR.newSubtitle)}
+          subtitle={tx(NS.rule)}
           figures={students.length > 0 ? figures : undefined}
           tabs={offered ? <TrialsAreaTabs /> : undefined}
         />
@@ -237,17 +260,17 @@ export function NewStudentsPage() {
               id: open.trialId,
               title: open.parent.name,
               kind: { icon: 'newStudents', label: tx(NS.kind) },
-              status: (
-                <>
-                  <Badge tone={STATUS[openStatus].tone} dot>{tx(STATUS[openStatus].label)}</Badge>
-                  <Age iso={since(open)} late={assignLate(open, openStatus)} />
-                </>
-              ),
               pinned: true,
               onClose: () => setOpenId(null),
               body: (
                 <FamilyRecord
                   s={open}
+                  status={
+                    <>
+                      <Badge tone={STATUS[openStatus].tone} dot>{tx(STATUS[openStatus].label)}</Badge>
+                      <Age iso={since(open)} late={assignLate(open, openStatus)} />
+                    </>
+                  }
                   canAssign={canAssign}
                   showRequests={mayRequestPayment}
                   more={more(open)}
@@ -270,7 +293,7 @@ export function NewStudentsPage() {
               </div>
             ) : (
               <>
-                <div className="ns-find">
+                <div className="rq-bar ns-find">
                   <label className="search">
                     <Icon name="search" size={16} />
                     <span className="sr-only">{tx(NS.search)}</span>
@@ -311,6 +334,7 @@ export function NewStudentsPage() {
  */
 function FamilyRecord({
   s,
+  status,
   canAssign,
   showRequests,
   more,
@@ -318,6 +342,7 @@ function FamilyRecord({
   onIntentDone,
 }: {
   s: NewStudentDto
+  status: ReactNode
   canAssign: boolean
   showRequests: boolean
   more: MenuItem[]
@@ -327,6 +352,7 @@ function FamilyRecord({
   const { locale, number } = useI18n()
   const tx = (p: Pair) => (locale === 'ar' ? p.ar : p.en)
   const money = (n: number) => formatAmount(n, s.payment.currency, locale)
+  const sep = locale === 'ar' ? '، ' : ', '
   const before: FlowStep[] = [
     {
       key: 'trial',
@@ -335,8 +361,8 @@ function FamilyRecord({
       meta: (
         <>
           <bdi>{s.prospectName}</bdi>
-          {s.trialTeacher && <> · <bdi>{s.trialTeacher.name}</bdi></>}
-          {s.trialAt && <> · <time dateTime={s.trialAt}>{formatWhen(s.trialAt, locale)}</time></>}
+          {s.trialTeacher && <>{sep}<bdi>{s.trialTeacher.name}</bdi></>}
+          {s.trialAt && <>{sep}<time dateTime={s.trialAt}>{formatWhen(s.trialAt, locale)}</time></>}
         </>
       ),
     },
@@ -346,9 +372,9 @@ function FamilyRecord({
       state: 'done',
       meta: (
         <>
-          <time dateTime={s.recordedAt}>{formatWhen(s.recordedAt, locale)}</time> · {tx(NS.recorded)} <bdi>{s.recordedBy.name}</bdi>
+          {tx(NS.recorded)} <bdi>{s.recordedBy.name}</bdi>{sep}<time dateTime={s.recordedAt}>{formatWhen(s.recordedAt, locale)}</time>
           {s.updatedAt && (
-            <> · {tx(NS.updated)} <time dateTime={s.updatedAt}>{formatWhen(s.updatedAt, locale)}</time></>
+            <>{sep}{tx(NS.updated)} <time dateTime={s.updatedAt}>{formatWhen(s.updatedAt, locale)}</time></>
           )}
         </>
       ),
@@ -356,7 +382,7 @@ function FamilyRecord({
   ]
   return (
     <div className="ns-record">
-      <NewStudentSetup s={s} canAssign={canAssign} before={before} intent={intent} onIntentDone={onIntentDone} more={more}>
+      <NewStudentSetup s={s} status={status} canAssign={canAssign} before={before} intent={intent} onIntentDone={onIntentDone} more={more}>
         <DetailSection title={tx(NS.contact)}>
           <dl className="rq-fields">
             <div className="rq-field">
@@ -365,7 +391,7 @@ function FamilyRecord({
             </div>
             <div className="rq-field">
               <dt>{tx(TR.email)}</dt>
-              <dd>{s.parent.email ? <bdi dir="ltr" className="ns-ltr">{s.parent.email}</bdi> : <span className="ts-muted">—</span>}</dd>
+              <dd>{s.parent.email ? <bdi dir="ltr" className="ns-ltr">{s.parent.email}</bdi> : <span className="ts-muted">{tx(NS.none)}</span>}</dd>
             </div>
             <div className="rq-field">
               <dt>{tx(TR.location)}</dt>
@@ -432,10 +458,10 @@ function FamilyRecord({
 
 /** PD-45: "Egypt · Giza" / "مصر · الجيزة" from the names the server sent, or a dash for a form that has none. */
 function formLocationText(location: NewStudentDto['parent']['location'], locale: 'ar' | 'en') {
-  if (!location) return <span className="ts-muted">—</span>
+  if (!location) return <span className="ts-muted">{locale === 'ar' ? NS.none.ar : NS.none.en}</span>
   const { country, subdivision } = location.names
   const name = (n: { ar: string; en: string }) => (locale === 'ar' ? n.ar : n.en)
-  return <bdi>{subdivision ? `${name(country)} · ${name(subdivision)}` : name(country)}</bdi>
+  return <bdi>{subdivision ? `${name(country)}${locale === 'ar' ? '، ' : ', '}${name(subdivision)}` : name(country)}</bdi>
 }
 
 function EditSubscriptionDialog({ student, onClose }: { student: NewStudentDto; onClose: () => void }) {

@@ -148,7 +148,8 @@ describe('the pipeline board and the lead beside it', () => {
     expect(document.body.textContent).not.toContain(SECRET_PHONE)
     expect(screen.queryByRole('complementary', { name: 'Lead details' })).not.toBeInTheDocument()
 
-    await userEvent.click(screen.getByRole('button', { name: 'Open Lead Beta' }))
+    // A lost lead is a quiet card: it opens from its name.
+    await userEvent.click(screen.getByRole('button', { name: 'Lead Beta' }))
     const again = screen.getByRole('complementary', { name: 'Lead details' })
     await within(again).findByText('No contact details are on file.')
     // A lost lead got as far as its record shows, and ends in Lost with its reason.

@@ -12,7 +12,7 @@ import { EmptyState, ErrorState, LoadingState } from '@/shared/components/States
 import type { Certificate, CertificateAct, CertificateCategory, StateGroup } from './api'
 import { C, GROUPS, actLabel, groupLabel, stateLabel, stateTone, useCopy } from './copy'
 import { useCertificate, useCertificateAccess, useCertificateBoard } from './hooks'
-import { CertificateDetail, CertificateStatus, actEnds, actIcon, orderedActs } from './CertificateDetail'
+import { CertificateDetail, actEnds, actIcon, certificateWhy, orderedActs } from './CertificateDetail'
 import { RequestDialog } from './RequestDialog'
 import { TypesPanel } from './TypesPanel'
 import './certificates.css'
@@ -48,7 +48,7 @@ function useDebounced<T>(value: T, ms = 300): T {
  */
 export function CertificatesPage() {
   const tx = useCopy()
-  const { number } = useI18n()
+  const { number, locale } = useI18n()
   const wide = useWidePane()
   const [params, setParams] = useSearchParams()
   const access = useCertificateAccess()
@@ -111,17 +111,31 @@ export function CertificatesPage() {
     )
   }
 
-  /** A certificate on the board: whose it is, what kind, who asked, since when, and the first act the server allows. */
+  /**
+   * A certificate on the board: whose it is, its state word where the column
+   * holds more than one state, why it waits there (the one emphasised line),
+   * what kind and who asked, since when, and the first act the server allows.
+   * Sent and closed certificates are quiet cards.
+   */
   const card = (c: Certificate, group: StateGroup) => {
     const acts = orderedActs(c.actions)
     const first = acts[0]
     const requester = c.projection === 'full' ? (c.requestedBy?.name ?? c.suggestedBy?.name ?? null) : c.requesterName
+    const story = c.projection === 'full' && !!c.story && !c.story.withdrawnAt
     return (
       <BoardCard
         key={c.id}
         title={c.printedName}
         selected={c.id === openId}
         onOpen={() => setOpenId(c.id)}
+        // Work that has ended is a quiet card, unless the server still offers an act on it (a Story, consent).
+        quiet={(group === 'sent' || group === 'closed') && acts.length === 0}
+        status={
+          !PLAIN.has(group) && group !== 'closed' ? <Badge tone={stateTone(c.state)} dot>{tx(stateLabel(c.state))}</Badge>
+            : story ? <Badge tone="info" dot>{tx(C.storyPublished)}</Badge>
+            : undefined
+        }
+        fact={certificateWhy(c, tx, locale)}
         age={<Age iso={c.requestedAt} />}
         actions={
           <RowActions
@@ -138,21 +152,15 @@ export function CertificatesPage() {
         }
       >
         <p className="rq-card__line">
-          <Icon name="certificates" size={15} />
+          <Icon name="certificates" size={16} />
           <bdi>{c.type ? tx({ en: c.type.labelEn, ar: c.type.labelAr }) : c.title}</bdi>
-          {c.juz !== null && <span className="ltr">· {number(c.juz)}</span>}
+          {c.juz !== null && <bdi className="rq-card__num">{tx(C.juzN, { n: c.juz })}</bdi>}
         </p>
-        {requester && (
+        {requester && group !== 'sent' && group !== 'closed' && (
           <p className="rq-card__line">
-            <Icon name="user" size={15} />
+            <Icon name="user" size={16} />
             <bdi>{requester}</bdi>
           </p>
-        )}
-        {(!PLAIN.has(group) || (c.projection === 'full' && c.story && !c.story.withdrawnAt)) && (
-          <div className="rq-card__tags">
-            {!PLAIN.has(group) && <Badge tone={stateTone(c.state)} dot>{tx(stateLabel(c.state))}</Badge>}
-            {c.projection === 'full' && c.story && !c.story.withdrawnAt && <Badge tone="neutral">{tx(C.storyPublished)}</Badge>}
-          </div>
         )}
       </BoardCard>
     )
@@ -164,6 +172,7 @@ export function CertificatesPage() {
       key: g,
       label: tx(groupLabel(g)),
       count: countOf(g),
+      quiet: g === 'sent' || g === 'closed',
       more: !!list?.nextCursor,
       cards: (list?.certificates ?? []).map((c) => card(c, g)),
       empty: tx(C.stageEmpty),
@@ -243,14 +252,13 @@ export function CertificatesPage() {
                     id: openId,
                     title: opened?.printedName ?? tx(C.title),
                     kind: { icon: 'certificates', label: opened?.type ? tx({ en: opened.type.labelEn, ar: opened.type.labelAr }) : tx(C.kind) },
-                    status: opened ? <CertificateStatus certificate={opened} /> : undefined,
                     body: <CertificateDetail certificateId={openId} intent={intent?.id === openId ? intent.act : null} onIntentDone={() => setIntent(null)} />,
                     onClose: () => setOpenId(null),
                   }
                 : null
             }
           >
-            <div className="cert-bar">
+            <div className="rq-bar cert-bar">
               <SearchField value={search} onChange={setSearch} label={tx(C.search)} clearLabel="×" />
               <button type="button" className="chip cert-bar__closed" aria-pressed={showClosed} onClick={() => setShowClosed((v) => !v)}>
                 {tx(C.showClosed)}

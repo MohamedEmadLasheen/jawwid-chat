@@ -5,9 +5,6 @@
 /* The family's record needs a little more room than a single request does. */
 .ns-page { --rq-panel: 440px; }
 
-/* The search belongs to the board under it. */
-.ns-find { display: flex; }
-.ns-find .search { flex: 1 1 auto; max-inline-size: 360px; }
 
 .ns-record { container: ns-record / inline-size; display: flex; flex-direction: column; flex: 1; min-inline-size: 0; }
 
@@ -15,21 +12,25 @@
 .ns-ltr { unicode-bidi: isolate; font-variant-numeric: tabular-nums; }
 .ns-inline { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 
-/* The sign-up code: large numerals on a gold rule, with what it is and what can be done. */
-.ns-code { display: grid; justify-items: start; gap: 6px; }
+/* The sign-up code, in the callout: large figures on a white tile, what it is, and the way to end it. */
+.ns-code { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 6px var(--space-3); }
 .ns-code__value {
-  font-family: var(--display);
-  font-size: 27px;
+  grid-row: span 2;
+  padding: 6px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  font-family: var(--font-head);
+  font-size: 26px;
   font-weight: 600;
   line-height: 1.2;
   letter-spacing: 0.14em;
   font-variant-numeric: tabular-nums lining-nums;
-  border-block-end: 2px solid var(--gold);
   color: var(--ink);
 }
-.ns-lock { display: grid; justify-items: start; gap: 6px; font-size: var(--fs-sm); }
-.ns-lock--on { color: var(--terracotta); }
-.ns-lock--on .icon { vertical-align: -2px; }
+.ns-code .btn { justify-self: start; }
+.ns-lock { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px var(--space-3); font-size: var(--fs-sm); }
+.ns-lock .icon { vertical-align: -3px; color: var(--ink-2); }
 
 /* The children. */
 .ns-children { overflow-x: auto; }
@@ -48,7 +49,7 @@
   .ns-children { overflow: visible; }
   .ns-table, .ns-table tbody { display: block; }
   .ns-table thead { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-  .ns-table tbody tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1px var(--space-3); padding-block: 9px; border-block-end: 1px solid var(--hairline-soft); }
+  .ns-table tbody tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1px var(--space-3); padding-block: 9px; border-block-end: 1px solid var(--line-2); }
   .ns-table tbody tr:last-child { border-block-end: 0; }
   .ns-table.table tbody tr > :is(th, td) { display: block; padding: 0; border: 0; min-inline-size: 0; background: none; }
   .ns-table .ns-c-name { grid-column: 1; }
@@ -61,7 +62,7 @@
 }
 
 /* PD-27: the trial's payment requests under the payment facts, before and after Assign. */
-.ns-requests { display: grid; gap: 6px; margin: var(--space-2) 0 0; padding: var(--space-2) 0 0; border-block-start: 1px solid var(--hairline-soft); list-style: none; }
+.ns-requests { display: grid; gap: 6px; margin: var(--space-2) 0 0; padding: var(--space-2) 0 0; border-block-start: 1px solid var(--line-2); list-style: none; }
 .ns-requests__item { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); font-size: var(--fs-sm); }
 .ns-requests__label { flex: 1 1 auto; min-inline-size: 0; overflow-wrap: anywhere; }
 .ns-requests__amount { font-variant-numeric: tabular-nums; }
