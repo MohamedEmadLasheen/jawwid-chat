@@ -28,7 +28,8 @@
 .dir-table thead th {
   padding-block: 8px;
   border-block-end: 1px solid var(--line-2);
-  font-size: var(--fs-xs);
+  /* The type floor is 13px: the English scale's --fs-xs is 12.5. */
+  font-size: max(13px, var(--fs-xs));
   font-weight: 500;
   color: var(--ink-muted);
   white-space: nowrap;
@@ -40,6 +41,8 @@
 .dir-row:has(.dir-name:focus-visible) > td { background: var(--teal-tint); }
 
 .dir-cell-who { inline-size: 60%; }
+/* The students list has three facts beside the name; the name takes less of the width. */
+@media (min-width: 768px) { .dir-table--students .dir-cell-who { inline-size: 40%; } }
 .dir-who { display: flex; align-items: center; gap: 12px; min-inline-size: 0; }
 .dir-who__text { display: grid; gap: 1px; min-inline-size: 0; }
 .dir-name { justify-self: start; font-weight: 600; color: var(--ink); text-decoration: none; overflow-wrap: anywhere; }
@@ -52,10 +55,11 @@ html[lang='ar'] .dir-sub > :not(:last-child)::after { content: '،'; }
 .dir-cell-quiet { font-size: var(--fs-sm); color: var(--ink-muted); }
 .dir-none { color: var(--ink-muted); }
 .dir-cell-state { white-space: nowrap; }
+.dir-state-quiet { font-size: var(--fs-sm); color: var(--ink-muted); }
 .dir-state__note { display: block; margin-block-start: 2px; font-size: var(--fs-xs); color: var(--ink-muted); }
 .dir-table td.cell-actions { inline-size: 1%; }
-/* The row's one stated action is quiet until the row is under the pointer. */
-.dir-row .row-actions2 > .btn { color: var(--ink-muted); }
+/* The row's one stated action reads in ink like every other row action; it turns teal with its row. */
+.dir-row .row-actions2 > .btn { color: var(--ink); }
 .dir-row:hover .row-actions2 > .btn { border-color: var(--teal); color: var(--teal); }
 
 /* A group of rows: its heading is a band on the canvas colour, with how many it holds. */
@@ -63,6 +67,7 @@ html[lang='ar'] .dir-sub > :not(:last-child)::after { content: '،'; }
 .dir-table > tbody:not(:first-of-type) > .dir-group__head > th { border-block-start: 1px solid var(--line-2); }
 .dir-group__title { display: inline-flex; align-items: center; gap: 8px; font-size: var(--fs-sm); font-weight: 600; color: var(--ink); }
 .dir-group__label { font-weight: 400; color: var(--ink-muted); }
+.dir-group__count { font-weight: 400; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
 /* The group nobody holds is said by its heading's word and an amber dot, not by an edge. */
 .dir-group--unplaced .dir-group__title::before { content: ''; inline-size: 8px; block-size: 8px; border-radius: 50%; background: var(--waiting); }
 
@@ -92,7 +97,7 @@ html[lang='ar'] .dir-sub > :not(:last-child)::after { content: '،'; }
   .dir-table > tbody:last-of-type > .dir-row:last-child { border-block-end: 0; }
   .dir-row > td, .dir-table :is(th, td):first-child, .dir-table :is(th, td):last-child { display: block; padding: 0; border: 0; }
   .dir-row:hover > td { background: none; }
-  .dir-row > .dir-cell-who { grid-column: 1; grid-row: 1; }
+  .dir-row > .dir-cell-who { grid-column: 1; grid-row: 1; inline-size: auto; }
   .dir-row > .dir-cell-state { grid-column: 2; grid-row: 1; text-align: end; }
   .dir-row > .dir-cell-quiet { grid-column: 1 / -1; padding-inline-start: 48px; font-size: var(--fs-xs); }
   .dir-row > .dir-cell-quiet::before { content: attr(data-label) ': '; }

@@ -277,6 +277,10 @@ export const CHILDREN_COUNT: CountForms = {
   en: ['{n} child', '{n} children'],
   ar: ['طفل واحد', 'طفلان', '{n} أطفال', '{n} طفلًا'],
 }
+export const PARENTS_COUNT: CountForms = {
+  en: ['{n} parent', '{n} parents'],
+  ar: ['ولي أمر واحد', 'وليا أمر', '{n} أولياء أمور', '{n} وليّ أمر'],
+}
 
 export const METHOD_LABEL: Record<PaymentMethod, Pair> = {
   invoice: { en: 'Invoice', ar: 'فاتورة' },
