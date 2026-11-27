@@ -68,9 +68,14 @@ export function WeekBoard({
   )
   const columns = { '--sc-cols': working.map((w) => (w ? 'minmax(86px, 1fr)' : '64px')).join(' ') } as CSSProperties
   const h = (m: number) => hoursOf(m, locale)
+  // Where the board is wider than its room (a narrow window, the sidebar open), today stays in view.
+  const grid = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    grid.current?.querySelector<HTMLElement>('.sc-dayhead--today')?.scrollIntoView?.({ inline: 'nearest', block: 'nearest' })
+  }, [data.from])
 
   return (
-    <div className="sc-grid sc-grid--week" role="table" aria-label={tx(S.title)} style={columns}>
+    <div className="sc-grid sc-grid--week" role="table" aria-label={tx(S.title)} style={columns} ref={grid}>
       <div className="sc-row sc-row--axis" role="row">
         <div className="sc-row__head" role="columnheader">
           <span>{tx(S.teacher)}</span>

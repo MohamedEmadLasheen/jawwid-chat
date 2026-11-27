@@ -126,3 +126,21 @@
   .in-group__sum { display: none; }
   .in-group--overdue .in-group__sum { display: flex; }
 }
+
+/* The room a row gets depends on the sidebar (folded or open), not only on the window:
+   below ~840px of list the plan moves under the name and its "left" line waits in the file. */
+.in-rows { container: in-rows / inline-size; }
+@container in-rows (max-width: 840px) and (min-width: 600px) {
+  .in-row {
+    grid-template-columns: minmax(180px, 1fr) 128px 116px var(--in-act);
+    grid-template-areas: 'who when amount act' 'plan when amount act';
+    row-gap: 2px;
+  }
+  .in-row__who { grid-area: who; }
+  .in-row__plan { grid-area: plan; padding-inline-start: 38px; }
+  .in-row__when { grid-area: when; }
+  .in-row__amount { grid-area: amount; }
+  .in-row__act { grid-area: act; }
+  .in-row__sup { display: none; }
+  .in-row .plan__left { display: none; }
+}
