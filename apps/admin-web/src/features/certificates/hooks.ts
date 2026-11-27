@@ -20,22 +20,22 @@ export function useCertificates(q: ListQuery, enabled = true) {
 }
 
 /**
- * The status strip counts every state, not only the open one. The server has no
- * count endpoint, so each count is the existing list read, asked once per state
- * (its first page; "+" when there is more). The open state's read is the list
- * the page shows anyway, and the others make their state open at once. Set this
- * to false to ask for the open state alone: the other cells then show no figure.
+ * The board's columns: the existing list read, once per state on the board (its
+ * first page, or the page a column's "Show more" moved it to). A column's count
+ * is its list's length, with "+" when the server says there is more. A state
+ * that is not on the board (Closed, until it is asked for) is not read.
  */
-export const COUNT_EVERY_STATE = true
-
-export function useCertificateCounts(category: CertificateCategory | undefined, groups: readonly StateGroup[], open: StateGroup) {
+export function useCertificateBoard(
+  category: CertificateCategory | undefined,
+  groups: readonly StateGroup[],
+  q: string | undefined,
+  cursors: Partial<Record<StateGroup, string>>,
+) {
   return useQueries({
-    queries: groups.map((status) => ({
-      queryKey: certificateKeys.list({ category, status }),
-      queryFn: () => certificatesApi.list({ category, status }),
-      enabled: !!category && (COUNT_EVERY_STATE || status === open),
-      staleTime: 15_000,
-    })),
+    queries: groups.map((status) => {
+      const query: ListQuery = { category, status, q, cursor: cursors[status] }
+      return { queryKey: certificateKeys.list(query), queryFn: () => certificatesApi.list(query), enabled: !!category, staleTime: 15_000 }
+    }),
   })
 }
 

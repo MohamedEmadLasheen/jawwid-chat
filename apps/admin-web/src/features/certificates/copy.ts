@@ -42,6 +42,12 @@ export const C = {
   readyToSend: { en: 'Approved, ready to send', ar: 'معتمدة وجاهزة للإرسال' },
   current: { en: 'Current', ar: 'الحالية' },
   openChat: { en: 'Open the chat', ar: 'فتح المحادثة' },
+  moreActions: { en: 'More actions', ar: 'إجراءات أخرى' },
+  showClosed: { en: 'Closed', ar: 'المغلقة' },
+  figOpen: { en: 'Open requests', ar: 'طلبات مفتوحة' },
+  figDesigner: { en: 'With the designer', ar: 'لدى المصمم' },
+  figReview: { en: 'To review or send', ar: 'للمراجعة أو الإرسال' },
+  stageEmpty: { en: 'None here.', ar: 'لا شيء هنا.' },
   more: { en: 'Show more', ar: 'عرض المزيد' },
   denied: { en: 'This account does not open certificates.', ar: 'هذا الحساب لا يفتح الشهادات.' },
 
