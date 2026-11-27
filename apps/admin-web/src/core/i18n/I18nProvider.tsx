@@ -108,8 +108,15 @@ export function I18nProvider({
     const numberFmt = new Intl.NumberFormat(tag)
     // PD-22: staff read every time in the academy's zone, never their browser's, so two
     // supervisors in two countries see the same clock.
-    const dateTimeFmt = new Intl.DateTimeFormat(tag, { dateStyle: 'medium', timeStyle: 'short', timeZone: ACADEMY_ZONE })
-    const dateFmt = new Intl.DateTimeFormat(tag, { dateStyle: 'medium', timeZone: ACADEMY_ZONE })
+    // Arabic's "medium" date is all digits (26/11/2026); the design names the month in
+    // Arabic ("26 نوفمبر 2026") with Western digits. English keeps its medium form (26 Nov 2026).
+    const day: Intl.DateTimeFormatOptions =
+      locale === 'ar' ? { day: 'numeric', month: 'long', year: 'numeric' } : { dateStyle: 'medium' }
+    const dateTimeFmt = new Intl.DateTimeFormat(
+      tag,
+      locale === 'ar' ? { ...day, hour: 'numeric', minute: '2-digit', timeZone: ACADEMY_ZONE } : { dateStyle: 'medium', timeStyle: 'short', timeZone: ACADEMY_ZONE },
+    )
+    const dateFmt = new Intl.DateTimeFormat(tag, { ...day, timeZone: ACADEMY_ZONE })
     const timeFmt = new Intl.DateTimeFormat(tag, { timeStyle: 'short', timeZone: ACADEMY_ZONE })
 
     return {
