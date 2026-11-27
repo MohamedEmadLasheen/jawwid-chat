@@ -138,10 +138,10 @@ export const TS = {
 
   // Each row's reason, as a sentence.
   rNoShow: { en: 'missed {lessons} without notice', ar: 'غياب عن {lessons} دون إشعار' },
-  rLateRecent: { en: 'reports overdue, unusual for this teacher', ar: 'تقارير فات موعدها، تأخر حديث على غير العادة' },
-  rLateHabit: { en: 'reports overdue, and late most of the month', ar: 'تقارير فات موعدها، والتأخر متكرر طوال الشهر' },
-  rLateNone: { en: 'reports overdue, none written yet this month', ar: 'تقارير فات موعدها، ولم يُكتب أي تقرير هذا الشهر' },
-  rAbsences: { en: 'students missed {absent} and excused {excused}', ar: 'غاب الطلاب عن {absent} واعتذروا عن {excused}' },
+  rLateRecent: { en: 'a recent report backlog, unusual here', ar: 'تأخر حديث في التقارير على غير العادة' },
+  rLateHabit: { en: 'reports late all month', ar: 'التقارير متأخرة طوال الشهر' },
+  rLateNone: { en: 'no report written this month', ar: 'لم يُكتب أي تقرير هذا الشهر' },
+  rAbsences: { en: 'students missed {absent}, excused {excused}', ar: 'غاب الطلاب عن {absent} واعتذروا عن {excused}' },
   rAbsencesOnly: { en: 'students missed {absent}', ar: 'غاب الطلاب عن {absent}' },
   rAbsencesUnknown: { en: 'students often miss their lessons', ar: 'الطلاب يتغيّبون كثيرًا' },
   rReportsLate: { en: 'reports often come in after a day', ar: 'كثيرًا ما يُكتب التقرير بعد مرور يوم' },

@@ -22,7 +22,7 @@ export function useReason() {
             return tx(TS.rLateNone)
           case 'absences':
             return c.excused > 0
-              ? tx(TS.rAbsences, { absent: lessons(c.absent), excused: lessons(c.excused) })
+              ? tx(TS.rAbsences, { absent: lessons(c.absent), excused: fmt.number(c.excused) })
               : tx(TS.rAbsencesOnly, { absent: lessons(c.absent) })
           case 'absencesUnknown':
             return tx(TS.rAbsencesUnknown)
