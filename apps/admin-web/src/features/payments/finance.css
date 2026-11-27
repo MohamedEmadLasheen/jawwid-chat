@@ -5,12 +5,14 @@
 .money { display: inline-flex; align-items: baseline; gap: 5px; white-space: nowrap; }
 .money__n { font-family: var(--font-head); font-size: 17px; font-weight: 600; line-height: 1.2; font-variant-numeric: tabular-nums lining-nums; color: var(--ink); }
 /* The currency has a slot of its own, so amounts in a column line up on their digits. */
-.money__c { min-inline-size: 2.4em; font-size: var(--fs-xs); font-weight: 500; color: var(--ink-muted); text-align: start; }
-.money--lg .money__c { min-inline-size: 0; }
+.money__c { font-size: var(--fs-xs); font-weight: 500; color: var(--ink-muted); }
 .money--sm .money__n { font-size: 15px; font-weight: 600; }
-/* Digits line up on the decimal point in both languages: the numeral has a box of its own, its
-   digits set to the box's right edge (numbers run left to right in Arabic too). */
-.money:not(.money--lg) .money__n { display: inline-block; min-inline-size: 8ch; text-align: right; }
+/* Digits line up on the decimal point in both languages. Numbers run left to right in Arabic too,
+   so an amount column is set to its physical right edge: in English the currency follows on the
+   right (a slot of its own, so the codes keep the digits in line); in Arabic the digits' end is the
+   column's edge and the currency follows on the left, beside its digits.
+   (Physical alignment on purpose: it is the numerals' own direction, not the page's.)
+   Each money column applies this in its own sheet (tx-end, rv-row__end, in-row__amount). */
 .money--lg { gap: 8px; }
 .money--lg .money__n { font-size: var(--fs-kpi); font-weight: 700; line-height: 1.15; }
 .money--lg .money__c { font-size: var(--fs-sm); }

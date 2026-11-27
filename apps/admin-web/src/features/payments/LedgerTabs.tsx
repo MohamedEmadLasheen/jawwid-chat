@@ -1076,7 +1076,7 @@ export function AttemptsTab() {
  */
 function AttemptRow({ a, onOpenPayment }: { a: CardAttemptRow; onOpenPayment: (paymentId: string) => void }) {
   const tx = useCopy()
-  const { dateTime, number } = useI18n()
+  const { time, number } = useI18n()
   const paymentId = a.paymentId
   return (
     <tr>
@@ -1110,7 +1110,8 @@ function AttemptRow({ a, onOpenPayment }: { a: CardAttemptRow; onOpenPayment: (p
               {tx(LED.colTries)} <span className="pay-count">{number(a.failureCount)}</span>
             </span>
           )}
-          {a.lastFailedAt && <span>{tx(LED.lastFailedAt, { date: dateTime(a.lastFailedAt) })}</span>}
+          {/* The day heads the group: the time is enough. */}
+          {a.lastFailedAt && <span>{tx(LED.lastFailedAt, { date: time(a.lastFailedAt) })}</span>}
         </span>
       </td>
       <td className="tx-c-state">

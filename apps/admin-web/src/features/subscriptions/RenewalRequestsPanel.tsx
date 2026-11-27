@@ -54,10 +54,10 @@ export function RenewalRequestsPanel() {
         />
       ) : (
         <>
+          {/* What to do with the queue, said once before it. */}
+          <p className="rn__how">{tx(S.renewalsHint)}</p>
           <Group title={tx(S.waiting)} rows={waiting} waiting />
           <Group title={tx(S.renewed)} rows={renewed} />
-          {/* What the queue is and what to do with it, at its foot. */}
-          <p className="rn__foot">{tx(S.renewalsHint)}</p>
         </>
       )}
     </section>

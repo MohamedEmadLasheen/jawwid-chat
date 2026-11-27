@@ -219,7 +219,8 @@ function Group({
   if (rows.length === 0) return null
   const shown = all || rows.length <= FOLD_AFTER ? rows : rows.slice(0, FOLD_AFTER)
   const sums = sumByCurrency(rows)
-  const counter = status === 'overdue' ? 'count count--urgent' : status === 'due' ? 'count' : 'count count--quiet'
+  // One count style; only what is late asks for action, in solid red.
+  const counter = status === 'overdue' ? 'count count--urgent' : 'count'
   return (
     <section className={`sheet in-group in-group--${status}`} aria-labelledby={id}>
       <div className="sheet__head">

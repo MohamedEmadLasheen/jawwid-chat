@@ -15,7 +15,10 @@
 .in-group__title { display: flex; align-items: center; gap: 10px; }
 /* The group's sum stands in the amount column: clear of the action column (its width, then the gap). */
 .in-group { --in-act: 136px; }
-.in-group__sum { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 2px var(--space-4); padding-inline-end: calc(var(--in-act) + var(--space-4)); }
+.in-group__sum { box-sizing: content-box; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 2px var(--space-4); inline-size: 140px; padding-inline-end: calc(var(--in-act) + var(--space-4)); }
+/* Amounts to the column's physical right edge, digits on the decimal point (numbers run left to right). */
+[dir='rtl'] .in-group__sum { justify-content: flex-start; }
+[dir='ltr'] :is(.in-group__sum, .in-row__amount) .money__c { display: inline-block; min-inline-size: 2.4em; text-align: left; }
 .in-group__sum .money__n { font-size: 17px; color: var(--ink-2); }
 .in-group--overdue .in-group__title { font-size: var(--fs-xl); font-weight: 700; }
 .in-group--overdue .in-group__sum .money__n { font-weight: 700; color: var(--ink); }
@@ -71,7 +74,7 @@
 .in-row__flag { margin-inline-start: 8px; }
 
 /* The amount ends the row, the heaviest thing on it. */
-.in-row__amount { justify-self: end; white-space: nowrap; }
+.in-row__amount { justify-self: right; white-space: nowrap; }
 .in-row__act { justify-self: end; }
 
 /* The plan in words: which of how many (or how many open), then what is left on it. */
@@ -115,7 +118,8 @@
   .in-row__plan .plan { justify-items: end; }
   .in-row__sup { grid-area: sup; display: flex; flex-wrap: wrap; align-items: baseline; align-self: center; gap: 0 8px; padding-inline-start: 38px; white-space: normal; }
   .in-row__act { grid-area: act; justify-self: end; }
-  .in-group__sum { padding-inline-end: 0; }
+  .in-group__sum { padding-inline-end: 0; inline-size: auto; }
+  .in-row__amount { justify-self: end; }
   .in-group__more { min-block-size: 48px; }
   .in-group__sum { display: none; }
   .in-group--overdue .in-group__sum { display: flex; }

@@ -51,6 +51,7 @@
 .rn-row__link { font-size: var(--fs-sm); font-weight: 500; color: var(--teal); text-decoration: none; }
 .rn-row__link:hover { text-decoration: underline; }
 .rn-group:not(.rn-group--waiting) .entity__name { font-weight: 500; color: var(--ink-2); }
+.rn__how { margin: 0; padding: 12px var(--space-4); border-block-end: 1px solid var(--line-2); font-size: var(--fs-sm); color: var(--ink-2); background: var(--surface-2); }
 .rn__foot { margin: 0; padding: 10px var(--space-4); border-block-start: 1px solid var(--line-2); font-size: var(--fs-xs); color: var(--ink-muted); }
 @media (max-width: 560px) {
   .rn-row { padding-block: 14px; }
