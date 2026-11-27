@@ -131,8 +131,8 @@ export function SessionList({
                           {g.current && <Badge tone="info">{tx(D.thisBrowserIsOne)}</Badge>}
                         </span>
                         <span className="dev-when">
-                          <span>{countWords(g.sessions.length, SESSIONS, locale)}</span>
                           <ActiveWhen session={g.latest} />
+                          <span>{countWords(g.sessions.length, SESSIONS, locale)}</span>
                         </span>
                       </span>
                       <span className="dev-group__chevron" aria-hidden="true">

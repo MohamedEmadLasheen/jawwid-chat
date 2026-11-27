@@ -22,7 +22,7 @@ export const D = {
   unknownDevice: { en: 'Unrecognised device', ar: 'جهاز لم يُتعرّف عليه' },
   notYet: { en: '—', ar: '—' },
   notActiveYet: { en: 'Not active yet', ar: 'لم ينشط بعد' },
-  signedInOn: { en: 'Signed in {when}', ar: 'سُجّل الدخول {when}' },
+  signedInOn: { en: 'signed in {when}', ar: 'سُجّل الدخول {when}' },
   empty: { en: 'No device is signed in.', ar: 'لا يوجد جهاز مسجَّل الدخول.' },
   activeWhen: { en: 'Active {when}', ar: 'آخر نشاط {when}' },
   thisBrowserIsOne: { en: 'Includes this browser', ar: 'ومنها هذا المتصفح' },
