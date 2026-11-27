@@ -742,8 +742,7 @@ html[lang='ar'] .table { font-size: var(--fs-sm); }
 [dir='rtl'] .table--interactive tbody tr[aria-selected='true'] { box-shadow: inset -3px 0 0 var(--gold); }
 .table--interactive tbody tr:hover .entity__name { color: var(--teal-dark); }
 .table td.num, .table th.num, .table .cell-nowrap time { font-variant-numeric: tabular-nums; }
-.table td.num { direction: ltr; unicode-bidi: isolate; text-align: end; }
-[dir='rtl'] .table td.num { text-align: left; }
+/* A numeric cell keeps the row's direction: it may hold a number with its unit in words. */
 .card:not(.card--flush) > .table th { background: var(--paper); }
 .entity__name { font-weight: 600; }
 .entity__sub { font-size: var(--fs-xs); color: var(--ink-muted); }
