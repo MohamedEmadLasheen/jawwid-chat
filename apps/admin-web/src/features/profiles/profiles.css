@@ -1,36 +1,210 @@
-/* PD-17 Parent and Student Profiles. Reuses the Teacher File's .tf-* layout, the staff
-   profile's photo picker (.sp-file-*) and the design system. */
+/* PD-17 Parent and Student Profiles. The open file pattern is people.css; the Teacher
+   File's .tf-* names and the staff profile's photo picker (.sp-file-*) are reused. */
 @import '../teacher-files/teacher-files.css';
 @import '../profile/profile.css';
+@import './people.css';
 
-.pf-contact { display: flex; flex-wrap: wrap; gap: var(--space-4); align-items: flex-start; margin-block-start: var(--space-3); }
-.pf-kv { flex: 1 1 20rem; margin: 0; }
-.pf-photo { display: flex; gap: var(--space-3); align-items: flex-start; flex-wrap: wrap; }
-.pf-photo__img { inline-size: 64px; block-size: 64px; border-radius: 50%; object-fit: cover; }
-.pf-photo__controls { display: flex; flex-direction: column; gap: var(--space-2); align-items: flex-start; max-inline-size: 260px; }
-.pf-note { margin: var(--space-2) 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+/* -------------------------------------------------------- the file's head */
+
+.pp-head__actions--stack { flex-direction: column; align-items: flex-end; gap: 4px; max-inline-size: 320px; }
+.pp-head__buttons { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: var(--space-2); }
+.pp-head__hint { font-size: var(--fs-xs); color: var(--ink-muted); text-align: end; }
+.pf-photo__img { inline-size: 64px; block-size: 64px; border-radius: var(--radius-lg); object-fit: cover; }
+@media (max-width: 767px) {
+  .pp-head__actions--stack { align-items: flex-start; max-inline-size: none; }
+  .pp-head__buttons { justify-content: flex-start; }
+  .pp-head__hint { text-align: start; }
+}
+
+.pp-contact { margin: 0; }
+.pp-contact__by { display: flex; flex-wrap: wrap; gap: 2px var(--space-4); margin: 6px 0 0; font-size: var(--fs-xs); color: var(--ink-muted); }
+/* The strip's lower rule is the bar's upper one: the bar follows with no gap. */
+
+/* ------------------------------------------------------------- children */
+
+.pp-child { grid-template-columns: auto minmax(0, 1fr) auto; min-block-size: 52px; }
+.pp-child__standing { gap: var(--space-5); }
+.pp-child__lessons { display: grid; gap: 5px; inline-size: 210px; }
+.pp-child__count { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
+.pp-child__standing .badge { min-inline-size: 5.5rem; }
+@media (max-width: 640px) {
+  .pp-child { grid-template-columns: auto minmax(0, 1fr); }
+  .pp-child__standing { grid-column: 1 / -1; justify-content: space-between; }
+  .pp-child__lessons { inline-size: auto; flex: 1; }
+}
+
+/* ---------------------------------------------------------- the package */
+
+.pp-money { margin: 0; border-block-start: 0; }
+.pp-money + .pp-money { border-block-start: 0; }
+.pp-money .ledger__value { font-size: var(--fs-2xl); }
+/* The terms the money is paid on: three facts in one line under the ledger. */
+.pp-terms { display: flex; flex-wrap: wrap; gap: 4px var(--space-6); margin: 12px 0 0; font-size: var(--fs-sm); }
+.pp-terms > div { display: flex; align-items: baseline; gap: 8px; }
+.pp-terms dt { color: var(--ink-muted); }
+.pp-terms dd { margin: 0; font-weight: 600; }
+.pp-terms dd .tf-muted { font-weight: 400; }
+
+/* ------------------------------------------------------- the internal note */
+
+/* Gold paper, as in the chat composer: this is never the parent's to read. */
+.pp-note { padding: 2px var(--space-3) 10px; border-inline-start: 2px solid var(--gold-line); background: var(--gold-tint); }
+.pp .pp-note .pp-sec__head { border-block-end-color: var(--gold-line); }
+.pp .pp-note .pp-sec__title { display: inline-flex; align-items: center; gap: 6px; color: var(--gold-text); }
+.pp-note .pp-rule, .pp-note .pp-empty { color: var(--gold-text); }
+.pf-note { margin: 10px 0 0; font-size: var(--fs-sm); line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink); }
+
+/* ---------------------------------------------------- activity (the margin) */
+
+/* The family's history is drawn as a dotted timeline; it is told oldest first. */
+.pp-activity .pf-people { list-style: none; margin: 12px 0 0; padding: 0; display: block; }
+.pp-activity .pf-people > li { position: relative; padding: 0 0 14px; padding-inline-start: 20px; font-size: var(--fs-sm); line-height: 1.5; }
+.pp-activity .pf-people > li::before { content: ''; position: absolute; inset-block: 6px -6px; inset-inline-start: 3px; border-inline-start: 1px solid var(--hairline); }
+.pp-activity .pf-people > li:last-child::before { display: none; }
+.pp-activity .pf-people > li::after {
+  content: '';
+  position: absolute;
+  inset-block-start: 6px;
+  inset-inline-start: 0;
+  inline-size: 7px;
+  block-size: 7px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border-control);
+  background: var(--paper);
+}
+.pp-activity .pf-people > li:last-child::after { border-color: var(--teal); background: var(--teal); }
+.pp-activity .pf-people .tf-muted { font-size: var(--fs-xs); }
+.pp-activity .pf-people p { margin: 2px 0 0; }
+/* The line under the heading says the order; it is kept, quietly. */
+.pp-activity .tf-section > .field__hint { margin-block-start: 6px; }
+
+/* ------------------------------------------------- people in a short list */
+
 .pf-people { list-style: none; margin: var(--space-3) 0 0; padding: 0; display: grid; gap: var(--space-2); }
 .pf-person { display: inline-flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
 .pf-slots { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-1); }
 .pf-row { display: flex; flex-wrap: wrap; gap: var(--space-3); }
 .pf-row > .field { flex: 1 1 10rem; }
-.pf-timeline { list-style: none; margin: var(--space-3) 0 0; padding: 0; display: grid; gap: var(--space-3); }
-.pf-entry { padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); display: grid; gap: var(--space-2); justify-items: start; }
-.pf-entry--voided { opacity: 0.7; }
+.pf-contact { display: flex; flex-wrap: wrap; gap: var(--space-4); align-items: flex-start; margin-block-start: var(--space-3); }
+.pf-kv { flex: 1 1 20rem; margin: 0; }
+.pf-photo { display: flex; gap: var(--space-3); align-items: flex-start; flex-wrap: wrap; }
+.pf-photo__controls { display: flex; flex-direction: column; gap: var(--space-2); align-items: flex-start; max-inline-size: 260px; }
+
+/* ------------------------------------------------ entries: ruled, not boxed */
+
+/* An instalment, a request, a payment, an invoice, a receipt: one ruled entry each.
+   What it is and its state on the start side, the amount in display numerals at the end. */
+.pf-timeline { list-style: none; margin: 4px 0 0; padding: 0; display: block; }
+.pf-entry {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 3px var(--space-4);
+  justify-items: start;
+  padding: 12px 2px 13px;
+  border: 0;
+  border-block-end: 1px solid var(--hairline-soft);
+  border-radius: 0;
+}
+.pf-entry > * { grid-column: 1; }
+.pf-entry > .pf-entry__head { grid-column: 1 / -1; }
+/* What can be done to an entry sits under its amount, at the row's end. */
+.pf-entry > .tf-actions { grid-column: 2; grid-row: 2 / span 4; align-self: start; justify-self: end; justify-content: flex-end; margin: 0; gap: 4px; }
+.pf-entry--voided { opacity: 1; color: var(--ink-muted); }
 .pf-entry--voided .pf-amount { text-decoration: line-through; }
-.pf-entry__head { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
-.pf-entry__meta { margin: 0; display: flex; flex-wrap: wrap; gap: var(--space-2); color: var(--text-muted); font-size: var(--fs-sm); }
-.pf-amount { font-variant-numeric: tabular-nums; font-weight: var(--fw-medium); }
-.pf-overdue { color: var(--danger); }
+.pf-entry--voided strong { font-weight: 500; }
+/* A late instalment carries a terracotta edge, the way a problem row does everywhere. */
+.pf-entry--late::before { content: ''; position: absolute; inset-block: 12px; inset-inline-start: -12px; inline-size: 2px; background: var(--terracotta); }
+.pf-entry__head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px var(--space-3); inline-size: 100%; }
+.pf-entry__head > strong { font-weight: 600; }
+.pf-entry__head > .badge { align-self: center; }
+.pf-entry__head > .pf-amount {
+  margin-inline-start: auto;
+  font-family: var(--display);
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums lining-nums;
+  direction: ltr;
+  unicode-bidi: isolate;
+  order: 9;
+}
+.pf-entry__meta { margin: 0; display: flex; flex-wrap: wrap; gap: 2px var(--space-3); color: var(--ink-muted); font-size: var(--fs-xs); line-height: 1.55; }
+.pf-entry__meta > span + span::before { content: '·'; margin-inline-end: var(--space-3); color: var(--border-strong); }
+.pf-amount { font-variant-numeric: tabular-nums; font-weight: 500; }
+.pf-overdue { color: var(--terracotta); }
+@media (max-width: 640px) {
+  .pf-entry--late::before { inset-inline-start: -8px; }
+  .pf-entry { grid-template-columns: minmax(0, 1fr); }
+  .pf-entry > .tf-actions { grid-column: 1; grid-row: auto; justify-self: start; justify-content: flex-start; margin-block-start: 6px; }
+}
 
 /* PD-45 §6.2: the staff-only suggestion from the phone's country code. */
 .pf-chip {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-2, 8px);
-  padding: var(--space-2, 8px) var(--space-3, 12px);
-  border: 1px dashed var(--border, currentColor);
-  border-radius: var(--radius-md, 8px);
-  margin-block-end: var(--space-3, 12px);
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  border-inline-start: 2px solid var(--gold-line);
+  border-radius: 0;
+  margin-block-end: var(--space-3);
+  font-size: var(--fs-sm);
 }
+
+/* ------------------------------------------------- feedback about teachers */
+
+.pp .tf-entries { list-style: none; margin: 4px 0 0; padding: 0; display: block; }
+.pp .tf-entry { padding: 12px 2px; border: 0; border-block-end: 1px solid var(--hairline-soft); border-radius: 0; display: grid; gap: 4px; justify-items: start; }
+.pp .tf-entry__head { gap: 4px var(--space-3); font-size: var(--fs-sm); }
+.pp .tf-entry__body { font-size: var(--fs-sm); line-height: 1.6; }
+.pp .tf-followup { border-inline-start: 2px solid var(--teal); padding-inline-start: var(--space-3); }
+
+/* ------------------------------------------------------------- the student */
+
+/* The subscription's standing, drawn as a ledger: a state, a package, three numerals. */
+.pp .sub-standing {
+  display: grid;
+  grid-template-columns: none;
+  grid-template-rows: auto auto;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 0;
+  margin: 12px 0 0;
+  border-block: 1px solid var(--hairline);
+  font-size: var(--fs-sm);
+}
+.pp .sub-standing > dt, .pp .sub-standing > dd { border: 0; border-inline-start: 1px solid var(--hairline); padding-inline: var(--space-4); margin: 0; }
+.pp .sub-standing > dt { padding-block: 12px 0; font-size: 12.5px; color: var(--ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pp .sub-standing > dd { padding-block: 2px 13px; font-weight: 500; }
+.pp .sub-standing > :is(dt, dd):nth-child(-n + 2) { border-inline-start: 0; padding-inline-start: 2px; }
+.pp .sub-standing > dd:nth-of-type(n + 3) {
+  font-family: var(--display);
+  font-size: var(--fs-2xl);
+  font-weight: 600;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+.pp .sub-standing > dd:nth-of-type(n + 3) .tf-muted { font-family: var(--font); font-size: var(--fs-xs); font-weight: 400; }
+.pp .sub-standing > dd .field__hint { font-size: var(--fs-xs); margin-block-start: 2px; }
+@media (max-width: 900px) {
+  .pp .sub-standing { grid-template-rows: none; grid-auto-flow: row; grid-template-columns: minmax(7rem, max-content) minmax(0, 1fr); }
+  .pp .sub-standing > dt, .pp .sub-standing > dd { border-inline-start: 0; border-block-end: 1px solid var(--hairline-soft); padding: 8px 2px; }
+  .pp .sub-standing > dd:nth-of-type(n + 3) { font-size: var(--fs-xl); }
+  .pp .sub-standing > :is(dt, dd):nth-last-child(-n + 2) { border-block-end: 0; }
+}
+.pp .sub-ledger { margin: 0; gap: 0; }
+.pp .sub-ledger__row { padding: 9px 2px; border-block-end: 1px solid var(--hairline-soft); font-size: var(--fs-sm); gap: 2px var(--space-3); }
+.pp .sub-ledger__row .btn { margin-inline-start: auto; }
+.pp .tf-subtitle + .field__hint { display: block; margin-block-start: 8px; font-size: var(--fs-xs); }
+.pp .tf-subtitle ~ .btn { margin-block-start: 8px; }
+
+/* Weekly times: day, hour, length. A few of them, so they sit side by side under the strip. */
+.pp-student-info { margin: 0 0 var(--space-6); }
+.pp-schedule { margin-block-start: var(--space-4); }
+.pp-schedule__label { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px var(--space-3); margin: 0; }
+.pp-schedule__zone { font-size: var(--fs-xs); font-weight: 400; }
+.pp-slots { list-style: none; margin: 6px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0 var(--space-6); border-block-start: 1px solid var(--hairline-soft); }
+.pp-slots > li { padding: 9px 2px; border-block-end: 1px solid var(--hairline-soft); font-size: var(--fs-sm); font-weight: 500; }
+.pp-slots > li .tf-muted { font-size: var(--fs-xs); font-weight: 400; }
+.pp-student-info .pp-empty { margin-block-start: 6px; }

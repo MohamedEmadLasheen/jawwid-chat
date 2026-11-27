@@ -1,22 +1,28 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { useSession } from '@/core/auth/SessionProvider'
-import { isSuperAdmin } from '@/core/permissions/capabilities'
+import { canOpenArea, isSuperAdmin } from '@/core/permissions/capabilities'
 import { adminSectionPath } from '@/features/admin/sections'
 import { Avatar } from '@/shared/components/Avatar'
 import { Badge, type Tone } from '@/shared/components/Badge'
-import { PageHeader } from '@/shared/components/PageHeader'
+import { Icon } from '@/shared/components/Icon'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
 import { preparePhoto, type PreparedPhoto } from '@/features/profile/photo'
 import { formatDay, formatMoney } from '@/features/instalments/copy'
 import type { Payment, PaymentRequest } from '@/features/payments/api'
 import { METHOD, PAY } from '@/features/payments/copy'
 import { InvoiceDownloadButton, InvoiceStatusBadge, PaymentList, ReceiptFile, ReceiptStatusBadge, RequestList } from '@/features/payments/PaymentParts'
+import { chatApi, chatKeys, type ChatConversation } from '@/features/chat/chatApi'
+import { useCallActions } from '@/features/calls-page/hooks'
+import { useSubscription } from '@/features/subscriptions/hooks'
+import { STATE_LABEL } from '@/features/subscriptions/copy'
+import type { AccessState } from '@/features/subscriptions/api'
 import { parentPath, studentPath, type FamilyBilling, type ParentProfile, type TimelineInstalment, type TimelineStatus } from './api'
 import { useCountries } from '@/shared/location/api'
 import { zoneCity } from '@/core/time/academyTime'
-import { METHOD_LABEL, P, TIMELINE_STATUS, describeError, isProfileRefusal, planLabel, useCopy } from './copy'
+import { METHOD_LABEL, P, TIMELINE_STATUS, describeError, isProfileRefusal, moneyParts, planLabel, useCopy, type Pair } from './copy'
 import { useFamilyBilling, useParent, useParentPhoto } from './hooks'
 import { FamilyFeedbackSection } from './FamilyFeedbackSection'
 import { IntakeDialog } from '@/features/intake/IntakeDialog'
@@ -39,8 +45,10 @@ import {
   VoidPaymentDialog,
 } from './ProfileDialogs'
 import '@/features/payments/payments.css'
+import './profiles.css'
 
 const STATUS_TONE: Record<TimelineStatus, Tone> = { overdue: 'danger', due: 'warn', upcoming: 'info', paid: 'ok', voided: 'outline' }
+const ACCESS_TONE: Record<AccessState, Tone> = { open: 'ok', grace: 'warn', locked: 'danger' }
 
 type Dialogs =
   | { kind: 'contact' }
@@ -62,6 +70,11 @@ type Dialogs =
  * and the family's payments. The server decides who may open it -- the
  * Operations department in scope, the Operations Manager, the super admin --
  * and refuses a teacher on every route; this page only shows its answer.
+ *
+ * Laid out as one open file: who it is, a ruled strip of contact facts, a bar
+ * that stays in view (the file's index and its actions), then the file itself
+ * with the family's money in its usual order, and a margin for what is about
+ * the family rather than its money.
  */
 export function ParentProfilePage({ eyebrow }: { eyebrow?: string }) {
   const { contactId = '' } = useParams<{ contactId: string }>()
@@ -77,9 +90,9 @@ export function ParentProfilePage({ eyebrow }: { eyebrow?: string }) {
   const close = () => setDialog(null)
 
   return (
-    <div className="page">
+    <div className="page pp">
       <div className="page__inner">
-        <p className="tf-back">
+        <p className="pp-back">
           <Link to={backTo}>{tx(P.back)}</Link>
         </p>
         {isProfileRefusal(profile.error) ? (
@@ -88,34 +101,33 @@ export function ParentProfilePage({ eyebrow }: { eyebrow?: string }) {
           <QueryBoundary isLoading={profile.isLoading} error={profile.error} onRetry={() => void profile.refetch()}>
             {data && (
               <>
-                <PageHeader
-                  eyebrow={eyebrow ?? tx(P.parent)}
-                  title={data.name}
-                  subtitle={data.family.name}
-                  status={
-                    <>
-                      <Badge tone="info">{tx(P.adminOnly)}</Badge>
-                      {!data.isActive && <Badge tone="outline">{tx(P.inactive)}</Badge>}
-                    </>
-                  }
-                />
-                <ContactSection profile={data} onEdit={() => setDialog({ kind: 'contact' })} />
-                {/* PD-42 PR-3: sign-in e-mail, Operations supervisor, Sales owner -- when the server answers for this viewer. */}
-                <OwnershipSection familyId={data.family.id} parentName={data.name} />
-                <NoteSection profile={data} onEdit={() => setDialog({ kind: 'note' })} />
-                <ChildrenSection profile={data} />
-                <FamilyFeedbackSection familyId={data.family.id} />
-                {/* PD-42 S4: who entered the family, owns it, placed it; its packages. */}
-                <FamilyHistorySection familyId={data.family.id} />
-                {isProfileRefusal(billing.error) ? (
-                  <Section id="pf-payments" title={tx(P.payments)}>
-                    <p className="tf-muted">{describeError(billing.error, locale)}</p>
-                  </Section>
-                ) : (
-                  <QueryBoundary isLoading={billing.isLoading} error={billing.error} onRetry={() => void billing.refetch()} compact>
-                    {billing.data && <PaymentsSection billing={billing.data} onOpen={setDialog} />}
-                  </QueryBoundary>
-                )}
+                <ParentHead profile={data} eyebrow={eyebrow ?? tx(P.parent)} onEdit={() => setDialog({ kind: 'contact' })} />
+                <ContactStrip profile={data} />
+                <FileBar profile={data} billing={billing.data} onRecord={() => setDialog({ kind: 'cash' })} />
+                <div className="pp-cols">
+                  <div className="pp-main">
+                    <ChildrenSection profile={data} />
+                    <FamilyFeedbackSection familyId={data.family.id} />
+                    {isProfileRefusal(billing.error) ? (
+                      <Section id="pf-payments" title={tx(P.payments)}>
+                        <p className="tf-muted">{describeError(billing.error, locale)}</p>
+                      </Section>
+                    ) : (
+                      <QueryBoundary isLoading={billing.isLoading} error={billing.error} onRetry={() => void billing.refetch()} compact>
+                        {billing.data && <PaymentsSection billing={billing.data} onOpen={setDialog} />}
+                      </QueryBoundary>
+                    )}
+                  </div>
+                  <aside className="pp-side">
+                    <NoteSection profile={data} onEdit={() => setDialog({ kind: 'note' })} />
+                    {/* PD-42 PR-3: sign-in e-mail, Operations supervisor, Sales owner -- when the server answers for this viewer. */}
+                    <OwnershipSection familyId={data.family.id} parentName={data.name} />
+                    {/* PD-42 S4: who entered the family, owns it, placed it; its packages. */}
+                    <div className="pp-activity">
+                      <FamilyHistorySection familyId={data.family.id} />
+                    </div>
+                  </aside>
+                </div>
                 {dialog?.kind === 'contact' && <EditContactDialog profile={data} onClose={close} />}
                 {dialog?.kind === 'note' && <EditNoteDialog profile={data} onClose={close} />}
                 {billing.data && dialog?.kind === 'billing' && <EditBillingDialog billing={billing.data} onClose={close} />}
@@ -137,97 +149,42 @@ export function ParentProfilePage({ eyebrow }: { eyebrow?: string }) {
   )
 }
 
-function Section({ id, title, action, hint, children }: { id: string; title: string; action?: ReactNode; hint?: string; children: ReactNode }) {
+function Section({
+  id,
+  title,
+  count,
+  action,
+  hint,
+  children,
+}: {
+  id: string
+  title: string
+  count?: ReactNode
+  action?: ReactNode
+  hint?: string
+  children: ReactNode
+}) {
   return (
-    <section className="card panel tf-section" aria-labelledby={id}>
-      <div className="tf-section__head">
-        <h2 id={id} className="tf-section__title">
+    <section className="pp-sec" aria-labelledby={id} data-file-section={id}>
+      <div className="pp-sec__head">
+        <h2 id={id} className="pp-sec__title">
           {title}
+          {count !== undefined && <span className="pp-count">{count}</span>}
         </h2>
         {action}
       </div>
-      {hint && <p className="field__hint">{hint}</p>}
+      {hint && <p className="pp-rule">{hint}</p>}
       {children}
     </section>
   )
 }
 
-function ContactSection({ profile, onEdit }: { profile: ParentProfile; onEdit: () => void }) {
-  const tx = useCopy()
-  const { locale, dateTime, date } = useI18n()
-  const c = profile.contact
-  const missing = <span className="tf-muted">{tx(P.notRecorded)}</span>
-  const pick = (n: { en: string; ar: string }) => (locale === 'ar' ? n.ar : n.en)
-  // A country with no subdivisions has no such row; while the list loads, assume it has them.
-  const countries = useCountries()
-  const showSubdivision = !!c.location?.subdivision || countries.data?.countries.find((x) => x.code === c.countryCode)?.hasSubdivisions !== false
-  // PD-45 §7, read-only: the clock the country implies where the app gave none, or a hint when they differ.
-  const zone = profile.timeZone
-  const clock =
-    zone.app === null && zone.estimate
-      ? tx(P.zoneEstimate, { city: zoneCity(zone.estimate, locale) })
-      : zone.mismatch && zone.app && c.location
-        ? tx(P.zoneHint, { country: pick(c.location.country), city: zoneCity(zone.app, locale) })
-        : null
-  return (
-    <Section
-      id="pf-contact"
-      title={tx(P.contactInfo)}
-      action={
-        profile.access.canEdit && (
-          <button type="button" className="btn btn--sm" onClick={onEdit} aria-label={tx(P.editContact)}>
-            {tx(P.edit)}
-          </button>
-        )
-      }
-    >
-      <div className="pf-contact">
-        <ParentPhoto profile={profile} />
-        <dl className="tf-kv pf-kv">
-          <dt>{tx(P.fullName)}</dt>
-          <dd>
-            <bdi>{profile.name}</bdi>
-          </dd>
-          <dt>{tx(P.phone)}</dt>
-          {/* The value is LTR; the cell keeps the page direction, so it sits beside its label. */}
-          <dd>{c.phone ? <bdi dir="ltr">{c.phone}</bdi> : missing}</dd>
-          <dt>{tx(P.email)}</dt>
-          <dd>{c.email ? <bdi dir="ltr">{c.email}</bdi> : missing}</dd>
-          <dt>{tx(P.childrenCount)}</dt>
-          <dd>{profile.childrenCount}</dd>
-          <dt>{tx(P.country)}</dt>
-          <dd>{c.location ? <bdi>{pick(c.location.country)}</bdi> : missing}</dd>
-          {c.location && showSubdivision && (
-            <>
-              <dt>{pick(c.location.label)}</dt>
-              <dd>{c.location.subdivision ? <bdi>{pick(c.location.subdivision)}</bdi> : missing}</dd>
-            </>
-          )}
-          {/* PD-45 §3.4: the old free text, until a subdivision is set. */}
-          {c.region && !c.subdivisionCode && (
-            <>
-              <dt>{tx(P.oldNote)}</dt>
-              <dd>
-                <bdi>{c.region}</bdi>
-              </dd>
-            </>
-          )}
-          {clock && (
-            <>
-              <dt>{tx(P.timeZone)}</dt>
-              <dd className="tf-muted">{clock}</dd>
-            </>
-          )}
-        </dl>
-      </div>
-      {c.locationSource === 'parent' && c.locationUpdatedAt && <p className="tf-byline">{tx(P.setByParent, { date: date(c.locationUpdatedAt) })}</p>}
-      {profile.updatedAt && <p className="tf-byline">{tx(P.lastEdit, { date: dateTime(profile.updatedAt) })}</p>}
-    </Section>
-  )
-}
-
-/** Choose -> preview -> use; or remove. The current photo stays until the new one is committed. */
-function ParentPhoto({ profile }: { profile: ParentProfile }) {
+/**
+ * Who this is: the photo or monogram, the name every chat shows, the family,
+ * and that the file is the administration's. Choosing a photo is choose ->
+ * preview -> use, or remove; the current photo stays until the new one is committed.
+ */
+function ParentHead({ profile, eyebrow, onEdit }: { profile: ParentProfile; eyebrow: string; onEdit: () => void }) {
   const tx = useCopy()
   const { locale } = useI18n()
   const inputId = useId()
@@ -244,13 +201,6 @@ function ParentPhoto({ profile }: { profile: ParentProfile }) {
     [prepared],
   )
 
-  const picture = prepared ? (
-    <img className="pf-photo__img" src={prepared.previewUrl} alt={tx(P.photoPreview)} />
-  ) : (
-    <Avatar name={profile.name} seed={profile.id} src={profile.avatarUrl} size="lg" />
-  )
-  if (!profile.access.canEdit) return <div className="pf-photo">{picture}</div>
-
   const choose = async (file: File | undefined) => {
     setProblem(null)
     setNotice(null)
@@ -265,99 +215,290 @@ function ParentPhoto({ profile }: { profile: ParentProfile }) {
   }
   const busy = upload.isPending || remove.isPending
   const error = problem ?? upload.error ?? remove.error
+  const canEdit = profile.access.canEdit
 
   return (
-    <div className="pf-photo">
-      {picture}
-      <div className="pf-photo__controls">
+    <header className="pp-head">
+      <div className="pp-head__mark">
         {prepared ? (
-          <>
-            <button
-              type="button"
-              className="btn btn--primary btn--sm"
-              disabled={busy}
-              onClick={() =>
-                upload.mutate(prepared.blob, {
-                  onSuccess: () => {
-                    setPrepared(null)
-                    setNotice(tx(P.photoSaved))
-                  },
-                })
-              }
-            >
-              {upload.isPending ? tx(P.photoUploading) : tx(P.photoUse)}
-            </button>
-            <button type="button" className="btn btn--sm" disabled={busy} onClick={() => setPrepared(null)}>
-              {tx(P.cancel)}
-            </button>
-          </>
+          <img className="pf-photo__img" src={prepared.previewUrl} alt={tx(P.photoPreview)} />
         ) : (
-          <>
-            <label htmlFor={inputId} className="btn btn--sm sp-file-label">
-              {profile.avatarUrl ? tx(P.photoReplace) : tx(P.photoChoose)}
-            </label>
-            <input
-              ref={fileRef}
-              id={inputId}
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              className="sp-file-input"
-              aria-describedby={`${inputId}-hint`}
-              disabled={busy}
-              onChange={(e) => void choose(e.target.files?.[0])}
-            />
-            {profile.avatarUrl && (
-              <button
-                type="button"
-                className="btn btn--sm btn--ghost"
-                disabled={busy}
-                onClick={() => remove.mutate(undefined, { onSuccess: () => setNotice(tx(P.photoRemoved)) })}
-              >
-                {tx(P.photoRemove)}
-              </button>
-            )}
-          </>
+          <Avatar name={profile.name} seed={profile.id} src={profile.avatarUrl} size="lg" />
         )}
-        <span id={`${inputId}-hint`} className="field__hint">
-          {tx(P.photoHint)}
-        </span>
-        {error ? (
-          <span className="field__error" role="alert">
-            {describeError(error, locale)}
-          </span>
-        ) : notice ? (
-          <span className="sp-ok" role="status">
-            {notice}
-          </span>
-        ) : null}
       </div>
+      <div className="pp-head__text">
+        <p className="pp-head__eyebrow">{eyebrow}</p>
+        <h1 className="pp-head__name">
+          <bdi>{profile.name}</bdi>
+        </h1>
+        <p className="pp-head__meta">
+          <span dir="auto">{profile.family.name}</span>
+          <Badge tone="info">{tx(P.adminOnly)}</Badge>
+          {!profile.isActive && <Badge tone="outline">{tx(P.inactive)}</Badge>}
+        </p>
+      </div>
+      {canEdit && (
+        <div className="pp-head__actions pp-head__actions--stack">
+          <div className="pp-head__buttons">
+            {prepared ? (
+              <>
+                <button
+                  type="button"
+                  className="btn btn--primary btn--sm"
+                  disabled={busy}
+                  onClick={() =>
+                    upload.mutate(prepared.blob, {
+                      onSuccess: () => {
+                        setPrepared(null)
+                        setNotice(tx(P.photoSaved))
+                      },
+                    })
+                  }
+                >
+                  {upload.isPending ? tx(P.photoUploading) : tx(P.photoUse)}
+                </button>
+                <button type="button" className="btn btn--sm" disabled={busy} onClick={() => setPrepared(null)}>
+                  {tx(P.cancel)}
+                </button>
+              </>
+            ) : (
+              <>
+                <label htmlFor={inputId} className="btn btn--sm btn--ghost sp-file-label">
+                  {profile.avatarUrl ? tx(P.photoReplace) : tx(P.photoChoose)}
+                </label>
+                <input
+                  ref={fileRef}
+                  id={inputId}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="sp-file-input"
+                  aria-describedby={`${inputId}-hint`}
+                  disabled={busy}
+                  onChange={(e) => void choose(e.target.files?.[0])}
+                />
+                {profile.avatarUrl && (
+                  <button
+                    type="button"
+                    className="btn btn--sm btn--ghost"
+                    disabled={busy}
+                    onClick={() => remove.mutate(undefined, { onSuccess: () => setNotice(tx(P.photoRemoved)) })}
+                  >
+                    {tx(P.photoRemove)}
+                  </button>
+                )}
+                <button type="button" className="btn btn--sm" onClick={onEdit} aria-label={tx(P.editContact)}>
+                  {tx(P.edit)}
+                </button>
+              </>
+            )}
+          </div>
+          <span id={`${inputId}-hint`} className="pp-head__hint">
+            {tx(P.photoHint)}
+          </span>
+          {error ? (
+            <span className="field__error" role="alert">
+              {describeError(error, locale)}
+            </span>
+          ) : notice ? (
+            <span className="sp-ok" role="status">
+              {notice}
+            </span>
+          ) : null}
+        </div>
+      )}
+    </header>
+  )
+}
+
+/** Phone, email, where they are and how many children: one ruled strip under the name. */
+function ContactStrip({ profile }: { profile: ParentProfile }) {
+  const tx = useCopy()
+  const { locale, dateTime, date } = useI18n()
+  const c = profile.contact
+  const missing = <span className="tf-muted">{tx(P.notRecorded)}</span>
+  const pick = (n: { en: string; ar: string }) => (locale === 'ar' ? n.ar : n.en)
+  // A country with no subdivisions has no such row; while the list loads, assume it has them.
+  const countries = useCountries()
+  const showSubdivision = !!c.location?.subdivision || countries.data?.countries.find((x) => x.code === c.countryCode)?.hasSubdivisions !== false
+  // PD-45 §7, read-only: the clock the country implies where the app gave none, or a hint when they differ.
+  const zone = profile.timeZone
+  const clock =
+    zone.app === null && zone.estimate
+      ? tx(P.zoneEstimate, { city: zoneCity(zone.estimate, locale) })
+      : zone.mismatch && zone.app && c.location
+        ? tx(P.zoneHint, { country: pick(c.location.country), city: zoneCity(zone.app, locale) })
+        : null
+  const setByParent = c.locationSource === 'parent' && c.locationUpdatedAt ? c.locationUpdatedAt : null
+  return (
+    <section className="pp-contact" aria-labelledby="pf-contact">
+      <h2 id="pf-contact" className="sr-only">
+        {tx(P.contactInfo)}
+      </h2>
+      <div className="pp-strip-wrap">
+        <dl className="pp-strip">
+          <div>
+            <dt>{tx(P.phone)}</dt>
+            {/* The value is LTR; the cell keeps the page direction, so it sits under its label. */}
+            <dd>{c.phone ? <bdi dir="ltr">{c.phone}</bdi> : missing}</dd>
+          </div>
+          <div>
+            <dt>{tx(P.email)}</dt>
+            <dd>{c.email ? <bdi dir="ltr">{c.email}</bdi> : missing}</dd>
+          </div>
+          <div>
+            <dt>{tx(P.country)}</dt>
+            <dd>{c.location ? <bdi>{pick(c.location.country)}</bdi> : missing}</dd>
+          </div>
+          {c.location && showSubdivision && (
+            <div>
+              <dt>{pick(c.location.label)}</dt>
+              <dd>{c.location.subdivision ? <bdi>{pick(c.location.subdivision)}</bdi> : missing}</dd>
+            </div>
+          )}
+          {/* PD-45 §3.4: the old free text, until a subdivision is set. */}
+          {c.region && !c.subdivisionCode && (
+            <div>
+              <dt>{tx(P.oldNote)}</dt>
+              <dd>
+                <bdi>{c.region}</bdi>
+              </dd>
+            </div>
+          )}
+          {clock && (
+            <div>
+              <dt>{tx(P.timeZone)}</dt>
+              <dd className="tf-muted">{clock}</dd>
+            </div>
+          )}
+          <div>
+            <dt>{tx(P.childrenCount)}</dt>
+            <dd>{profile.childrenCount}</dd>
+          </div>
+        </dl>
+      </div>
+      {(setByParent || profile.updatedAt) && (
+        <p className="pp-contact__by">
+          {setByParent && <span>{tx(P.setByParent, { date: date(setByParent) })}</span>}
+          {profile.updatedAt && <span>{tx(P.lastEdit, { date: dateTime(profile.updatedAt) })}</span>}
+        </p>
+      )}
+    </section>
+  )
+}
+
+/** The direct chat with this parent, among the conversations the viewer already has. */
+function directChat(list: ChatConversation[] | undefined, contactId: string, familyId: string): ChatConversation | null {
+  const direct = (list ?? []).filter((c) => c.type === 'direct' && !c.archivedAt)
+  return (
+    direct.find((c) => c.members?.some((m) => m.actorKind === 'contact' && m.actorId === contactId)) ??
+    direct.find((c) => c.familyId === familyId && !c.members) ??
+    null
+  )
+}
+
+function jumpTo(id: string) {
+  const el = document.querySelector(`[data-file-section="${id}"]`)
+  const calm = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  el?.scrollIntoView?.({ block: 'start', behavior: calm ? 'auto' : 'smooth' })
+}
+
+/**
+ * The bar that stays in view: where each part of the file is, and the three
+ * things staff do from here. Chat and Call open the viewer's own direct chat
+ * with this parent, when there is one; Record payment is the family's
+ * "Record a payment" and appears on the server's `canRecord`.
+ */
+function FileBar({ profile, billing, onRecord }: { profile: ParentProfile; billing: FamilyBilling | undefined; onRecord: () => void }) {
+  const tx = useCopy()
+  const { number } = useI18n()
+  const { staff } = useSession()
+  const mayChat = !!staff && !isSuperAdmin(staff.role) && canOpenArea(staff.role, 'chat')
+  const chats = useQuery({ queryKey: chatKeys.list, queryFn: chatApi.list, enabled: mayChat, staleTime: 30_000, retry: false })
+  const conversation = mayChat ? directChat(chats.data, profile.id, profile.family.id) : null
+
+  const open = billing?.instalments.filter((i) => i.status !== 'paid' && i.status !== 'voided') ?? []
+  const late = open.some((i) => i.status === 'overdue')
+  const openRequests = billing?.requests.filter((r) => r.status === 'open').length ?? 0
+  const pendingReceipts = billing?.receipts.filter((r) => r.status === 'pending').length ?? 0
+  const index: Array<{ id: string; label: Pair; count?: number; late?: boolean }> = [{ id: 'pf-children', label: P.ixChildren }]
+  if (billing) {
+    index.push(
+      { id: 'pf-payments', label: P.ixPackage },
+      { id: 'pf-timeline', label: P.ixInstalments, count: open.length, late },
+      { id: 'pf-requests', label: P.ixRequests, count: openRequests },
+      { id: 'pf-received', label: P.ixReceived },
+      { id: 'pf-invoices', label: P.ixInvoices },
+      { id: 'pf-receipts', label: P.ixReceipts, count: pendingReceipts },
+    )
+  }
+
+  return (
+    <div className="pp-bar">
+      <nav className="pp-bar__index" aria-label={tx(P.fileIndex)}>
+        {index.map((x) => (
+          <button key={x.id} type="button" className={x.late ? 'pp-bar__jump pp-bar__jump--late' : 'pp-bar__jump'} onClick={() => jumpTo(x.id)}>
+            {tx(x.label)}
+            {x.count ? <span className="pp-count">{number(x.count)}</span> : null}
+          </button>
+        ))}
+      </nav>
+      {(conversation || billing?.canRecord) && (
+        <div className="pp-bar__actions">
+          {conversation && <ChatAndCall conversation={conversation} />}
+          {billing?.canRecord && (
+            <button type="button" className="btn btn--primary btn--sm" onClick={onRecord}>
+              {tx(PAY.recordReceived)}
+            </button>
+          )}
+        </div>
+      )}
     </div>
+  )
+}
+
+function ChatAndCall({ conversation }: { conversation: ChatConversation }) {
+  const tx = useCopy()
+  const calls = useCallActions()
+  return (
+    <>
+      <Link className="btn btn--sm" to={`/chat/${encodeURIComponent(conversation.id)}`}>
+        <Icon name="conversations" size={16} />
+        {tx(P.chat)}
+      </Link>
+      {calls.available && (
+        <button type="button" className="btn btn--sm" disabled={calls.busy} onClick={() => void calls.startCall(conversation)}>
+          <Icon name="phone" size={16} />
+          {tx(P.call)}
+        </button>
+      )}
+    </>
   )
 }
 
 function NoteSection({ profile, onEdit }: { profile: ParentProfile; onEdit: () => void }) {
   const tx = useCopy()
   return (
-    <Section
-      id="pf-note"
-      title={tx(P.about)}
-      hint={tx(P.aboutHint)}
-      action={
-        profile.access.canEdit && (
-          <button type="button" className="btn btn--sm" onClick={onEdit} aria-label={tx(P.editNote)}>
+    <section className="pp-sec pp-note" aria-labelledby="pf-note">
+      <div className="pp-sec__head">
+        <h2 id="pf-note" className="pp-sec__title">
+          <Icon name="lockNote" size={15} />
+          {tx(P.about)}
+        </h2>
+        {profile.access.canEdit && (
+          <button type="button" className="btn btn--sm btn--ghost" onClick={onEdit} aria-label={tx(P.editNote)}>
             {tx(P.edit)}
           </button>
-        )
-      }
-    >
+        )}
+      </div>
       {profile.adminNote ? (
         <p className="pf-note" dir="auto">
           {profile.adminNote}
         </p>
       ) : (
-        <p className="tf-muted">{tx(P.noNote)}</p>
+        <p className="pp-empty">{tx(P.noNote)}</p>
       )}
-    </Section>
+      <p className="pp-rule">{tx(P.aboutHint)}</p>
+    </section>
   )
 }
 
@@ -375,26 +516,63 @@ function ChildrenSection({ profile }: { profile: ParentProfile }) {
     </button>
   ) : undefined
   return (
-    <Section id="pf-children" title={`${tx(P.children)} (${profile.childrenCount})`} action={action}>
+    <Section id="pf-children" title={tx(P.children)} count={profile.childrenCount} action={action}>
       {adding && intake.data && (
         <IntakeDialog options={intake.data} initial={{ kind: 'add', familyId: profile.family.id, familyName: profile.name }} onClose={() => setAdding(false)} />
       )}
       {profile.children.length === 0 ? (
-        <p className="tf-muted">{tx(P.noChildren)}</p>
+        <p className="pp-empty">{tx(P.noChildren)}</p>
       ) : (
-        <ul className="pf-people">
+        <ul className="pp-rows">
           {profile.children.map((c) => (
-            <li key={c.id} className="pf-person">
+            <li key={c.id} className="pp-row pp-child">
               <Avatar name={c.name} seed={c.id} src={c.avatarUrl} size="sm" />
-              <span dir="auto">{c.name}</span>
-              <Link className="btn btn--sm btn--ghost" to={studentPath(c.id)} aria-label={`${tx(P.viewProfile)}: ${c.name}`}>
-                {tx(P.viewProfile)}
+              <Link className="pp-row__name" to={studentPath(c.id)} aria-label={`${tx(P.viewProfile)}: ${c.name}`} dir="auto">
+                {c.name}
               </Link>
+              <ChildStanding learnerId={c.id} />
             </li>
           ))}
         </ul>
       )}
     </Section>
+  )
+}
+
+/**
+ * A child's lessons as one thin line: used out of bought, and whether the
+ * subscription is open, in grace or locked. Read from the child's own
+ * subscription (PD-30); where the server does not answer for this viewer,
+ * nothing is drawn.
+ */
+function ChildStanding({ learnerId }: { learnerId: string }) {
+  const tx = useCopy()
+  const { number } = useI18n()
+  const view = useSubscription(learnerId)
+  const s = view.data?.standing
+  if (!s) return null
+  const total = s.lessonsIncluded
+  const used = s.lessonsUsed
+  const share = total && used !== null ? Math.min(100, Math.round((used / total) * 100)) : null
+  return (
+    <span className="pp-row__end pp-child__standing">
+      {total !== null && used !== null && (
+        <span className="pp-child__lessons">
+          <span className="pp-child__count">
+            <span>{tx(P.lessonsUsed, { used: number(used), total: number(total) })}</span>
+            {s.lessonsLeft !== null && <span className="pp-row__sub">{tx(P.lessonsLeft, { n: number(s.lessonsLeft) })}</span>}
+          </span>
+          {share !== null && (
+            <span className={s.state === 'locked' ? 'pp-meter pp-meter--late' : s.state === 'grace' ? 'pp-meter pp-meter--warn' : 'pp-meter'} aria-hidden="true">
+              <span style={{ inlineSize: `${share}%` }} />
+            </span>
+          )}
+        </span>
+      )}
+      <Badge tone={ACCESS_TONE[s.state]} dot>
+        {tx(STATE_LABEL[s.state])}
+      </Badge>
+    </span>
   )
 }
 
@@ -407,7 +585,6 @@ function PaymentsSection({ billing, onOpen }: { billing: FamilyBilling; onOpen: 
       <Section
         id="pf-payments"
         title={tx(P.payments)}
-        hint={tx(P.paymentsHint)}
         action={
           billing.canRecord && (
             <button type="button" className="btn btn--sm" onClick={() => onOpen({ kind: 'billing' })} aria-label={tx(P.editPayments)}>
@@ -416,17 +593,24 @@ function PaymentsSection({ billing, onOpen }: { billing: FamilyBilling; onOpen: 
           )
         }
       >
-        <dl className="tf-kv">
-          <dt>{tx(P.subscription)}</dt>
-          <dd>{billing.planMonths ? planLabel(billing.planMonths, locale) : <span className="tf-muted">{tx(P.noPlan)}</span>}</dd>
-          <dt>{tx(P.method)}</dt>
-          <dd>{billing.paymentMethod ? tx(METHOD_LABEL[billing.paymentMethod]) : missing}</dd>
-          <dt>{tx(P.currency)}</dt>
-          <dd>{billing.currency ?? missing}</dd>
-          {billing.totals.map((t) => (
-            <TotalsRows key={t.currency} totals={t} locale={locale} />
-          ))}
+        {billing.totals.map((t) => (
+          <TotalsLedger key={t.currency} totals={t} locale={locale} />
+        ))}
+        <dl className="pp-terms">
+          <div>
+            <dt>{tx(P.subscription)}</dt>
+            <dd>{billing.planMonths ? planLabel(billing.planMonths, locale) : <span className="tf-muted">{tx(P.noPlan)}</span>}</dd>
+          </div>
+          <div>
+            <dt>{tx(P.method)}</dt>
+            <dd>{billing.paymentMethod ? tx(METHOD_LABEL[billing.paymentMethod]) : missing}</dd>
+          </div>
+          <div>
+            <dt>{tx(P.currency)}</dt>
+            <dd>{billing.currency ?? missing}</dd>
+          </div>
         </dl>
+        <p className="pp-rule">{tx(P.paymentsHint)}</p>
       </Section>
       <Section
         id="pf-timeline"
@@ -434,14 +618,14 @@ function PaymentsSection({ billing, onOpen }: { billing: FamilyBilling; onOpen: 
         hint={tx(P.timelineHint)}
         action={
           billing.canRecord && (
-            <button type="button" className="btn btn--primary btn--sm" onClick={() => onOpen({ kind: 'new' })}>
+            <button type="button" className="btn btn--sm" onClick={() => onOpen({ kind: 'new' })}>
               {tx(P.addInstalments)}
             </button>
           )
         }
       >
         {billing.instalments.length === 0 ? (
-          <p className="tf-muted">{tx(P.noInstalments)}</p>
+          <p className="pp-empty">{tx(P.noInstalments)}</p>
         ) : (
           <ol className="pf-timeline">
             {billing.instalments.map((i) => (
@@ -460,6 +644,7 @@ function PaymentsSection({ billing, onOpen }: { billing: FamilyBilling; onOpen: 
  * arrived, their invoices, and the receipts the parents uploaded. Every
  * control is the server's answer: `canRecord` creates requests and records
  * cash or bank transfers, voids and decides receipts; `canVerify` refunds.
+ * "Record a payment" is on the bar above, where it stays in view.
  */
 function MoneySections({ billing, onOpen }: { billing: FamilyBilling; onOpen: (d: Dialogs) => void }) {
   const tx = useCopy()
@@ -476,7 +661,7 @@ function MoneySections({ billing, onOpen }: { billing: FamilyBilling; onOpen: (d
         hint={tx(PAY.requestsHint)}
         action={
           billing.canRecord && (
-            <button type="button" className="btn btn--primary btn--sm" onClick={() => onOpen({ kind: 'request' })}>
+            <button type="button" className="btn btn--sm" onClick={() => onOpen({ kind: 'request' })}>
               {tx(PAY.requestPayment)}
             </button>
           )
@@ -484,18 +669,7 @@ function MoneySections({ billing, onOpen }: { billing: FamilyBilling; onOpen: (d
       >
         <RequestList requests={billing.requests} canCancel={billing.canRecord} onCancel={(request) => onOpen({ kind: 'cancelRequest', request })} />
       </Section>
-      <Section
-        id="pf-received"
-        title={tx(PAY.received)}
-        hint={tx(PAY.receivedHint)}
-        action={
-          billing.canRecord && (
-            <button type="button" className="btn btn--sm" onClick={() => onOpen({ kind: 'cash' })}>
-              {tx(PAY.recordReceived)}
-            </button>
-          )
-        }
-      >
+      <Section id="pf-received" title={tx(PAY.received)} hint={tx(PAY.receivedHint)}>
         <PaymentList
           payments={billing.payments}
           canVoid={billing.canRecord}
@@ -508,7 +682,7 @@ function MoneySections({ billing, onOpen }: { billing: FamilyBilling; onOpen: (d
       </Section>
       <Section id="pf-invoices" title={tx(PAY.invoices)} hint={tx(PAY.invoicesHint)}>
         {billing.invoices.length === 0 ? (
-          <p className="tf-muted">{tx(PAY.noInvoices)}</p>
+          <p className="pp-empty">{tx(PAY.noInvoices)}</p>
         ) : (
           <ol className="pf-timeline">
             {billing.invoices.map((inv) => (
@@ -549,7 +723,7 @@ function MoneySections({ billing, onOpen }: { billing: FamilyBilling; onOpen: (d
         }
       >
         {billing.receipts.length === 0 ? (
-          <p className="tf-muted">{tx(PAY.noFamilyReceipts)}</p>
+          <p className="pp-empty">{tx(PAY.noFamilyReceipts)}</p>
         ) : (
           <ol className="pf-timeline">
             {billing.receipts.map((r) => (
@@ -588,27 +762,29 @@ function MoneySections({ billing, onOpen }: { billing: FamilyBilling; onOpen: (d
   )
 }
 
-function TotalsRows({ totals, locale }: { totals: FamilyBilling['totals'][number]; locale: 'ar' | 'en' }) {
+/** One currency's money as a ruled ledger: paid, still to pay, and what of that is late. */
+function TotalsLedger({ totals, locale }: { totals: FamilyBilling['totals'][number]; locale: 'ar' | 'en' }) {
   const tx = useCopy()
+  const cells: Array<{ key: string; label: string; minor: number; late?: boolean }> = [
+    { key: 'paid', label: tx(P.paid), minor: totals.paidMinor },
+    { key: 'outstanding', label: tx(P.outstanding), minor: totals.outstandingMinor },
+  ]
+  if (totals.overdueMinor > 0) cells.push({ key: 'overdue', label: tx(P.overdueShort), minor: totals.overdueMinor, late: true })
   return (
-    <>
-      <dt>
-        {tx(P.paid)} · {totals.currency}
-      </dt>
-      <dd>{formatMoney(totals.paidMinor, totals.currency, locale)}</dd>
-      <dt>
-        {tx(P.outstanding)} · {totals.currency}
-      </dt>
-      <dd>
-        {formatMoney(totals.outstandingMinor, totals.currency, locale)}
-        {totals.overdueMinor > 0 && (
-          <span className="pf-overdue">
-            {' '}
-            ({tx(P.overdue)} {formatMoney(totals.overdueMinor, totals.currency, locale)})
-          </span>
-        )}
-      </dd>
-    </>
+    <div className="ledger pp-money">
+      {cells.map((c) => {
+        const m = moneyParts(c.minor, totals.currency, locale)
+        return (
+          <div key={c.key} className={c.late ? 'ledger__cell ledger__cell--late' : 'ledger__cell'}>
+            <span className="ledger__label">{c.label}</span>
+            <span className="ledger__value">
+              {m.amount}
+              <span className="ledger__unit">{m.unit}</span>
+            </span>
+          </div>
+        )
+      })}
+    </div>
   )
 }
 
@@ -617,7 +793,7 @@ function TimelineRow({ item, canRecord, onOpen }: { item: TimelineInstalment; ca
   const { locale } = useI18n()
   const open = item.status !== 'paid' && item.status !== 'voided'
   return (
-    <li className={item.status === 'voided' ? 'pf-entry pf-entry--voided' : 'pf-entry'}>
+    <li className={item.status === 'voided' ? 'pf-entry pf-entry--voided' : item.status === 'overdue' ? 'pf-entry pf-entry--late' : 'pf-entry'}>
       <div className="pf-entry__head">
         <Badge tone={STATUS_TONE[item.status]} dot>
           {tx(TIMELINE_STATUS[item.status])}
@@ -664,12 +840,12 @@ function TimelineRow({ item, canRecord, onOpen }: { item: TimelineInstalment; ca
       {canRecord && item.status !== 'voided' && (
         <div className="tf-actions">
           {open && (
-            <button type="button" className="btn btn--sm btn--primary" onClick={() => onOpen({ kind: 'pay', instalment: item })}>
+            <button type="button" className="btn btn--sm" onClick={() => onOpen({ kind: 'pay', instalment: item })}>
               {tx(P.recordPayment)}
             </button>
           )}
           {open && (
-            <button type="button" className="btn btn--sm" onClick={() => onOpen({ kind: 'link', instalment: item })}>
+            <button type="button" className="btn btn--sm btn--ghost" onClick={() => onOpen({ kind: 'link', instalment: item })}>
               {tx(PAY.paymentLink)}
             </button>
           )}
