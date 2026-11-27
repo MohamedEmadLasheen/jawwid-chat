@@ -423,6 +423,21 @@ export function ChatThread({
     }
     lastCount.current = count
   }, [messages.length, shownPending.length])
+  // What renders late (a font, a photo, a card's live note) grows the thread
+  // after it opened: a reader still at the bottom stays there.
+  const hasThread = latest.data !== undefined
+  useEffect(() => {
+    const el = scroller.current
+    const content = el?.firstElementChild
+    if (!el || !content || typeof ResizeObserver === 'undefined') return
+    const keep = new ResizeObserver(() => {
+      if (atBottom.current) el.scrollTop = el.scrollHeight
+    })
+    // The thread itself shrinks when the composer grows (a second line, a reply, a file).
+    keep.observe(el)
+    for (const child of Array.from(el.children)) keep.observe(child)
+    return () => keep.disconnect()
+  }, [hasThread, messages.length === 0])
 
   const send = useMutation({
     mutationFn: async (p: PendingSend) => {
@@ -564,7 +579,7 @@ export function ChatThread({
                     <>
                       <span className="thread-head__kind">
                         {copy.kind[conv.type] ?? conv.type}
-                        {memberCount > 0 && ' · '}
+                        {memberCount > 0 && copy.listSeparator.trimEnd()}
                       </span>
                       {memberCount > 0 && copy.membersCount(memberCount)}
                     </>
@@ -599,6 +614,19 @@ export function ChatThread({
         {conv?.familyId && <FamilyFact familyId={conv.familyId} onOpen={infoShown ? undefined : onToggleInfo} />}
         <div className="cw-head__actions">
           {conv && <CallButton conversationId={conversationId} peerLabel={name} isGroup={group} />}
+          {/* The context panel (the family's money, the conversation's details), shown or hidden: visible at every width. */}
+          {conv && (
+            <button
+              type="button"
+              className="btn btn--ghost btn--icon cw-head__panel"
+              onClick={onToggleInfo}
+              aria-pressed={infoShown}
+              aria-label={copy.panelTabs}
+              title={copy.panelTabs}
+            >
+              <Icon name="panel" size={20} />
+            </button>
+          )}
           {conv && (
             <Menu
               label={copy.chatActions}
@@ -670,8 +698,10 @@ export function ChatThread({
               const runStart =
                 newDay || !prev || prev.authorId !== m.authorId || sideOf(prev, staff?.id) !== side
               // A card Jawwid posted itself has no sender to picture or name.
+              // The viewer's own internal note sits on their side, unnamed, like their messages.
+              const ownNote = side === 'internal' && m.authorId === staff?.id
               const identity: Identity =
-                side === 'out' || side === 'system' || !showsSenders || m.authorKind === 'system' ? 'none' : runStart ? 'lead' : 'follow'
+                side === 'out' || ownNote || side === 'system' || !showsSenders || m.authorKind === 'system' ? 'none' : runStart ? 'lead' : 'follow'
               return (
                 <Fragment key={m.id}>
                   {newDay && (
@@ -1080,7 +1110,7 @@ function MessageItem({
 
   return (
     <li
-      className={`bubble-row ${SIDE_CLASS[side]} cw-msg${runStart ? ' cw-msg--run-start' : ''}${identity !== 'none' ? ' cw-msg--with-sender' : ''}${selectable ? ' cw-msg--selectable' : ''}${isSelected ? ' cw-msg--selected' : ''}${m.mentionsViewer && !m.deletedForAll ? ' cw-msg--mentions-me' : ''}${isCard ? ` cw-msg--card cw-msg--card-${edge}` : ''}`}
+      className={`bubble-row ${SIDE_CLASS[side]} cw-msg${mine ? ' cw-msg--mine' : ''}${runStart ? ' cw-msg--run-start' : ''}${identity !== 'none' ? ' cw-msg--with-sender' : ''}${selectable ? ' cw-msg--selectable' : ''}${isSelected ? ' cw-msg--selected' : ''}${m.mentionsViewer && !m.deletedForAll ? ' cw-msg--mentions-me' : ''}${isCard ? ` cw-msg--card cw-msg--card-${edge}` : ''}${notice ? ' cw-msg--notice' : ''}`}
       data-seq={m.seq ?? undefined}
       data-msg-id={m.id}
       onClick={selectable ? onToggleSelect : undefined}
@@ -1125,9 +1155,9 @@ function MessageItem({
             </span>
           )}
           {side === 'internal' && (
-            <span className="bubble__flag">
-              <Icon name="lockNote" size={14} />
-              {copy.internal}
+            <span className="bubble__flag" title={copy.internal}>
+              <Icon name="lock" size={14} />
+              {copy.staffOnlyShort}
             </span>
           )}
           {quoted !== undefined && live && (
@@ -1157,6 +1187,7 @@ function MessageItem({
                 ...(trialCard.level ? [copy.cardLevel(trialCard.level)] : []),
               ]}
               highlight={highlight}
+              tone="act"
             />
           ) : (
             <>
@@ -1170,6 +1201,7 @@ function MessageItem({
                   <FallbackCard
                     text={m.authorKind === 'system' ? westernDigits(cardFallbackText(m.body)) : cardFallbackText(m.body)}
                     highlight={highlight}
+                    tone={edge ?? 'info'}
                   />
                 ) : (
                   <span dir="auto">
@@ -1200,7 +1232,8 @@ function MessageItem({
               </span>
             )}
             <time dateTime={m.createdAt}>{time(m.createdAt)}</time>
-            {mine && <Ticks status={m.status} />}
+            {/* Delivery ticks tell the family's side; a note or a card has none to tell. */}
+            {mine && side !== 'internal' && !isCard && <Ticks status={m.status} />}
           </span>
         </div>
         {!selectMode && !notice && <Menu
@@ -1254,24 +1287,33 @@ function MessageItem({
 }
 
 /** A card drawn from its plain words: the first line is its title, the rest its facts. */
-function FallbackCard({ text, highlight }: { text: string; highlight?: string }) {
+function FallbackCard({ text, highlight, tone }: { text: string; highlight?: string; tone: CardTone }) {
   const [title = '', ...lines] = text.split('\n').filter((line) => line.trim() !== '')
-  return <PlainCard title={title} lines={lines} highlight={highlight} />
+  return <PlainCard title={title} lines={lines} highlight={highlight} tone={tone} />
 }
 
-/** A reference card in words: a title in the display face, then its facts line by line. */
-function PlainCard({ title, lines, highlight }: { title: string; lines: string[]; highlight?: string }) {
+type CardTone = ReturnType<typeof cardEdge>
+/** What a card is, said by its glyph's colour, never by a stripe: teal information, amber "asks someone to act", red a problem. */
+const CARD_GLYPH: Record<CardTone, 'info' | 'clock' | 'alert'> = { info: 'info', act: 'clock', problem: 'alert' }
+
+/** A reference card in words: its glyph, a title, then its facts line by line. */
+function PlainCard({ title, lines, highlight, tone }: { title: string; lines: string[]; highlight?: string; tone: CardTone }) {
   const show = (line: string) => (highlight ? <Highlighted text={line} query={highlight} /> : line)
   return (
-    <span className="cw-card">
-      <strong className="cw-card__title" dir="auto">
-        {show(title)}
-      </strong>
-      {lines.map((line, i) => (
-        <span key={i} className="cw-card__line" dir="auto">
-          {show(line)}
-        </span>
-      ))}
+    <span className={`cw-card cw-card--${tone}`}>
+      <span className="cw-card__glyph" aria-hidden="true">
+        <Icon name={CARD_GLYPH[tone]} size={18} />
+      </span>
+      <span className="cw-card__text">
+        <strong className="cw-card__title" dir="auto">
+          {show(title)}
+        </strong>
+        {lines.map((line, i) => (
+          <span key={i} className="cw-card__line" dir="auto">
+            {show(line)}
+          </span>
+        ))}
+      </span>
     </span>
   )
 }

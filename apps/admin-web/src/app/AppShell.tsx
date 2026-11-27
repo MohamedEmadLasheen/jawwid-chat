@@ -52,6 +52,10 @@ export const TODAY_PATH = '/today'
 export const REQUESTS_PATH = '/requests'
 const TODAY_LABEL = { en: 'Today', ar: 'اليوم' }
 const ACCOUNT_LABEL = { en: 'Account', ar: 'الحساب' }
+/** Places whose full name does not fit the sidebar: the short word shown there. */
+const SHORT_LABEL: Partial<Record<DestinationKey, { en: string; ar: string }>> = {
+  people: { en: 'People', ar: 'الأشخاص' },
+}
 
 /** A hairline is drawn above these destinations: the rail's sections. */
 const RAIL_RULE_BEFORE: ReadonlySet<DestinationKey> = new Set<DestinationKey>(['people', 'certificates', 'finance'])
@@ -62,8 +66,15 @@ const RAIL_RULE_BEFORE: ReadonlySet<DestinationKey> = new Set<DestinationKey>(['
  * adds no request of its own.
  */
 function useUnreadChats(): number {
-  const q = useQuery({ queryKey: chatKeys.list, queryFn: chatApi.list, enabled: false })
-  return (q.data ?? []).reduce((n, c) => n + ((c.unreadCount ?? 0) > 0 ? 1 : 0), 0)
+  const { staff } = useSession()
+  const destinations = useDestinations()
+  // Only for an account whose navigation offers the chat workspace; the same list the
+  // workspace reads (one key, one request), refreshed slowly in the background.
+  const hasChat = destinations.some((d) => entriesOf(d).some((e) => e.path === '/chat'))
+  const q = useQuery({ queryKey: chatKeys.list, queryFn: chatApi.list, enabled: !!staff && hasChat, staleTime: 60_000 })
+  const list = Array.isArray(q.data) ? q.data : []
+  // A conversation waiting on the academy is the count that asks for action.
+  return list.reduce((n, c) => n + (c.needsReply ? 1 : 0), 0)
 }
 
 function RailBadge({ count }: { count: number }) {
@@ -142,7 +153,7 @@ function DrawerNav() {
             </p>
             {d.groups.map((g) => (
               <Fragment key={g.key}>
-                {g.label && <p className="side__subheading">{tx(g.label)}</p>}
+                {g.label && g.entries.length > 1 && <p className="side__subheading">{tx(g.label)}</p>}
                 <ul className="ruled">
                   {g.entries.map((e) => (
                     <li key={e.key}>
@@ -193,7 +204,6 @@ function onMenuKeyDown(e: ReactKeyboardEvent<HTMLDivElement>) {
 function RailItem({
   destination: d,
   current,
-  currentPage,
   open,
   onToggle,
   onOpenAndEnter,
@@ -201,8 +211,6 @@ function RailItem({
 }: {
   destination: Destination
   current: boolean
-  /** The page of this destination that is open now, said under its name. */
-  currentPage: string | null
   open: boolean
   onToggle: () => void
   onOpenAndEnter: () => void
@@ -245,6 +253,8 @@ function RailItem({
         type="button"
         className={current ? 'side__item is-current' : 'side__item'}
         data-destination={d.key}
+        // A long name is said in full to assistive technology and shortened on screen.
+        aria-label={SHORT_LABEL[d.key] ? tx(d.label) : undefined}
         aria-expanded={open}
         aria-controls={menuId}
         aria-current={current ? 'true' : undefined}
@@ -257,19 +267,24 @@ function RailItem({
         }}
       >
         <Icon name={d.icon} size={20} />
-        <span className="side__label">
-          {tx(d.label)}
-          {current && currentPage && (
-            <span className="side__now" aria-hidden="true">
-              {currentPage}
-            </span>
-          )}
-        </span>
+        <span className="side__label">{tx(SHORT_LABEL[d.key] ?? d.label)}</span>
         <RailBadge count={badge} />
         <span className="side__caret" aria-hidden="true">
           <Icon name="chevronForward" size={16} />
         </span>
       </button>
+      {current && (
+        // Where you are: the current place's pages, one click apart, under its name.
+        <ul className="ruled side__sub" aria-label={tx(d.label)}>
+          {entriesOf(d).map((e) => (
+            <li key={e.key}>
+              <NavLink to={e.path} end={e.exact} className="side__sub-link" tabIndex={-1}>
+                {entryLabel(e)}
+              </NavLink>
+            </li>
+          ))}
+        </ul>
+      )}
       <div className="side__menu" id={menuId} hidden={!open} onKeyDown={onMenuKeyDown}>
         <p className="side__menu-title" aria-hidden="true">
           {tx(d.label)}
@@ -303,12 +318,6 @@ function RailNav() {
   const [enterKey, setEnterKey] = useState<DestinationKey | null>(null)
   const navRef = useRef<HTMLElement>(null)
   const current = destinationForPath(destinations, pathname)
-  const entryLabel = useEntryLabel()
-  // The open page of the current place: the longest path that matches.
-  const currentEntry = destinations
-    .flatMap(entriesOf)
-    .filter((e) => pathname === e.path || pathname.startsWith(`${e.path}/`))
-    .sort((a, b) => b.path.length - a.path.length)[0]
 
   // Choosing a page is the end of a menu's job.
   useEffect(() => setOpenKey(null), [pathname])
@@ -350,7 +359,6 @@ function RailNav() {
             key={d.key}
             destination={d}
             current={current === d.key}
-            currentPage={current === d.key && currentEntry ? entryLabel(currentEntry) : null}
             open={openKey === d.key}
             onToggle={() => setOpenKey((k) => (k === d.key ? null : d.key))}
             onOpenAndEnter={() => openAndEnter(d.key)}
@@ -398,13 +406,24 @@ function Sidebar({
         )}
       </div>
       {staff && rail && (
-        <button type="button" className="side__search" onClick={onSearch} aria-label={tx(SEARCH.open)} aria-keyshortcuts="Control+K Meta+K /">
-          <Icon name="search" size={17} />
-          <span>{tx(SEARCH.short)}</span>
-          <span className="kbd" aria-hidden="true">
-            {mac ? '⌘K' : 'Ctrl K'}
-          </span>
-        </button>
+        <div className="side__searchrow">
+          <button type="button" className="side__search" onClick={onSearch} aria-label={tx(SEARCH.open)} aria-keyshortcuts="Control+K Meta+K /">
+            <Icon name="search" size={17} />
+            <span>{tx(SEARCH.short)}</span>
+            <span className="kbd" aria-hidden="true">
+              {mac ? '⌘K' : 'Ctrl K'}
+            </span>
+          </button>
+          {/* PD-34: the staff member's own Notification Center. */}
+          <NotificationBell />
+        </div>
+      )}
+      {staff && (
+        // Today is home: the first place, outside the navigation landmark like the logo.
+        <NavLink to={TODAY_PATH} className="side__item side__today">
+          <Icon name="home" size={20} />
+          <span className="side__label">{tx(TODAY_LABEL)}</span>
+        </NavLink>
       )}
       {rail ? <RailNav /> : <DrawerNav />}
       {staff && rail && <AccountBlock />}
@@ -414,7 +433,7 @@ function Sidebar({
 
 /** The foot of the sidebar: who is signed in, the language, the notifications, and the way out. */
 function AccountBlock() {
-  const { t } = useI18n()
+  const { t, locale, setLocale } = useI18n()
   const tx = useText()
   const navigate = useNavigate()
   const { staff, signOut } = useSession()
@@ -422,11 +441,6 @@ function AccountBlock() {
   const superAdmin = isSuperAdmin(staff.role)
   return (
     <div className="side__foot">
-      <div className="side__tools">
-        <LanguageToggle />
-        {/* PD-34: the staff member's own Notification Center. */}
-        <NotificationBell />
-      </div>
       <Menu
         label={tx(ACCOUNT_LABEL)}
         className="side__account"
@@ -438,11 +452,13 @@ function AccountBlock() {
               <span className="side__me-name">{staff.name}</span>
               <span className="side__me-role">{superAdmin ? t('role.super_admin') : tx(TEXT.operations)}</span>
             </span>
+            <Icon name="caretUpDown" size={16} />
           </span>
         }
         triggerClassName="side__me-button header__profile"
         items={[
           { key: 'profile', label: t('nav.profile'), icon: 'staff', onSelect: () => navigate('/profile') },
+          { key: 'language', label: t('shell.switchLanguage'), icon: 'language', onSelect: () => setLocale(locale === 'ar' ? 'en' : 'ar') },
           { key: 'signOut', label: t('common.signOut'), icon: 'signOut', onSelect: () => void signOut() },
         ]}
       />
@@ -549,38 +565,48 @@ function Topbar({
   menuRef: RefObject<HTMLButtonElement>
   destinations: Destination[]
 }) {
-  const { t } = useI18n()
+  const { t, locale, setLocale } = useI18n()
   const tx = useText()
   const navigate = useNavigate()
   const { staff, signOut } = useSession()
   const rail = useMediaQuery(RAIL_QUERY)
+  const phone = useMediaQuery(TABBAR_QUERY)
   // From desktop width the sidebar carries all of this; the bar is for narrow screens.
   if (rail) return null
 
   return (
     <header className="topbar">
-      <button
-        type="button"
-        ref={menuRef}
-        className="btn btn--ghost btn--icon topbar__menu"
-        onClick={onOpenNav}
-        aria-label={t('shell.openMenu')}
-        aria-expanded={navOpen}
-        aria-controls="app-sidebar"
-      >
-        <Icon name="menu" size={20} />
-      </button>
-      <Where destinations={destinations} />
+      {/* On phones the bottom bar's "More" opens the menu; one trigger is enough. */}
+      {!phone && (
+        <button
+          type="button"
+          ref={menuRef}
+          className="btn btn--ghost btn--icon topbar__menu"
+          onClick={onOpenNav}
+          aria-label={t('shell.openMenu')}
+          aria-expanded={navOpen}
+          aria-controls="app-sidebar"
+        >
+          <Icon name="menu" size={20} />
+        </button>
+      )}
+      {phone ? (
+        <Link to={TODAY_PATH} className="topbar__brand" aria-label={`Jawwid — ${tx(TODAY_LABEL)}`}>
+          <BrandLogo />
+        </Link>
+      ) : (
+        <Where destinations={destinations} />
+      )}
+      <span className="topbar__spacer" />
       {staff && (
         <button type="button" className="btn btn--ghost btn--icon" onClick={onSearch} aria-label={tx(SEARCH.open)} aria-keyshortcuts="Control+K Meta+K /">
           <Icon name="search" size={20} />
         </button>
       )}
-      <LanguageToggle />
       {/* PD-34: the staff member's own Notification Center. */}
       {staff && <NotificationBell />}
       {staff && (
-        // One's own profile and the way out live behind one's own face, not in the rail.
+        // One's own profile, the language and the way out live behind one's own face.
         <Menu
           label={tx(ACCOUNT_LABEL)}
           className="topbar__account"
@@ -588,10 +614,12 @@ function Topbar({
           triggerClassName="btn btn--ghost btn--icon topbar__me header__profile"
           items={[
             { key: 'profile', label: t('nav.profile'), icon: 'staff', onSelect: () => navigate('/profile') },
+            { key: 'language', label: t('shell.switchLanguage'), icon: 'language', onSelect: () => setLocale(locale === 'ar' ? 'en' : 'ar') },
             { key: 'signOut', label: t('common.signOut'), icon: 'signOut', onSelect: () => void signOut() },
           ]}
         />
       )}
+      {!staff && <LanguageToggle />}
     </header>
   )
 }
@@ -609,14 +637,18 @@ function Tabbar({ destinations, onMore }: { destinations: Destination[]; onMore:
   const current = destinationForPath(destinations, pathname)
   // Four places and More: the everyday ones first, in the rail's own order of use.
   const order: DestinationKey[] = ['conversations', 'dashboard', 'finance', 'people', 'sales', 'scheduling', 'operations', 'certificates', 'materials', 'communication']
-  const picked = order.map((k) => destinations.find((d) => d.key === k)).filter((d): d is Destination => !!d).slice(0, 4)
+  const picked = order.map((k) => destinations.find((d) => d.key === k)).filter((d): d is Destination => !!d).slice(0, 3)
   return (
     <nav className="tabbar" aria-label={tx({ en: 'Quick navigation', ar: 'تنقّل سريع' })}>
+      <Link to={TODAY_PATH} className="tabbar__item" aria-label={tx(TODAY_LABEL)} aria-current={pathname === TODAY_PATH ? 'true' : undefined}>
+        <Icon name="home" size={22} />
+        <span aria-hidden="true">{tx(TODAY_LABEL)}</span>
+      </Link>
       {picked.map((d) => {
         const first = entriesOf(d)[0]!
         const label = soleEntry(d) ? entryLabel(first) : tx(d.label)
         return (
-          <Link key={d.key} to={first.path} className="tabbar__item" aria-label={label} aria-current={current === d.key ? 'true' : undefined}>
+          <Link key={d.key} to={first.path} className="tabbar__item" aria-label={label} aria-current={current === d.key && pathname !== TODAY_PATH ? 'true' : undefined}>
             <Icon name={soleEntry(d) ? first.icon : d.icon} size={22} />
             <span aria-hidden="true">{shortLabel(label)}</span>
             {d.key === 'conversations' && <RailBadge count={unread} />}
@@ -624,7 +656,7 @@ function Tabbar({ destinations, onMore }: { destinations: Destination[]; onMore:
         )
       })}
       <button type="button" className="tabbar__item" onClick={onMore} aria-label={t('shell.openMenu')}>
-        <Icon name="menu" size={22} />
+        <Icon name="grid" size={22} />
         <span aria-hidden="true">{tx({ en: 'More', ar: 'المزيد' })}</span>
       </button>
     </nav>

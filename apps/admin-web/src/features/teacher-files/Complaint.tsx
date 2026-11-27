@@ -12,6 +12,7 @@ import { FeedbackStatusBadge, ReplyDialog } from '@/features/teacher-supervision
 import { useTakeFeedback } from '@/features/teacher-supervision/hooks'
 import type { Away, Complaint, ComplaintStatus, EntryBrief } from './api'
 import { T, describeError, useCopy } from './copy'
+import { By } from './Byline'
 import { useCalendarDate } from './calendar'
 
 const STATUS: Record<ComplaintStatus, { label: keyof typeof T; tone: Tone }> = {
@@ -36,11 +37,10 @@ export function AwayBadge({ away }: { away: Away | null | undefined }) {
 }
 
 function Byline({ entry }: { entry: Omit<EntryBrief, 'author'> & { author: EntryBrief['author'] | null } }) {
-  const tx = useCopy()
   const { dateTime } = useI18n()
   // A PD-32 app complaint has no staff author: the parent filed it (named in its head).
-  if (!entry.author) return <span className="tf-byline">{dateTime(entry.createdAt)}</span>
-  return <span className="tf-byline">{tx(T.by, { name: entry.author.name, date: dateTime(entry.createdAt) })}</span>
+  if (!entry.author) return <By when={dateTime(entry.createdAt)} />
+  return <By name={entry.author.name} when={dateTime(entry.createdAt)} />
 }
 
 /** Where a complaint came from. An app complaint names the parent and the child (PD-32). */
@@ -105,7 +105,7 @@ export function ComplaintItem({
   }
   const first = acts[0]
   const primary = first ? (
-    <button type="button" className={first.strong ? 'btn btn--primary btn--sm' : 'btn btn--sm'} disabled={first.busy} onClick={first.run}>
+    <button type="button" className="btn btn--sm" disabled={first.busy} onClick={first.run}>
       {first.label}
     </button>
   ) : undefined

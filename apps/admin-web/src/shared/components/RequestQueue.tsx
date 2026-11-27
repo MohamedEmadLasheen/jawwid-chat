@@ -1,4 +1,4 @@
-import { useEffect, useState, type MouseEvent, type ReactNode } from 'react'
+import { Fragment, useEffect, useRef, useState, type MouseEvent, type ReactNode, type RefObject } from 'react'
 import { LOCALE_TAG, useI18n } from '@/core/i18n/I18nProvider'
 import { ACADEMY_ZONE } from '@/core/time/academyTime'
 import { Dialog } from './Dialog'
@@ -7,20 +7,22 @@ import { Menu, type MenuItem } from './Menu'
 import './request-queue.css'
 
 /**
- * What every requests-and-approvals page is composed from. The page's states
- * are the figures of its masthead; below it:
+ * What every requests-and-approvals page is composed from:
  *
  *   RequestQueue   the work, and the open request's inspector beside it
  *   QueueGroup     a headed sheet of rows that belong together (a day, a wait)
- *   QueueRow       one designed row: a lead, who, one line, a fact, a tag, its actions
+ *   QueueRow       one designed row: a lead, who, why it is here, the fact, its action
  *   Board          the flow as columns of cards, first stage first; tabs when narrow
- *   BoardCard      one request on the board
+ *   BoardCard      one request on the board: who, the waiting fact, a status, one action
+ *   DetailCallout  the inspector's top: where it stands, in a sentence, and its one action
+ *   DetailSection  a titled part of the inspector: facts, steps, activity
  *   FlowSteps      the request's steps as a vertical list of dots
- *   DetailFoot     the inspector's one primary action, and the rest behind "⋯"
  *
- * From 1100px the inspector is a white sheet at the inline end, there while a
- * request is open; below that it is the side sheet (full screen on a phone).
- * The page owns its data, its filter and its rules: these only lay them out.
+ * The inspector has one anatomy on every page: the kind and the name, then the
+ * state callout with the one thing to do, then the facts, the steps and the
+ * activity. From 1100px it is a white sheet at the inline end; below that it is
+ * the side sheet (full screen on a phone). The page owns its data, its filter
+ * and its rules: these only lay them out.
  */
 
 type Pair = { en: string; ar: string }
@@ -33,6 +35,8 @@ const WORDS = {
   problem: { en: 'problem', ar: 'مشكلة' },
   skipped: { en: 'skipped', ar: 'لم يحدث' },
   more: { en: 'or more', ar: 'أو أكثر' },
+  moreColumns: { en: '{n} more', ar: '{n} أخرى' },
+  earlierColumns: { en: '{n} before', ar: '{n} قبلها' },
 } satisfies Record<string, Pair>
 
 /* ---------------------------------------------------------------- layout */
@@ -60,6 +64,7 @@ export interface RequestDetail {
   title: string
   /** What kind of request this is: its icon and a word, above the title. */
   kind?: { icon: IconName; label: string }
+  /** A status beside the title, for a page whose body has no `DetailCallout` to carry it. */
   status?: ReactNode
   body: ReactNode
   onClose: () => void
@@ -131,7 +136,7 @@ export function RequestQueue({
                   {detail.kind && <Kind kind={detail.kind} />}
                   {!detail.pinned && (
                     <button type="button" className="btn btn--ghost btn--icon btn--sm rq-panel__close" onClick={detail.onClose} aria-label={WORDS.close[locale]}>
-                      <Icon name="close" size={16} />
+                      <Icon name="close" size={18} />
                     </button>
                   )}
                 </div>
@@ -148,7 +153,46 @@ export function RequestQueue({
   )
 }
 
-/** A titled part of the inspector: a quiet label over a hairline. */
+/**
+ * The top of the inspector: where the request stands (its status word and how
+ * long it has waited), what that means in one sentence, a note that must not be
+ * missed (what a reviewer asked for, a lock), and the one thing to do now, the
+ * rest behind "⋯". Every request page opens its inspector with it.
+ */
+export function DetailCallout({
+  status,
+  state,
+  note,
+  primary,
+  more,
+  label,
+  children,
+}: {
+  /** The status word and the age: a tag, never colour alone. */
+  status?: ReactNode
+  /** One sentence: where it stands and whose turn it is. */
+  state?: ReactNode
+  /** One more line that must not be missed. */
+  note?: ReactNode
+  primary?: ReactNode
+  more?: MenuItem[]
+  /** The "⋯" menu's accessible name. */
+  label: string
+  /** What the step needs in place: a code to read out, a confirmation. */
+  children?: ReactNode
+}) {
+  return (
+    <div className="rq-callout">
+      {status && <div className="rq-callout__status">{status}</div>}
+      {state && <p className="rq-callout__state">{state}</p>}
+      {note && <div className="rq-callout__note">{note}</div>}
+      {children}
+      <DetailFoot primary={primary} more={more} label={label} />
+    </div>
+  )
+}
+
+/** A titled part of the inspector (facts, steps, activity), set apart by space and one soft line. */
 export function DetailSection({ title, children, aside }: { title: string; children: ReactNode; aside?: ReactNode }) {
   return (
     <section className="rq-section" aria-label={title}>
@@ -162,9 +206,9 @@ export function DetailSection({ title, children, aside }: { title: string; child
 }
 
 /**
- * The inspector's foot: the ONE thing to do next, and everything else behind
- * "⋯" (what ends the request last, marked as such). It stays at the foot while
- * the inspector scrolls, and at the bottom of the screen on a phone.
+ * The ONE thing to do next, and everything else behind "⋯" (what ends the
+ * request last, marked as such). Inside a `DetailCallout` it closes the callout;
+ * on its own it is a foot that stays at the bottom of the inspector.
  */
 export function DetailFoot({ primary, more, label }: { primary?: ReactNode; more?: MenuItem[]; label: string }) {
   const items = more ?? []
@@ -187,7 +231,11 @@ export function DetailActions({ children }: { children: ReactNode }) {
 
 /* ---------------------------------------------------------- groups & rows */
 
-/** Rows that belong together (a day, a wait), on their own headed sheet. An urgent group's count is solid terracotta. */
+/**
+ * Rows that belong together (a day, a wait), on their own headed sheet. An
+ * urgent group's count is solid red. `note` is one quiet fact at the head's
+ * end: how the rows are ordered ("longest wait first").
+ */
 export function QueueGroup({
   title,
   count,
@@ -198,7 +246,6 @@ export function QueueGroup({
   title: string
   count?: number
   tone?: 'urgent' | 'quiet'
-  /** One quiet fact at the head's end ("oldest 3 days ago"). */
   note?: ReactNode
   children: ReactNode
 }) {
@@ -208,7 +255,7 @@ export function QueueGroup({
       <header className="sheet__head">
         <h2 className="sheet__title">
           {title}
-          {count !== undefined && <span className={tone === 'urgent' ? 'count count--urgent rq-group__count' : 'count count--quiet rq-group__count'}>{number(count)}</span>}
+          {count !== undefined && <span className={tone === 'urgent' ? 'count count--urgent rq-group__count' : 'count rq-group__count'}>{number(count)}</span>}
         </h2>
         {note && <span className="rq-group__note">{note}</span>}
       </header>
@@ -229,8 +276,9 @@ export function rowOpener(open: () => void) {
 }
 
 /**
- * One designed row: what leads it (a time, a type), who, one supporting line,
- * the fact that matters, a tag, and its actions (one stated, the rest in "⋯").
+ * One designed row: what leads it (a time, a type), who, why it is here in one
+ * sentence (`sub`), the fact that matters, a tag, and its actions (one stated,
+ * the rest in "⋯").
  */
 export function QueueRow({
   lead,
@@ -263,7 +311,7 @@ export function QueueRow({
         ) : (
           <strong className="rq-row__title"><bdi>{title}</bdi></strong>
         )}
-        {sub && <span className="rq-sub">{sub}</span>}
+        {sub && <span className="rq-sub rq-why">{sub}</span>}
       </div>
       {fact && <div className="rq-row__fact">{fact}</div>}
       {tag && <div className="rq-row__tag">{tag}</div>}
@@ -281,8 +329,10 @@ export interface BoardStage<K extends string> {
   count: number | null
   /** The list holds more than were counted ("25+"). */
   more?: boolean
-  /** A stage that holds a real problem: its count is solid terracotta. */
+  /** A stage that holds a real problem: its count is solid red. */
   urgent?: boolean
+  /** A stage where the work has ended (sent, converted, lost): a narrower column of quieter cards. */
+  quiet?: boolean
   /** The stage's cards. */
   cards: ReactNode
   /** One line for a stage with no cards. */
@@ -293,8 +343,9 @@ export interface BoardStage<K extends string> {
 
 /**
  * A flow as a board: one column per stage, in the flow's order (the first stage
- * at the inline start, so at the right in Arabic), each headed by its name and
- * count. Cards move through the page's own actions; nothing is dragged.
+ * at the inline start, so the columns read right to left in Arabic), each
+ * headed by its name and count. Stages where the work has ended are narrower.
+ * Cards move through the page's own actions; nothing is dragged.
  *
  * Below 1100px there is no room for columns: the stages become tabs with their
  * counts and the cards a list. `value` is the stage in view ('all' for every
@@ -315,6 +366,15 @@ export function Board<K extends string>({
 }) {
   const { locale, number } = useI18n()
   const wide = useWidePane()
+  const boardRef = useRef<HTMLDivElement>(null)
+  const edges = useScrollEdges(boardRef, wide)
+  /** Scroll the board one pane's width toward its end (+1) or its start (-1), in the page's direction. */
+  const page = (toward: 1 | -1) => {
+    const el = boardRef.current
+    if (!el) return
+    const rtl = getComputedStyle(el).direction === 'rtl'
+    el.scrollBy({ left: toward * (rtl ? -1 : 1) * el.clientWidth * 0.8, behavior: 'smooth' })
+  }
   const shown = value === 'all' ? stages : stages.filter((s) => s.key === value)
   const figure = (s: BoardStage<K>) =>
     s.count === null ? null : (
@@ -329,10 +389,10 @@ export function Board<K extends string>({
       </>
     )
   const column = (s: BoardStage<K>) => (
-    <section key={s.key} className="rq-col" aria-label={s.label}>
+    <section key={s.key} className={s.quiet ? 'rq-col rq-col--quiet' : 'rq-col'} aria-label={s.label}>
       <header className="rq-col__head">
         <h2 className="rq-col__title">{s.label}</h2>
-        {s.count !== null && <span className={s.urgent ? 'count count--urgent' : 'count count--quiet'}>{figure(s)}</span>}
+        {s.count !== null && <span className={s.urgent ? 'count count--urgent' : 'count'}>{figure(s)}</span>}
       </header>
       <div className="rq-col__cards">{s.count === 0 ? <p className="rq-col__empty">{s.empty}</p> : s.cards}</div>
       {s.foot}
@@ -340,9 +400,37 @@ export function Board<K extends string>({
   )
 
   if (wide) {
+    // The stages where the work has ended share one narrower track, one above the other.
+    const tracks: Array<Array<BoardStage<K>>> = []
+    for (const s of shown) {
+      const last = tracks.at(-1)
+      if (s.quiet && last?.[0]?.quiet) last.push(s)
+      else tracks.push([s])
+    }
+    // Columns the pane cannot show sit behind a solid edge that names how many, never as cut-off fragments.
     return (
-      <div className={shown.length === 1 ? 'rq-board rq-board--one' : 'rq-board'} role="group" aria-label={label}>
-        {shown.map(column)}
+      <div className="rq-board-wrap">
+        <div
+          ref={boardRef}
+          className={shown.length === 1 ? 'rq-board rq-board--one' : 'rq-board'}
+          role="group"
+          aria-label={label}
+          style={shown.length === 1 ? undefined : { gridTemplateColumns: tracks.map((t) => (t[0]!.quiet ? 'minmax(var(--rq-col-quiet, 184px), 0.8fr)' : 'minmax(var(--rq-col, 208px), 1fr)')).join(' ') }}
+        >
+          {tracks.map((t) => (t.length === 1 ? column(t[0]!) : <div key={t[0]!.key} className="rq-col-stack">{t.map(column)}</div>))}
+        </div>
+        {edges.start > 0 && (
+          <button type="button" className="rq-board__edge rq-board__edge--start" style={{ inlineSize: Math.max(72, edges.startCover + 8) }} onClick={() => page(-1)}>
+            <span className="rq-board__back"><Icon name="chevronForward" size={18} /></span>
+            {WORDS.earlierColumns[locale].replace('{n}', number(edges.start))}
+          </button>
+        )}
+        {edges.end > 0 && (
+          <button type="button" className="rq-board__edge rq-board__edge--end" style={{ inlineSize: Math.max(72, edges.endCover + 8) }} onClick={() => page(1)}>
+            <Icon name="chevronForward" size={18} />
+            {WORDS.moreColumns[locale].replace('{n}', number(edges.end))}
+          </button>
+        )}
       </div>
     )
   }
@@ -372,14 +460,73 @@ export function Board<K extends string>({
 }
 
 /**
- * One request on the board: who (the heading), what is known in a few quiet
- * lines, how long it has waited, and its actions: one stated, the rest in "⋯".
+ * Whether a board that scrolls sideways hides columns at its inline start or
+ * end, so the hidden edge can fade. Direction-agnostic: in RTL, scrollLeft runs
+ * from 0 to negative.
+ */
+function useScrollEdges(ref: RefObject<HTMLElement>, enabled: boolean) {
+  const [edges, setEdges] = useState({ start: 0, end: 0, startCover: 0, endCover: 0 })
+  const update = () => {
+    const el = ref.current
+    if (!el) return
+    const box = el.getBoundingClientRect()
+    const rtl = getComputedStyle(el).direction === 'rtl'
+    let start = 0
+    let end = 0
+    // How far in from each side the edge must reach to cover every column it counts.
+    let startCover = 0
+    let endCover = 0
+    // A column the pane does not show whole counts as hidden on its side, and the edge covers all of it that shows.
+    for (const child of Array.from(el.children)) {
+      const r = child.getBoundingClientRect()
+      if (r.width === 0) continue
+      const n = child.classList.contains('rq-col-stack') ? child.children.length : 1
+      const pastEnd = rtl ? r.left < box.left - 1 : r.right > box.right + 1
+      const beforeStart = rtl ? r.right > box.right + 1 : r.left < box.left - 1
+      if (pastEnd) {
+        end += n
+        endCover = Math.max(endCover, rtl ? r.right - box.left : box.right - r.left)
+      } else if (beforeStart) {
+        start += n
+        startCover = Math.max(startCover, rtl ? box.right - r.left : r.right - box.left)
+      }
+    }
+    const round = (v: number) => Math.max(0, Math.ceil(v))
+    const next = { start, end, startCover: round(startCover), endCover: round(endCover) }
+    setEdges((e) => (e.start === next.start && e.end === next.end && e.startCover === next.startCover && e.endCover === next.endCover ? e : next))
+  }
+  // The columns change with the data, not only with the window: measure after every render.
+  useEffect(update)
+  useEffect(() => {
+    const el = ref.current
+    if (!enabled || !el) return
+    el.addEventListener('scroll', update, { passive: true })
+    const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(update) : null
+    observer?.observe(el)
+    return () => {
+      el.removeEventListener('scroll', update)
+      observer?.disconnect()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `update` reads only the ref and a state setter
+  }, [ref, enabled])
+  return edges
+}
+
+/**
+ * One request on the board. Its anatomy is fixed and its parts differ by role:
+ * the name (Readex, the heading) with its status word at the end of that line;
+ * the waiting fact, the one emphasised line (red only on a late value in it); a few quiet
+ * lines of what is known; then how long it has waited and its one action. A
+ * `quiet` card (work that has ended) is the name and its lines, without a foot.
  */
 export function BoardCard({
   title,
   onOpen,
   selected = false,
   titleOpens = true,
+  status,
+  fact,
+  quiet = false,
   children,
   age,
   actions,
@@ -389,29 +536,77 @@ export function BoardCard({
   selected?: boolean
   /** False when the card's own primary action is "Open": the name is then plain text. */
   titleOpens?: boolean
+  /** Its status word (a tag), at the end of the name's line. */
+  status?: ReactNode
+  /** Why the card waits in this column now ("follow-up was due on Tuesday"); a value that is late inside it is red, never the line. */
+  fact?: ReactNode
+  quiet?: boolean
   children?: ReactNode
   age?: ReactNode
   actions?: ReactNode
 }) {
   return (
-    <article className="rq-card sheet" data-selected={selected || undefined} onClick={rowOpener(onOpen)}>
-      <h3 className="rq-card__title">
-        {titleOpens ? (
-          <button type="button" className="rq-open" onClick={onOpen} aria-current={selected ? 'true' : undefined}>
+    <article className={quiet ? 'rq-card rq-card--quiet' : 'rq-card'} data-selected={selected || undefined} onClick={rowOpener(onOpen)}>
+      <div className="rq-card__head">
+        <h3 className="rq-card__title">
+          {titleOpens ? (
+            <button type="button" className="rq-open" onClick={onOpen} aria-current={selected ? 'true' : undefined}>
+              <bdi>{title}</bdi>
+            </button>
+          ) : (
             <bdi>{title}</bdi>
-          </button>
-        ) : (
-          <bdi>{title}</bdi>
-        )}
-      </h3>
+          )}
+        </h3>
+        {status && <span className="rq-card__status">{status}</span>}
+      </div>
+      {fact && <p className="rq-card__fact">{fact}</p>}
       {children && <div className="rq-card__body">{children}</div>}
-      {(age || actions) && (
+      {!quiet && (age || actions) && (
         <div className="rq-card__foot">
           <span className="rq-card__age">{age}</span>
           {actions}
         </div>
       )}
     </article>
+  )
+}
+
+/* --------------------------------------------------------------- filters */
+
+export interface QueueFilter<K extends string> {
+  key: K
+  label: string
+  /** Null until its list has arrived: the chip shows its name alone, never a zero. */
+  count?: number | null
+  /** The count asks for action and nothing below repeats it: solid red while it is above zero. */
+  urgent?: boolean
+}
+
+/**
+ * A page's few filters as one quiet row of chips above its work: each names
+ * what it shows and how many, the one that asks for action counted in solid red.
+ */
+export function QueueFilters<K extends string>({
+  label,
+  filters,
+  value,
+  onChange,
+}: {
+  label: string
+  filters: ReadonlyArray<QueueFilter<K>>
+  value: K
+  onChange: (key: K) => void
+}) {
+  const { number } = useI18n()
+  return (
+    <div className="chips rq-filters" role="group" aria-label={label}>
+      {filters.map((f) => (
+        <button key={f.key} type="button" className="chip" aria-pressed={value === f.key} onClick={() => onChange(f.key)}>
+          {f.label}
+          {f.count != null && <span className={f.urgent && f.count > 0 ? 'count count--urgent' : 'chip__count'}>{number(f.count)}</span>}
+        </button>
+      ))}
+    </div>
   )
 }
 
@@ -430,8 +625,8 @@ export interface FlowStep {
 }
 
 /**
- * A request's steps, top to bottom. A solid teal dot is done, the gold ring is
- * where it stands now, a hairline ring is still to come, terracotta is a problem.
+ * A request's steps, top to bottom. A solid teal dot is done, a teal ring is
+ * where it stands now, a soft ring is still to come, red is a problem.
  */
 export function FlowSteps({ steps, label }: { steps: ReadonlyArray<FlowStep>; label: string }) {
   const { locale } = useI18n()
@@ -452,6 +647,16 @@ export function FlowSteps({ steps, label }: { steps: ReadonlyArray<FlowStep>; la
       ))}
     </ol>
   )
+}
+
+/* ------------------------------------------------------------- sentences */
+
+/**
+ * A reason line with its names isolated: each "{name}" in `text` becomes that
+ * value in its own direction (a Latin name inside Arabic, or the reverse).
+ */
+export function sentence(text: string, vars: Record<string, ReactNode> = {}): ReactNode {
+  return text.split(/\{(\w+)\}/).map((part, i) => (i % 2 === 1 ? <bdi key={i}>{vars[part] ?? ''}</bdi> : <Fragment key={i}>{part}</Fragment>))
 }
 
 /* ------------------------------------------------------------------- age */
@@ -476,6 +681,16 @@ export function waitedOvernight(iso: string, now: Date = new Date()): boolean {
   return !Number.isNaN(t.getTime()) && academyDayOf(t) < academyDayOf(now)
 }
 
+/**
+ * A day by its name: "Thu 26 Nov" / "الخميس 26 نوفمبر", Western digits, the
+ * month in words. Takes an instant or a calendar date (YYYY-MM-DD).
+ */
+export function dayName(value: string, locale: 'ar' | 'en', weekday = true): string {
+  const t = new Date(/^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T12:00:00Z` : value)
+  if (Number.isNaN(t.getTime())) return value
+  return new Intl.DateTimeFormat(locale === 'ar' ? 'ar-EG-u-nu-latn' : 'en', { ...(weekday ? { weekday: locale === 'ar' ? 'long' : 'short' } : {}), day: 'numeric', month: locale === 'ar' ? 'long' : 'short', timeZone: ACADEMY_ZONE }).format(t)
+}
+
 /** "in 2 days", "3 hours ago", "yesterday": by the academy's calendar, in the reader's language. */
 export function ageText(iso: string, locale: 'ar' | 'en', now: Date = new Date()): string {
   const t = new Date(iso)
@@ -488,7 +703,7 @@ export function ageText(iso: string, locale: 'ar' | 'en', now: Date = new Date()
   return f.format(Math.round(minutes / 60), 'hour')
 }
 
-/** An age in words; the exact time is its title. Terracotta only when `late`. */
+/** An age in words; the exact time is its title. Red only when `late`. */
 export function Age({ iso, late = false }: { iso: string; late?: boolean }) {
   const { locale, dateTime } = useI18n()
   return (

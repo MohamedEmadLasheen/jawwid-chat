@@ -7,10 +7,6 @@ import type { LostReason, Stage } from './api'
 
 export const P = {
   title: { en: 'Sales pipeline', ar: 'مسار المبيعات' },
-  subtitle: {
-    en: 'Every lead from the first call to the hand-over. Trial stages come from the trial itself.',
-    ar: 'كل عميل محتمل من أول اتصال حتى التسليم. مراحل التجربة تأتي من الحصة التجريبية نفسها.',
-  },
   newLead: { en: 'New lead', ar: 'عميل محتمل جديد' },
   search: { en: 'Search by name', ar: 'ابحث بالاسم' },
   filterLabel: { en: 'Stage', ar: 'المرحلة' },
@@ -30,6 +26,7 @@ export const P = {
   whatsapp: { en: 'WhatsApp', ar: 'واتساب' },
   email: { en: 'E-mail', ar: 'البريد الإلكتروني' },
   noChannel: { en: 'None', ar: 'لا يوجد' },
+  noContactOnFile: { en: 'No way to reach them on file', ar: 'لا وسيلة تواصل مسجلة' },
   open: { en: 'Open', ar: 'فتح' },
   previous: { en: 'Previous', ar: 'السابق' },
   next: { en: 'Next', ar: 'التالي' },
@@ -108,15 +105,35 @@ export const P = {
   about: { en: 'About', ar: 'عن العميل' },
   followUp: { en: 'Follow-up', ar: 'المتابعة' },
   created: { en: 'Added', ar: 'أُضيف' },
+  // A card's waiting fact and its age
+  dueOn: { en: 'Follow-up was due on {date}', ar: 'كان موعد المتابعة {date}' },
+  dueSince: { en: '{what} since {date}', ar: '{what} منذ {date}' },
+  allStages: { en: 'All stages', ar: 'كل المراحل' },
+  sinceDate: { en: 'since {date}', ar: 'منذ {date}' },
+  followUpOn: { en: 'Follow-up on {date}', ar: 'المتابعة في {date}' },
+  noFollowUp: { en: 'No follow-up planned', ar: 'لا متابعة مخطط لها' },
+  lastContactAge: { en: 'Last contact {age}', ar: 'آخر تواصل {age}' },
+  addedAge: { en: 'Added {age}', ar: 'أُضيف {age}' },
+  // The inspector's state, in one sentence
+  stateDue: { en: 'The planned follow-up has not been made. Record the contact once you reach the family.', ar: 'لم تتم المتابعة المخططة. سجّل التواصل حين تصل إلى الأسرة.' },
+  stateConvert: { en: 'Ready to hand over: convert the lead to pass the family to Operations.', ar: 'جاهز للتسليم: حوّل العميل لتنتقل الأسرة إلى التشغيل.' },
+  stateNew: { en: 'Nobody has contacted this family yet.', ar: 'لم يتواصل أحد مع هذه الأسرة بعد.' },
+  stateTrial: { en: 'A trial is booked; its outcome decides the next stage.', ar: 'حُجزت حصة تجريبية، ونتيجتها تحدد المرحلة التالية.' },
+  stateNext: { en: 'Contacted; the next follow-up is on {date}.', ar: 'تم التواصل، والمتابعة القادمة في {date}.' },
+  stateNoNext: { en: 'Contacted, with no follow-up planned. Set a date below.', ar: 'تم التواصل ولا متابعة مخطط لها. حدّد موعدًا أدناه.' },
+  stateLost: { en: 'Lost: {reason}. Reopen it if the family comes back.', ar: 'خسرناه بسبب: {reason}. أعد فتحه إن عادت الأسرة.' },
+  stateLostPlain: { en: 'Lost. Reopen it if the family comes back.', ar: 'خسرناه. أعد فتحه إن عادت الأسرة.' },
+  stateConverted: { en: 'Handed over to the academy.', ar: 'سُلّم إلى الأكاديمية.' },
 } satisfies Record<string, Pair>
 
+/** A stage is where a lead stands, not an alarm: teal for the working stages, green for converted, grey for lost. */
 export const STAGE: Record<Stage, { label: Pair; tone: Tone }> = {
-  new_lead: { label: { en: 'New lead', ar: 'عميل جديد' }, tone: 'info' },
-  contacted: { label: { en: 'Contacted', ar: 'تم التواصل' }, tone: 'waiting' },
-  trial_booked: { label: { en: 'Trial booked', ar: 'تم حجز تجربة' }, tone: 'today' },
-  trial_completed: { label: { en: 'Trial completed', ar: 'اكتملت التجربة' }, tone: 'gold' },
+  new_lead: { label: { en: 'New lead', ar: 'عميل جديد' }, tone: 'neutral' },
+  contacted: { label: { en: 'Contacted', ar: 'تم التواصل' }, tone: 'info' },
+  trial_booked: { label: { en: 'Trial booked', ar: 'تم حجز تجربة' }, tone: 'info' },
+  trial_completed: { label: { en: 'Trial completed', ar: 'اكتملت التجربة' }, tone: 'info' },
   converted: { label: { en: 'Converted', ar: 'تم التحويل' }, tone: 'ok' },
-  lost: { label: { en: 'Lost', ar: 'خسارة' }, tone: 'danger' },
+  lost: { label: { en: 'Lost', ar: 'خسارة' }, tone: 'neutral' },
 }
 
 export const LOST: Record<LostReason | 'no_show', Pair> = {

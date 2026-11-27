@@ -192,6 +192,7 @@ import {
   Wallet,
   X,
   Zap,
+  BookUser,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -395,7 +396,7 @@ const ICONS = {
   userCheck: UserCheck,
   userCircle: CircleUserRound,
   userMinus: UserMinus,
-  users: IdCard,
+  users: BookUser,
   video: Video,
   videoOff: VideoOff,
   warningOctagon: OctagonAlert,

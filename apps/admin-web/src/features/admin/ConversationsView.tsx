@@ -15,7 +15,7 @@ import { EmptyState, LoadingState, QueryBoundary } from '@/shared/components/Sta
 import { useMediaQuery } from '@/shared/hooks/useMediaQuery'
 import { chatCopyFor, systemText } from '@/features/chat/copy'
 import { BlankMonogram, conversationTone } from '@/features/chat/chatView'
-import { waitedFor } from '@/features/chat/queue'
+import { waitTone, waitedFor } from '@/features/chat/queue'
 import { PageHeader, type MastFigure } from '@/shared/components/PageHeader'
 import { useWorkspaceKeys } from '@/features/chat/useWorkspaceKeys'
 import '@/features/chat/chat.css'
@@ -115,7 +115,8 @@ export function ConversationsView({ section }: { section: AdminSection }) {
   const { number, locale } = useI18n()
   const [params, setParams] = useSearchParams()
   const [search, setSearch] = useState('')
-  const wide = useMediaQuery('(min-width: 1100px)')
+  // Details beside the thread only where the thread keeps a readable width; a drawer below.
+  const wide = useMediaQuery('(min-width: 1360px)')
   const resizable = useMediaQuery('(min-width: 1024px)')
   const listWidth = useResizableWidth(LIST_WIDTH_KEY, 360, 280, 520)
   const [panelPref, setPanelPref] = useState(readPanelPref)
@@ -232,7 +233,10 @@ export function ConversationsView({ section }: { section: AdminSection }) {
 
   // The masthead carries the counts as figures; a figure is also the status filter
   // (so the list has no strip of status chips repeating them).
-  const figures: MastFigure[] = query.data
+  // Figures that cannot tell anything apart ("All 99", "Open 99") are not shown:
+  // with a single status the strip would only repeat one number.
+  const figuresTell = stateOptions.length > 2 || stateFilter !== 'all'
+  const figures: MastFigure[] = query.data && figuresTell
     ? stateOptions.slice(0, 4).map((o) => ({
         key: o.value,
         label: o.label,
@@ -401,6 +405,9 @@ export function ConversationsView({ section }: { section: AdminSection }) {
   )
 }
 
+/** Facts on one line are joined with the language's own comma, never a middle dot. */
+const separator = (locale: 'ar' | 'en') => chatCopyFor(locale).listSeparator
+
 function countBy<T>(rows: readonly T[], key: (row: T) => string): Record<string, number> {
   const out: Record<string, number> = {}
   for (const r of rows) out[key(r)] = (out[key(r)] ?? 0) + 1
@@ -417,7 +424,7 @@ function TypedAvatar({ c, name, size }: { c: AdminConversation; name: string; si
       {c.title ?? c.familyName ? <Avatar name={name} seed={c.id} size={size} /> : <BlankMonogram size={size} />}
       {glyph && (
         <span className="typed-avatar__glyph" aria-hidden="true">
-          <Icon name={glyph} size={11} />
+          <Icon name={glyph} size={13} />
         </span>
       )}
     </span>
@@ -453,22 +460,29 @@ function ConversationRow({
               <bdi className="cw-line">{name}</bdi>
             </span>
             {isTrialGroup(c) && <TrialBadge />}
-            <time className="conv-row__time" dateTime={c.lastActivityAt} title={dateTime(c.lastActivityAt)}>
-              {listTime(c.lastActivityAt, locale)}
-            </time>
-          </span>
-          <span className="conv-row__bottom">
-            <span className="conv-row__sub">
-              {typeLabel(c.type)} · {plural(PLURAL.members, c.liveMembers)}
-            </span>
+            {/* Waiting on us: how long is the row's one emphasised fact, in place of the time (as in Chat). */}
             {c.state === 'waiting_on_jawwid' ? (
-              <span className="cw-row__waited" title={dateTime(c.lastActivityAt)} aria-label={label(CONVERSATION_STATE, c.state)}>
-                <Icon name="hourglass" size={13} />
+              <span
+                className={`cw-row__waited cw-wait--${waitTone(c.lastActivityAt)}`}
+                title={dateTime(c.lastActivityAt)}
+                aria-label={label(CONVERSATION_STATE, c.state)}
+              >
+                <Icon name="hourglass" size={14} />
                 {waitedFor(c.lastActivityAt, locale)}
               </span>
             ) : (
-              <ConversationStateBadge state={c.state} />
+              <time className="conv-row__time" dateTime={c.lastActivityAt} title={dateTime(c.lastActivityAt)}>
+                {listTime(c.lastActivityAt, locale)}
+              </time>
             )}
+          </span>
+          <span className="conv-row__bottom">
+            <span className="conv-row__sub">
+              {typeLabel(c.type)}
+              {separator(locale)}
+              {plural(PLURAL.members, c.liveMembers)}
+            </span>
+            {c.state !== 'waiting_on_jawwid' && <ConversationStateBadge state={c.state} />}
           </span>
         </span>
       </Link>
@@ -527,8 +541,9 @@ function Thread({
             {name} {isTrialGroup(c) && <TrialBadge />}
           </h2>
           <span className="thread-head__sub">
-            {typeLabel(c.type)} · {plural(PLURAL.members, c.liveMembers)} ·{' '}
-            {fill(tx(TEXT.lastActive), { age: relativeTime(c.lastActivityAt, locale) })}
+            {[typeLabel(c.type), plural(PLURAL.members, c.liveMembers), fill(tx(TEXT.lastActive), { age: relativeTime(c.lastActivityAt, locale) })].join(
+              separator(locale),
+            )}
           </span>
         </div>
         <ConversationStateBadge state={c.state} />
@@ -632,9 +647,9 @@ function MessageItem({ m, side, showAuthor }: { m: AdminMessage; side: Side; sho
       )}
       <div className="bubble">
         {side === 'internal' && (
-          <span className="bubble__flag">
-            <Icon name="lockNote" size={14} />
-            {tx(TEXT.internal)}
+          <span className="bubble__flag" title={tx(TEXT.internal)}>
+            <Icon name="lock" size={14} />
+            {chatCopyFor(locale).staffOnlyShort}
           </span>
         )}
         {m.deleted ? (
@@ -645,7 +660,7 @@ function MessageItem({ m, side, showAuthor }: { m: AdminMessage; side: Side; sho
               <span className="bubble__attachment">
                 <Icon name="paperclip" size={14} />
                 {typeLabel ?? plural(PLURAL.attachments, m.attachments)}
-                {typeLabel && m.attachments > 1 && <> · {plural(PLURAL.attachments, m.attachments)}</>}
+                {typeLabel && m.attachments > 1 && <>{separator(locale)}{plural(PLURAL.attachments, m.attachments)}</>}
               </span>
             )}
             {/* This view reads what was sent, word for word. */}

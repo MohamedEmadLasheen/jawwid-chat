@@ -150,14 +150,15 @@ function offboardError(error: unknown, locale: 'ar' | 'en', tx: ReturnType<typeo
 }
 
 /** The super admin only (owner Q6); the answer's first sign-in code is shown once. */
-export function ReactivateButton({ show, teacherId, name }: { show: boolean; teacherId: string; name: string }) {
+/** `hidden`: pressed from elsewhere (the file's callout), so it is not offered twice. */
+export function ReactivateButton({ show, teacherId, name, hidden }: { show: boolean; teacherId: string; name: string; hidden?: boolean }) {
   const tx = useCopy()
   const [open, setOpen] = useState(false)
   const close = useCallback(() => setOpen(false), [])
   return (
     <>
       {show && (
-        <button type="button" className="btn" onClick={() => setOpen(true)}>
+        <button type="button" className="btn" hidden={hidden} onClick={() => setOpen(true)}>
           {tx(T.reactivate)}
         </button>
       )}

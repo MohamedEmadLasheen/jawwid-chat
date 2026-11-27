@@ -14,7 +14,7 @@
   .table.stack-table tbody tr:hover > * { background: none; }
   /* The row's heading: the name, at body size. */
   .table.stack-table tbody tr > :first-child { grid-column: 1 / -1; font-size: var(--fs-md); font-weight: 600; color: var(--ink); }
-  .table.stack-table tbody tr > [data-label]::before { content: attr(data-label); display: block; margin-block-end: 1px; font-size: 12px; font-weight: 400; color: var(--ink-muted); }
+  .table.stack-table tbody tr > [data-label]::before { content: attr(data-label); display: block; margin-block-end: 1px; font-size: var(--fs-xs); font-weight: 400; color: var(--ink-muted); }
   .table.stack-table tbody tr > .stack-wide { grid-column: 1 / -1; }
   .table.stack-table tbody tr > :empty { display: none; }
   /* Actions are always in reach on a phone, on their own line. */

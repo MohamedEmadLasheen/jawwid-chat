@@ -72,7 +72,7 @@ export function ConversationCallControls({
                 <li key={c.id}>
                   <span>
                     {c.outcome ? copy.outcome[c.outcome] ?? c.outcome : c.status}
-                    {c.durationSeconds ? ` · ${copy.duration(c.durationSeconds)}` : ''}
+                    {c.durationSeconds ? `${locale === 'ar' ? '، ' : ', '}${copy.duration(c.durationSeconds)}` : ''}
                   </span>
                   <span>{time(c.startedAt)}</span>
                 </li>

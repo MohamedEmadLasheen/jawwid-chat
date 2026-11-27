@@ -2,7 +2,7 @@
    (a work queue on white sheets) beside the day's lessons and the latest lines. */
 .today__queue { display: grid; gap: var(--space-4); align-content: start; min-inline-size: 0; }
 .today__queue-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); }
-.today__h { margin: 0; font-family: var(--display); font-size: var(--fs-xl); font-weight: 600; }
+.today__h { margin: 0; font-family: var(--font-head); font-size: var(--fs-xl); font-weight: 700; }
 html[lang='ar'] .today__h { font-weight: 700; }
 .today__count { margin-inline-start: 8px; vertical-align: 1px; }
 .today__clear { display: flex; align-items: flex-start; gap: 10px; margin: 0; padding: var(--space-5) var(--space-4); color: var(--ink-muted); font-size: var(--fs-sm); max-inline-size: 62ch; }
@@ -10,18 +10,18 @@ html[lang='ar'] .today__h { font-weight: 700; }
 
 /* One thing to do: what, the one fact that makes it urgent, where it is done. */
 .todo { list-style: none; margin: 0; padding: 0; }
-.todo__row { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto auto; align-items: center; gap: var(--space-3); padding: 10px var(--space-4); border-block-end: 1px solid var(--hairline-soft); }
+.todo__row { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto auto; min-block-size: 64px; align-items: center; gap: var(--space-3); padding: 10px var(--space-4); border-block-end: 1px solid var(--hairline-soft); }
 .todo__row:last-child { border-block-end: 0; }
-.todo__icon { display: grid; place-items: center; inline-size: 36px; block-size: 36px; border-radius: var(--radius); background: var(--teal-tint); color: var(--teal); }
-.todo__row--urgent .todo__icon { background: var(--terracotta-tint); color: var(--terracotta); }
 .todo__main { display: grid; min-inline-size: 0; }
 .todo__title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .todo__line { color: var(--ink-muted); font-size: var(--fs-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.todo__fact { font-size: var(--fs-sm); font-weight: 600; color: var(--ink); white-space: nowrap; font-variant-numeric: tabular-nums; }
-.todo__row--urgent .todo__fact { color: var(--terracotta); }
+.todo__facts { display: grid; justify-items: end; gap: 1px; text-align: end; }
+.todo__fact { font-family: var(--font-head); font-size: var(--fs-md); font-weight: 600; color: var(--ink); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.todo__age { font-size: var(--fs-xs); color: var(--ink-muted); white-space: nowrap; }
+.todo__age--late { color: var(--urgent); font-weight: 600; }
 @media (max-width: 640px) {
   .todo__row { grid-template-columns: 36px minmax(0, 1fr) auto; }
-  .todo__fact { grid-column: 2; grid-row: 2; font-weight: 500; }
+  .todo__facts { grid-column: 2; grid-row: 2; justify-items: start; text-align: start; grid-auto-flow: column; gap: 10px; }
   .todo__row .btn { grid-column: 3; grid-row: 1 / span 2; }
 }
 
@@ -62,3 +62,6 @@ html[lang='ar'] .today__h { font-weight: 700; }
 /* A name sets the order of its own words; its place in the row follows the page. */
 [dir='rtl'] :is(.todo__main, .tl__who) > bdi { text-align: right; }
 [dir='ltr'] :is(.todo__main, .tl__who) > bdi { text-align: left; }
+
+/* The side column's titles are section titles too. */
+.today__aside .aside-group__title { font-size: var(--fs-lg); font-weight: 700; color: var(--ink); }

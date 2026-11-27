@@ -5,7 +5,7 @@ import type { AdminConversation } from '@/core/api/endpoints'
 import { Badge, type Tone } from '@/shared/components/Badge'
 import { Icon } from '@/shared/components/Icon'
 import { CONVERSATION_STATE, fill, TEXT, useLabel, useText } from './copy'
-import { ADMIN_GROUPS, type AdminSection, type AdminSectionStatus } from './sections'
+import { type AdminSection, type AdminSectionStatus } from './sections'
 
 /** The browser tab names the page, so several open tabs stay tellable apart. */
 export function useDocumentTitle(title: string | null) {
@@ -109,8 +109,7 @@ export function ConversationStateBadge({ state, showOpen }: { state: string; sho
 }
 
 /** The section's group, shown above its title so the page says where it sits. */
-export function useEyebrow(section: AdminSection): string | undefined {
-  const tx = useText()
-  const group = ADMIN_GROUPS.find((g) => g.key === section.group)
-  return group ? tx(group.label) : undefined
+/** No eyebrow above every title (docs/design/admin-rationale.md): the sidebar already says where a page sits. */
+export function useEyebrow(_section: AdminSection): string | undefined {
+  return undefined
 }

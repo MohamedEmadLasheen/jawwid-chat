@@ -54,27 +54,28 @@ function InsightsBody({
   basePath: string
 }) {
   const tx = useText()
-  const { number, dateTime } = useI18n()
+  const { number, dateTime, locale } = useI18n()
   const navigate = useNavigate()
   const summary = useAudienceSummary()
   const publish = usePublishStory()
   const [deleting, setDeleting] = useState(false)
   const [showPeople, setShowPeople] = useState(false)
   const state = effectiveState(s)
-  const pct = (r: number | null | undefined) => (r == null ? '—' : fill(tx(S.pct), { n: number(Math.round(r * 100)) }))
+  // An empty value is a word, never a dash.
+  const pct = (r: number | null | undefined) => (r == null ? tx(S.none) : fill(tx(S.pct), { n: number(Math.round(r * 100)) }))
 
   // The masthead's figures: how far it went, how many opened it, how many acted.
   const figures: MastFigure[] = a
     ? [
         { key: 'reach', label: tx(S.reached), value: number(a.reach.total), tone: 'key' },
         { key: 'views', label: tx(S.viewed), value: number(a.views.total), note: fill(tx(S.ofReach), { pct: pct(a.rates.view) }) },
-        {
-          key: 'tapped',
-          label: tx(S.tapped),
-          value: a.cta.kind ? number(a.cta.tappers) : '—',
-          note: a.cta.kind ? fill(tx(S.ofViews), { pct: pct(a.rates.tapOfViews) }) : tx(S.noButton),
-        },
-        { key: 'taps', label: tx(S.totalTapsLabel), value: a.cta.kind ? number(a.cta.taps) : '—' },
+        // A story without a button has no taps to count: its figures stop at views.
+        ...(a.cta.kind
+          ? [
+              { key: 'tapped', label: tx(S.tapped), value: number(a.cta.tappers), note: fill(tx(S.ofViews), { pct: pct(a.rates.tapOfViews) }) },
+              { key: 'taps', label: tx(S.totalTapsLabel), value: number(a.cta.taps) },
+            ]
+          : []),
       ]
     : []
 
@@ -131,7 +132,7 @@ function InsightsBody({
               <dd>
                 {s.cta ? (
                   <>
-                    {tx(CTA_LABEL[s.cta.kind])} · <span dir="auto">{s.cta.label || tx(CTA_DEFAULT_TEXT[s.cta.kind])}</span>
+                    {tx(CTA_LABEL[s.cta.kind])}{locale === 'ar' ? '، ' : ', '}<span dir="auto">{s.cta.label || tx(CTA_DEFAULT_TEXT[s.cta.kind])}</span>
                     {s.cta.url && (
                       <a className="details-list__link" href={s.cta.url} target="_blank" rel="noreferrer noopener" dir="ltr">
                         {s.cta.phone ? `+${s.cta.phone}` : s.cta.url}
@@ -170,16 +171,19 @@ function InsightsBody({
             <>
               {/* How it did: the fall from reach to action, then the same by day. */}
               <div className="sheet insight-sheet">
-              <section className="insight-card">
-                <h2 className="insight-card__title">{tx(S.funnel)}</h2>
-                <Funnel
-                  steps={[
-                    { label: tx(S.reached), value: a.reach.total },
-                    { label: tx(S.viewed), value: a.views.total },
-                    ...(a.cta.kind ? [{ label: tx(S.tapped), value: a.cta.tappers }] : []),
-                  ]}
-                />
-              </section>
+              {/* Without a button the funnel is reach and views, the figures above: it is drawn only with three steps. */}
+              {a.cta.kind && (
+                <section className="insight-card">
+                  <h2 className="insight-card__title">{tx(S.funnel)}</h2>
+                  <Funnel
+                    steps={[
+                      { label: tx(S.reached), value: a.reach.total },
+                      { label: tx(S.viewed), value: a.views.total },
+                      { label: tx(S.tapped), value: a.cta.tappers },
+                    ]}
+                  />
+                </section>
+              )}
 
               <section className="insight-card">
                 <h2 className="insight-card__title">{tx(S.overTime)}</h2>
@@ -259,7 +263,7 @@ function Funnel({ steps }: { steps: Array<{ label: string; value: number }> }) {
             </span>
             <span className="funnel__value">
               {number(st.value)}
-              {base > 0 && <small> · {fill(tx(S.pct), { n: number(Math.round(ratio * 100)) })}</small>}
+              {base > 0 && <small>{fill(tx(S.pct), { n: number(Math.round(ratio * 100)) })}</small>}
             </span>
           </li>
         )
@@ -269,7 +273,7 @@ function Funnel({ steps }: { steps: Array<{ label: string; value: number }> }) {
 }
 
 /**
- * Views (teal) and taps (gold) per day. The bars are decoration; the same
+ * Views (deep teal) and taps (light teal) per day. The bars are decoration; the same
  * numbers are in a table for anyone who cannot see them.
  */
 function DailyChart({ daily, showTaps }: { daily: StoryAnalytics['daily']; showTaps: boolean }) {
@@ -281,6 +285,8 @@ function DailyChart({ daily, showTaps }: { daily: StoryAnalytics['daily']; showT
     new Intl.DateTimeFormat(locale === 'ar' ? 'ar-EG-u-nu-latn' : 'en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' }).format(
       new Date(`${iso}T00:00:00Z`),
     )
+  // Nothing to draw yet: one line, not an empty plot.
+  if (days.every((d) => d.views === 0 && d.taps === 0)) return <p className="daily__empty">{tx(S.noViewsYet)}</p>
   return (
     <div className="daily">
       <div className="daily__legend" aria-hidden="true">
@@ -341,7 +347,7 @@ function Breakdown({ rows }: { rows: Array<{ key: string; label: string; reach: 
             <td>{r.label}</td>
             <td className="col-num">{number(r.reach)}</td>
             <td className="col-num">{number(r.views)}</td>
-            <td className="col-num">{r.reach > 0 ? number(Math.round((r.views / r.reach) * 100)) : '—'}</td>
+            <td className="col-num">{r.reach > 0 ? number(Math.round((r.views / r.reach) * 100)) : tx(S.none)}</td>
           </tr>
         ))}
       </tbody>
@@ -403,7 +409,7 @@ function PeopleList({ storyId, hasCta }: { storyId: string; hasCta: boolean }) {
             <tr key={v.actorId}>
               <td>
                 <span dir="auto">{v.displayName}</span>{' '}
-                <span className="cell-muted">· {v.actorKind === 'teacher' ? tx(S.teachers) : tx(S.parents)}</span>
+                <span className="cell-muted">{v.actorKind === 'teacher' ? tx(S.teachers) : tx(S.parents)}</span>
               </td>
               <td className="cell-nowrap">{dateTime(v.viewedAt)}</td>
               {hasCta && <td className="col-num">{number(v.ctaTaps)}</td>}

@@ -69,8 +69,8 @@
   cursor: pointer;
 }
 .palette__row .icon { color: var(--teal); }
-.palette__row[aria-selected='true'], .palette__row--recent:hover { background: var(--teal-tint); box-shadow: inset 3px 0 0 var(--gold); }
-[dir='rtl'] .palette__row[aria-selected='true'], [dir='rtl'] .palette__row--recent:hover { box-shadow: inset -3px 0 0 var(--gold); }
+.palette__row[aria-selected='true'], .palette__row--recent:hover { background: var(--teal-tint); box-shadow: inset 3px 0 0 var(--teal); }
+[dir='rtl'] .palette__row[aria-selected='true'], [dir='rtl'] .palette__row--recent:hover { box-shadow: inset -3px 0 0 var(--teal); }
 .palette__text { min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
 .palette__sub { margin-inline-start: auto; flex: 0 1 auto; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-muted); font-size: var(--fs-xs); }
 .palette__mark { background: var(--gold-tint); color: inherit; border-radius: 2px; padding-block: 1px; }

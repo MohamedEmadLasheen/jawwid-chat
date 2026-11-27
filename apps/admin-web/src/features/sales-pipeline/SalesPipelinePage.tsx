@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
-import { Badge } from '@/shared/components/Badge'
 import { Icon } from '@/shared/components/Icon'
-import { PageHeader, type MastFigure } from '@/shared/components/PageHeader'
-import { Age, Board, BoardCard, RequestQueue, type BoardStage } from '@/shared/components/RequestQueue'
+import { PageHeader } from '@/shared/components/PageHeader'
+import { Age, Board, BoardCard, RequestQueue, dayName, sentence, type BoardStage } from '@/shared/components/RequestQueue'
 import { RowActions } from '@/shared/components/RowActions'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
 import { STAGES, type ContactPresence, type LeadDetail, type LeadRow, type Stage } from './api'
 import { CreateLeadDialog } from './CreateLeadDialog'
-import { LeadPanel, LeadStatus } from './LeadDetail'
+import { LeadPanel } from './LeadDetail'
 import { P, STAGE, lostText } from './copy'
 import { ForbiddenPage } from '@/app/ForbiddenPage'
 import { ApiError } from '@/core/api/errors'
@@ -20,8 +20,6 @@ import './sales-pipeline.css'
 
 const PAGE_SIZE = 25
 type StageFilter = Stage | 'all'
-/** The stages a lead is still being worked in. */
-const OPEN: readonly Stage[] = ['new_lead', 'contacted', 'trial_booked', 'trial_completed']
 
 /** A search that waits for a pause in typing, so each key is not a request. */
 function useDebounced<T>(value: T, ms = 300): T {
@@ -53,7 +51,9 @@ export function SalesPipelinePage() {
   const [search, setSearch] = useState('')
   const [due, setDue] = useState(false)
   const [offset, setOffset] = useState(0)
-  const [openId, setOpenId] = useState<string | null>(null)
+  // The Requests hub links here with the lead to open (?open=<id>): opening it is the one audited read.
+  const [params] = useSearchParams()
+  const [openId, setOpenId] = useState<string | null>(() => params.get('open'))
   const [creating, setCreating] = useState(false)
   const q = useDebounced(search.trim())
   // The server decides who may open the pipeline. An account it refuses (a Teachers or
@@ -75,22 +75,6 @@ export function SalesPipelinePage() {
   const rows = data?.leads ?? []
   const last = data ? Math.min(data.offset + rows.length, data.total) : 0
   const openRow = rows.find((r) => r.id === openId)
-  const n = (count: number | null | undefined) => (count == null ? '–' : number(count))
-
-  const figures: MastFigure[] = [
-    { key: 'all', label: tx(P.leads), value: n(total), onClick: () => setStage('all'), pressed: stage === 'all' },
-    { key: 'open', label: tx(P.openLeads), value: n(counts ? OPEN.reduce((sum, s) => sum + counts[s], 0) : null), tone: 'key' },
-    {
-      key: 'due',
-      label: tx(P.followUpDue),
-      value: n(data?.dueCount),
-      tone: (data?.dueCount ?? 0) > 0 ? 'urgent' : 'quiet',
-      // Not a stage: the leads whose follow-up date has passed, across every stage.
-      onClick: () => setDue((d) => !d),
-      pressed: due,
-    },
-    { key: 'converted', label: tx(STAGE.converted.label), value: n(counts?.converted), tone: 'quiet', onClick: () => setStage('converted'), pressed: stage === 'converted' },
-  ]
 
   const stages: Array<BoardStage<Stage>> = STAGES.map((s) => {
     const mine = rows.filter((r) => r.stage === s)
@@ -102,6 +86,8 @@ export function SalesPipelinePage() {
       key: s,
       label: tx(STAGE[s].label),
       count: narrowed ? mine.length : count,
+      // Where the work has ended: a narrower column of quieter cards.
+      quiet: s === 'converted' || s === 'lost',
       cards: mine.map((r) => <LeadCard key={r.id} row={r} selected={r.id === openId} onOpen={() => setOpenId(r.id)} />),
       empty: tx(P.stageEmpty),
       foot:
@@ -118,10 +104,8 @@ export function SalesPipelinePage() {
       <div className="page__inner">
         <PageHeader
           title={tx(P.title)}
-          subtitle={tx(P.subtitle)}
-          figures={figures}
           actions={
-            <button type="button" className="btn btn--primary" onClick={() => setCreating(true)}>
+            <button type="button" className="btn" onClick={() => setCreating(true)}>
               <Icon name="plus" size={16} />
               {tx(P.newLead)}
             </button>
@@ -134,21 +118,30 @@ export function SalesPipelinePage() {
               ? {
                   id: openId,
                   title: lead?.displayName ?? openRow?.displayName ?? tx(P.lead),
-                  kind: { icon: 'pipeline', label: tx(P.kind) },
-                  status: lead ? <LeadStatus lead={lead} /> : openRow ? <LeadStatus lead={openRow} /> : undefined,
+                  kind: { icon: 'handshake', label: tx(P.kind) },
                   onClose: () => setOpenId(null),
                   body: <LeadPanel id={openId} onLead={setLoaded} />,
                 }
               : null
           }
         >
-          <div className="lead-bar">
+          <div className="rq-bar lead-bar">
             <label className="search">
               <Icon name="search" size={16} />
               <span className="sr-only">{tx(P.search)}</span>
               <input className="input" type="search" value={search} placeholder={tx(P.search)} aria-describedby="sp-search-hint" onChange={(e) => setSearch(e.target.value)} />
             </label>
-            <span id="sp-search-hint" className="lead-bar__hint">{tx(P.searchHint)}</span>
+            <span id="sp-search-hint" className="lead-bar__hint" title={tx(P.searchHint)}>{tx(P.searchHint)}</span>
+            <div className="rq-bar__end">
+              {stage !== 'all' && (
+                <button type="button" className="chip" onClick={() => setStage('all')}>{tx(P.allStages)}</button>
+              )}
+              {/* Not a stage: the leads whose follow-up date has passed, across every stage. */}
+              <button type="button" className="chip" aria-pressed={due} onClick={() => setDue((d) => !d)}>
+                {tx(P.followUpDue)}
+                {data && <span className={data.dueCount > 0 ? 'count count--urgent' : 'chip__count'}>{number(data.dueCount)}</span>}
+              </button>
+            </div>
           </div>
           <QueryBoundary isLoading={list.isLoading} error={list.error} onRetry={() => void list.refetch()}>
             {rows.length === 0 && (total === 0 || !!q || due) ? (
@@ -177,22 +170,48 @@ export function SalesPipelinePage() {
   )
 }
 
-function channelsText(c: ContactPresence, tx: (p: { en: string; ar: string }) => string): string {
+function channelsText(c: ContactPresence, tx: (p: { en: string; ar: string }) => string, locale: 'ar' | 'en'): string {
   const on = [c.phone && tx(P.phone), c.whatsapp && tx(P.whatsapp), c.email && tx(P.email)].filter(Boolean)
-  return on.length > 0 ? on.join(' · ') : tx(P.noChannel)
+  return on.length > 0 ? on.join(locale === 'ar' ? '، ' : ', ') : tx(P.noChannel)
 }
 
-/** A lead on the board: who, whose it is, what is on file, and when it is next due. Its one action opens it. */
+/**
+ * A lead on the board. Its status word is the follow-up when one is due; its
+ * waiting fact says when the next contact is (red once that day has passed);
+ * then whose it is and what is on file, and since when it has waited. Its one
+ * action opens it. A converted or lost lead is a quiet card: the name and why.
+ */
 function LeadCard({ row, selected, onOpen }: { row: LeadRow; selected: boolean; onOpen: () => void }) {
-  const { locale, date } = useI18n()
+  const { locale } = useI18n()
   const tx = (p: { en: string; ar: string }) => (locale === 'ar' ? p.ar : p.en)
+  const ended = row.stage === 'converted' || row.stage === 'lost'
+  const on = (d: string) => dayName(d, locale, false)
+  const fact = ended
+    ? row.stage === 'lost'
+      ? lostText(row.lostReason, locale) || undefined
+      : tx(P.handedOver)
+    : row.nextFollowUpOn
+      ? row.followUpDue
+        ? sentence(tx(P.dueSince), { what: tx(P.followUpDue), date: <span className="rq-age rq-age--late">{on(row.nextFollowUpOn)}</span> })
+        : sentence(tx(P.followUpOn), { date: on(row.nextFollowUpOn) })
+      : row.lastContactedAt
+        ? tx(P.noFollowUp)
+        : tx(P.neverContacted)
+  const age = row.lastContactedAt ? (
+    <>{tx(P.lastContactAge).split('{age}')[0]}<Age iso={row.lastContactedAt} /></>
+  ) : (
+    <>{tx(P.addedAge).split('{age}')[0]}<Age iso={row.createdAt} /></>
+  )
   return (
     <BoardCard
       title={row.displayName}
-      titleOpens={false}
+      // A working lead's one action is to open it; an ended lead's quiet card opens from its name.
+      titleOpens={ended}
       selected={selected}
       onOpen={onOpen}
-      age={row.lastContactedAt ? <>{tx(P.lastContacted)} <Age iso={row.lastContactedAt} /></> : tx(P.neverContacted)}
+      quiet={ended}
+      fact={fact}
+      age={age}
       actions={
         <RowActions
           label={`${tx(P.moreActions)}: ${row.displayName}`}
@@ -204,34 +223,18 @@ function LeadCard({ row, selected, onOpen }: { row: LeadRow; selected: boolean; 
         />
       }
     >
-      <p className="rq-card__line">
-        <Icon name="user" size={15} />
-        {row.owner?.name ? <bdi>{row.owner.name}</bdi> : <span>{tx(P.unassigned)}</span>}
-      </p>
-      <p className="rq-card__line">
-        <Icon name="phone" size={15} />
-        <span>{channelsText(row.contact, tx)}</span>
-      </p>
-      {row.stage === 'lost' && row.lostReason && (
-        <p className="rq-card__line">
-          <Icon name="xCircle" size={15} />
-          <span>{lostText(row.lostReason, locale)}</span>
-        </p>
-      )}
-      {row.nextFollowUpOn &&
-        (row.followUpDue ? (
-          <div className="rq-card__tags">
-            <Badge tone="danger">{tx(P.followUpDue)}</Badge>
-            <time dateTime={row.nextFollowUpOn} className="rq-age rq-age--late">{date(`${row.nextFollowUpOn}T12:00:00Z`)}</time>
-          </div>
-        ) : (
+      {!ended && (
+        <>
           <p className="rq-card__line">
-            <Icon name="calendar" size={15} />
-            <span>
-              {tx(P.nextFollowUp)} · <time dateTime={row.nextFollowUpOn}>{date(`${row.nextFollowUpOn}T12:00:00Z`)}</time>
-            </span>
+            <Icon name="user" size={16} />
+            {row.owner?.name ? <bdi>{row.owner.name}</bdi> : <span>{tx(P.unassigned)}</span>}
           </p>
-        ))}
+          <p className="rq-card__line">
+            <Icon name="phone" size={16} />
+            <span>{row.contact.phone || row.contact.whatsapp || row.contact.email ? channelsText(row.contact, tx, locale) : tx(P.noContactOnFile)}</span>
+          </p>
+        </>
+      )}
     </BoardCard>
   )
 }

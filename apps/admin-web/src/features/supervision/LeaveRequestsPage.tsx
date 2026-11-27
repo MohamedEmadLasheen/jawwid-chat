@@ -150,7 +150,7 @@ export function LeaveRequestsList({ basePath }: { basePath: string }) {
                               <RowActions
                                 primary={
                                   r.state === 'requested' ? (
-                                    <button type="button" className="btn btn--primary btn--sm" onClick={() => setApproving(r)}>
+                                    <button type="button" className="btn btn--sm" onClick={() => setApproving(r)}>
                                       {tx(S.approve)}
                                     </button>
                                   ) : undefined

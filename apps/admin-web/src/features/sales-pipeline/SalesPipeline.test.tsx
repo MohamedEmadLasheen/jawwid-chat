@@ -75,7 +75,8 @@ const DETAIL: LeadDetail = {
   manualStage: true,
   lastContactedAt: '2026-11-18T10:00:00Z',
   nextFollowUpOn: '2026-11-20',
-  followUpDue: true,
+  // A lead ready to hand over, with no follow-up overdue: its stated act is Convert.
+  followUpDue: false,
   followUpNote: null,
   createdAt: '2026-11-10T09:00:00Z',
   convertedAt: null,
@@ -136,10 +137,10 @@ describe('the Sales pipeline page', () => {
     const alpha = (await screen.findByText('Lead Alpha')).closest('article')!
     expect(within(alpha.closest('section')!).getByRole('heading', { name: 'Contacted' })).toBeInTheDocument()
     expect(within(alpha).getByText('Follow-up due')).toBeInTheDocument()
-    expect(within(alpha).getByText('Phone · E-mail')).toBeInTheDocument()
+    expect(within(alpha).getByText('Phone, E-mail')).toBeInTheDocument()
     const beta = screen.getByText('Lead Beta').closest('article')!
     expect(within(beta.closest('section')!).getByRole('heading', { name: 'Trial booked' })).toBeInTheDocument()
-    expect(within(beta).getByText('None')).toBeInTheDocument()
+    expect(within(beta).getByText('No way to reach them on file')).toBeInTheDocument()
     expect(document.body.textContent).not.toContain(SECRET_PHONE)
     expect(document.body.textContent).not.toContain(SECRET_EMAIL)
     // The list's own request never asked for a contact; the detail has not been read.
@@ -423,6 +424,10 @@ describe('ownership in the page', () => {
     await user.click(await screen.findByRole('button', { name: 'Open Lead Alpha' }))
     const dialog = await screen.findByRole('dialog')
     await within(dialog).findByText('Parent One')
+    // Reassigning adjusts the lead; it waits behind "⋯" until it is asked for.
+    expect(within(dialog).queryByRole('combobox', { name: 'Reassign to' })).not.toBeInTheDocument()
+    await user.click(within(dialog).getByRole('button', { name: 'More actions: Lead Alpha' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Reassign to' }))
     const picker = await within(dialog).findByRole('combobox', { name: 'Reassign to' })
     await chooseOption(user, picker, 'Rep Two')
     await user.click(within(dialog).getByRole('button', { name: 'Reassign to' }))

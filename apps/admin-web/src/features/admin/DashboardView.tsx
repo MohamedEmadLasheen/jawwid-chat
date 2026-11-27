@@ -177,7 +177,7 @@ function Attention({ o, query }: { o: AdminOverview; query: ConversationsQuery }
           <h2 className="sheet__title" id="dash-attention">
             {tx(TEXT.needsAttention)}
           </h2>
-          {items.length > 0 && <span className="count count--urgent">{items.length}</span>}
+          {items.length > 0 && <span className="count">{items.length}</span>}
         </div>
       </header>
       {query.isLoading ? (
@@ -222,7 +222,8 @@ function Kpis({ o }: { o: AdminOverview }) {
   const tx = useText()
   const label = useLabel()
   const plural = usePlural()
-  const { number } = useI18n()
+  const { number, locale } = useI18n()
+  const sep = locale === 'ar' ? '، ' : ', '
   const staff = sum(o.staffByRole)
   const direct = o.conversationsByType.direct ?? 0
   const groups = sum(o.conversationsByType) - direct
@@ -238,7 +239,7 @@ function Kpis({ o }: { o: AdminOverview }) {
       key: 'conversations',
       label: tx(TEXT.conversations),
       value: sum(o.conversationsByType),
-      sub: `${label(CONVERSATION_TYPE, 'direct')} ${number(direct)} · ${tx(TEXT.groupConversations)} ${number(groups)}`,
+      sub: `${label(CONVERSATION_TYPE, 'direct')} ${number(direct)}${sep}${tx(TEXT.groupConversations)} ${number(groups)}`,
       to: adminSectionPath('conversations'),
     },
     { key: 'messages', label: tx(TEXT.messages), value: o.messages, to: adminSectionPath('conversations') },
@@ -246,7 +247,7 @@ function Kpis({ o }: { o: AdminOverview }) {
       key: 'people',
       label: tx(TEXT.people),
       value: staff + o.teachers + o.contacts,
-      sub: `${plural(PLURAL.staff, staff)} · ${plural(PLURAL.teachers, o.teachers)}`,
+      sub: `${plural(PLURAL.staff, staff)}${sep}${plural(PLURAL.teachers, o.teachers)}`,
       to: adminSectionPath('users'),
     },
   ]

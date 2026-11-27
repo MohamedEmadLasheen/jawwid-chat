@@ -4,23 +4,20 @@ import { useI18n } from '@/core/i18n/I18nProvider'
 import { Badge } from '@/shared/components/Badge'
 import { FilterChips } from '@/shared/components/FilterChips'
 import { Icon } from '@/shared/components/Icon'
-import { PageHeader, type MastFigure } from '@/shared/components/PageHeader'
+import { PageHeader } from '@/shared/components/PageHeader'
 import { Age, Board, BoardCard, RequestQueue, useWidePane, type BoardStage } from '@/shared/components/RequestQueue'
 import { RowActions } from '@/shared/components/RowActions'
 import { SearchField } from '@/shared/components/SearchField'
 import { EmptyState, ErrorState, LoadingState } from '@/shared/components/States'
 import type { Certificate, CertificateAct, CertificateCategory, StateGroup } from './api'
-import { C, GROUPS, actLabel, groupLabel, stateLabel, stateTone, useCopy } from './copy'
+import { C, GROUPS, actLabel, groupLabel, useCopy } from './copy'
 import { useCertificate, useCertificateAccess, useCertificateBoard } from './hooks'
-import { CertificateDetail, CertificateStatus, actEnds, actIcon, orderedActs } from './CertificateDetail'
+import { CertificateDetail, actEnds, actIcon, certificateLate, certificateWhy, orderedActs } from './CertificateDetail'
 import { RequestDialog } from './RequestDialog'
 import { TypesPanel } from './TypesPanel'
 import './certificates.css'
 
 type Tab = CertificateCategory | 'types'
-
-/** The states that hold one kind of certificate: its card needs no tag to say which. */
-const PLAIN: ReadonlySet<StateGroup> = new Set<StateGroup>(['suggested', 'pending', 'sent'])
 
 /** A search that waits for a pause in typing: it is asked of every column. */
 function useDebounced<T>(value: T, ms = 300): T {
@@ -48,7 +45,7 @@ function useDebounced<T>(value: T, ms = 300): T {
  */
 export function CertificatesPage() {
   const tx = useCopy()
-  const { number } = useI18n()
+  const { number, locale } = useI18n()
   const wide = useWidePane()
   const [params, setParams] = useSearchParams()
   const access = useCertificateAccess()
@@ -111,48 +108,58 @@ export function CertificatesPage() {
     )
   }
 
-  /** A certificate on the board: whose it is, what kind, who asked, since when, and the first act the server allows. */
+  /**
+   * A certificate on the board: whose it is, its state word where the column
+   * holds more than one state, why it waits there (the one emphasised line),
+   * what kind and who asked, since when, and the first act the server allows.
+   * Sent and closed certificates are quiet cards.
+   */
   const card = (c: Certificate, group: StateGroup) => {
     const acts = orderedActs(c.actions)
     const first = acts[0]
     const requester = c.projection === 'full' ? (c.requestedBy?.name ?? c.suggestedBy?.name ?? null) : c.requesterName
+    const story = c.projection === 'full' && !!c.story && !c.story.withdrawnAt
     return (
       <BoardCard
         key={c.id}
         title={c.printedName}
         selected={c.id === openId}
         onOpen={() => setOpenId(c.id)}
-        age={<Age iso={c.requestedAt} />}
+        // Work that has ended is a quiet card, unless the server still offers an act on it (a Story, consent).
+        quiet={(group === 'sent' || group === 'closed') && acts.length === 0}
+        // The waiting fact already says the state; the status word is what it does not: a Story that is live.
+        status={story ? <Badge tone="info" dot>{tx(C.storyPublished)}</Badge> : undefined}
+        fact={certificateWhy(c, tx, locale)}
+        // An open request left since before today is late, as on the Requests hub.
+        age={<Age iso={c.requestedAt} late={certificateLate(c)} />}
         actions={
           <RowActions
             label={`${tx(C.moreActions)}: ${c.printedName}`}
             primary={
-              first ? (
+              // A card never states an act that ends the request: when that is all there is, it opens instead.
+              first && !actEnds(first) ? (
                 <button type="button" className="btn btn--sm" onClick={() => openWith(c, first)}>{tx(actLabel(first))}</button>
               ) : (
                 <button type="button" className="btn btn--sm" onClick={() => setOpenId(c.id)}>{tx(C.open)}</button>
               )
             }
-            more={acts.slice(1).map((x) => ({ key: x, label: tx(actLabel(x)), icon: actIcon(x), danger: actEnds(x), onSelect: () => openWith(c, x) }))}
+            more={(first && !actEnds(first) ? acts.slice(1) : acts).map((x) => ({ key: x, label: tx(actLabel(x)), icon: actIcon(x), danger: actEnds(x), onSelect: () => openWith(c, x) }))}
           />
         }
       >
         <p className="rq-card__line">
-          <Icon name="certificates" size={15} />
-          <bdi>{c.type ? tx({ en: c.type.labelEn, ar: c.type.labelAr }) : c.title}</bdi>
-          {c.juz !== null && <span className="ltr">· {number(c.juz)}</span>}
+          <Icon name="certificates" size={16} />
+          <span>
+            <bdi>{c.type ? tx({ en: c.type.labelEn, ar: c.type.labelAr }) : c.title}</bdi>
+            {c.juz !== null && <> <bdi className="ltr">{number(c.juz)}</bdi></>}
+          </span>
         </p>
-        {requester && (
+        {/* Who asked, unless the waiting fact already names them. */}
+        {requester && group !== 'sent' && group !== 'closed' && c.state !== 'requested' && c.state !== 'proposed' && (
           <p className="rq-card__line">
-            <Icon name="user" size={15} />
+            <Icon name="user" size={16} />
             <bdi>{requester}</bdi>
           </p>
-        )}
-        {(!PLAIN.has(group) || (c.projection === 'full' && c.story && !c.story.withdrawnAt)) && (
-          <div className="rq-card__tags">
-            {!PLAIN.has(group) && <Badge tone={stateTone(c.state)} dot>{tx(stateLabel(c.state))}</Badge>}
-            {c.projection === 'full' && c.story && !c.story.withdrawnAt && <Badge tone="neutral">{tx(C.storyPublished)}</Badge>}
-          </div>
         )}
       </BoardCard>
     )
@@ -164,6 +171,9 @@ export function CertificatesPage() {
       key: g,
       label: tx(groupLabel(g)),
       count: countOf(g),
+      quiet: g === 'sent' || g === 'closed',
+      // A solid red count over the cards whose red age asks this desk to act, as on the other boards.
+      urgent: (list?.certificates ?? []).some(certificateLate),
       more: !!list?.nextCursor,
       cards: (list?.certificates ?? []).map((c) => card(c, g)),
       empty: tx(C.stageEmpty),
@@ -175,30 +185,6 @@ export function CertificatesPage() {
     }
   })
 
-  // The masthead sums the board up rather than repeating its columns: what is open, whose turn it
-  // is, and what has gone out. The figure this account acts on is the key one. Each is the length
-  // of lists the board already holds ("+" when one of them is longer than its first page).
-  const sum = (label: string, key: string, of: readonly StateGroup[], tone?: MastFigure['tone'], opens?: StateGroup): MastFigure => {
-    const on = of.filter((g) => groups.includes(g))
-    const known = on.every((g) => countOf(g) !== null)
-    const total = on.reduce((n, g) => n + (countOf(g) ?? 0), 0)
-    return {
-      key,
-      label,
-      value: known ? `${number(total)}${on.some((g) => listOf(g)?.data?.nextCursor) ? '+' : ''}` : '–',
-      tone: known && total === 0 ? 'quiet' : tone,
-      ...(opens ? { onClick: () => setFocus(stage === opens ? 'all' : opens), pressed: stage === opens } : {}),
-    }
-  }
-  const figures: MastFigure[] = category
-    ? [
-        sum(tx(C.figOpen), 'open', ['suggested', 'pending', 'in_progress', 'completed']),
-        sum(tx(C.figDesigner), 'designer', ['pending', 'in_progress'], designerOnly ? 'key' : undefined),
-        sum(tx(C.figReview), 'review', ['completed'], designerOnly ? undefined : 'key', 'completed'),
-        sum(tx(groupLabel('sent')), 'sent', ['sent'], 'quiet', 'sent'),
-      ]
-    : []
-
   const loading = access.isLoading || lists.some((l) => l.isLoading)
   const failed = lists.find((l) => l.error)
   const none = !loading && lists.every((l) => (l.data?.certificates.length ?? 0) === 0)
@@ -209,7 +195,6 @@ export function CertificatesPage() {
         <PageHeader
           title={tx(C.title)}
           subtitle={tx(C.subtitle)}
-          figures={figures.length > 0 ? figures : undefined}
           tabs={
             tabs.length > 1 ? (
               <FilterChips<Tab>
@@ -223,7 +208,7 @@ export function CertificatesPage() {
           }
           actions={
             canRequest ? (
-              <button type="button" className="btn btn--primary" onClick={() => setRequesting(true)}>
+              <button type="button" className="btn" onClick={() => setRequesting(true)}>
                 <Icon name="plus" size={16} />
                 {tx(C.newRequest)}
               </button>
@@ -242,17 +227,17 @@ export function CertificatesPage() {
                 ? {
                     id: openId,
                     title: opened?.printedName ?? tx(C.title),
-                    kind: { icon: 'certificates', label: opened?.type ? tx({ en: opened.type.labelEn, ar: opened.type.labelAr }) : tx(C.kind) },
-                    status: opened ? <CertificateStatus certificate={opened} /> : undefined,
+                    kind: { icon: 'certificates', label: tx(C.kind) },
                     body: <CertificateDetail certificateId={openId} intent={intent?.id === openId ? intent.act : null} onIntentDone={() => setIntent(null)} />,
                     onClose: () => setOpenId(null),
                   }
                 : null
             }
           >
-            <div className="cert-bar">
+            <div className="rq-bar cert-bar">
               <SearchField value={search} onChange={setSearch} label={tx(C.search)} clearLabel="×" />
               <button type="button" className="chip cert-bar__closed" aria-pressed={showClosed} onClick={() => setShowClosed((v) => !v)}>
+                <Icon name="archive" size={16} />
                 {tx(C.showClosed)}
               </button>
             </div>

@@ -13,9 +13,30 @@ export { useCopy, type Pair } from '@/features/organization/copy'
 export const C = {
   title: { en: 'Certificates', ar: 'الشهادات' },
   subtitle: {
-    en: 'Requested, designed, approved by the requester, then sent to the right group. Shared as a Story only when asked for.',
-    ar: 'تُطلب ثم تُصمَّم ثم يعتمدها صاحب الطلب، ثم تُرسل إلى المجموعة الصحيحة. لا تُنشر في القصص إلا عند طلب ذلك.',
+    en: 'A certificate is shared as a Story only when its request asks for it.',
+    ar: 'لا تُنشر الشهادة في القصص إلا إذا طُلب ذلك في طلبها.',
   },
+  // Why a certificate waits where it is, in one line; and the inspector's state
+  whyProposed: { en: '{who} suggested it; waiting for a decision', ar: 'اقترحها {who} وتنتظر القرار' },
+  whyRequested: { en: 'Waiting for the designer', ar: 'تنتظر المصمم' },
+  whyAsked: { en: 'Asked for by {who}', ar: 'طلبها {who}' },
+  whyDesigning: { en: '{who} is designing it', ar: 'يصممها {who} الآن' },
+  whyDesigningNobody: { en: 'Being designed', ar: 'قيد التصميم' },
+  whyChanges: { en: 'Sent back to the designer for changes', ar: 'أُعيدت إلى المصمم لإجراء تعديلات' },
+  whyUploaded: { en: 'The design is in; waiting for review', ar: 'وصل التصميم وينتظر المراجعة' },
+  whyApproved: { en: 'Approved; ready to send to the family', ar: 'اعتُمدت وهي جاهزة للإرسال' },
+  whySent: { en: 'Sent {age}', ar: 'أُرسلت {age}' },
+  whyCancelled: { en: 'Cancelled', ar: 'أُلغيت' },
+  whyDeclined: { en: 'Declined', ar: 'رُفضت' },
+  stateProposed: { en: '{who} suggested this certificate. Accept it to send it to the designer, or decline it.', ar: 'اقترح {who} هذه الشهادة. اقبلها لتصل إلى المصمم، أو ارفضها.' },
+  stateRequested: { en: 'It waits for the designer to start.', ar: 'تنتظر أن يبدأ المصمم العمل عليها.' },
+  stateDesigning: { en: '{who} is designing it. The requester reviews the design when it is uploaded.', ar: 'يصممها {who}. يراجع صاحب الطلب التصميم عند رفعه.' },
+  stateChanges: { en: 'The design was sent back for changes.', ar: 'أُعيد التصميم لإجراء تعديلات.' },
+  stateUploaded: { en: 'The design is in. Open it, then approve it or ask for changes.', ar: 'وصل التصميم. افتحه ثم اعتمده أو اطلب تعديلات.' },
+  stateApproved: { en: 'Approved. Send it to the family group.', ar: 'اعتُمدت. أرسلها إلى مجموعة الأسرة.' },
+  stateSent: { en: 'Sent to the group {age}.', ar: 'أُرسلت إلى المجموعة {age}.' },
+  stateClosed: { en: 'This request is closed.', ar: 'أُغلق هذا الطلب.' },
+  someone: { en: 'A teacher', ar: 'أحد المعلمين' },
   students: { en: 'Students', ar: 'الطلاب' },
   teachers: { en: 'Teachers', ar: 'المعلمون' },
   types: { en: 'Types', ar: 'الأنواع' },
@@ -65,7 +86,7 @@ export const C = {
   s_in_design: { en: 'In design', ar: 'قيد التصميم' },
   s_changes_requested: { en: 'Needs changes', ar: 'تحتاج تعديلًا' },
   s_uploaded: { en: 'Awaiting your review', ar: 'بانتظار المراجعة' },
-  s_approved: { en: 'Approved · ready to send', ar: 'معتمدة · جاهزة للإرسال' },
+  s_approved: { en: 'Approved, ready to send', ar: 'معتمدة وجاهزة للإرسال' },
   s_sent: { en: 'Sent', ar: 'أُرسلت' },
   s_cancelled: { en: 'Cancelled', ar: 'أُلغيت' },
   s_declined: { en: 'Declined', ar: 'مرفوضة' },
@@ -76,6 +97,7 @@ export const C = {
   printedName: { en: 'Name on the certificate', ar: 'الاسم على الشهادة' },
   type: { en: 'Type', ar: 'النوع' },
   juz: { en: 'Juz’', ar: 'الجزء' },
+  juzN: { en: 'Juz’ {n}', ar: 'الجزء {n}' },
   period: { en: 'Period', ar: 'الفترة' },
   requestedBy: { en: 'Requested by', ar: 'صاحب الطلب' },
   requested: { en: 'Requested', ar: 'تاريخ الطلب' },
@@ -180,7 +202,7 @@ export const actLabel = (a: CertificateAct): Pair => C[`a_${a}` as const]
 export function stateTone(s: CertificateState): Tone {
   if (s === 'sent' || s === 'approved') return 'ok'
   if (s === 'uploaded' || s === 'changes_requested' || s === 'proposed') return 'warn'
-  if (s === 'cancelled' || s === 'declined') return 'waiting'
+  if (s === 'cancelled' || s === 'declined') return 'neutral'
   return 'info'
 }
 

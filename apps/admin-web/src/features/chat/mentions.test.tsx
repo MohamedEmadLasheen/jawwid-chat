@@ -191,10 +191,12 @@ describe('PD-36 in the chat workspace', () => {
       messages: {},
     })
     renderChat()
-    await screen.findByText('Asked chat')
-    const rows = [...document.querySelectorAll('.conv-row__name')].map((n) => n.textContent)
+    // The summons also leads the empty pane's queue now (it asks this viewer to act), so the list is read on its own.
+    await screen.findByText('Asked chat', { selector: '.conv-row__name bdi' })
+    const list = document.getElementById('chat-list') as HTMLElement
+    const rows = [...list.querySelectorAll('.conv-row__name')].map((n) => n.textContent)
     expect(rows).toEqual(['Asked chat', 'Pinned chat'])
-    expect(screen.getByText('Mentioned')).toBeInTheDocument()
+    expect(within(list).getByText('Mentioned')).toBeInTheDocument()
   })
 
   it('asked into a group: the banner offers Join and "Not for me", and the composer waits', async () => {

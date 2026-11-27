@@ -1,7 +1,92 @@
 /*
- * PD-10 Teacher File. One teacher's record as open ruled sections: who they are
- * beside the work, a quiet label over each section, entries as ruled lines.
+ * PD-10 Teacher File: one fixed record anatomy (docs/design/admin-references.md, Attio).
+ * The head says who the teacher is in one sentence, six highlights of the month,
+ * one callout with one action, then the tabs. The work sits on white sheets; the
+ * facts about the person sit beside it on the canvas.
  */
+
+/* ---- the record's head */
+.tf-head, .page-header.tf-head { display: block; margin-block-end: var(--space-5); }
+.tf-head__row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3) var(--space-5); }
+.tf-head__lead { min-inline-size: 0; flex: 1 1 420px; }
+.tf-head > .mast__back { margin-block-end: var(--space-3); }
+.tf-head__who { display: flex; align-items: center; gap: var(--space-4); min-inline-size: 0; }
+.tf-head__text { min-inline-size: 0; }
+.tf-head__name { margin: 0; font-family: var(--font-head); font-size: var(--fs-title); font-weight: 700; line-height: 1.2; color: var(--ink); overflow-wrap: anywhere; }
+html[dir='rtl'] .tf-head__name[dir='auto'] { text-align: right; }
+.tf-head__line { display: flex; align-items: baseline; gap: 8px; margin: 6px 0 0; font-size: var(--fs-md); color: var(--ink-2); }
+.tf-head__person { font-weight: 600; color: var(--ink); white-space: nowrap; }
+.tf-nowrap { white-space: nowrap; }
+.tf-head__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.tf-head__actions .field__error { flex-basis: 100%; }
+.tf-dot { flex: none; inline-size: 8px; block-size: 8px; border-radius: 50%; background: var(--done); transform: translateY(-1px); }
+.tf-dot--away { background: var(--waiting); }
+.tf-dot--left { background: var(--line-strong); }
+.tf-highlights .figures { margin-block-start: var(--space-5); }
+.tf-highlights .figure { flex-basis: 150px; padding: 10px 16px 12px; }
+.tf-highlights .figure__n { font-size: 28px; }
+.tf-highlights .figure__unit { font-size: var(--fs-sm); }
+.tf-highlights .figure--urgent .figure__note { color: var(--ink-muted); }
+.tf-fig-wait { display: inline-block; inline-size: 44px; block-size: 30px; vertical-align: middle; }
+.tf-head .mast__tabs { margin-block-start: var(--space-5); }
+
+/* ---- one callout, one action: what needs a person about this teacher now */
+.tf-callout { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 4px var(--space-3); margin-block-start: var(--space-3); padding: 14px var(--space-4); border: 1px solid transparent; border-radius: var(--radius-lg); background: var(--surface); }
+.tf-callout__icon { display: grid; place-items: center; align-self: start; margin-block-start: 2px; color: var(--waiting); }
+.tf-callout__text { min-inline-size: 0; }
+.tf-callout__title { margin: 0; font-family: var(--font-head); font-size: var(--fs-md); font-weight: 600; line-height: 1.45; color: var(--ink); }
+.tf-callout__body { margin: 2px 0 0; font-size: var(--fs-sm); color: var(--ink-2); max-inline-size: 80ch; }
+.tf-callout { border-color: var(--line); }
+.tf-callout--urgent { background: var(--surface); }
+.tf-callout--urgent .tf-callout__icon { color: var(--urgent); }
+.tf-callout--neutral .tf-callout__icon { color: var(--ink-muted); }
+.tf-callout--neutral .tf-callout__icon { color: var(--ink-muted); }
+@media (max-width: 767px) {
+  .tf-callout { grid-template-columns: auto minmax(0, 1fr); }
+  .tf-callout__action { grid-column: 1 / -1; inline-size: 100%; margin-block-start: var(--space-2); }
+  .tf-head__actions { inline-size: 100%; }
+  .tf-head__actions > .btn:first-child { flex: 1; }
+  .tf-head__name { font-size: 26px; }
+  .tf-head__line { font-size: var(--fs-sm); }
+}
+
+/* On a phone the highlights are a compact three-across grid: the figure and its word, no notes. */
+@media (max-width: 767px) {
+  .tf-highlights .figures { grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 2px; }
+  .tf-highlights .figure { align-content: space-between; }
+  .tf-highlights .figure__label { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-block-size: 2.7em; }
+  .tf-highlights .figure { padding: 10px 10px 12px; }
+  .tf-highlights .figure__label { font-size: var(--fs-xs); line-height: 1.35; }
+  .tf-highlights .figure__n { font-size: 20px; }
+  .tf-highlights .figure__note, .tf-highlights .figure__unit { display: none; }
+  .tf-head__actions > .btn:first-child { flex: 0 1 auto; }
+}
+
+/* The record has one solid action, in its head or its callout; a sheet's own head action is secondary
+   (the shift sheet comes from the schedule feature with a solid button). */
+.tf-record .tf-section__head .btn--primary { background: var(--surface); border-color: var(--line-strong); color: var(--ink); }
+.tf-record .tf-section__head .btn--primary:hover:not(:disabled) { background: var(--surface-hover); border-color: var(--border-control); }
+/* design-system.css shades every th; a row's own heading is text, not a header band. */
+:is(.tf-record, .tf-roster) .table tbody th { background: none; color: var(--ink); font-size: inherit; letter-spacing: 0; }
+.tf-kv__sub { display: block; font-size: var(--fs-xs); font-weight: 400; color: var(--ink-muted); }
+.tf-kv__foot { margin: var(--space-2) 0 0; }
+.tf-history__reason { display: block; color: var(--ink-2); }
+.tf-history li { display: grid; gap: 2px; }
+/* A lesson report's child is a quiet name, the way to the lesson a quiet link at the line's end. */
+.tf-report a { color: var(--ink); font-weight: 600; text-decoration: none; }
+.tf-report a:hover { color: var(--teal-dark); text-decoration: underline; text-underline-offset: 3px; }
+.tf-report a.tf-report__open { color: var(--teal); font-weight: 500; }
+.tf-section .tf-entry .row-actions2 { margin-block-start: 4px; }
+
+/* The month picker inside a sheet's head is a quiet control, lighter than the sheet's name. */
+.tf-record .tf-section__head .monthpick__text { font-size: var(--fs-sm); font-weight: 600; }
+.tf-record .tf-section__head .monthpick__step { min-block-size: 32px; }
+
+/* A quiet note under a section (a mismatch, a warning): a tinted line, never a banner. */
+.tf-note { margin: var(--space-3) 0 0; padding: 8px var(--space-3); border-radius: 8px; background: var(--surface-2); color: var(--ink-2); font-size: var(--fs-sm); }
+.tf-note--waiting { background: var(--waiting-tint); color: var(--ink); }
+/* app.css still draws a dashed box around an outline status; a status is a dot and a word. */
+.tf-record .badge--outline, .tf-roster .badge--outline { border: 0; background: none; }
 
 .tf-back { margin-block: 0 var(--space-2); }
 .tf-back a { display: inline-flex; align-items: center; gap: 6px; min-block-size: 32px; color: var(--teal); font-size: var(--fs-sm); font-weight: 500; text-decoration: none; }
@@ -40,12 +125,8 @@
 .tf-section .tf-section__head ~ .tf-section__head { margin-block-start: var(--space-4); border-block-start: 1px solid var(--hairline-soft); }
 .tf-section .table-wrap { margin-inline: calc(-1 * var(--space-4)); border: 0; border-radius: 0; border-block-start: 1px solid var(--hairline-soft); }
 .tf-section > .table-wrap:last-child { margin-block-end: calc(-1 * var(--space-4)); border-end-start-radius: var(--radius-lg); border-end-end-radius: var(--radius-lg); overflow: hidden; }
-.tf-subtitle { margin: var(--space-4) 0 var(--space-2); font-size: 12.5px; font-weight: 600; color: var(--ink-muted); }
+.tf-subtitle { margin: var(--space-4) 0 var(--space-2); font-family: var(--font-head); font-size: var(--fs-sm); font-weight: 600; color: var(--ink-2); }
 /* Who the teacher is: labelled facts on the canvas, no surface of their own. */
-.tf-file__side .tf-section { padding: 0; background: none; border: 0; border-radius: 0; }
-.tf-file__side .tf-section + .tf-section { margin-block-start: var(--space-5); padding-block-start: var(--space-5); border-block-start: 1px solid var(--hairline); }
-.tf-file__side .tf-section__head { margin-inline: 0; margin-block-end: var(--space-1); padding: 0; min-block-size: 32px; border-block-end: 0; }
-.tf-file__side .tf-section__title { font-size: 12.5px; font-weight: 600; color: var(--ink-muted); }
 .tf-file__side .tf-kv { grid-template-columns: minmax(6.5rem, max-content) 1fr; }
 /* Sections other features bring into the file are sheets like the rest. */
 .page section.card.panel { margin-block-end: var(--space-5); }
@@ -76,11 +157,12 @@
 
 /* The month in figures: a ruled line of numerals, not a grid of boxes. */
 .tf-month { display: inline-flex; gap: var(--space-2); align-items: center; }
-.tf-kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 8.5rem), 1fr)); gap: 0 var(--space-5); margin: 0; }
-.tf-kpi { display: grid; align-content: start; gap: 1px; padding: 10px 0 9px; border: 0; border-block-end: 1px solid var(--hairline-soft); border-radius: 0; }
-.tf-kpi dt { color: var(--ink-muted); font-size: 12.5px; }
+.tf-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-4) var(--space-5); margin: 0 0 var(--space-3); }
+@media (max-width: 767px) { .tf-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.tf-kpi { display: grid; align-content: start; gap: 1px; padding: 4px 0; border: 0; border-radius: 0; }
+.tf-kpi dt { color: var(--ink-muted); font-size: var(--fs-xs); }
 .tf-kpi dd { margin: 0; display: grid; gap: 1px; }
-.tf-kpi dd strong { font-family: var(--display); font-size: var(--fs-xl); font-weight: 600; line-height: 1.2; font-variant-numeric: tabular-nums lining-nums; }
+.tf-kpi dd strong { font-family: var(--font-head); font-size: var(--fs-lg); font-weight: 600; line-height: 1.2; font-variant-numeric: tabular-nums lining-nums; }
 .tf-kpi__hint { font-size: var(--fs-xs); }
 
 /* PD-35: evaluations and improvement plans. */
@@ -100,9 +182,15 @@
 .tf-code__value { font-family: var(--font-mono, ui-monospace, monospace); font-size: 1.5rem; letter-spacing: 0.2em; direction: ltr; unicode-bidi: isolate; }
 
 /* PD-43 PR-1b: the set-up checklist and the offboard preview's lessons. */
-.tf-setup { list-style: none; margin: 0; padding: 0; font-size: var(--fs-sm); }
-.tf-setup li { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-2); padding-block: 6px; border-block-end: 1px solid var(--hairline-soft); }
-.tf-setup .badge { font-size: var(--fs-xs); }
+.tf-setup { list-style: none; margin: 0; padding: 0; display: grid; font-size: var(--fs-sm); }
+.tf-setup li:last-child { border-block-end: 0; }
+.tf-setup li { display: flex; align-items: center; gap: 10px; min-block-size: 40px; border-block-end: 1px solid var(--line-2); color: var(--ink); font-weight: 600; }
+.tf-setup li .icon { color: var(--ink-muted); }
+.tf-setup li.is-done { color: var(--ink-muted); font-weight: 400; }
+.tf-setup li.is-done .icon { color: var(--done); }
+.tf-setup__label { flex: 1; min-inline-size: 0; }
+.tf-setup__state { font-size: var(--fs-xs); font-weight: 400; color: var(--ink-muted); }
+.tf-section__meta { font-size: var(--fs-sm); color: var(--ink-muted); }
 .tf-lessons { margin: var(--space-2) 0; padding-inline-start: var(--space-4); }
 
 /* PD-43: the teacher's and their login's history, newest first. */
@@ -132,6 +220,9 @@
 
 /* Inside the file a notice is a ruled line, and a name in a table is a quiet link. */
 .tf-section .banner--info, .tf-section .banner--warn { margin: var(--space-2) 0 0; padding: 6px 0; padding-inline-start: var(--space-3); border-radius: 0; background: none; border-inline-start: 2px solid var(--teal); color: var(--ink-muted); font-size: var(--fs-sm); }
-.tf-section .banner--warn { border-inline-start-color: var(--gold-line); color: var(--gold-text); }
+.tf-section .banner--warn { border-inline-start-color: var(--waiting); color: var(--ink); }
 .tf-section .table a, .th-body .table a, .tf-timeline a { color: var(--ink); font-weight: 600; text-decoration: none; }
 .tf-section .table a:hover, .th-body .table a:hover, .tf-timeline a:hover { color: var(--teal-dark); text-decoration: underline; text-underline-offset: 3px; }
+
+/* The roster: the student count is a fact beside the name, not the row's loudest thing. */
+.tf-roster .rw-fact__n { font-size: var(--fs-lg); }

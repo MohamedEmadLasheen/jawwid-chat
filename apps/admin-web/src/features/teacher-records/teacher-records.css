@@ -1,7 +1,8 @@
 /* PD-52: the teacher-records pages. Tokens only; logical properties (the pages are Arabic-first). */
 .tr-toolbar { margin-block-end: var(--space-5); }
 .tr-toolbar .sheet-bar { align-items: flex-end; border-block-end: 0; }
-.tr-picker { inline-size: min(100%, 20rem); margin: 0; }
+.tr-picker { inline-size: min(100%, 16rem); margin: 0; }
+.tr-toolbar { display: flex; justify-content: flex-start; }
 /* Who is chosen, beside the page's title. */
 .tr-chosen { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px var(--space-2); }
 
@@ -10,4 +11,4 @@
 .tr-denied .icon { color: var(--teal); flex: none; }
 
 /* What the teacher will read, quoted before it is sent. */
-.tr-preview { margin: 0; padding: var(--space-2) 0; padding-inline-start: var(--space-3); border-inline-start: 2px solid var(--gold-line); background: none; border-radius: 0; }
+.tr-preview { margin: 0; padding: var(--space-2) 0; padding-inline-start: var(--space-3); border-inline-start: 2px solid var(--line-strong); background: none; border-radius: 0; }

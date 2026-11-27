@@ -71,6 +71,8 @@ export interface AdminSection {
   purpose: Bilingual
   note: Bilingual
   legacy?: readonly LegacyScreen[]
+  /** Where the work is done until this section opens. */
+  meanwhile?: AdminSectionKey
 }
 
 export const ADMIN_GROUPS: readonly { key: AdminGroupKey; label: Bilingual }[] = [
@@ -103,7 +105,7 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
   {
     key: 'conversations',
     group: 'communication',
-    icon: 'conversations',
+    icon: 'messages',
     status: 'read_only',
     label: { en: 'Conversations', ar: 'المحادثات' },
     navLabel: { en: 'All conversations', ar: 'كل المحادثات' },
@@ -295,6 +297,7 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
       en: 'Until it opens, conversations are read under All conversations.',
       ar: 'وحتى يُفتح، تُقرأ المحادثات من «كل المحادثات».',
     },
+    meanwhile: 'conversations',
   },
   {
     key: 'academy',

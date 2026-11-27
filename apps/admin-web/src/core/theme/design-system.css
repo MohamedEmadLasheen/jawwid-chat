@@ -580,7 +580,7 @@ html[lang='ar'] .rail__menu-heading { text-transform: none; letter-spacing: 0; f
 .page input[type='checkbox']:not([class]) { inline-size: 16px; block-size: 16px; margin: 0; accent-color: var(--accent); }
 .page input[type='file']:not([class]) { font-size: var(--fs-sm); color: var(--text-muted); }
 
-.page button:not([class]),
+.page button:not([class]):not(.switch > *),
 .page input[type='file']:not([class])::file-selector-button {
   min-block-size: var(--control-h-sm);
   padding: 0 var(--space-3);

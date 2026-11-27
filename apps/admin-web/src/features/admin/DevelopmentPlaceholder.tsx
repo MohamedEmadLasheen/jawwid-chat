@@ -1,3 +1,4 @@
+import { ADMIN_SECTIONS } from './sections'
 import { Link } from 'react-router-dom'
 import { Icon } from '@/shared/components/Icon'
 import { PageHeader } from '@/shared/components/PageHeader'
@@ -32,6 +33,11 @@ export function DevelopmentPlaceholder({ section }: { section: AdminSection }) {
               <p className="adm-soon__note">
                 <span className="adm-soon__status">{tx(TEXT.placeholderTitle)}</span> {tx(section.note)}
               </p>
+              {section.meanwhile && (
+                <Link className="btn adm-soon__go" to={adminSectionPath(section.meanwhile)}>
+                  {tx(ADMIN_SECTIONS.find((s) => s.key === section.meanwhile)?.label ?? section.label)}
+                </Link>
+              )}
               {section.legacy && (
                 <details className="disclosure adm-soon__legacy">
                   <summary>{tx(TEXT.prototypeTitle)}</summary>

@@ -51,6 +51,7 @@ export interface CallsPageCopy {
   colDuration: string
   colWhen: string
   colCall: string
+  callBack: string
   figScheduled: string
   today: string
   tomorrow: string
@@ -161,6 +162,7 @@ const ar: CallsPageCopy = {
   colDuration: 'المدة',
   colWhen: 'الوقت',
   colCall: 'اتصال',
+  callBack: 'معاودة الاتصال',
   figScheduled: 'مجدولة',
   today: 'اليوم',
   tomorrow: 'غدًا',
@@ -263,6 +265,7 @@ const en: CallsPageCopy = {
   colDuration: 'Length',
   colWhen: 'When',
   colCall: 'Call',
+  callBack: 'Call back',
   figScheduled: 'Scheduled',
   today: 'Today',
   tomorrow: 'Tomorrow',

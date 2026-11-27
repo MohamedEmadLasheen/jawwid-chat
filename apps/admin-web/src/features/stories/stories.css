@@ -47,7 +47,7 @@
 }
 .story-phone--thumb { inline-size: 40px; border-radius: var(--radius-sm); }
 
-.story-phone__progress { padding: 10px 10px 0; z-index: 2; }
+.story-phone__progress { grid-row: 1; grid-column: 1; align-self: start; padding: 10px 10px 0; z-index: 2; }
 .story-phone__progress span {
   display: block; block-size: 2px; border-radius: 2px;
   background: rgba(255, 255, 255, 0.9);
@@ -149,7 +149,7 @@
 /* A story sheet: its own face at the start, what it is and how it did beside it. */
 .story-card {
   display: grid;
-  grid-template-columns: 96px minmax(0, 1fr);
+  grid-template-columns: 116px minmax(0, 1fr);
   gap: var(--space-4);
   padding: var(--space-3);
   background: var(--surface);
@@ -157,19 +157,27 @@
   border-radius: var(--radius-lg);
   transition: border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
 }
-.story-card:hover { border-color: var(--border-strong); box-shadow: var(--shadow-sm); }
-.story-card--deleted { background: var(--paper); }
+.story-card:hover { border-color: var(--line-strong); }
+.story-card--deleted { background: var(--surface-2); }
 .story-card--deleted .story-card__thumb { opacity: 0.55; }
 .story-card__thumb { display: block; align-self: start; color: inherit; text-decoration: none; }
 .story-card .story-phone--thumb { inline-size: 100%; border-radius: var(--radius); }
 .story-card .story-phone--thumb .story-phone__content { padding: 8px; }
 .story-card .story-phone--thumb .story-phone__text { font-size: 9.5px; line-height: 1.35; -webkit-line-clamp: 9; }
 .story-card .story-phone__glyph .icon { inline-size: 28px; block-size: 28px; }
+/* What it is and how far it reached come first; who made it and when follow. */
 .story-card__body { display: flex; flex-direction: column; gap: 3px; min-inline-size: 0; }
+.story-card__top { order: 0; }
+.story-row__name { order: 1; }
+.story-card .story-row__perf { order: 2; margin-block: 4px 6px; padding-block-start: 0; }
+.story-row__audience { order: 3; }
+.story-row__meta { order: 4; margin-block-end: auto; }
+.story-card__actions, .story-row__error { order: 5; }
+.story-row__views { font-family: var(--font-head); font-weight: 600; color: var(--ink); }
 .story-card__top { display: flex; flex-wrap: wrap; align-items: center; gap: 4px var(--space-3); margin-block-end: 3px; font-size: var(--fs-xs); color: var(--ink-muted); }
 .story-row__name {
   align-self: flex-start; max-inline-size: 100%;
-  color: var(--ink); font-family: var(--display); font-size: var(--fs-lg); font-weight: 600; line-height: 1.35; text-decoration: none;
+  color: var(--ink); font-family: var(--font-head); font-size: var(--fs-lg); font-weight: 600; line-height: 1.35; text-decoration: none;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
 html[lang='ar'] .story-row__name { font-weight: 700; }
@@ -183,15 +191,15 @@ html[lang='ar'] .story-row__name { font-weight: 700; }
   font-size: var(--fs-xs); color: var(--ink-muted);
 }
 .story-row__audience > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.story-row__audience .icon { flex: none; color: var(--teal); }
+.story-row__audience .icon { flex: none; color: var(--ink-muted); }
 .story-row__perf { display: grid; gap: 5px; margin-block-start: auto; padding-block-start: var(--space-3); font-size: var(--fs-sm); }
 .story-row__views { font-variant-numeric: tabular-nums; }
-.story-row__taps { font-size: var(--fs-xs); color: var(--ink-muted); }
+.story-row__taps { display: block; font-size: var(--fs-xs); color: var(--ink-muted); }
 .story-card__actions { display: flex; justify-content: flex-end; margin-block-start: var(--space-2); }
 .story-row__error { margin: 0; }
 
 /* How much of the audience has seen it: a thin line, not a pill. */
-.reach__bar { display: block; block-size: 3px; background: var(--hairline); overflow: hidden; }
+.reach__bar { display: block; block-size: 4px; border-radius: 2px; background: var(--line-2); overflow: hidden; }
 .reach__fill { display: block; block-size: 100%; background: var(--teal); }
 
 /* ---------------------------------------------------------------- composer */
@@ -251,7 +259,7 @@ html[lang='ar'] .story-row__name { font-weight: 700; }
   display: flex; align-items: center;
   min-block-size: 32px;
   margin: 0;
-  font-family: var(--display); font-size: var(--fs-xl); font-weight: 600; line-height: 1.3;
+  font-family: var(--font-head); font-size: var(--fs-xl); font-weight: 600; line-height: 1.3;
 }
 html[lang='ar'] .compose-step__title { font-weight: 700; }
 .compose-step__num {
@@ -264,7 +272,7 @@ html[lang='ar'] .compose-step__title { font-weight: 700; }
   border-radius: 50%;
   background: var(--surface);
   color: var(--teal);
-  font-family: var(--display); font-size: var(--fs-md); font-weight: 600;
+  font-family: var(--font-head); font-size: var(--fs-md); font-weight: 600;
   font-variant-numeric: lining-nums;
 }
 
@@ -332,9 +340,9 @@ html[lang='ar'] .compose-step__title { font-weight: 700; }
   display: inline-flex; align-items: center; gap: var(--space-3);
   min-block-size: var(--control-h);
   padding: 0 var(--space-3);
-  border: 1px solid var(--terracotta);
+  border: 1px solid var(--urgent-line);
   border-radius: var(--radius);
-  color: var(--terracotta); font-size: var(--fs-sm); font-weight: 500;
+  color: var(--urgent); font-size: var(--fs-sm); font-weight: 500;
 }
 .voice-recorder__dot { inline-size: 8px; block-size: 8px; border-radius: 50%; background: currentColor; animation: rec-pulse 1s infinite; }
 @keyframes rec-pulse { 50% { opacity: 0.3; } }
@@ -387,7 +395,7 @@ html[lang='ar'] .compose-step__title { font-weight: 700; }
   border-inline-start: 2px solid var(--hairline);
 }
 .chip-group { display: grid; gap: 6px; }
-.chip-group__label { font-size: 12.5px; font-weight: 500; color: var(--ink-muted); }
+.chip-group__label { font-size: var(--fs-xs); font-weight: 500; color: var(--ink-muted); }
 .chip-group__chips { display: flex; flex-wrap: wrap; gap: 6px; }
 
 .seg-chip {
@@ -426,11 +434,13 @@ html[lang='ar'] .compose-step__title { font-weight: 700; }
 .audience__missing {
   display: flex; gap: var(--space-2); align-items: flex-start;
   padding-inline-start: var(--space-3);
-  border-inline-start: 2px solid var(--gold-line);
-  color: var(--ink-muted);
+  padding: 8px var(--space-3);
+  border-radius: 8px;
+  background: var(--waiting-tint);
+  color: var(--ink);
   font-size: var(--fs-sm);
 }
-.audience__missing .icon { flex: none; margin-block-start: 2px; color: var(--gold-line); }
+.audience__missing .icon { flex: none; margin-block-start: 2px; color: var(--waiting); }
 
 /* Who it will reach: a figure on its own small sheet, under the preview. */
 .reach-card {
@@ -440,8 +450,8 @@ html[lang='ar'] .compose-step__title { font-weight: 700; }
   border: 1px solid var(--hairline);
   border-radius: var(--radius-lg);
 }
-.reach-card__label { font-size: 12.5px; color: var(--ink-muted); }
-.reach-card__value { font-family: var(--display); font-size: var(--fs-2xl); font-weight: 600; line-height: 1.2; font-variant-numeric: tabular-nums lining-nums; color: var(--ink); }
+.reach-card__label { font-size: var(--fs-xs); color: var(--ink-muted); }
+.reach-card__value { font-family: var(--font-head); font-size: var(--fs-2xl); font-weight: 600; line-height: 1.2; font-variant-numeric: tabular-nums lining-nums; color: var(--ink); }
 .reach-card__value small { font-family: var(--font); font-size: var(--fs-md); font-weight: 500; color: var(--ink-muted); }
 .reach-card__value--muted { font-family: var(--font); font-size: var(--fs-md); font-weight: 400; color: var(--ink-muted); }
 .reach-card__split { font-size: var(--fs-xs); color: var(--ink-muted); }
@@ -452,7 +462,9 @@ html[lang='ar'] .compose-step__title { font-weight: 700; }
    start and two sheets beside it. */
 .stories-studio .mast__tabs:has(.si-figures) { margin-block-start: 0; }
 .si-figures .figures { border-block-end: 0; }
-.insights { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: var(--space-5); align-items: start; }
+/* The figures lead (the start column); the story itself is a narrower panel at the end. */
+.insights { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: var(--space-5); align-items: start; }
+.insights__aside { order: 2; }
 .insights__aside { display: grid; gap: var(--space-4); position: sticky; inset-block-start: var(--space-4); padding: var(--space-4); }
 .insights__main { display: grid; gap: var(--space-4); min-inline-size: 0; }
 .insight-sheet { min-inline-size: 0; }
@@ -468,7 +480,7 @@ html[lang='ar'] .compose-step__title { font-weight: 700; }
 .details-list { display: grid; margin: 0; padding: 0; border-block-start: 1px solid var(--hairline); }
 .details-list > div:last-child { border-block-end: 0; padding-block-end: 0; }
 .details-list > div { display: grid; gap: 1px; padding-block: 8px; border-block-end: 1px solid var(--hairline-soft); }
-.details-list dt { font-size: 12.5px; color: var(--ink-muted); }
+.details-list dt { font-size: var(--fs-xs); color: var(--ink-muted); }
 .details-list dd { margin: 0; font-size: var(--fs-sm); overflow-wrap: anywhere; }
 .details-list__link { display: block; font-size: var(--fs-xs); }
 .details-list__note { display: block; font-size: var(--fs-xs); color: var(--success); }
@@ -477,18 +489,19 @@ html[lang='ar'] .compose-step__title { font-weight: 700; }
 .funnel { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-3); }
 .funnel__step { display: grid; grid-template-columns: minmax(90px, 140px) 1fr auto; align-items: center; gap: var(--space-3); }
 .funnel__label { font-size: var(--fs-sm); color: var(--ink-muted); }
-.funnel__track { block-size: 8px; background: var(--hairline-soft); overflow: hidden; }
+.funnel__track { block-size: 8px; border-radius: 4px; background: var(--line-2); overflow: hidden; }
 .funnel__fill { display: block; block-size: 100%; background: var(--teal); }
+/* One hue, stepping lighter as the funnel narrows: no gold, no second colour. */
 .funnel__step:nth-child(2) .funnel__fill { background: var(--brand-500); }
-.funnel__step:nth-child(3) .funnel__fill { background: var(--gold); }
-.funnel__value { font-family: var(--display); font-size: var(--fs-lg); font-variant-numeric: tabular-nums lining-nums; font-weight: 600; min-inline-size: 72px; text-align: end; }
-.funnel__value small { font-family: var(--font); font-size: var(--fs-xs); font-weight: 400; color: var(--ink-muted); }
+.funnel__step:nth-child(3) .funnel__fill { background: var(--brand-200); }
+.funnel__value { font-family: var(--font-head); font-size: var(--fs-lg); font-variant-numeric: tabular-nums lining-nums; font-weight: 600; min-inline-size: 120px; text-align: end; white-space: nowrap; }
+.funnel__value small { display: inline-block; min-inline-size: 48px; margin-inline-start: 10px; text-align: end; font-family: var(--font); font-size: var(--fs-xs); font-weight: 400; color: var(--ink-muted); }
 
 .daily { display: grid; gap: var(--space-2); }
 .daily__legend { display: flex; gap: var(--space-4); font-size: var(--fs-xs); color: var(--ink-muted); }
 .daily__key { display: inline-flex; align-items: center; gap: 6px; }
 .daily__key::before { content: ''; inline-size: 10px; block-size: 10px; background: var(--teal); }
-.daily__key--taps::before { background: var(--gold); }
+.daily__key--taps::before { background: var(--brand-200); }
 .daily__bars {
   display: grid; gap: 4px; align-items: end;
   block-size: 150px;
@@ -496,7 +509,7 @@ html[lang='ar'] .compose-step__title { font-weight: 700; }
 }
 .daily__day { display: flex; align-items: flex-end; justify-content: center; gap: 2px; block-size: 100%; }
 .daily__bar { flex: 1; max-inline-size: 10px; min-block-size: 0; background: var(--teal); }
-.daily__bar--taps { background: var(--gold); }
+.daily__bar--taps { background: var(--brand-200); }
 .daily__axis { display: flex; justify-content: space-between; font-size: var(--fs-xs); color: var(--ink-muted); font-variant-numeric: tabular-nums; }
 
 .table--compact th, .table--compact td { padding-block: 7px; }
@@ -506,9 +519,10 @@ html[lang='ar'] .compose-step__title { font-weight: 700; }
 .audience-data { display: grid; gap: var(--space-4); }
 .audience-data__intro {
   display: flex; gap: var(--space-3); align-items: flex-start;
-  padding-inline-start: var(--space-3);
-  border-inline-start: 2px solid var(--teal);
-  color: var(--ink-muted);
+  padding: 10px var(--space-3);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--ink-2);
 }
 .audience-data__intro p { margin: 0; font-size: var(--fs-sm); max-inline-size: 78ch; }
 .audience-data__intro .icon { flex: none; color: var(--teal); margin-block-start: 2px; }
@@ -540,7 +554,7 @@ html[lang='ar'] .compose-step__title { font-weight: 700; }
   [dir='rtl'] .who-card.is-selected { box-shadow: inset -3px 0 0 var(--teal); }
   /* A phone: one story to a row, its face smaller; the tabs scroll sideways. */
   .story-grid { grid-template-columns: minmax(0, 1fr); gap: var(--space-3); }
-  .story-card { grid-template-columns: 76px minmax(0, 1fr); gap: var(--space-3); }
+  .story-card { grid-template-columns: 88px minmax(0, 1fr); gap: var(--space-3); }
   .story-card .story-phone--thumb .story-phone__text { font-size: 7.5px; }
   .studio-tab { min-block-size: 44px; }
   .studio-tab--data { margin-inline-start: 0; }
@@ -566,3 +580,13 @@ html[lang='ar'] .compose-step__title { font-weight: 700; }
   .funnel__step { grid-template-columns: 1fr auto; }
   .funnel__track { grid-column: 1 / -1; grid-row: 2; }
 }
+
+/* The audience facts: a strip of figures, the missing ones in the waiting colour. */
+.audience-data .kpi-strip { display: flex; flex-wrap: wrap; padding: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); }
+.audience-data .kpi { flex: 1 1 160px; display: grid; gap: 2px; padding: 12px 16px; }
+.audience-data .kpi + .kpi { border-inline-start: 1px solid var(--line-2); }
+.audience-data .kpi__label { font-size: var(--fs-sm); color: var(--ink-muted); }
+.audience-data .kpi__value { font-family: var(--font-head); font-size: var(--fs-xl); font-weight: 700; font-variant-numeric: tabular-nums; color: var(--ink); }
+
+.daily__empty { margin: 0; padding: var(--space-4) 0; font-size: var(--fs-sm); color: var(--ink-muted); }
+.funnel__value small { font-size: var(--fs-xs); }

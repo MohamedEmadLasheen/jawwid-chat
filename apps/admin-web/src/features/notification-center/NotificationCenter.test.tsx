@@ -89,7 +89,7 @@ describe('PD-34: the Notification Center', () => {
     )
     expect(await screen.findByText('New messages: 3')).toBeInTheDocument()
     expect(screen.getByText('You missed a call.')).toBeInTheDocument()
-    await userEvent.click(screen.getAllByRole('button', { name: 'Open' })[0]!)
+    await userEvent.click(screen.getAllByRole('button', { name: /^Open/ })[0]!)
     expect(await screen.findByText('conversation page')).toBeInTheDocument()
     expect(calls('POST', /\/me\/notifications\/n1\/acted$/)).toHaveLength(1)
   })

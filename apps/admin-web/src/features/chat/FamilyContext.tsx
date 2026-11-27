@@ -234,7 +234,7 @@ function AmountDue({ billing }: { billing: FamilyBilling }) {
                 {late ? (
                   <>
                     {copy.famOverdue(formatMoney(t.overdueMinor, t.currency, locale))}
-                    {oldest && oldest.currency === t.currency && ` · ${copy.famLate(oldest.days)}`}
+                    {oldest && oldest.currency === t.currency && `${copy.listSeparator}${copy.famLate(oldest.days)}`}
                   </>
                 ) : (
                   next && next.currency === t.currency && copy.famNextDue(formatDay(next.dueDate, locale))
@@ -266,7 +266,7 @@ function MoneyRows({ billing }: { billing: FamilyBilling }) {
             <bdi className="cw-fam__money">{formatMoney(last.amountMinor, last.currency, locale)}</bdi>
             <span className="cw-fam__meta">
               {formatDay(last.paidOn, locale)}
-              {method && ` · ${locale === 'ar' ? method.ar : method.en}`}
+              {method && `${copy.listSeparator}${locale === 'ar' ? method.ar : method.en}`}
             </span>
           </dd>
         </div>

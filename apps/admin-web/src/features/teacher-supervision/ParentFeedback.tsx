@@ -100,7 +100,7 @@ export function ParentFeedbackSection({ basePath, only }: { basePath: string; on
                             {tx(F.take)}
                           </button>
                         )}
-                        <button type="button" className="btn btn--primary btn--sm" onClick={() => setReplying(f)}>
+                        <button type="button" className="btn btn--sm" onClick={() => setReplying(f)}>
                           {f.response ? tx(F.changeReply) : tx(F.reply)}
                         </button>
                       </>

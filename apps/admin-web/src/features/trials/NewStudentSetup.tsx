@@ -5,7 +5,7 @@ import { useI18n } from '@/core/i18n/I18nProvider'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
 import { Icon } from '@/shared/components/Icon'
 import type { MenuItem } from '@/shared/components/Menu'
-import { DetailFoot, DetailSection, FlowSteps, type FlowStep } from '@/shared/components/RequestQueue'
+import { DetailCallout, DetailSection, FlowSteps, type FlowStep, sentence } from '@/shared/components/RequestQueue'
 import { useStructure } from '@/features/organization/hooks'
 import { describeOpsError } from '../teachers/opsCopy'
 import type { Pair } from '../teachers/copy'
@@ -13,7 +13,7 @@ import { trialKeys, trialsApi, type AssignResult, type NewStudentDto } from './a
 import { ChangeSupervisorDialog, transferNotice } from '@/features/organization/ChangeSupervisorDialog'
 import { useCopy } from '@/features/organization/copy'
 import { orgKeys } from '@/features/organization/api'
-import { NS } from './newStudentsCopy'
+import { NS, STATUS } from './newStudentsCopy'
 import { ApiError } from '@/core/api/errors'
 import { OP } from '@/features/intake/opsCopy'
 import { groupNotice } from '@/features/intake/OpsDialogs'
@@ -21,7 +21,7 @@ import { SearchableSelect } from '@/shared/components/SearchableSelect'
 
 const S: Record<string, Pair> = {
   setup: { en: 'Setup', ar: 'التجهيز' },
-  assign: { en: 'Assign', ar: 'تعيين' },
+  assign: { en: 'Assign supervisor', ar: 'تعيين مشرف' },
   change: { en: 'Change', ar: 'تغيير' },
   assignTitle: { en: 'Assign a supervisor', ar: 'تعيين مشرف' },
   assignHint: {
@@ -47,8 +47,8 @@ const S: Record<string, Pair> = {
   groupMade: { en: 'Created', ar: 'أُنشئت' },
   parent: { en: 'Parent\'s account', ar: 'حساب ولي الأمر' },
   notStarted: {
-    en: 'Not signed up yet. Ask the parent to download the app and choose "I\'m a new parent" with their e-mail.',
-    ar: 'لم يُنشئ حسابه بعد. اطلب من ولي الأمر تنزيل التطبيق واختيار «ولي أمر جديد» ببريده الإلكتروني.',
+    en: 'Ask the parent to download the app and choose "I\'m a new parent" with their e-mail.',
+    ar: 'اطلب من ولي الأمر تنزيل التطبيق واختيار «ولي أمر جديد» ببريده الإلكتروني.',
   },
   codeWaiting: {
     en: 'The parent asked for a code. Send it to them on WhatsApp:',
@@ -70,12 +70,12 @@ export type SetupIntent = 'assign' | 'group'
  * family's group; the parent signs up in the app with a code the supervisor
  * relays on WhatsApp. Every step is decided by the server.
  *
- * Drawn as the family's steps, top to bottom: `before` is what led here (the
- * trial, the recorded subscription). The step that moves the family on is the
- * inspector's one primary action, at its foot; what only adjusts a step
- * (change the supervisor, end a code, clear a lock) stays beside that step.
- * `children` are the record's facts, between the steps and the foot; `more`
- * is what the foot keeps behind "⋯".
+ * Read top to bottom: the state callout (where the setup stands, in one
+ * sentence, the code to send or the lock to clear, and the one step that moves
+ * the family on), then `children` (the record's facts), then the steps from the
+ * trial to the parent's sign-up -- `before` is what led here. What only adjusts
+ * a step (change the supervisor) stays beside that step; `more` is what the
+ * callout keeps behind "⋯"; `status` is its tag and age.
  */
 export function NewStudentSetup({
   s,
@@ -84,9 +84,11 @@ export function NewStudentSetup({
   intent = null,
   onIntentDone,
   more = [],
+  status,
   children,
 }: {
   s: NewStudentDto
+  status?: ReactNode
   canAssign: boolean
   before?: FlowStep[]
   /** The step the family's card asked for; it is taken once, then `onIntentDone` clears it. */
@@ -176,86 +178,116 @@ export function NewStudentSetup({
       key: 'parent',
       label: tx(S.parent),
       state: !e || !signup ? 'todo' : signup.state === 'signed_up' ? 'done' : attempts?.locked ? 'problem' : 'current',
-      meta: signup?.state === 'signed_up' ? tx(S.signedUp) : undefined,
-      children:
-        e && signup && signup.state !== 'signed_up' ? (
-          <>
-            {signup.state === 'not_started' && !attempts?.locked && <span className="rq-note">{tx(S.notStarted)}</span>}
-            {signup.state === 'code_waiting' && (
-              <div className="ns-code">
-                <span className="rq-note">{tx(S.codeWaiting)}</span>
-                {signup.code && (
-                  <strong className="ns-code__value" dir="ltr" aria-live="polite" aria-label={`${tx(NS.codeLabel)} ${signup.code.split('').join(' ')}`}>
-                    {signup.code}
-                  </strong>
-                )}
-                <span className="rq-note">{tx(NS.codeValid)}</span>
-                {signup.code && (
-                  <button
-                    type="button"
-                    className="btn btn--sm"
-                    disabled={pending}
-                    title={tx(NS.invalidateHint)}
-                    onClick={() => void signupAction(() => trialsApi.invalidateSignupCode(s.trialId), tx(NS.invalidated))}
-                  >
-                    {tx(NS.invalidate)}
-                  </button>
-                )}
-              </div>
-            )}
-            {attempts && attempts.wrong > 0 && (
-              <div className={attempts.locked ? 'ns-lock ns-lock--on' : 'ns-lock'} role={attempts.locked ? 'status' : undefined}>
-                {attempts.locked ? (
-                  <span>
-                    <Icon name="lock" size={14} /> {tx(NS.lockedNote)}
-                  </span>
-                ) : (
-                  <span className="rq-note">
-                    {tx(NS.wrongTries)}: {number(attempts.wrong)} / {number(attempts.cap)}
-                  </span>
-                )}
-                <button
-                  type="button"
-                  className="btn btn--sm"
-                  disabled={pending}
-                  onClick={() => void signupAction(() => trialsApi.resetSignupAttempts(s.trialId), tx(NS.resetDone))}
-                >
-                  {tx(NS.reset)}
-                </button>
-              </div>
-            )}
-          </>
-        ) : undefined,
+      meta: signup?.state === 'signed_up' ? tx(S.signedUp) : attempts?.locked ? tx(STATUS.locked.label) : signup?.state === 'code_waiting' ? tx(NS.codeAsked) : undefined,
     },
   ]
 
+  // What the parent's sign-up needs in place: the code to read out, or the lock to clear.
+  const signupNow =
+    e && signup && signup.state !== 'signed_up' ? (
+      <>
+        {signup.state === 'code_waiting' && signup.code && (
+          <div className="ns-code">
+            <strong className="ns-code__value" dir="ltr" aria-live="polite" aria-label={`${tx(NS.codeLabel)} ${signup.code.split('').join(' ')}`}>
+              {signup.code}
+            </strong>
+            <span className="rq-note">{tx(NS.codeValid)}</span>
+            <button
+              type="button"
+              className="btn btn--sm btn--ghost"
+              disabled={pending}
+              title={tx(NS.invalidateHint)}
+              onClick={() => void signupAction(() => trialsApi.invalidateSignupCode(s.trialId), tx(NS.invalidated))}
+            >
+              {tx(NS.invalidate)}
+            </button>
+          </div>
+        )}
+        {attempts && attempts.wrong > 0 && (
+          <div className={attempts.locked ? 'ns-lock ns-lock--on' : 'ns-lock'} role={attempts.locked ? 'status' : undefined}>
+            <span className="rq-note">
+              {attempts.locked && <Icon name="lock" size={16} />} {tx(NS.wrongTries)}: <bdi className="ltr">{number(attempts.wrong)} / {number(attempts.cap)}</bdi>
+            </span>
+            {!attempts.locked && (
+              <button
+                type="button"
+                className="btn btn--sm btn--ghost"
+                disabled={pending}
+                onClick={() => void signupAction(() => trialsApi.resetSignupAttempts(s.trialId), tx(NS.resetDone))}
+              >
+                {tx(NS.reset)}
+              </button>
+            )}
+          </div>
+        )}
+      </>
+    ) : null
+
+  // Where the setup stands, in one sentence: what moves the family on, or whose turn it is.
+  const supervisorName = e?.supervisor?.name ?? tx(NS.itsSupervisor)
+  const state: ReactNode = !e?.supervisor
+    ? tx(canAssign ? NS.stateUnassigned : NS.stateUnassignedOther)
+    : attempts?.locked
+      ? tx(NS.stateLocked)
+      : signup?.state === 'code_waiting'
+        ? tx(NS.stateCode)
+        : signup?.state === 'signed_up'
+          ? tx(NS.stateSignedUp)
+          : !e.groupConversationId && e.canCreateGroup
+            ? sentence(tx(NS.stateNoGroup), { supervisor: supervisorName })
+            : sentence(tx(NS.stateNotStarted), { supervisor: supervisorName })
+
+  // A locked sign-up is what stops the family now: clearing it is the one action, the group waits behind "⋯".
+  const locked = !!attempts?.locked
   const primary =
-    next === 'assign' ? (
+    locked ? (
+      <button
+        type="button"
+        className="btn btn--primary"
+        disabled={pending}
+        onClick={() => void signupAction(() => trialsApi.resetSignupAttempts(s.trialId), tx(NS.resetDone))}
+      >
+        {tx(NS.reset)}
+      </button>
+    ) : next === 'assign' ? (
       <button type="button" className="btn btn--primary" onClick={() => setAssigning(true)}>
         {tx(S.assign)}
       </button>
     ) : next === 'group' ? (
       <button type="button" className="btn btn--primary" disabled={pending} onClick={() => void createGroup()}>
-        <Icon name="plus" size={14} />
+        <Icon name="plus" size={18} />
         {pending ? tx(S.creating) : tx(S.createGroup)}
       </button>
     ) : next === 'open' ? (
       <button type="button" className="btn" onClick={() => navigate(`/chat/${e!.groupConversationId}`)}>
-        <Icon name="conversations" size={16} />
+        <Icon name="conversations" size={18} />
         {tx(S.openGroup)}
       </button>
     ) : undefined
 
   return (
     <>
-      <DetailSection title={tx(NS.setup)}>
-        <FlowSteps steps={steps} label={tx(S.setup)} />
-        {notice && <p className="banner banner--warning" role="status">{notice}</p>}
+      <DetailCallout
+        status={status}
+        state={state}
+        note={e?.supervisor && signup?.state === 'not_started' && !attempts?.locked ? tx(S.notStarted) : undefined}
+        primary={primary}
+        more={
+          locked && next === 'open'
+            ? [{ key: 'group', label: tx(S.openGroup), icon: 'conversations' as const, onSelect: () => navigate(`/chat/${e!.groupConversationId}`) }, ...more]
+            : more
+        }
+        label={`${tx(NS.moreActions)}: ${s.parent.name}`}
+      >
+        {signupNow}
+        {notice && <p className="banner banner--warn" role="status">{notice}</p>}
         {done && <p className="banner banner--info" role="status">{done}</p>}
         {error ? <p className="banner banner--danger" role="alert">{describeOpsError(error, locale)}</p> : null}
-      </DetailSection>
+      </DetailCallout>
       {children}
-      <DetailFoot primary={primary} more={more} label={`${tx(NS.moreActions)}: ${s.parent.name}`} />
+      <DetailSection title={tx(NS.setup)}>
+        <FlowSteps steps={steps} label={tx(S.setup)} />
+      </DetailSection>
       {changing && e && (
         <ChangeSupervisorDialog
           name={s.parent.name}
@@ -282,7 +314,7 @@ export function NewStudentSetup({
             // PD-42 PR-3: a trial sibling went to the family the parent is already in.
             if (result.attached) setDone(groupNotice(orgTx, result.group, familyName ?? s.parent.name))
             const missing = result.schedules.filter((x) => !x.set)
-            if (missing.length > 0) setNotice(`${tx(S.timesNotSet)} ${[...new Set(missing.map((m) => m.reason))].join(' · ')}`)
+            if (missing.length > 0) setNotice(`${tx(S.timesNotSet)} ${[...new Set(missing.map((m) => m.reason))].join(locale === 'ar' ? '، ' : ', ')}`)
           }}
         />
       )}

@@ -340,7 +340,7 @@ describe('the family beside the conversation', () => {
     expect(figure.closest('.cw-fam__sum')).toHaveClass('cw-fam__sum--late')
     // The currency sits where the payments formatter puts it, the same side as every other amount here.
     expect(figure.closest('.cw-fam__figure')).toHaveTextContent(/^EGP\s?18,000\.00$/)
-    expect(within(money).getByText(/9,600\.00 overdue · 32 days late/)).toBeInTheDocument()
+    expect(within(money).getByText(/9,600\.00 overdue, 32 days late/)).toBeInTheDocument()
     // The newest payment, not the first in the list.
     expect(within(money).getByText(/3,600\.00/)).toBeInTheDocument()
     expect(within(money).queryByText(/1,000\.00/)).not.toBeInTheDocument()

@@ -1,12 +1,13 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
+import { formatWhen } from '@/features/trials/copy'
 import { Badge } from '@/shared/components/Badge'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
 import { Icon, type IconName } from '@/shared/components/Icon'
 import type { MenuItem } from '@/shared/components/Menu'
 import { ReasonDialog } from '@/shared/components/ReasonDialog'
-import { DetailFoot, DetailSection, FlowSteps, type FlowStep, type StepState } from '@/shared/components/RequestQueue'
+import { Age, DetailCallout, DetailSection, FlowSteps, ageText, dayName, sentence, waitedOvernight, type FlowStep, type StepState } from '@/shared/components/RequestQueue'
 import { QueryBoundary } from '@/shared/components/States'
 import {
   CERTIFICATE_ACCEPT,
@@ -75,6 +76,71 @@ const STAGE: Record<CertificateState, number> = {
   declined: 0,
 }
 
+/**
+ * A certificate is late when it has waited since before today on a step this
+ * desk takes (a decision on a suggestion, a review, a send). While the designer
+ * has it there is nothing to do here, so its age stays quiet.
+ */
+export const certificateLate = (c: Certificate): boolean =>
+  (c.state === 'proposed' || c.state === 'uploaded' || c.state === 'approved') && waitedOvernight(c.requestedAt)
+
+/** Who asked for a certificate (or suggested it), as the reader may see it. */
+const askerOf = (c: Certificate): string | null => (c.projection === 'full' ? (c.requestedBy?.name ?? c.suggestedBy?.name ?? null) : c.requesterName)
+
+/** Why a certificate waits where it is, in one line: the board card's waiting fact. */
+export function certificateWhy(c: Certificate, tx: ReturnType<typeof useCopy>, locale: 'ar' | 'en'): ReactNode {
+  const designer = c.assignedDesigner?.name
+  switch (c.state) {
+    case 'proposed':
+      return sentence(tx(C.whyProposed), { who: (c.projection === 'full' ? c.suggestedBy?.name : null) ?? askerOf(c) ?? tx(C.someone) })
+    case 'requested': {
+      const asker = askerOf(c)
+      return asker ? sentence(tx(C.whyAsked), { who: asker }) : tx(C.whyRequested)
+    }
+    case 'in_design':
+      return designer ? sentence(tx(C.whyDesigning), { who: designer }) : tx(C.whyDesigningNobody)
+    case 'changes_requested':
+      return tx(C.whyChanges)
+    case 'uploaded':
+      return tx(C.whyUploaded)
+    case 'approved':
+      return tx(C.whyApproved)
+    case 'sent': {
+      const at = c.projection === 'full' ? c.sent?.at : null
+      return at ? tx(C.whySent).replace('{age}', ageText(at, locale)) : tx(stateLabel(c.state))
+    }
+    case 'cancelled':
+      return tx(C.whyCancelled)
+    case 'declined':
+      return tx(C.whyDeclined)
+  }
+}
+
+/** Where a certificate stands, in one sentence: the inspector's callout. */
+function certificateState(c: Certificate, tx: ReturnType<typeof useCopy>, locale: 'ar' | 'en'): ReactNode {
+  const designer = c.assignedDesigner?.name
+  switch (c.state) {
+    case 'proposed':
+      return sentence(tx(C.stateProposed), { who: (c.projection === 'full' ? c.suggestedBy?.name : null) ?? askerOf(c) ?? tx(C.someone) })
+    case 'requested':
+      return tx(C.stateRequested)
+    case 'in_design':
+      return designer ? sentence(tx(C.stateDesigning), { who: designer }) : tx(C.whyDesigningNobody)
+    case 'changes_requested':
+      return tx(C.stateChanges)
+    case 'uploaded':
+      return tx(C.stateUploaded)
+    case 'approved':
+      return tx(C.stateApproved)
+    case 'sent': {
+      const at = c.projection === 'full' ? c.sent?.at : null
+      return at ? tx(C.stateSent).replace('{age}', ageText(at, locale)) : tx(stateLabel(c.state))
+    }
+    default:
+      return tx(C.stateClosed)
+  }
+}
+
 /** A certificate's state and what goes with it: the Story, the delivery. */
 export function CertificateStatus({ certificate: c }: { certificate: Certificate }) {
   const tx = useCopy()
@@ -90,7 +156,7 @@ export function CertificateStatus({ certificate: c }: { certificate: Certificate
 }
 
 /** The request's steps, from what the server recorded: who, when, and where it stands now. */
-export function certificateSteps(c: Certificate, tx: ReturnType<typeof useCopy>, when: (iso: string) => string): FlowStep[] {
+export function certificateSteps(c: Certificate, tx: ReturnType<typeof useCopy>, when: (iso: string) => string, sep = ', '): FlowStep[] {
   const full = c.projection === 'full' ? c : null
   const closed = c.state === 'cancelled' || c.state === 'declined'
   // A closed request got as far as its own record shows.
@@ -100,7 +166,7 @@ export function certificateSteps(c: Certificate, tx: ReturnType<typeof useCopy>,
     name || iso ? (
       <>
         {name && <bdi>{name}</bdi>}
-        {name && iso && ' · '}
+        {name && iso && sep}
         {iso && <time dateTime={iso}>{when(iso)}</time>}
       </>
     ) : undefined
@@ -189,7 +255,7 @@ export function CertificateDetail({
 }) {
   const tx = useCopy()
   const navigate = useNavigate()
-  const { locale, dateTime } = useI18n()
+  const { locale } = useI18n()
   const one = useCertificate(certificateId)
   const act = useCertificateAct()
   const upload = useUploadDesign()
@@ -262,15 +328,33 @@ export function CertificateDetail({
       <QueryBoundary isLoading={one.isLoading} error={one.error} onRetry={() => void one.refetch()}>
         {c && (
           <>
-            {c.returnMessage && (c.state === 'changes_requested' || c.state === 'in_design') && (
-              <div className="cert-callout" role="note">
-                <strong>{tx(C.returnMessage)}:</strong> <span dir="auto">{c.returnMessage}</span>
-              </div>
-            )}
-
-            <DetailSection title={tx(C.steps)}>
-              <FlowSteps steps={certificateSteps(c, tx, dateTime)} label={tx(C.steps)} />
-            </DetailSection>
+            <DetailCallout
+              status={
+                <>
+                  <CertificateStatus certificate={c} />
+                  <Age iso={c.requestedAt} late={certificateLate(c)} />
+                </>
+              }
+              state={certificateState(c, tx, locale)}
+              note={
+                c.returnMessage && (c.state === 'changes_requested' || c.state === 'in_design') ? (
+                  <span role="note">
+                    <strong>{tx(C.returnMessage)}:</strong> <span dir="auto">{c.returnMessage}</span>
+                  </span>
+                ) : c.actions.includes('upload') ? (
+                  tx(C.uploadHint)
+                ) : undefined
+              }
+              primary={primary}
+              more={more}
+              label={`${tx(C.moreActions)}: ${c.printedName}`}
+            >
+              {(fileError || upload.error || act.error) && (
+                <div className="field__error" role="alert">
+                  {fileError ?? describeError(upload.error ?? act.error, locale)}
+                </div>
+              )}
+            </DetailCallout>
 
             <DetailSection title={tx(C.theRequest)}>
               <dl className="rq-fields">
@@ -278,12 +362,12 @@ export function CertificateDetail({
                 <Fact label={C.titleField} value={c.title} />
                 <Fact label={C.achievement} value={c.achievement} />
                 <Fact label={C.juz} value={c.juz} />
-                <Fact label={C.period} value={c.periodStart ? `${c.periodStart}${c.periodEnd ? ` → ${c.periodEnd}` : ''}` : null} />
-                <Fact label={C.achievedOn} value={c.achievedOn} />
+                <Fact label={C.period} value={c.periodStart ? `${dayName(c.periodStart, locale, false)}${c.periodEnd ? ` ${tx(C.periodEnd)} ${dayName(c.periodEnd, locale, false)}` : ''}` : null} />
+                <Fact label={C.achievedOn} value={c.achievedOn ? dayName(c.achievedOn, locale, false) : null} />
                 <Fact label={C.grade} value={c.grade} />
                 {c.projection === 'full' ? (
                   <>
-                    <Fact label={C.student} value={c.learner?.name} />
+                    {c.learner?.name !== c.printedName && <Fact label={C.student} value={c.learner?.name} />}
                     <Fact label={C.teacher} value={c.teacher?.name} />
                     <Fact label={C.signatory} value={c.signatoryTeacher?.name} />
                     <Fact label={C.requestedBy} value={c.requestedBy?.name ?? c.suggestedBy?.name} />
@@ -297,7 +381,7 @@ export function CertificateDetail({
                 )}
                 <Fact label={C.designerNote} value={c.designerNote} />
                 <Fact label={C.designer} value={c.assignedDesigner?.name} />
-                <Fact label={C.requested} value={dateTime(c.requestedAt)} />
+                <Fact label={C.requested} value={formatWhen(c.requestedAt, locale)} />
               </dl>
             </DetailSection>
 
@@ -307,7 +391,7 @@ export function CertificateDetail({
                   {c.files.map((f) => (
                     <li key={f.id}>
                       <span className="cert-files__name">
-                        {tx(C.revision, { n: f.revision })} · <span dir="auto">{f.fileName}</span>
+                        {tx(C.revision, { n: f.revision })}{locale === 'ar' ? '، ' : ', '}<bdi>{f.fileName}</bdi>
                         {f.id === c.currentFile?.id && <span className="cert-files__current">{tx(C.current)}</span>}
                       </span>
                       <button type="button" className="btn btn--sm" onClick={() => void openFile(f.id)}>{tx(C.open)}</button>
@@ -323,14 +407,18 @@ export function CertificateDetail({
               </p>
             )}
 
+            <DetailSection title={tx(C.steps)}>
+              <FlowSteps steps={certificateSteps(c, tx, (iso) => formatWhen(iso, locale), locale === 'ar' ? '، ' : ', ')} label={tx(C.steps)} />
+            </DetailSection>
+
             {c.history && c.history.length > 0 && (
               <DetailSection title={tx(C.history)}>
                 <ol className="cert-history">
                   {c.history.map((h) => (
                     <li key={h.seq}>
                       <strong title={h.kind}>{historyLabel(h, tx)}</strong>
-                      {h.actor?.name ? <> · <span dir="auto">{h.actor.name}</span></> : null}
-                      <span className="cert-history__when">{dateTime(h.at)}</span>
+                      {h.actor?.name ? <>{locale === 'ar' ? '، ' : ', '}<bdi>{h.actor.name}</bdi></> : null}
+                      <span className="cert-history__when">{formatWhen(h.at, locale)}</span>
                       {h.note ? <div className="cert-history__note"><bdi>{h.note}</bdi></div> : null}
                     </li>
                   ))}
@@ -339,13 +427,6 @@ export function CertificateDetail({
             )}
 
             <input ref={fileInput} type="file" accept={CERTIFICATE_ACCEPT} hidden onChange={(e) => onFile(e.target.files?.[0])} aria-label={tx(C.a_upload)} />
-            {(fileError || upload.error || act.error) && (
-              <div className="field__error" role="alert">
-                {fileError ?? describeError(upload.error ?? act.error, locale)}
-              </div>
-            )}
-            {c.actions.includes('upload') && <p className="field__hint">{tx(C.uploadHint)}</p>}
-            <DetailFoot primary={primary} more={more} label={`${tx(C.moreActions)}: ${c.printedName}`} />
           </>
         )}
       </QueryBoundary>
@@ -425,7 +506,7 @@ function SendDialog({ certificate, onClose }: { certificate: Certificate; onClos
         {t ? (
           <p>
             {t.conversationId ? tx(C.sendTo, { name: t.title ?? '' }) : tx(C.sendToNew)}
-            {t.members != null && <> · {tx(C.members, { n: t.members })}</>}
+            {t.members != null && <>{locale === 'ar' ? '، ' : ', '}{tx(C.members, { n: t.members })}</>}
           </p>
         ) : (
           <p role="alert">{tx(C.noGroup)}</p>

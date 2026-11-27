@@ -122,17 +122,20 @@ function RecentRow({
   name,
   conversation,
   selfId,
+  returned = false,
 }: {
   row: AccountCallRow
   name: string
   conversation: ChatConversation | undefined
   selfId: string | undefined
+  /** A missed call that a later answered call has already returned: no longer red. */
+  returned?: boolean
 }) {
   const copy = useCallsCopy()
   const { dateTime, locale } = useI18n()
   const actions = useCallActions()
   const direction = callDirection(row, selfId)
-  const missed = row.outcome === 'missed'
+  const missed = row.outcome === 'missed' && !returned
   const status =
     row.outcome === 'answered' ? copy.answered
     : row.outcome === 'missed' ? copy.missed
@@ -150,14 +153,31 @@ function RecentRow({
           {isTrialGroup(conversation) && <TrialBadge />}
         </span>
         <span className="cp-recent__facts">
-          <span>{direction === 'outgoing' ? copy.outgoing : copy.incoming}</span>
-          <Badge tone={missed ? 'danger' : row.outcome === 'answered' ? 'ok' : row.outcome ? 'neutral' : 'info'}>
-            <span>{status}</span>
-          </Badge>
-          {row.endReason === 'connection_lost' ? <span className="cp-recent__lost">· {copy.connectionLost}</span> : null}
+          <span className="sr-only">{direction === 'outgoing' ? copy.outgoing : copy.incoming}</span>
+          {/* Only a missed call is marked; an answered one is plain words. */}
+          {missed ? (
+            <Badge tone="danger">
+              <span>{status}</span>
+            </Badge>
+          ) : (
+            <span className="cp-recent__outcome">{status}</span>
+          )}
+          {row.endReason === 'connection_lost' ? (
+            <>
+              <span aria-hidden="true" className="cp-recent__sep">{locale === 'ar' ? '،' : ','}</span>
+              <span className="cp-recent__lost">{copy.connectionLost}</span>
+            </>
+          ) : null}
         </span>
       </span>
-      <span className="cp-recent__len">{row.durationSeconds ? <bdi>{copy.duration(row.durationSeconds)}</bdi> : null}</span>
+      <span className="cp-recent__len">
+        {row.durationSeconds ? (
+          <>
+            <Icon name="timer" size={14} />
+            <bdi>{copy.duration(row.durationSeconds)}</bdi>
+          </>
+        ) : null}
+      </span>
       <time className="cp-row__time" dateTime={row.startedAt} title={dateTime(row.startedAt)}>
         {listTime(row.startedAt, locale)}
       </time>
@@ -175,7 +195,7 @@ function RecentRow({
               onClick={() => void actions.startCall(conversation)}
             >
               <Icon name="phone" size={16} />
-              {copy.colCall}
+              {missed ? copy.callBack : copy.colCall}
             </button>
           ) : undefined
         }
@@ -259,6 +279,11 @@ export function CallsPage() {
           const conversation = conversations.byId.get(row.conversationId)
           return { row, conversation, name: historyName(row, selfId, conversation, chat) }
         })
+        // A missed call stops asking once a later call in the same conversation was answered (the list is newest first).
+        .map((r, i, all) => ({
+          ...r,
+          returned: r.row.outcome === 'missed' && all.slice(0, i).some((x) => x.row.conversationId === r.row.conversationId && x.row.outcome === 'answered'),
+        }))
         .filter((r) => nameMatches(r.name, query)),
     [chat, conversations.byId, history.data, query, selfId],
   )
@@ -284,7 +309,6 @@ export function CallsPage() {
   }, [upcomingRows])
   const dayName = (day: string, at: string) =>
     day === today ? copy.today : day === tomorrow ? copy.tomorrow : `${weekdayIn(at, ACADEMY_ZONE, locale)} ${dayMonthIn(at, ACADEMY_ZONE, locale)}`
-  const openNow = (upcoming.data ?? []).filter((c) => c.state !== 'cancelled' && isJoinable(c.joinableFrom, c.joinableUntil, now)).length
 
   const upcomingSection = (
     <section className="sheet cp-section" aria-labelledby="cp-upcoming">
@@ -319,7 +343,7 @@ export function CallsPage() {
   )
 
   const favoritesSection = (
-    <section className="sheet cp-section" aria-labelledby="cp-favorites">
+    <section className="sheet cp-section cp-section--fav" aria-labelledby="cp-favorites">
       <div className="sheet__head">
         <h2 className="sheet__title" id="cp-favorites">
           {copy.favorites}
@@ -333,7 +357,7 @@ export function CallsPage() {
         searching ? (
           <EmptyState compact title={copy.noMatches} />
         ) : (
-          <EmptyState compact title={copy.noFavorites} hint={copy.noFavoritesHint} />
+          <p className="cp-empty">{copy.noFavoritesHint}</p>
         )
       ) : (
         <ul className="cp-list" onKeyDown={onListKeyDown}>
@@ -379,6 +403,10 @@ export function CallsPage() {
         <h2 className="sheet__title" id="cp-recent">
           {copy.recent}
         </h2>
+        {/* The search sits on the list it searches (it also narrows the scheduled calls). */}
+        <div className="cp-search">
+          <SearchField value={query} onChange={setQuery} label={copy.search} clearLabel={copy.clearSearch} />
+        </div>
       </div>
       {history.isLoading ? (
         <LoadingState compact />
@@ -393,7 +421,7 @@ export function CallsPage() {
       ) : (
         <ul className="cp-list" onKeyDown={onListKeyDown}>
           {recentRows.map((r) => (
-            <RecentRow key={r.row.id} row={r.row} name={r.name} conversation={r.conversation} selfId={selfId} />
+            <RecentRow key={r.row.id} row={r.row} name={r.name} conversation={r.conversation} selfId={selfId} returned={r.returned} />
           ))}
         </ul>
       )}
@@ -412,15 +440,6 @@ export function CallsPage() {
       <div className="page__inner">
         <PageHeader
           title={copy.title}
-          subtitle={copy.subtitle}
-          figures={
-            upcoming.data
-              ? [
-                  { key: 'open', label: copy.stateOpen, value: String(openNow), tone: openNow > 0 ? 'key' : 'quiet' },
-                  { key: 'scheduled', label: copy.figScheduled, value: String(upcoming.data.filter((c) => c.state !== 'cancelled').length) },
-                ]
-              : undefined
-          }
           actions={
             <section className="cp-actions" aria-label={copy.actions}>
               <button type="button" className="btn btn--primary cp-action" onClick={() => pick('call')}>
@@ -461,9 +480,6 @@ export function CallsPage() {
             {favoritesSection}
           </div>
           <div className="cp-cols__end">
-            <div className="cp-search">
-              <SearchField value={query} onChange={setQuery} label={copy.search} clearLabel={copy.clearSearch} />
-            </div>
             {recentSection}
           </div>
         </div>

@@ -2,6 +2,7 @@ import { useCallback, useId, useState } from 'react'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { ApiError } from '@/core/api/errors'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
+import { Icon } from '@/shared/components/Icon'
 import type { TeacherDeletionRequest } from './api'
 import { T, describeError, useCopy } from './copy'
 import { useCompleteDeletionRequest, useDeletionRequest } from './hooks'
@@ -26,14 +27,19 @@ export function DeletionRequestBanner({ teacherId, name }: { teacherId: string; 
   if (!data || !request || request.state !== 'pending') return null
 
   return (
-    <div className="banner banner--warn" role="region" aria-label={tx(T.deletionRequested)}>
-      <p>
-        <strong>{tx(T.deletionRequested)}</strong>{' '}
-        {tx(T.deletionRequestedBody, { requested: date(request.requestedAt), deadline: date(request.deadlineAt) })}
-      </p>
-      <p>{stillOpen(data.leftOpen, tx, number, locale === 'ar' ? '، ' : ', ')}</p>
+    <div className="tf-callout tf-callout--urgent" role="region" aria-label={tx(T.deletionRequested)}>
+      <span className="tf-callout__icon" aria-hidden="true">
+        <Icon name="userMinus" size={18} />
+      </span>
+      <div className="tf-callout__text">
+        <p className="tf-callout__title">{tx(T.deletionRequested)}</p>
+        <p className="tf-callout__body">
+          {tx(T.deletionRequestedBody, { requested: date(request.requestedAt), deadline: date(request.deadlineAt) })}{' '}
+          {stillOpen(data.leftOpen, tx, number, locale === 'ar' ? '، ' : ', ')}
+        </p>
+      </div>
       {data.canComplete && (
-        <button type="button" className="btn btn--danger" onClick={() => setOpen(true)}>
+        <button type="button" className="btn btn--danger tf-callout__action" onClick={() => setOpen(true)}>
           {tx(T.closeAndDelete)}
         </button>
       )}

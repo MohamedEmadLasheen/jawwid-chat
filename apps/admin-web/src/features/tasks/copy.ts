@@ -6,10 +6,9 @@ export { useCopy } from '@/features/organization/copy'
 /** PD-47: the Tasks page, Arabic and English side by side. */
 export const C = {
   title: { en: 'Tasks', ar: 'المهام' },
-  subtitle: {
-    en: 'A task leaves a list only when it is completed, removed or handed on.',
-    ar: 'لا تغادر المهمة القائمة إلا إذا أُنجزت أو أُزيلت أو أُسندت لغيره.',
-  },
+  // The order the queue is read in, named by need.
+  sortDue: { en: 'Overdue first, then soonest due', ar: 'المتأخرة أولًا، ثم الأقرب موعدًا' },
+  sortClosed: { en: 'Most recently closed first', ar: 'الأحدث إغلاقًا أولًا' },
   empty: { en: 'No open tasks in this list', ar: 'لا مهام مفتوحة في هذه القائمة' },
   emptyClosed: { en: 'No closed tasks yet', ar: 'لا مهام مغلقة بعد' },
   emptyAction: { en: 'Give someone a task', ar: 'إسناد مهمة لأحد' },
@@ -20,11 +19,6 @@ export const C = {
   emptyClosedHint: { en: 'Tasks you finish or remove are kept here with their history.', ar: 'تُحفظ هنا المهام المنجزة أو المُزالة مع سجلها.' },
   loadMore: { en: 'Show more', ar: 'عرض المزيد' },
   newTask: { en: 'New task', ar: 'مهمة جديدة' },
-  // The masthead's figures: the viewer's own open tasks
-  figOverdue: { en: 'My overdue', ar: 'متأخرة لديّ' },
-  figToday: { en: 'Mine due today', ar: 'تستحق اليوم لديّ' },
-  figOpen: { en: 'My open tasks', ar: 'مهامي المفتوحة' },
-  figDecisions: { en: 'Awaiting my decision', ar: 'تنتظر قراري' },
   filters: { en: 'Filters', ar: 'تصفية' },
   moreActions: { en: 'More actions: {name}', ar: 'إجراءات أخرى: {name}' },
   taskDetails: { en: 'Task details', ar: 'تفاصيل المهمة' },
@@ -47,7 +41,7 @@ export const C = {
   due: { en: 'Due {when}', ar: 'الموعد {when}' },
   noDue: { en: 'No due date', ar: 'بلا موعد' },
   age: { en: 'Opened {ago}', ar: 'فُتحت {ago}' },
-  dueAgo: { en: 'due {ago}', ar: 'استحقت {ago}' },
+  dueAgo: { en: 'Due {ago}', ar: 'استحقت {ago}' },
   closedOn: { en: 'Closed {when}', ar: 'أُغلقت {when}' },
   // The panel
   close: { en: 'Close', ar: 'إغلاق' },
@@ -57,6 +51,8 @@ export const C = {
     ar: 'هذه المهمة غير موجودة، أو ليست مما يحق لك رؤيته.',
   },
   openSource: { en: 'Open', ar: 'فتح' },
+  // A row's way to the page where the work is done.
+  goPage: { en: 'Open page', ar: 'افتح الصفحة' },
   createdBy: { en: 'Given by {name}', ar: 'أسندها {name}' },
   instructions: { en: 'Instructions', ar: 'التعليمات' },
   closeReason: { en: 'Reason', ar: 'السبب' },
@@ -91,7 +87,8 @@ export const C = {
   note: { en: 'Note (optional)', ar: 'ملاحظة (اختياري)' },
   text: { en: 'Text', ar: 'النص' },
   dueAt: { en: 'Due', ar: 'الموعد' },
-  clearDue: { en: 'Clear', ar: 'مسح' },
+  clearDue: { en: 'Remove due date', ar: 'أزل الموعد' },
+  levelNow: { en: 'Shown as {level} now: {reason}.', ar: 'تظهر الآن {level}: {reason}.' },
   manualLevel: { en: 'Level set by a person', ar: 'المستوى الذي حدده شخص' },
   save: { en: 'Save', ar: 'حفظ' },
   send: { en: 'Send', ar: 'إرسال' },
@@ -108,6 +105,7 @@ export const C = {
 export const GROUP_LABEL = {
   overdue: { en: 'Overdue', ar: 'متأخرة' },
   today: { en: 'Due today', ar: 'تستحق اليوم' },
+  tomorrow: { en: 'Due tomorrow', ar: 'تستحق غدًا' },
   week: { en: 'Next 7 days', ar: 'خلال 7 أيام' },
   later: { en: 'Later', ar: 'لاحقًا' },
   none: { en: 'No due date', ar: 'بلا موعد' },
@@ -129,14 +127,14 @@ export const LEVEL_LABEL: Record<Level, Pair> = {
 
 /** Why the level was raised. A level a person set (`manual`) needs no reason. */
 export const REASON_LABEL = {
-  overdue: { en: 'Overdue', ar: 'متأخرة' },
-  due_soon: { en: 'Due soon', ar: 'قريبة الموعد' },
-  source: { en: 'Raised by its source', ar: 'رفعها مصدرها' },
+  overdue: { en: 'overdue', ar: 'متأخرة' },
+  due_soon: { en: 'due soon', ar: 'قريبة الموعد' },
+  source: { en: 'raised by its source', ar: 'رفعها مصدرها' },
 } satisfies Record<string, Pair>
 
 /** A source's own words for raising the level. */
 export const SOURCE_REASON: Partial<Record<SourceType, Pair>> = {
-  package_low: { en: 'Balance used up', ar: 'نفد رصيد الحصص' },
+  package_low: { en: 'balance used up', ar: 'نفد رصيد الحصص' },
 }
 
 export const FINANCE: Pair = { en: 'Finance', ar: 'مالية' }

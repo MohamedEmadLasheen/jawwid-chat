@@ -58,12 +58,15 @@ export function TeacherGrantsPage({ basePath, eyebrow }: { basePath: string; eye
     <div className="page">
       <div className="page__inner">
         <PageHeader
-          eyebrow={eyebrow ?? tx(R.group)}
           title={tx(R.grantsTitle)}
           status={facts.status}
-          subtitle={tx(R.grantsSubtitle)}
           figures={facts.figures}
-          actions={facts.action}
+          actions={
+            <>
+              <TeacherPicker value={teacher} onChange={(id) => set({ teacher: id })} />
+              {facts.action}
+            </>
+          }
           tabs={
         <FilterChips<GrantsSection>
           variant="tabs"
@@ -77,11 +80,6 @@ export function TeacherGrantsPage({ basePath, eyebrow }: { basePath: string; eye
         />
           }
         />
-        <div className="sheet tr-toolbar">
-          <div className="sheet-bar">
-          <TeacherPicker value={teacher} onChange={(id) => set({ teacher: id })} />
-          </div>
-        </div>
         <div className="th-body">
           {/* PD-52 PR-5: Sales names the student or trial of every grant and testimonial. */}
           {section === 'grants' && <RewardsSection basePath={basePath} canRecord={a.grants.record} requireAbout={a.basis === 'sales'} />}

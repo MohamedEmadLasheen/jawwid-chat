@@ -1,131 +1,136 @@
 /* PD-47: Tasks, and what it shares with Escalations: a queue grouped by when
-   things are due, and an inspector that stays beside it. Tokens only.
+   things are due, and an inspector that stays beside it (system.css tokens).
 
-   The level pairs are the app's own (tokens.css, light and dark), measured in
-   TasksPage.test.tsx: text 4.5:1, icon 3:1. Gold carries text only as gold-700
-   on gold-50 (the gold rule). On these pages a level is a word in its colour on
-   the sheet (measured there too); the fill stays for the chip anywhere else.
-   Three tones only: terracotta is high, gold text is medium, low is plain muted ink. */
+   Colour is the due time's to carry: grey while there is time, amber in the last
+   day, red once it is overdue. A level is an order, not an alarm, so it is drawn
+   in ink: a mark and a word, heavier for High. Gold is never used here.
+
+   The level pairs are measured in TasksPage.test.tsx (4.5:1, light and dark):
+   on these pages a level is a word on the sheet; the fill stays for anywhere else. */
 .task-level,
 .task-finance {
   display: inline-flex;
   align-items: center;
   gap: 5px;
   font-size: var(--fs-sm);
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1.4;
   white-space: nowrap;
 }
-.task-level--high { color: var(--danger); background: var(--danger-soft); }
-.task-level--medium { color: var(--gold-700); background: var(--gold-50); }
-.task-level--low { color: var(--text-muted); background: var(--surface-sunken); }
-.task-level__reason { font-weight: 400; }
-.task-finance { color: var(--text-muted); background: var(--surface-sunken); font-weight: 500; }
+.task-level--high { color: var(--text); background: var(--surface-sunken); }
+.task-level--medium { color: var(--text-muted); background: var(--surface-sunken); }
+.task-level--low { color: var(--text-subtle); background: var(--surface-sunken); }
+.task-finance { color: var(--text-muted); background: var(--surface-sunken); }
+.task-level--high { font-weight: 600; }
+.task-level__reason { font-weight: 400; color: var(--ink-muted); }
 /* A level is a word, not a pill. */
 :is(.tasks, .cases) :is(.task-level, .task-finance) { background: none; }
-.task-level .icon, .task-finance .icon { flex: none; }
+.task-level .icon, .task-finance .icon { flex: none; color: var(--ink-muted); }
+.task-level--high .icon { color: var(--ink); }
 
 /* Tasks | Escalations sit on the masthead's lower edge. */
 :is(.tasks, .cases) .mast__tabs .ts-tabs { margin: 0; }
-/* The count is a bare figure, as in .seg__count. */
-.ts-tab__count { margin-inline-start: 6px; color: var(--ink-muted); font-size: var(--fs-xs); font-weight: 500; font-variant-numeric: tabular-nums; }
-.ts-tab--active .ts-tab__count { color: var(--teal); }
+.ts-tab__count { margin-inline-start: 6px; padding: 0 6px; border-radius: 6px; background: var(--surface-2); color: var(--ink-2); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.ts-tab--active .ts-tab__count { background: var(--teal-tint); color: var(--teal-dark); }
 
 /* ------------------------------------------------------- queue + inspector */
 
 .tq { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-5); align-items: start; }
 @media (min-width: 1100px) {
-  .tq--open { grid-template-columns: minmax(0, 1fr) minmax(380px, 430px); }
+  .tq--open { grid-template-columns: minmax(0, 1fr) minmax(380px, 440px); }
 }
 /* The list reshapes to the room it has (beside the inspector, or on a phone), not to the window. */
 .tq__sheet { min-inline-size: 0; overflow: hidden; container: tq / inline-size; }
-.tq__more { display: flex; justify-content: center; padding: var(--space-3); border-block-start: 1px solid var(--hairline-soft); }
-.tq__sheet .state { padding: var(--space-5) var(--space-4); }
+.tq__more { display: flex; justify-content: center; padding: var(--space-3); border-block-start: 1px solid var(--line-2); }
+.tq__sheet .state { padding: var(--space-6) var(--space-5); }
 
-/* The views are the sheet's own tabs: compact, the open one tinted and underlined.
+/* The views are the sheet's own tabs: words, the open one underlined in teal.
    The label is --text-link and only the underline --accent (tabs.test.ts measures both). */
 .tasks__tabs,
 .cases__bar .ts-tabs {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: var(--space-5);
   margin: 0;
   border: 0;
   overflow: visible;
 }
 .tasks__tab,
 .cases__bar .ts-tab {
-  min-block-size: 32px;
-  margin: 0;
-  padding: 0 12px;
+  min-block-size: 40px;
+  margin: 0 0 -11px;
+  padding: 0 0 2px;
   border: 0;
   border-block-end: 2px solid transparent;
-  border-radius: var(--radius) var(--radius) 0 0;
+  border-radius: 0;
   background: none;
   color: var(--ink-muted);
-  font: inherit;
+  font-family: var(--font-head);
   font-size: var(--fs-sm);
   font-weight: 500;
   cursor: pointer;
-  transition: color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
+  transition: color var(--dur-fast) var(--ease-out);
 }
 .tasks__tab:hover,
-.cases__bar .ts-tab:hover { color: var(--ink); background: var(--surface-hover); }
-.tasks__tab[aria-selected='true'] { color: var(--text-link); border-block-end-color: var(--accent); background: var(--accent-soft); font-weight: 600; }
-.cases__bar .ts-tab--active { color: var(--text-link); border-block-end-color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+.cases__bar .ts-tab:hover { color: var(--ink); }
+.tasks__tab[aria-selected='true'] { color: var(--text-link); border-block-end-color: var(--accent); font-weight: 600; }
+.cases__bar .ts-tab--active { color: var(--text-link); border-block-end-color: var(--accent); font-weight: 600; }
 .tasks__tab:focus-visible,
 .cases__bar .ts-tab:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
+/* The order, named by what it serves (a caption, not a control); then the filters. */
+.tq__sort { font-size: var(--fs-sm); color: var(--ink-muted); white-space: nowrap; }
 .tq__filter-toggle { gap: 6px; }
 .tq__filter-toggle[aria-expanded='true'] { border-color: var(--teal); color: var(--teal-dark); }
-.tq__clear { display: inline-flex; align-items: center; gap: 6px; }
-.tasks__filters { background: var(--paper); }
-.tasks__filters .ss { inline-size: auto; min-inline-size: 9.5rem; }
+.tq__clear { display: inline-flex; align-items: center; gap: 6px; border-color: var(--line-strong); }
+.tasks__filters { background: var(--surface-2); }
+.tasks__filters .ss { inline-size: auto; min-inline-size: 10rem; }
 .tasks__filters .ss__input { min-block-size: var(--control-h-sm); block-size: var(--control-h-sm); font-size: var(--fs-sm); }
 .tasks__check,
 .cases__closed {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  min-block-size: 32px;
+  gap: 8px;
+  min-block-size: 34px;
   font-size: var(--fs-sm);
-  color: var(--ink-muted);
+  color: var(--ink-2);
   cursor: pointer;
 }
-:is(.tasks__check, .cases__closed) input { inline-size: 15px; block-size: 15px; accent-color: var(--teal); }
+:is(.tasks__check, .cases__closed) input { inline-size: 16px; block-size: 16px; accent-color: var(--teal); }
 :is(.tasks__check, .cases__closed):has(input:checked) { color: var(--ink); }
 
-/* Groups: when it is due. The late group is the one that looks different. */
+/* Groups: when it is due. The overdue group's count is the solid one. */
 .tq-group__head {
   display: flex;
   align-items: center;
   gap: 8px;
   margin: 0;
-  padding: 9px var(--space-4) 8px;
-  background: var(--paper);
-  border-block: 1px solid var(--hairline-soft);
-  font-size: 12.5px;
+  padding: 8px var(--space-4);
+  background: var(--surface-2);
+  border-block: 1px solid var(--line-2);
+  font-family: var(--font-head);
+  font-size: var(--fs-sm);
   font-weight: 600;
-  color: var(--ink-muted);
+  color: var(--ink-2);
 }
 .tq-group:first-child .tq-group__head { border-block-start: 0; }
-.tq-group--overdue .tq-group__head, .tq-group--past .tq-group__head { color: var(--terracotta); }
 
 .tq-rows { list-style: none; margin: 0; padding: 0; }
 .tq-row {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(150px, 190px) 128px minmax(84px, auto);
-  align-items: center;
-  gap: 4px var(--space-4);
+  grid-template-columns: minmax(0, 1fr) minmax(150px, 200px) 128px;
+  align-items: start;
+  gap: 4px var(--space-5);
+  min-block-size: 64px;
   padding: 12px var(--space-4);
-  border-block-end: 1px solid var(--hairline-soft);
+  border-block-end: 1px solid var(--line-2);
   transition: background var(--dur-fast) var(--ease-out);
 }
 .tq-rows > .tq-row:last-child { border-block-end: 0; }
 .tq-row:hover { background: var(--surface-hover); }
-.tq-row--selected, .tq-row--selected:hover { background: var(--teal-tint); }
-.tq-row--selected::before { content: ''; position: absolute; inset-block: 0; inset-inline-start: 0; inline-size: 3px; background: var(--gold); }
+/* The open one is lifted: a tint and a soft shadow, no stripe. */
+.tq-row--selected, .tq-row--selected:hover { z-index: 1; background: var(--teal-tint); box-shadow: var(--shadow-lift); }
 .tq-row__main { min-inline-size: 0; }
 .tasks__title,
 .cases__title {
@@ -133,6 +138,7 @@
   display: block;
   cursor: pointer;
   font-weight: 600;
+  font-size: var(--fs-md);
   color: var(--ink);
   line-height: 1.45;
   overflow-wrap: anywhere;
@@ -142,6 +148,7 @@
 /* The whole row opens the task, not the words alone. */
 :is(.tasks__title, .cases__title)::after { content: ''; position: absolute; inset: 0; }
 .tq-row :is(a, .badge, .row-actions2) { position: relative; z-index: 1; }
+/* Why it is here: one line, in words. */
 .tq-row__sub {
   display: flex;
   flex-wrap: wrap;
@@ -149,31 +156,41 @@
   gap: 2px var(--space-3);
   margin-block-start: 2px;
   color: var(--ink-muted);
-  font-size: var(--fs-xs);
+  font-size: var(--fs-sm);
 }
-.tq-row__sub .task-finance { font-size: var(--fs-xs); }
+.tq-row__why { min-inline-size: 0; }
+.tq-row__sub .task-finance { font-size: var(--fs-sm); }
+/* The one fact a queue is read for: how long until it is due, or how long since. */
 .tq-row__when { display: grid; gap: 1px; justify-items: start; min-inline-size: 0; }
-.tq-row__age { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; font-size: var(--fs-sm); font-weight: 600; color: var(--ink); }
-.tq-row--late .tq-row__age { color: var(--terracotta); }
+.tq-row__age { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; font-size: var(--fs-sm); font-weight: 600; color: var(--ink-muted); }
+.tq-row--soon .tq-row__age { color: var(--waiting); }
+.tq-row--late .tq-row__age { color: var(--urgent); }
 .tq-row__date { font-size: var(--fs-xs); color: var(--ink-muted); font-variant-numeric: tabular-nums; }
-.tq-row__level { min-inline-size: 0; }
-.tq-row__level .task-level { white-space: normal; }
-.tq-row .row-actions2 { justify-self: end; }
-.tq-row--closed .tasks__title { font-weight: 500; color: var(--ink-muted); }
-.tasks__overdue { display: inline-flex; align-items: center; gap: 4px; color: var(--terracotta); font-weight: 600; }
-/* Less room (beside the inspector, a phone): who and what, with the fact and the action at the end. */
-@container tq (max-width: 760px) {
-  .tq-row { grid-template-columns: minmax(0, 1fr) auto; }
-  .tq-row__main { grid-column: 1; }
+.tq-row__act { display: flex; justify-content: flex-end; }
+.tq-row--closed .tasks__title { font-weight: 500; color: var(--ink-2); }
+.tasks__overdue { display: inline-flex; align-items: center; gap: 4px; color: var(--urgent); font-weight: 600; }
+/* Less room (beside the inspector, a phone): what and why, with the time and the action at the end. */
+@container tq (max-width: 700px) {
+  .tq-row { grid-template-columns: minmax(0, 1fr) auto; gap: 6px var(--space-4); }
+  .tq-row__main { grid-column: 1; grid-row: 1 / span 2; }
   .tq-row__when { grid-column: 2; grid-row: 1; justify-items: end; text-align: end; }
-  .tq-row__level { grid-column: 1; }
-  .tq-row .row-actions2 { grid-column: 2; }
+  .tq-row__act { grid-column: 2; grid-row: 2; }
+  .tq-row__act:empty { display: none; }
+}
+/* A phone: one column, the time under the title, the action under that. */
+@container tq (max-width: 480px) {
+  .tq-row { grid-template-columns: minmax(0, 1fr); }
+  .tq-row__main { grid-row: auto; }
+  .tq-row__when, .tq-row__act { grid-column: 1; grid-row: auto; justify-items: start; text-align: start; justify-content: flex-start; }
+  .tq-row__when { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; }
 }
 
 /* ------------------------------------------------------------- inspector */
 
 /* The open task (or case): a white sheet that stays on screen beside the queue,
    its one action at the foot. */
+/* teachers/rows.css spaces any .sheet + .sheet by 24px (a global rule); beside the queue the inspector starts level with it. */
+.tq > .sheet.insp { margin: 0; }
 .insp {
   position: sticky;
   inset-block-start: 0;
@@ -188,50 +205,59 @@
   .insp { animation: none; }
 }
 .insp > .state { padding: var(--space-5) var(--space-4); }
-.insp__head { padding: var(--space-3) var(--space-4) var(--space-4); border-block-end: 1px solid var(--hairline-soft); }
-.insp__top { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); min-block-size: 32px; margin-block-end: 4px; }
-.insp__kind { display: inline-flex; align-items: center; gap: 6px; min-inline-size: 0; font-size: 12.5px; font-weight: 600; color: var(--teal); }
+.insp__head { padding: var(--space-4) var(--space-5); border-block-end: 1px solid var(--line-2); }
+.insp__top { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); }
+.insp__top > :first-child { flex: 1; min-inline-size: 0; }
+.insp__top .insp__close { margin-block-start: 2px; margin-inline-end: -6px; }
+.insp__kind { font-size: var(--fs-sm); font-weight: 500; color: var(--ink-2); }
 .tasks__panel-title,
 .cases__panel-title {
   margin: 0;
-  font-family: var(--display);
+  font-family: var(--font-head);
   font-size: var(--fs-xl);
-  font-weight: 600;
-  line-height: 1.3;
+  font-weight: 700;
+  line-height: 1.35;
   overflow-wrap: anywhere;
 }
-html[lang='ar'] :is(.tasks__panel-title, .cases__panel-title) { font-weight: 700; line-height: 1.5; }
-.tasks__chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px var(--space-3); margin: var(--space-2) 0 0; }
-.insp__body { flex: 1; min-block-size: 0; overflow-y: auto; padding: var(--space-4); scrollbar-width: thin; }
-.insp__facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3) var(--space-4); margin: 0 0 var(--space-4); }
+.insp__due { margin: var(--space-2) 0 0; font-size: var(--fs-sm); font-weight: 600; color: var(--ink-muted); }
+.insp__due--soon { color: var(--waiting); }
+.insp__due--late { color: var(--urgent); }
+.tasks__chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px var(--space-4); margin: var(--space-3) 0 0; }
+.insp__body { flex: 1; min-block-size: 0; overflow-y: auto; padding: var(--space-4) var(--space-5); scrollbar-width: thin; }
+.insp__facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); margin: 0 0 var(--space-5); }
 .insp__facts > div { min-inline-size: 0; }
-.insp__facts dt { font-size: 12.5px; color: var(--ink-muted); }
-.insp__facts dd { margin: 1px 0 0; font-size: var(--fs-sm); font-weight: 500; overflow-wrap: anywhere; }
-.insp__late { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; color: var(--terracotta); }
+.insp__facts dt { font-size: var(--fs-xs); color: var(--ink-muted); }
+.insp__facts dd { margin: 2px 0 0; font-size: var(--fs-md); font-weight: 500; overflow-wrap: anywhere; }
+.insp__late { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; }
+.insp__late .insp__when { color: var(--urgent); font-weight: 600; }
 .insp__link { display: inline-flex; align-items: center; gap: 2px; color: var(--teal); font-weight: 600; text-decoration: none; }
 .insp__link:hover { text-decoration: underline; }
 .insp__foot {
   display: flex;
   justify-content: flex-end;
-  padding: 10px var(--space-4);
-  border-block-start: 1px solid var(--hairline);
+  padding: 12px var(--space-5);
+  border-block-start: 1px solid var(--line);
   background: var(--surface);
 }
 .insp__foot .row-actions2 { inline-size: 100%; justify-content: space-between; flex-direction: row-reverse; }
 .insp__foot .row-actions2 > .btn { min-block-size: var(--control-h); }
 
+/* What the reader must know before acting: a quiet note, not an alarm. */
 .tasks__banner {
-  margin: 0 0 var(--space-3);
-  padding: 8px var(--space-3);
-  border: 1px solid var(--hairline);
-  border-inline-start: 3px solid var(--gold-line);
-  border-radius: var(--radius);
+  display: grid;
+  gap: 2px;
+  margin: 0 0 var(--space-4);
+  padding: 10px var(--space-3);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--ink-2);
   font-size: var(--fs-sm);
 }
-.tasks__banner-title { margin: 0 0 2px; font-size: 12.5px; font-weight: 600; color: var(--gold-text); }
+.tasks__banner--waiting { background: var(--waiting-tint); color: var(--ink); }
+.tasks__banner-title { margin: 0; font-size: var(--fs-sm); font-weight: 600; color: var(--ink); }
 .tasks__banner .tasks__text { margin: 0; }
 .tasks__text,
-.cases__text { white-space: pre-wrap; margin: 0 0 var(--space-3); overflow-wrap: anywhere; }
+.cases__text { white-space: pre-wrap; margin: 0 0 var(--space-4); overflow-wrap: anywhere; line-height: 1.7; }
 .tasks__controls,
 .cases__controls {
   display: grid;
@@ -239,7 +265,7 @@ html[lang='ar'] :is(.tasks__panel-title, .cases__panel-title) { font-weight: 700
   grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   margin-block: var(--space-4);
   padding-block-start: var(--space-4);
-  border-block-start: 1px solid var(--hairline-soft);
+  border-block-start: 1px solid var(--line-2);
 }
 .dialog .tasks__controls { padding-block-start: 0; border-block-start: 0; margin-block: 0 var(--space-3); }
 :is(.tasks__controls, .cases__controls) .field { margin: 0; }
@@ -249,35 +275,36 @@ html[lang='ar'] :is(.tasks__panel-title, .cases__panel-title) { font-weight: 700
 .tasks__actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .tasks__controls fieldset .tasks__actions { flex-basis: 100%; margin: 0; }
 .insp .tasks__controls:has(fieldset) { grid-template-columns: minmax(0, 1fr); }
-.tasks__comment { display: grid; gap: var(--space-2); padding-block-start: var(--space-4); border-block-start: 1px solid var(--hairline-soft); }
+.tasks__comment { display: grid; gap: var(--space-2); padding-block-start: var(--space-4); border-block-start: 1px solid var(--line-2); }
 .tasks__comment .field { margin: 0; }
 
-/* History: a line down the side, a ring per event. */
+/* History: a line down the side, a ring per event; who and when on their own line. */
 .tasks__history-title,
-.cases__history-title { margin: var(--space-5) 0 var(--space-2); font-size: 12.5px; font-weight: 600; color: var(--ink-muted); }
+.cases__history-title { margin: var(--space-5) 0 var(--space-3); font-family: var(--font-head); font-size: var(--fs-sm); font-weight: 600; color: var(--ink-2); }
 .tasks__history,
 .cases__history { list-style: none; margin: 0; padding: 0; display: grid; font-size: var(--fs-sm); }
-:is(.tasks__history, .cases__history) > li { position: relative; padding: 0 0 12px; padding-inline-start: 20px; }
+:is(.tasks__history, .cases__history) > li { position: relative; display: grid; gap: 1px; padding: 0 0 14px; padding-inline-start: 22px; }
 :is(.tasks__history, .cases__history) > li::before {
   content: '';
   position: absolute;
-  inset-block-start: 0.55em;
+  inset-block-start: 0.6em;
   inset-inline-start: 0;
-  inline-size: 7px;
-  block-size: 7px;
-  border: 1.5px solid var(--teal);
+  inline-size: 8px;
+  block-size: 8px;
+  border: 1.5px solid var(--line-strong);
   border-radius: 50%;
   background: var(--surface);
 }
+:is(.tasks__history, .cases__history) > li:first-child::before { border-color: var(--teal); }
 :is(.tasks__history, .cases__history) > li::after {
   content: '';
   position: absolute;
-  inset-block: calc(0.55em + 11px) 0;
+  inset-block: calc(0.6em + 12px) 0;
   inset-inline-start: 4.5px;
-  border-inline-start: 1px solid var(--hairline);
+  border-inline-start: 1px solid var(--line);
 }
 :is(.tasks__history, .cases__history) > li:last-child::after { display: none; }
-:is(.tasks__history, .cases__history) strong { font-weight: 600; }
+:is(.tasks__history, .cases__history) strong { font-weight: 600; color: var(--ink); }
 .tasks__history-by,
 .cases__history-by { color: var(--ink-muted); font-size: var(--fs-xs); }
 :is(.tasks__history, .cases__history) :is(.tasks__text, .cases__text) { margin: 4px 0 0; }
@@ -299,19 +326,28 @@ html[lang='ar'] :is(.tasks__panel-title, .cases__panel-title) { font-weight: 700
   }
 }
 @media (max-width: 767px) {
-  .insp { inline-size: 100%; border: 0; box-shadow: none; }
-  .insp__facts { grid-template-columns: minmax(0, 1fr); }
-  .tasks__tab, .cases__bar .ts-tab { min-block-size: 44px; }
+  /* On a phone the open task is the whole screen, over the bar, with its own close. */
+  .insp { inset-block-start: 0; z-index: 90; inline-size: 100%; border: 0; box-shadow: none; }
+  .insp__head, .insp__body, .insp__foot { padding-inline: var(--space-4); }
+  .insp__facts { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .tasks__tabs, .cases__bar .ts-tabs { gap: var(--space-4); flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .tasks__tab, .cases__bar .ts-tab { min-block-size: 44px; flex: none; }
+  .tq__sort { display: none; }
   .tasks__filters .ss { flex: 1 1 8rem; }
   .tasks__filters .ss__input, .tasks__check, .cases__closed { min-block-size: 44px; block-size: 44px; }
   /* Every button on these pages is a full touch target. */
   :is(.tasks, .cases) :is(.btn, .btn--sm) { min-block-size: 44px; }
-  .tq-row { padding-inline: var(--space-3); }
+  .tq-row { padding-inline: var(--space-3); min-block-size: 0; }
   .tq-group__head { padding-inline: var(--space-3); }
+  /* A phone: the title and its one action share a row; the figures are one quiet line of three. */
+  :is(.tasks, .cases) .mast__row { flex-wrap: nowrap; }
+  .tasks .figures { display: flex; flex-wrap: nowrap; margin-block-start: var(--space-4); }
+  .tasks .figure { flex: 1 1 0; padding: 8px 10px 10px; }
+  .tasks .figure__label { font-size: var(--fs-xs); line-height: 1.35; }
+  .tasks .figure__n { font-size: 22px; }
 }
 
-/* The masthead's tabs sit on its lower edge. (The shared .mast--tabs rule is
-   outranked by .page-header.mast, so the band keeps a foot of padding without this.) */
+/* The masthead's tabs sit on its lower edge. */
 :is(.tasks, .cases) .page-header.mast--tabs { padding-block-end: 0; }
 
 /* From 1100px on a screen with room the page is a workspace: the masthead stays
@@ -325,3 +361,6 @@ html[lang='ar'] :is(.tasks__panel-title, .cases__panel-title) { font-weight: 700
   :is(.tasks, .cases) .tq__sheet { max-block-size: 100%; overflow-y: auto; scrollbar-width: thin; }
   :is(.tasks, .cases) .insp { position: static; max-block-size: 100%; }
 }
+
+/* With a task open, its way to the work is in the inspector: rows keep one height. */
+.tq--open .tq-row__act { display: none; }

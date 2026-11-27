@@ -14,7 +14,7 @@
   align-items: start;
   row-gap: var(--space-2);
   padding: var(--space-3) var(--space-4);
-  border-block-end: 1px solid var(--hairline-soft);
+  border-block-end: 1px solid var(--line-2);
 }
 .ef-row:last-child { border-block-end: 0; }
 .ef-row__who { min-inline-size: 0; display: grid; gap: 2px; }
@@ -22,8 +22,9 @@
 /* A long tag wraps inside its column; it never runs under the next one. */
 .ef-row__title .badge { max-inline-size: 100%; white-space: normal; }
 .ef-row__name { margin: 0; font-size: var(--fs-md); font-weight: 600; line-height: 1.4; }
-.ef-row__children { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0 var(--space-2); font-size: var(--fs-sm); color: var(--ink-muted); }
-.ef-row__children li + li::before { content: '·'; margin-inline-end: var(--space-2); }
+.ef-row__children { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0 6px; font-size: var(--fs-sm); color: var(--ink-muted); }
+.ef-row__children li:not(:last-child)::after { content: ','; }
+html[lang='ar'] .ef-row__children li:not(:last-child)::after { content: '،'; }
 .ef-row__byline { margin: 0; font-size: var(--fs-xs); color: var(--ink-muted); }
 .ef-row__facts { margin: 0; grid-column: 1 / -1; grid-row: 2; display: grid; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); gap: var(--space-2) var(--space-4); }
 .ef-row__facts > div { min-inline-size: 0; display: grid; align-content: start; gap: 1px; }
@@ -31,7 +32,7 @@
 .ef-row__facts dd { margin: 0; font-size: var(--fs-sm); font-weight: 500; overflow-wrap: anywhere; }
 .ef-row__note { font-weight: 400; }
 .ef-row__code { display: grid; gap: 4px; font-weight: 400; color: var(--ink-muted); }
-.ef-row__code-value { font-family: var(--display); font-size: 20px; font-weight: 600; line-height: 1.2; letter-spacing: 0.12em; font-variant-numeric: tabular-nums lining-nums; color: var(--ink); justify-self: start; border-block-end: 2px solid var(--gold); }
+.ef-row__code-value { font-family: var(--font-head); font-size: 20px; font-weight: 600; line-height: 1.2; letter-spacing: 0.12em; font-variant-numeric: tabular-nums lining-nums; color: var(--ink); justify-self: start; padding: 2px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); }
 .ef-row__actions { justify-self: end; }
 .ef-row__done { grid-column: 1 / -1; margin: 0; }
 
@@ -49,7 +50,7 @@
     grid-template-columns: subgrid;
     grid-column: 1 / -1;
     padding: 8px var(--space-4);
-    border-block-end: 1px solid var(--hairline-soft);
+    border-block-end: 1px solid var(--line-2);
     font-size: var(--fs-xs);
     color: var(--ink-muted);
   }

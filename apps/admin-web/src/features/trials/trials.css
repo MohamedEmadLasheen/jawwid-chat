@@ -4,8 +4,8 @@
 
 /* The card: which trial, then which of the three outcomes. Each is a ruled row
    that leads on, so it ends in a small arrow. */
-.tj-picklist { list-style: none; margin: var(--space-2) 0 0; padding: 0; border-block-start: 1px solid var(--hairline); }
-.tj-options { display: grid; border-block-start: 1px solid var(--hairline); }
+.tj-picklist { list-style: none; margin: var(--space-2) 0 0; padding: 0; border-block-start: 1px solid var(--line); }
+.tj-options { display: grid; border-block-start: 1px solid var(--line); }
 .tj-pick,
 .tj-option {
   inline-size: 100%;
@@ -15,7 +15,7 @@
   min-block-size: 48px;
   padding: 10px 4px;
   border: 0;
-  border-block-end: 1px solid var(--hairline-soft);
+  border-block-end: 1px solid var(--line-2);
   border-radius: 0;
   background: none;
   color: var(--ink);
@@ -44,7 +44,7 @@
 .tj-option:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 .tj-pick:disabled,
 .tj-option:disabled { cursor: not-allowed; color: var(--ink-muted); }
-:is(.tj-pick, .tj-option):disabled::after { border-color: var(--border-strong); }
+:is(.tj-pick, .tj-option):disabled::after { border-color: var(--line-strong); }
 .tj-pick__hint { margin: var(--space-1) 0 var(--space-2); padding-inline-start: 4px; font-size: var(--fs-xs); }
 .tj-pick__name { font-weight: 600; flex: 1 1 auto; min-inline-size: 0; overflow-wrap: anywhere; }
 .tj-option { font-weight: 600; }
@@ -53,24 +53,24 @@
 .tj-trial-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2); margin: 0 0 var(--space-3); font-size: var(--fs-sm); }
 .tj-trial-head strong { font-size: var(--fs-md); }
 .tj-current { margin: 0 0 var(--space-2); font-size: var(--fs-sm); }
-/* What the group will read: set apart on gold paper, so nobody sends more than they meant to. */
+/* What the group will read: set apart on a teal tint, so nobody sends more than they meant to. */
 .tj-preview {
   display: grid;
   gap: var(--space-1);
   margin-block-start: var(--space-4);
   padding: var(--space-2) var(--space-3);
-  border-inline-start: 2px solid var(--gold-line);
-  background: var(--gold-tint);
+  border-radius: 8px;
+  background: var(--teal-tint);
   font-size: var(--fs-sm);
 }
 .tj-preview q { font-weight: 600; font-size: var(--fs-md); color: var(--ink); }
-.tj-preview .ts-muted { color: var(--gold-text); }
+.tj-preview .ts-muted { color: var(--teal-dark); }
 
 /* The forms: each part is a quiet label over a rule, not a box. */
 .tj-form { display: grid; gap: var(--space-4); }
 .tj-fieldset {
   border: 0;
-  border-block-start: 1px solid var(--hairline);
+  border-block-start: 1px solid var(--line);
   border-radius: 0;
   padding: var(--space-3) 0 var(--space-2);
   margin: 0 0 var(--space-2);
@@ -79,12 +79,12 @@
   gap: var(--space-2);
 }
 /* Floated, the legend sits under the rule as a label instead of breaking it. */
-.tj-legend { float: inline-start; inline-size: 100%; padding: 0; margin: 0; font-size: 12.5px; font-weight: 500; color: var(--ink-muted); }
+.tj-legend { float: inline-start; inline-size: 100%; padding: 0; margin: 0; font-size: var(--fs-sm); font-weight: 600; font-family: var(--font-head); color: var(--ink-2); }
 .tj-legend + * { clear: both; }
 .tj-fieldset > p { margin: 0; font-size: var(--fs-sm); }
 .tj-row { display: grid; gap: var(--space-3); grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); }
 .tj-row > .field { margin: 0; }
-.tj-child { display: grid; gap: var(--space-2); padding-block: var(--space-2) var(--space-3); border-block-end: 1px solid var(--hairline-soft); }
+.tj-child { display: grid; gap: var(--space-2); padding-block: var(--space-2) var(--space-3); border-block-end: 1px solid var(--line-2); }
 .tj-child:last-of-type { border-block-end: none; }
 .tj-child__head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
 .tj-child__title { font-weight: 600; font-size: var(--fs-sm); }
@@ -104,8 +104,8 @@
   align-items: center;
   gap: var(--space-2);
   padding: var(--space-2) var(--space-3);
-  border-block-start: 1px solid var(--hairline);
-  background: var(--paper);
+  border-block-start: 1px solid var(--line);
+  background: var(--canvas);
   font-size: var(--fs-sm);
   color: var(--ink-muted);
 }

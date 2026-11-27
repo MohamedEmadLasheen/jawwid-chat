@@ -17,7 +17,7 @@ import { chatCopyFor } from './copy'
 import { LabelChip, LabelsDialog } from './LabelsDialog'
 import { ConversationAvatar, conversationName, isGroup, isMuted, previewParts, toneOfKind } from './chatView'
 import { useConversationPreferences } from './useChatActions'
-import { groupQueue, waitedFor } from './queue'
+import { asksViewer, groupQueue, isUnseenSummons, waitTone, waitedFor } from './queue'
 import { TrialBadge, isTrialGroup } from '@/shared/components/TrialBadge'
 
 export type View = 'all' | 'unread' | 'favorites' | 'groups' | 'joined' | 'archived' | 'waiting'
@@ -108,10 +108,13 @@ export function ConversationList({
     : active
   // PD-36: a chat that has asked the viewer in, not yet opened, leads -- above
   // pinned. Then pinned; otherwise the server's order (most recent activity first).
-  const rank = (c: ChatConversation) => (isUnseenSummons(c) ? 2 : c.viewerState?.pinned ? 1 : 0)
+  // Within "Needs a reply" a family owed an answer comes first (longest wait
+  // first), then a summons -- the same order as the empty pane's queue.
+  const rank = (c: ChatConversation) => (c.needsReply ? 3 : isUnseenSummons(c) ? 2 : c.viewerState?.pinned ? 1 : 0)
   // A work queue, not a flat inbox: owed an answer (longest wait first), then
   // unread, then the rest by recency. The tabs filter within this grouping.
-  const sections = groupQueue(inView(view), rank)
+  // A summons asks this viewer to act, so it sits with what is owed an answer.
+  const sections = groupQueue(inView(view), rank, asksViewer)
   const rows = sections.flatMap((s) => s.rows)
   // One quiet section alone needs no heading: it is simply the list.
   const headed = sections.length > 1 || (sections.length === 1 && sections[0]!.key !== 'rest')
@@ -137,7 +140,6 @@ export function ConversationList({
       <div className="workspace__head">
         <div className="workspace__title-row">
           <h1 className="workspace__title">{copy.title}</h1>
-          <span className="workspace__count">{number(active.length)}</span>
           <div className="cw-list__actions">{actions}</div>
         </div>
         <SearchField value={search} onChange={setSearch} label={onOpenMessage ? copy.searchList : copy.search} clearLabel={copy.clearSearch} />
@@ -252,11 +254,7 @@ export function ConversationList({
   )
 }
 
-/** PD-36: the viewer was asked into this chat and has not opened it since. */
-export function isUnseenSummons(c: ChatConversation): boolean {
-  const m = c.viewerState?.mention
-  return !!m && m.kind === 'summons' && m.state === 'pending' && !m.seen
-}
+export { isUnseenSummons } from './queue'
 
 function ConversationRow({
   c,
@@ -275,7 +273,7 @@ function ConversationRow({
   onLabel: () => void
 }) {
   const copy = chatCopyFor(locale)
-  const { dateTime } = useI18n()
+  const { dateTime, number } = useI18n()
   const prefs = useConversationPreferences()
   const name = conversationName(c, selfId, copy)
   const unread = c.unreadCount ?? 0
@@ -283,7 +281,7 @@ function ConversationRow({
   const muted = isMuted(c)
   const archived = !!c.viewerState?.archived
   const favorite = !!c.viewerState?.favorite
-  const said = previewParts(c.lastMessage, selfId, copy)
+  const said = previewParts(c.lastMessage, selfId, copy, isGroup(c) ? c.members : undefined)
   const preview = said.text || (copy.kind[c.type] ?? c.type)
   const mention = c.viewerState?.mention ?? null
   const summoned = mention?.kind === 'summons' && mention.state === 'pending'
@@ -291,7 +289,7 @@ function ConversationRow({
   const age = c.needsReply ? waitedFor(c.lastActivityAt, locale) : ''
 
   return (
-    <li className={isUnseenSummons(c) ? 'cw-row cw-row--summoned' : 'cw-row'}>
+    <li className="cw-row">
       <button
         type="button"
         className={unread > 0 ? 'conv-row cw-row__main cw-row__main--unread' : 'conv-row cw-row__main'}
@@ -305,14 +303,30 @@ function ConversationRow({
               <bdi className="cw-line">{name}</bdi>
             </span>
             {isTrialGroup(c) && <TrialBadge />}
-            <time className="conv-row__time" dateTime={c.lastActivityAt} title={dateTime(c.lastActivityAt)}>
-              {listTime(c.lastActivityAt, locale)}
-            </time>
+            {/* Owed an answer: how long it has waited is the row's one emphasised fact (grey, then amber, then red). */}
+            {c.needsReply ? (
+              <span
+                className={`cw-row__waited cw-wait--${waitTone(c.lastActivityAt)}`}
+                title={dateTime(c.lastActivityAt)}
+                aria-label={copy.waitedLabel(age)}
+              >
+                <Icon name="hourglass" size={14} />
+                {age}
+              </span>
+            ) : (
+              <time className="conv-row__time" dateTime={c.lastActivityAt} title={dateTime(c.lastActivityAt)}>
+                {listTime(c.lastActivityAt, locale)}
+              </time>
+            )}
           </span>
           <span className="conv-row__bottom">
             <span className="conv-row__sub">
-              {/* "You:" leads the line in the pane's direction; what was said follows it in its own. */}
-              {said.who && <span className="cw-row__who">{said.who}:</span>}
+              {/* Why it is here, in words: who said what last. "You" or the writer leads in the pane's direction; what was said follows in its own. */}
+              {said.who && (
+                <span className="cw-row__who">
+                  <bdi>{said.who}</bdi>:
+                </span>
+              )}
               <bdi className="cw-line">{preview}</bdi>
             </span>
             {/* Marks are quiet glyphs: what this viewer set on the chat, never its state. */}
@@ -332,7 +346,7 @@ function ConversationRow({
                 <span key={l.id} className={`cw-row__label cw-tone--${l.color}`} role="img" title={l.name} aria-label={l.name} />
               ))}
               {favorite && (
-                <span className="cw-row__mark cw-row__mark--favorite" title={copy.favoriteMark} aria-label={copy.favoriteMark}>
+                <span className="cw-row__mark" title={copy.favoriteMark} aria-label={copy.favoriteMark}>
                   <Icon name="heart" size={14} />
                 </span>
               )}
@@ -347,20 +361,13 @@ function ConversationRow({
                 </span>
               )}
             </span>
-            {/* The ONE state that matters most, at the row's end: asked in, else how long it has waited, else what is unread. */}
+            {/* Asked in (someone wants this viewer to act), else what is unread. */}
             {summoned ? (
-              <Badge tone="gold" dot>
-                {copy.mentionedBadge}
-              </Badge>
-            ) : c.needsReply ? (
-              <span className="cw-row__waited" title={dateTime(c.lastActivityAt)} aria-label={copy.waitedLabel(age)}>
-                <Icon name="hourglass" size={13} />
-                {age}
-              </span>
+              <Badge tone="info">{copy.mentionedBadge}</Badge>
             ) : (
               unread > 0 && (
                 <span className="cw-unread" aria-label={copy.unread(unread)}>
-                  {unread}
+                  {number(unread)}
                 </span>
               )
             )}

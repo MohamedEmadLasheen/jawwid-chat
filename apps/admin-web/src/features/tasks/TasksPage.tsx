@@ -7,11 +7,10 @@ import { holdsAny, isSuperAdmin } from '@/core/permissions/capabilities'
 import { academyWallClockToIso, ACADEMY_ZONE, clock12In, dayMonthIn, isoToAcademyWallClock } from '@/core/time/academyTime'
 import { Badge } from '@/shared/components/Badge'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
-import { PageHeader, type MastFigure } from '@/shared/components/PageHeader'
+import { PageHeader } from '@/shared/components/PageHeader'
 import { RowActions } from '@/shared/components/RowActions'
 import type { MenuItem } from '@/shared/components/Menu'
 import { relativeTime } from '@/features/admin/copy'
-import { dashboardApi, dashboardKeys } from '@/features/dashboard/api'
 import { academyToday, addDays } from '@/features/schedule/viewState'
 import { ReasonDialog } from '@/shared/components/ReasonDialog'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
@@ -30,7 +29,7 @@ import {
   type TaskView,
 } from './api'
 import { C, DEPARTMENT_LABEL, EVENT_LABEL, GROUP_LABEL, LEVEL_LABEL, SOURCE_LABEL, STATE_LABEL, TAB_LABEL, useCopy } from './copy'
-import { sourceLink, stateOf, STATE_TONE, titleOf } from './format'
+import { reasonOf, sourceLink, stateOf, STATE_TONE, titleOf } from './format'
 import { FinanceTag, PriorityChip } from './PriorityChip'
 import { SearchableSelect } from '@/shared/components/SearchableSelect'
 import { CASES_ACCESS_KEYS, TasksAreaTabs } from './TasksAreaTabs'
@@ -38,6 +37,8 @@ import './tasks.css'
 
 type Tab = TaskView | 'closed'
 const LEVELS: Level[] = ['high', 'medium', 'low']
+/** The window before a task is due in which its time turns amber. */
+const SOON_MS = 24 * 60 * 60 * 1000
 
 const keys = {
   all: ['tasks'] as const,
@@ -49,7 +50,7 @@ const keys = {
 /** "3 Nov, 6:00 PM": an instant on the academy's clock, 12-hour (PD-22, owner 2026-10-28). */
 function useWhen() {
   const { locale } = useI18n()
-  return (iso: string) => `${dayMonthIn(iso, ACADEMY_ZONE, locale)}, ${clock12In(iso, ACADEMY_ZONE, locale)}`
+  return (iso: string) => `${dayMonthIn(iso, ACADEMY_ZONE, locale)}${locale === 'ar' ? '، ' : ', '}${clock12In(iso, ACADEMY_ZONE, locale)}`
 }
 
 function useTitle() {
@@ -70,13 +71,14 @@ function useTabs(): { tabs: Tab[]; closedViews: TaskView[] } {
 }
 
 /** When a task is due, as the list groups it. Overdue is the server's own flag, never recomputed. */
-type Group = 'overdue' | 'today' | 'week' | 'later' | 'none'
-const GROUPS: Group[] = ['overdue', 'today', 'week', 'later', 'none']
+type Group = 'overdue' | 'today' | 'tomorrow' | 'week' | 'later' | 'none'
+const GROUPS: Group[] = ['overdue', 'today', 'tomorrow', 'week', 'later', 'none']
 function groupOf(t: Pick<TaskSummary, 'overdue' | 'dueAt'>, today: string): Group {
   if (t.overdue) return 'overdue'
   if (!t.dueAt) return 'none'
   const day = isoToAcademyWallClock(t.dueAt).date
   if (day <= today) return 'today'
+  if (day === addDays(today, 1)) return 'tomorrow'
   return day <= addDays(today, 7) ? 'week' : 'later'
 }
 
@@ -170,53 +172,8 @@ export function TasksPage({ eyebrow }: { eyebrow?: string }) {
   const hasCases = holdsAny(staff, CASES_ACCESS_KEYS)
   const today = academyToday()
 
-  // The masthead counts the viewer's own open tasks. They come from the unfiltered
-  // Mine list when all of it is loaded (the same request as the Mine view), else
-  // from the Dashboard's task counts; a figure neither can give is left out.
-  const mineQuery: ListQuery = useMemo(() => ({ view: 'mine', state: 'open' }), [])
-  const mine = useInfiniteQuery({
-    queryKey: keys.list(mineQuery),
-    queryFn: ({ pageParam }) => tasksApi.list(mineQuery, pageParam),
-    initialPageParam: undefined as string | undefined,
-    getNextPageParam: (last) => last.nextCursor ?? undefined,
-    staleTime: 15_000,
-  })
-  const counted = useQuery({ queryKey: dashboardKeys.section('tasks'), queryFn: () => dashboardApi.section('tasks'), staleTime: 60_000, retry: false })
-  const mineItems = mine.data?.pages.flatMap((p) => p.items) ?? []
-  const mineWhole = !!mine.data && !mine.hasNextPage
-  const tile = (key: string) => counted.data?.tiles.find((x) => x.key === key)
-  const figures: MastFigure[] = []
-  const overdueCount = mineWhole ? mineItems.filter((t) => t.overdue).length : tile('tasks.mine_overdue')?.count
-  if (overdueCount !== undefined) {
-    figures.push({
-      key: 'overdue',
-      label: tx(C.figOverdue),
-      value: number(overdueCount),
-      tone: overdueCount > 0 ? 'urgent' : 'quiet',
-      pressed: tab === 'mine' && overdue,
-      onClick: () => {
-        pick('mine')
-        setOverdue(!(tab === 'mine' && overdue))
-      },
-    })
-  }
-  if (mineWhole) {
-    const dueToday = mineItems.filter((t) => groupOf(t, today) === 'today').length
-    figures.push({ key: 'today', label: tx(C.figToday), value: number(dueToday), tone: dueToday > 0 ? 'key' : 'quiet' })
-  }
-  const openCount = mineWhole ? mineItems.length : tile('tasks.mine_open')?.count
-  if (openCount !== undefined) figures.push({ key: 'open', label: tx(C.figOpen), value: number(openCount) })
-  const waiting = tabs.includes('decisions') ? tile('tasks.awaiting_decision') : undefined
-  if (waiting) {
-    figures.push({
-      key: 'decisions',
-      label: tx(C.figDecisions),
-      value: waiting.capped ? `${number(waiting.count)}+` : number(waiting.count),
-      pressed: tab === 'decisions',
-      onClick: () => pick('decisions'),
-    })
-  }
-
+  // No figure strip: the overdue group below carries its count, and the Escalations
+  // page has none either, so the two pages of this place keep one layout.
   const filterCount = (level ? 1 : 0) + (category ? 1 : 0) + (overdue && tab !== 'closed' ? 1 : 0) + (tab === 'closed' && closedView !== 'mine' ? 1 : 0)
   const grouped = GROUPS.map((g) => ({ group: g, rows: items.filter((t) => groupOf(t, today) === g) })).filter((g) => g.rows.length > 0)
   const row = (t: TaskSummary) => (
@@ -229,11 +186,10 @@ export function TasksPage({ eyebrow }: { eyebrow?: string }) {
         <PageHeader
           eyebrow={eyebrow}
           title={tx(C.title)}
-          subtitle={tx(C.subtitle)}
-          figures={figures}
           actions={
             canCreate ? (
-              <button type="button" className="btn btn--primary" onClick={() => setCreating(true)}>
+              // Not the page's primary: the next thing to do is in the queue (and, with a task open, its own action).
+              <button type="button" className="btn" onClick={() => setCreating(true)}>
                 <Icon name="plus" size={16} />
                 {tx(C.newTask)}
               </button>
@@ -266,6 +222,9 @@ export function TasksPage({ eyebrow }: { eyebrow?: string }) {
                 ))}
               </div>
               <div className="sheet-bar__end">
+                <span className="tq__sort">
+                  {tx(tab === 'closed' ? C.sortClosed : C.sortDue)}
+                </span>
                 {gone && (
                   <button type="button" className="chip tq__clear" aria-label={tx(C.clearFilter, { filter: tx(C.goneOnly) })} onClick={() => setGone(false)}>
                     {tx(C.goneOnly)}
@@ -384,24 +343,35 @@ function TaskRow({ task, showAssignee, selected, onOpen }: { task: TaskSummary; 
   const closed = task.state === 'completed' || task.state === 'removed'
   const link = sourceLink(task)
   const late = !closed && task.overdue
+  // The last day before it is due is the window: amber, as red is for overdue.
+  const soon = !closed && !late && !!task.dueAt && Date.parse(task.dueAt) - Date.now() < SOON_MS
   const name = title(task)
+  const sep = locale === 'ar' ? '، ' : ', '
   return (
-    <li className={`tq-row${selected ? ' tq-row--selected' : ''}${closed ? ' tq-row--closed' : ''}${late ? ' tq-row--late' : ''}`}>
+    <li className={`tq-row${selected ? ' tq-row--selected' : ''}${closed ? ' tq-row--closed' : ''}${late ? ' tq-row--late' : ''}${soon ? ' tq-row--soon' : ''}`}>
       <div className="tq-row__main">
         <button type="button" className="tasks__title" dir="auto" aria-current={selected ? 'true' : undefined} onClick={onOpen}>
           {name}
         </button>
         <div className="tq-row__sub">
-          {/* Where it came from: the kind of work for a system task, the person for one somebody gave. */}
-          {task.source ? (
-            <span className="tasks__source">{tx(SOURCE_LABEL[task.source.type])}</span>
-          ) : (
-            task.createdBy && <span className="tasks__source" dir="auto">{tx(C.createdBy, { name: task.createdBy.name })}</span>
-          )}
-          {showAssignee && <span dir="auto">{tx(C.assignedTo, { name: task.assigneeName })}</span>}
+          {/* Why it is here, in words: the kind of work for a system task, the person for one somebody gave, and whose it is. */}
+          <span className="tq-row__why">
+            {task.source ? (
+              <span className="tasks__source">{tx(SOURCE_LABEL[task.source.type])}</span>
+            ) : (
+              task.createdBy && <span className="tasks__source" dir="auto">{tx(C.createdBy, { name: task.createdBy.name })}</span>
+            )}
+            {showAssignee && (
+              <>
+                {(task.source || task.createdBy) && sep}
+                <span dir="auto">{tx(C.assignedTo, { name: task.assigneeName })}</span>
+              </>
+            )}
+          </span>
+          {!closed && <PriorityChip task={task} />}
           {task.category === 'financial' && <FinanceTag />}
           {!closed && state !== 'open' && <Badge tone={STATE_TONE[state]}>{tx(STATE_LABEL[state])}</Badge>}
-          {task.needsReassignment && !closed && <Badge tone="danger">{tx(C.assigneeLeft)}</Badge>}
+          {task.needsReassignment && !closed && <Badge tone="neutral">{tx(C.goneOnly)}</Badge>}
         </div>
       </div>
       {/* The one fact a queue is read for: how long until it is due, or how long since. */}
@@ -423,24 +393,21 @@ function TaskRow({ task, showAssignee, selected, onOpen }: { task: TaskSummary; 
           <span className="tq-row__date">{tx(C.noDue)}</span>
         )}
       </div>
-      <div className="tq-row__level">{!closed && <PriorityChip task={task} />}</div>
-      <RowActions
-        label={tx(C.moreActions, { name })}
-        primary={
-          link && !closed ? (
-            <Link className="btn btn--sm" to={link} aria-label={`${tx(C.openSource)}: ${name}`}>
-              {tx(C.openSource)}
-            </Link>
-          ) : undefined
-        }
-      />
+      {/* One stated action, in a slot of its own width so the column stays straight; the open task's is in its inspector. */}
+      <div className="tq-row__act">
+        {link && !closed && !selected && (
+          <Link className="btn btn--sm" to={link} aria-label={`${tx(C.goPage)}: ${name}`}>
+            {tx(C.goPage)}
+          </Link>
+        )}
+      </div>
     </li>
   )
 }
 
 function TaskPanel({ id, onClose }: { id: string; onClose: () => void }) {
   const tx = useCopy()
-  const { locale } = useI18n()
+  const { locale, duration } = useI18n()
   const qc = useQueryClient()
   const when = useWhen()
   const title = useTitle()
@@ -496,18 +463,25 @@ function TaskPanel({ id, onClose }: { id: string; onClose: () => void }) {
           <>
             <header className="insp__head">
               <div className="insp__top">
-                <span className="insp__kind">
-                  <Icon name={t.source ? 'bolt' : 'user'} size={16} />
-                  {t.source || !t.createdBy ? tx(SOURCE_LABEL[t.source?.type ?? 'manual']) : tx(C.createdBy, { name: t.createdBy.name })}
-                </span>
+                <h2 className="tasks__panel-title" dir="auto">{title(t)}</h2>
                 <CloseButton onClose={onClose} />
               </div>
-              <h2 className="tasks__panel-title" dir="auto">{title(t)}</h2>
               <div className="tasks__chips">
+                <span className="insp__kind">
+                  {t.source || !t.createdBy ? tx(SOURCE_LABEL[t.source?.type ?? 'manual']) : tx(C.createdBy, { name: t.createdBy.name })}
+                </span>
                 {live && <PriorityChip task={t} />}
                 {t.category === 'financial' && <FinanceTag />}
-                <Badge tone={STATE_TONE[state]}>{tx(STATE_LABEL[state])}</Badge>
+                {state !== 'open' && <Badge tone={STATE_TONE[state]}>{tx(STATE_LABEL[state])}</Badge>}
               </div>
+              {/* When it is due, in words and coloured as on the row: the one fact the queue is read for. */}
+              {live && t.dueAt && (
+                <p className={`insp__due insp__due--${t.overdue ? 'late' : Date.parse(t.dueAt) - Date.now() < SOON_MS ? 'soon' : 'later'}`}>
+                  {t.overdue ? tx(C.dueAgo, { ago: duration(t.dueAt) }) : relativeTime(t.dueAt, locale)}
+                  {locale === 'ar' ? '، ' : ', '}
+                  {when(t.dueAt)}
+                </p>
+              )}
             </header>
 
             <div className="insp__body">
@@ -522,13 +496,16 @@ function TaskPanel({ id, onClose }: { id: string; onClose: () => void }) {
                     <dd dir="auto">{t.createdBy.name}</dd>
                   </div>
                 )}
+                {/* Shown as a fact only where it cannot be edited below (the line under the title says it in words). */}
+                {!can.has('due') && (
                 <div>
-                  <dt>{tx(C.dueAt)}</dt>
-                  <dd className={t.overdue && live ? 'insp__late' : undefined}>
-                    {t.dueAt ? when(t.dueAt) : tx(C.noDue)}
-                    {t.overdue && t.priorityReason !== 'overdue' && live && <OverdueMark />}
-                  </dd>
-                </div>
+                    <dt>{tx(C.dueAt)}</dt>
+                    <dd className={t.overdue && live ? 'insp__late' : undefined}>
+                      <span className="insp__when">{t.dueAt ? when(t.dueAt) : tx(C.noDue)}</span>
+                      {t.overdue && t.priorityReason !== 'overdue' && live && <OverdueMark />}
+                    </dd>
+                  </div>
+                )}
                 {link && (
                   <div>
                     <dt>{tx(C.factWhere)}</dt>
@@ -543,7 +520,7 @@ function TaskPanel({ id, onClose }: { id: string; onClose: () => void }) {
               </dl>
 
               {t.instructions && t.state === 'open' && (
-                <div className="tasks__banner" role="note">
+                <div className="tasks__banner tasks__banner--waiting" role="note">
                   <p className="tasks__banner-title">{tx(C.instructions)}</p>
                   <p className="tasks__text" dir="auto">{t.instructions}</p>
                 </div>
@@ -578,6 +555,10 @@ function TaskPanel({ id, onClose }: { id: string; onClose: () => void }) {
                           <option key={l} value={l}>{tx(LEVEL_LABEL[l])}</option>
                         ))}
                       </SearchableSelect>
+                      {/* When something raised the level above the one a person set, say so: one level, explained. */}
+                      {t.effectivePriority !== t.manualPriority && reasonOf(t, tx) && (
+                        <span className="field__hint">{tx(C.levelNow, { level: tx(LEVEL_LABEL[t.effectivePriority]), reason: reasonOf(t, tx)! })}</span>
+                      )}
                     </label>
                   )}
                   {can.has('due') && (
@@ -729,8 +710,9 @@ function DueControl({ date, time, disabled, onSave }: { date: string; time: stri
 function History({ task }: { task: TaskDetail }) {
   const tx = useCopy()
   const when = useWhen()
+  const { dir, locale } = useI18n()
   // "before → after" reads in the page's direction.
-  const arrow = useI18n().dir === 'rtl' ? '←' : '→'
+  const arrow = dir === 'rtl' ? '←' : '→'
   return (
     <ol className="tasks__history">
       {task.history.map((e) => {
@@ -738,16 +720,19 @@ function History({ task }: { task: TaskDetail }) {
         const after = e.after as Record<string, string | null> | null
         return (
           <li key={e.id}>
-            <strong>{tx(EVENT_LABEL[e.kind])}</strong>
-            {e.kind === 'priority_changed' && before?.priority && after?.priority && (
-              <> — {tx(LEVEL_LABEL[before.priority as Level])} {arrow} {tx(LEVEL_LABEL[after.priority as Level])}</>
-            )}
-            {e.kind === 'due_changed' && (
-              <> — {before?.dueAt ? when(before.dueAt) : tx(C.noDue)} {arrow} {after?.dueAt ? when(after.dueAt) : tx(C.noDue)}</>
-            )}
+            <span>
+              <strong>{tx(EVENT_LABEL[e.kind])}</strong>
+              {e.kind === 'priority_changed' && before?.priority && after?.priority && (
+                <>: {tx(LEVEL_LABEL[before.priority as Level])} {arrow} {tx(LEVEL_LABEL[after.priority as Level])}</>
+              )}
+              {e.kind === 'due_changed' && (
+                <>: {before?.dueAt ? when(before.dueAt) : tx(C.noDue)} {arrow} {after?.dueAt ? when(after.dueAt) : tx(C.noDue)}</>
+              )}
+            </span>{' '}
             <span className="tasks__history-by">
-              {' · '}
-              <span dir="auto">{e.actor ? e.actor.name : tx(C.system)}</span> · <time dateTime={e.at}>{when(e.at)}</time>
+              <span dir="auto">{e.actor ? e.actor.name : tx(C.system)}</span>
+              {locale === 'ar' ? '، ' : ', '}
+              <time dateTime={e.at}>{when(e.at)}</time>
             </span>
             {e.body && <p className="tasks__text" dir="auto">{e.body}</p>}
           </li>
@@ -882,6 +867,10 @@ function NewTaskDialog({ onClose }: { onClose: () => void }) {
     >
       <QueryBoundary isLoading={options.isLoading} error={options.error} onRetry={() => options.refetch()}>
         <label className="field">
+          <span className="field__label">{tx(C.taskTitle)}</span>
+          <input className="input" maxLength={200} value={title} onChange={(e) => setTitle(e.target.value)} />
+        </label>
+        <label className="field">
           <span className="field__label">{tx(C.assignee)}</span>
           <SearchableSelect className="select" value={assignee} onValueChange={(v) => setAssignee(v)}>
             <option value="">{tx(C.choose)}</option>
@@ -889,10 +878,6 @@ function NewTaskDialog({ onClose }: { onClose: () => void }) {
               <option key={`${p.kind}:${p.id}`} value={`${p.kind}:${p.id}`}>{p.name}</option>
             ))}
           </SearchableSelect>
-        </label>
-        <label className="field">
-          <span className="field__label">{tx(C.taskTitle)}</span>
-          <input className="input" maxLength={200} value={title} onChange={(e) => setTitle(e.target.value)} />
         </label>
         <label className="field">
           <span className="field__label">{tx(C.details)}</span>

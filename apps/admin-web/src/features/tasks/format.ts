@@ -60,8 +60,8 @@ export function stateOf(t: Pick<TaskSummary, 'state' | 'outcome' | 'instructions
 
 export const STATE_TONE: Record<keyof typeof STATE_LABEL, 'warn' | 'info' | 'ok' | 'neutral' | 'waiting'> = {
   open: 'info',
-  returned: 'warn',
-  awaiting_decision: 'waiting',
+  returned: 'info',
+  awaiting_decision: 'info',
   withdrawn: 'neutral',
   completed: 'ok',
   acknowledged: 'ok',

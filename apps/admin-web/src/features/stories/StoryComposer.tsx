@@ -538,13 +538,13 @@ function ReachCard({
 }) {
   const tx = useText()
   const plural = usePlural()
-  const { number } = useI18n()
+  const { number, locale } = useI18n()
   if (!hasAudience) return null
   return (
     <div className="reach-card" aria-live="polite">
       <span className="reach-card__label">{tx(S.willReach)}</span>
       {loading || !estimate ? (
-        <span className="reach-card__value reach-card__value--muted">{error ? '—' : tx(S.estimating)}</span>
+        <span className="reach-card__value reach-card__value--muted">{error ? tx(S.none) : tx(S.estimating)}</span>
       ) : (
         <>
           <span className="reach-card__value">{plural(COUNT.people, estimate.recipients)}</span>
@@ -555,7 +555,7 @@ function ReachCard({
               estimate.families > 0 && plural(COUNT.families, estimate.families),
             ]
               .filter(Boolean)
-              .join(' · ')}
+              .join(locale === 'ar' ? '، ' : ', ')}
           </span>
           {estimate.recipients === 0 && <span className="field__error">{tx(S.emptyAudience)}</span>}
           {estimate.excludedByReplyScope > 0 && (
