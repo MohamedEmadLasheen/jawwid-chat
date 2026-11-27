@@ -197,7 +197,7 @@ describe('Payments > Transactions', () => {
     expect(within(alpha!).getByText('Family Alpha')).toBeInTheDocument()
     expect(within(alpha!).getByText('Child A1')).toBeInTheDocument()
     expect(within(alpha!).getByText('3-month subscription')).toBeInTheDocument()
-    expect(within(alpha!).getByText('Subscription · 3 months')).toBeInTheDocument()
+    expect(within(alpha!).getByText('Subscription, 3 months')).toBeInTheDocument()
     expect(within(alpha!).getByText('Visa •••• 4242')).toBeInTheDocument()
     expect(within(alpha!).getByText(/1,200\.00/)).toBeInTheDocument()
     expect(within(alpha!).getByText('Paid')).toBeInTheDocument()

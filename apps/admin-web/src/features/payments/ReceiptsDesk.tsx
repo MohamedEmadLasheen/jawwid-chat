@@ -6,11 +6,13 @@ import { FilterChips } from '@/shared/components/FilterChips'
 import { Icon } from '@/shared/components/Icon'
 import { DetailActions, RequestQueue, useWidePane } from '@/shared/components/RequestQueue'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
+import { relativeTime } from '@/features/admin/copy'
 import type { Receipt, ReceiptStatus } from './api'
 import { PAY, describeError, type Pair, formatDay, formatMoney, toMinor, useCopy } from './copy'
 import { useApproveReceipt, useReceipts, useRejectReceipt } from './hooks'
 import { Money } from './Money'
 import { Field, Footer, ReasonDialog, ReceiptStatusBadge, ServerError } from './PaymentParts'
+
 
 const STATUSES: readonly ReceiptStatus[] = ['pending', 'approved', 'rejected']
 const FILTER_LABEL: Record<ReceiptStatus, Pair> = {
@@ -174,11 +176,16 @@ export function ReceiptsDesk({ onSeeTransactions }: { onSeeTransactions: () => v
   )
 }
 
-/** A receipt in the queue: whose it is and what for, when it came, where it stands, the amount at the row's end. */
+/**
+ * A receipt in the queue: whose it is and what it pays for, whether the parent
+ * wrote a note; at the row's end the amount, the heaviest thing on it, and how
+ * long ago it came. The list is already one status, so the row does not repeat it.
+ */
 function QueueRow({ receipt: r, current, onOpen }: { receipt: Receipt; current: boolean; onOpen: () => void }) {
-  const { dateTime } = useI18n()
+  const tx = useCopy()
+  const { locale, dateTime } = useI18n()
   return (
-    <li className="rv-rows__item" aria-label={r.family ? `${r.family.name} · ${r.label}` : r.label}>
+    <li className="rv-rows__item" aria-label={r.family ? `${r.family.name}${locale === 'ar' ? '، ' : ', '}${r.label}` : r.label}>
       <button type="button" className="rv-row" aria-current={current ? 'true' : undefined} onClick={onOpen}>
         <Avatar name={r.family?.name ?? r.label} seed={r.family?.id ?? r.id} size="sm" />
         <span className="rv-row__who">
@@ -189,16 +196,19 @@ function QueueRow({ receipt: r, current, onOpen }: { receipt: Receipt; current: 
           )}
           <span className={r.family ? 'rv-row__for' : 'rv-row__name'}>
             <bdi>{r.label}</bdi>
+            {r.note && (
+              <span className="rv-row__note">
+                <Icon name="chatText" size={14} />
+                <span className="rv-row__note-word">{tx(PAY.hasNote)}</span>
+              </span>
+            )}
           </span>
         </span>
-        <time className="rv-row__when" dateTime={r.uploadedAt}>
-          {dateTime(r.uploadedAt)}
-        </time>
-        <span className="rv-row__state">
-          <ReceiptStatusBadge status={r.status} />
-        </span>
-        <span className="rv-row__amount">
+        <span className="rv-row__end">
           <Money amountMinor={r.amountMinor} currency={r.currency} />
+          <time className="rv-row__when" dateTime={r.uploadedAt} title={dateTime(r.uploadedAt)}>
+            {relativeTime(r.uploadedAt, locale)}
+          </time>
         </span>
       </button>
     </li>
@@ -225,7 +235,9 @@ function ReceiptImage({ receipt: r }: { receipt: Receipt }) {
       {failed === r.fileUrl ? (
         <p className="rv__failed">{tx(PAY.imageFailed)}</p>
       ) : (
-        <img src={r.fileUrl} alt={tx(PAY.receiptImage, { label: r.label })} onError={() => setFailed(r.fileUrl)} />
+        <a className="rv__zoom" href={r.fileUrl} target="_blank" rel="noopener noreferrer" title={tx(PAY.openFile)}>
+          <img src={r.fileUrl} alt={tx(PAY.receiptImage, { label: r.label })} onError={() => setFailed(r.fileUrl)} />
+        </a>
       )}
     </div>
   )
@@ -246,7 +258,7 @@ function ReceiptInspector({ receipt: r, onApprove, onReject }: { receipt: Receip
         <Money amountMinor={r.amountMinor} currency={r.currency} size="lg" />
         <span className="rv__sub">{tx(PAY.transferredLine, { date: formatDay(r.transferredOn, locale) })}</span>
       </div>
-      <ReceiptImage receipt={r} />
+      {/* The facts in one short band, so the receipt keeps the height of the sheet. */}
       <dl className="rq-fields rv__facts">
         <div className="rq-field">
           <dt>{tx(PAY.forWhat)}</dt>
@@ -261,19 +273,11 @@ function ReceiptInspector({ receipt: r, onApprove, onReject }: { receipt: Receip
             {r.uploadedBy && (
               <>
                 {' '}
-                <bdi>{tx(PAY.uploadedBy, { name: r.uploadedBy.name })}</bdi>
+                <bdi className="rv__by">{tx(PAY.uploadedBy, { name: r.uploadedBy.name })}</bdi>
               </>
             )}
           </dd>
         </div>
-        {r.note && (
-          <div className="rq-field">
-            <dt>{tx(PAY.note)}</dt>
-            <dd className="rv__note">
-              <bdi>{r.note}</bdi>
-            </dd>
-          </div>
-        )}
         {r.status !== 'pending' && r.reviewedBy && r.reviewedAt && (
           <div className="rq-field">
             <dt>{tx(PAY.status)}</dt>
@@ -291,6 +295,16 @@ function ReceiptInspector({ receipt: r, onApprove, onReject }: { receipt: Receip
           </div>
         )}
       </dl>
+      {/* What the parent wrote is read before the proof: it often explains a difference (another name, another account). */}
+      {r.note && (
+        <figure className="rv__said">
+          <figcaption className="rv__said-who">{r.uploadedBy ? tx(PAY.noteBy, { name: r.uploadedBy.name }) : tx(PAY.note)}</figcaption>
+          <blockquote className="rv__note" dir="auto">
+            {r.note}
+          </blockquote>
+        </figure>
+      )}
+      <ReceiptImage receipt={r} />
       {r.mimeType.startsWith('image/') && (
         <a className="rv__file" href={r.fileUrl} target="_blank" rel="noopener noreferrer">
           <Icon name="external" size={15} />
@@ -343,6 +357,13 @@ function ApproveDialog({ receipt, onClose, onDone }: { receipt: Receipt; onClose
       footer={<Footer onCancel={onClose} onSave={submit} pending={approve.isPending} saveLabel={tx(PAY.approve)} />}
     >
       <ServerError error={approve.error} />
+      {/* What is being approved, first: whose money and how much they say they sent. */}
+      <div className="rv-approve">
+        <span className="rv-approve__who">
+          <bdi>{receipt.family?.name ?? receipt.label}</bdi>
+        </span>
+        <Money amountMinor={receipt.amountMinor} currency={receipt.currency} size="lg" />
+      </div>
       <p className="field__hint">{tx(PAY.approveHint)}</p>
       <Field
         label={tx(PAY.correctedAmount)}

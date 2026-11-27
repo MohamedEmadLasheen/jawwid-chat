@@ -54,10 +54,10 @@ export function RenewalRequestsPanel() {
         />
       ) : (
         <>
+          {/* What to do with the queue, said once before it. */}
+          <p className="rn__how">{tx(S.renewalsHint)}</p>
           <Group title={tx(S.waiting)} rows={waiting} waiting />
           <Group title={tx(S.renewed)} rows={renewed} />
-          {/* What the queue is and what to do with it, at its foot. */}
-          <p className="rn__foot">{tx(S.renewalsHint)}</p>
         </>
       )}
     </section>
@@ -69,10 +69,10 @@ function Group({ title, rows, waiting = false }: { title: string; rows: RenewalR
   const { locale, dateTime, number } = useI18n()
   if (rows.length === 0) return null
   return (
-    <div className="rn-group">
+    <div className={waiting ? 'rn-group rn-group--waiting' : 'rn-group'}>
       <h3 className="rn-group__head">
         <span>{title}</span>
-        <span className={waiting ? 'count' : 'count count--quiet'}>{number(rows.length)}</span>
+        <span className="count">{number(rows.length)}</span>
       </h3>
       <ul className="rn-list">
         {rows.map((r) => (
@@ -83,22 +83,30 @@ function Group({ title, rows, waiting = false }: { title: string; rows: RenewalR
                 <span className="entity__name">
                   <bdi>{r.child.name}</bdi>
                 </span>
+                {/* The row's reason, as a sentence: who asked, and when. */}
                 <span className="entity__sub">
-                  <bdi>{r.parentName}</bdi>
+                  {tx(S.askedBy, { name: `\u2068${r.parentName}\u2069` })}{' '}
+                  <time dateTime={r.requestedAt} title={dateTime(r.requestedAt)}>
+                    {relativeTime(r.requestedAt, locale)}
+                  </time>
                 </span>
               </div>
             </div>
-            <time className="rn-row__when" dateTime={r.requestedAt} title={dateTime(r.requestedAt)}>
-              {relativeTime(r.requestedAt, locale)}
-            </time>
-            <RowActions
-              primary={
-                <Link className="btn btn--sm" to={studentPath(r.child.id)} aria-label={tx(S.openStudentNamed, { name: r.child.name })}>
-                  {tx(S.openStudent)}
-                </Link>
-              }
-              label={tx(S.openStudentNamed, { name: r.child.name })}
-            />
+            {/* A waiting row has its one action; a renewed row is done and keeps only a quiet way to the student. */}
+            {waiting ? (
+              <RowActions
+                primary={
+                  <Link className="btn btn--sm" to={studentPath(r.child.id)} aria-label={tx(S.openStudentNamed, { name: r.child.name })}>
+                    {tx(S.openStudent)}
+                  </Link>
+                }
+                label={tx(S.openStudentNamed, { name: r.child.name })}
+              />
+            ) : (
+              <Link className="rn-row__link" to={studentPath(r.child.id)} aria-label={tx(S.openStudentNamed, { name: r.child.name })}>
+                {tx(S.openStudent)}
+              </Link>
+            )}
           </li>
         ))}
       </ul>

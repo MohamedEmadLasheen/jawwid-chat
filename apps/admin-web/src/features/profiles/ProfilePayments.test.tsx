@@ -236,7 +236,7 @@ describe('PD-27 on the Parent Profile', () => {
     const r = within(requests).getAllByRole('listitem')[0]!
     expect(within(r).getByText('Open')).toBeInTheDocument()
     expect(within(r).getByText('3-month subscription')).toBeInTheDocument()
-    expect(within(r).getByText(/^Amount .*1,200\.00 · paid .*0\.00 · remaining .*1,200\.00$/)).toBeInTheDocument()
+    expect(within(r).getByText(/^Amount .*1,200\.00, paid .*0\.00, remaining .*1,200\.00$/)).toBeInTheDocument()
     // PD-30 (3): the package reads "3 months" (and "— N lessons" when the request buys lessons).
     expect(within(r).getByText('3 months')).toBeInTheDocument()
     // One stated action on the row (Copy link); sending and cancelling are in its "⋯" menu.
@@ -251,9 +251,11 @@ describe('PD-27 on the Parent Profile', () => {
     expect(within(cash!).getByText('recorded by Supervisor One')).toBeInTheDocument()
     expect(within(cash!).getByText('Invoice JW-2026-000001')).toBeInTheDocument()
     expect(within(card!).getByText('confirmed by Stripe')).toBeInTheDocument()
-    // A recorder voids (never a card payment); only a verifier refunds.
-    expect(within(cash!).getByRole('button', { name: 'Void' })).toBeInTheDocument()
-    expect(within(card!).queryByRole('button', { name: 'Void' })).not.toBeInTheDocument()
+    // A recorder voids (never a card payment); only a verifier refunds. Void waits in the row's "⋯".
+    await userEvent.click(within(cash!).getByRole('button', { name: /^More actions: the payment of/ }))
+    expect(within(cash!).getByRole('menuitem', { name: 'Void' })).toBeInTheDocument()
+    await userEvent.keyboard('{Escape}')
+    expect(within(card!).queryByRole('button', { name: /^More actions: the payment of/ })).not.toBeInTheDocument()
     expect(within(received).queryByRole('button', { name: 'Refund' })).not.toBeInTheDocument()
 
     const invoices = screen.getByRole('region', { name: 'Invoices' })
@@ -489,10 +491,12 @@ describe('PD-27 on the Parent Profile', () => {
     const received = await screen.findByRole('region', { name: 'Payments received' })
     const [cash] = within(received).getAllByRole('listitem')
     const cardRow = () => within(received).getAllByRole('listitem')[1]!
-    expect(within(cardRow()).queryByRole('button', { name: 'Void' })).not.toBeInTheDocument()
+    // The card payment's only action is Refund: no "⋯", so no Void.
+    expect(within(cardRow()).queryByRole('button', { name: /^More actions: the payment of/ })).not.toBeInTheDocument()
     expect(within(cardRow()).getByRole('button', { name: 'Refund' })).toBeInTheDocument()
 
-    await userEvent.click(within(cash!).getByRole('button', { name: 'Void' }))
+    await userEvent.click(within(cash!).getByRole('button', { name: /^More actions: the payment of/ }))
+    await userEvent.click(within(cash!).getByRole('menuitem', { name: 'Void' }))
     let dialog = screen.getByRole('dialog', { name: /^Void the payment of/ })
     await userEvent.click(within(dialog).getByRole('button', { name: 'Void' }))
     expect(within(dialog).getByText('Say why.')).toBeInTheDocument()
@@ -563,7 +567,8 @@ describe('PD-27 on the Parent Profile', () => {
     )
     renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1#money' })
     const received = await screen.findByRole('region', { name: 'Payments received' })
-    expect(within(received).queryByRole('button', { name: 'Void' })).not.toBeInTheDocument()
+    // Void would wait in the row's "⋯": there is none, Refund is the only action.
+    expect(within(received).queryByRole('button', { name: /^More actions: the payment of/ })).not.toBeInTheDocument()
     expect(within(received).getByRole('button', { name: 'Refund' })).toBeInTheDocument()
   })
 
@@ -682,7 +687,8 @@ describe('PD-27 on the Parent Profile', () => {
       expect(screen.queryByRole('menuitem', { name: /Cancel the request/ })).not.toBeInTheDocument()
       await userEvent.keyboard('{Escape}')
     }
-    expect(screen.queryByRole('button', { name: 'Void' })).not.toBeInTheDocument()
+    // Void would wait in a payment's "⋯": no payment has one.
+    expect(screen.queryByRole('button', { name: /^More actions: the payment of/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Review in Payments' })).not.toBeInTheDocument()
     // Copying a link someone else created is still offered.
     expect(within(requests).getByRole('button', { name: 'Copy link' })).toBeInTheDocument()
@@ -693,7 +699,8 @@ describe('PD-27 on the Parent Profile', () => {
     renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1#money' })
     const received = await screen.findByRole('region', { name: 'Payments received' })
     expect(within(received).getByRole('button', { name: 'Refund' })).toBeInTheDocument()
-    expect(within(received).queryByRole('button', { name: 'Void' })).not.toBeInTheDocument()
+    // Void would wait in the row's "⋯": there is none.
+    expect(within(received).queryByRole('button', { name: /^More actions: the payment of/ })).not.toBeInTheDocument()
   })
 
   it('a recorder with pending receipts is pointed at the Payments area', async () => {

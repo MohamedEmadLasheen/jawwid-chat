@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { moneyParts } from '@/features/instalments/copy'
 import './finance.css'
@@ -26,6 +27,19 @@ export function Money({
       <span className="money__c" dir="auto">
         {unit}
       </span>
+    </span>
+  )
+}
+
+/**
+ * A state that went wrong and asks nothing more of anyone (a declined card, a
+ * rejected receipt): a red dot and the word. It is deliberately not the solid
+ * urgent tag, which is kept for what a person must act on now (overdue, a dispute).
+ */
+export function FailedTag({ children, title }: { children: ReactNode; title?: string }) {
+  return (
+    <span className="badge badge--failed" title={title}>
+      {children}
     </span>
   )
 }

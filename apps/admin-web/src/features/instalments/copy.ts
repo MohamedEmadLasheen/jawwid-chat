@@ -10,16 +10,18 @@ export { useCopy, type Pair } from '@/features/organization/copy'
  */
 export const I = {
   title: { en: 'Instalment payments', ar: 'الأقساط' },
+  // The one line that prevents a mistake: the payment is not recorded here.
   subtitle: {
-    en: 'Overdue first, then due today, then upcoming. A payment is recorded on the Parent Profile.',
-    ar: 'المتأخر أولًا، ثم المستحق اليوم، ثم القادم. تُسجَّل الدفعة في ملف ولي الأمر.',
+    en: 'A payment is recorded on the payer’s Parent Profile: open their file from the row.',
+    ar: 'تُسجَّل الدفعة في ملف ولي الأمر الدافع: افتح ملفه من الصف.',
   },
   all: { en: 'All', ar: 'الكل' },
   mine: { en: 'Mine', ar: 'مسؤوليتي' },
   noSupervisor: { en: 'No billing supervisor', ar: 'بلا مشرف تحصيل' },
   showPaid: { en: 'Show paid', ar: 'إظهار المدفوع' },
   // PD-30: overdue before the payment lock started -- these never lock a group.
-  beforeGoLive: { en: 'Overdue before go-live', ar: 'متأخر قبل التفعيل' },
+  // The box narrows the list to these (the server's `beforeGoLive=true`); it says so.
+  beforeGoLive: { en: 'Overdue before go-live only', ar: 'المتأخر قبل التفعيل فقط' },
   beforeGoLiveHint: {
     en: 'Due before {date}: these never lock a group. Follow them up by hand.',
     ar: 'مستحق قبل {date}: لا يوقف المجموعة. تابِعه يدويًا.',
@@ -32,6 +34,8 @@ export const I = {
   },
   planLabel: { en: 'Instalment {i} of {n}', ar: 'القسط {i} من {n}' },
   planOpenLabel: { en: 'Instalment {i} of the {n} still open', ar: 'القسط {i} من {n} ما زالت مفتوحة' },
+  planOf: { en: '{i} of {n}', ar: '{i} من {n}' },
+  leftOnPlan: { en: '{amount} left', ar: 'المتبقي {amount}' },
   // The strip's key, and the same words in each strip's own label.
   keyPaid: { en: 'paid', ar: 'مدفوع' },
   keyLate: { en: 'late', ar: 'متأخر' },
@@ -141,7 +145,7 @@ export function countWords(n: number, forms: CountForms, locale: 'ar' | 'en'): s
 }
 
 export const DAYS: CountForms = { en: ['{n} day', '{n} days'], ar: ['يوم واحد', 'يومين', '{n} أيام', '{n} يومًا'] }
-export const OPEN_ONES: CountForms = { en: ['{n} open', '{n} open'], ar: ['واحد مفتوح', 'اثنان مفتوحان', '{n} مفتوحة', '{n} مفتوحًا'] }
+export const OPEN_ONES: CountForms = { en: ['{n} open', '{n} open'], ar: ['قسط واحد مفتوح', 'قسطان مفتوحان', '{n} أقساط مفتوحة', '{n} قسطًا مفتوحًا'] }
 export const INSTALMENTS: CountForms = {
   en: ['{n} instalment', '{n} instalments'],
   ar: ['قسط واحد', 'قسطان', '{n} أقساط', '{n} قسطًا'],

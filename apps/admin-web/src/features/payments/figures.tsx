@@ -57,15 +57,18 @@ export function useFinanceFigures(): FinanceFigures {
   })
 
   const others = (sums: CurrencySum[]) => {
-    if (sums.length < 2) return null
-    const list = sums.slice(1).map((s) => {
+    // Another currency that came to nothing (a voided payment) is not news.
+    const rest = sums.slice(1).filter((s) => s.amountMinor !== 0)
+    if (rest.length === 0) return null
+    const list = rest.map((s) => {
       const p = moneyParts(s.amountMinor, s.currency, locale)
       // Isolated, so a Latin label such as US$ keeps its order inside Arabic text.
       return `⁨${p.number} ${p.unit}⁩`
     })
     return tx(FIN.also, { amounts: list.join(locale === 'ar' ? ' و' : ', ') })
   }
-  const join = (...parts: Array<string | null>) => parts.filter(Boolean).join(' · ')
+  // A note is a short sentence: its parts joined the way the language joins them, never with a middle dot.
+  const join = (...parts: Array<string | null>) => parts.filter(Boolean).join(locale === 'ar' ? '، ' : ', ')
   /** A sum as a figure: the numeral, its currency as the unit. A count stands alone. */
   const figure = (key: string, label: string, sums: CurrencySum[], count: number, noteWords: string): MastFigure => {
     const first = sums[0]
@@ -95,7 +98,8 @@ export function useFinanceFigures(): FinanceFigures {
     const sums = collected.data.totals
       .map((t) => ({ currency: t.currency, count: t.count, amountMinor: t.netMinor }))
       .sort((a, b) => b.count - a.count || b.amountMinor - a.amountMinor)
-    const count = sums.reduce((n, s) => n + s.count, 0)
+    // The count is of the payments the figure sums (its currency); the other currencies are named in the note.
+    const count = sums[0]?.count ?? 0
     const monthName = new Intl.DateTimeFormat(LOCALE_TAG[locale], { month: 'long', timeZone: 'UTC' }).format(new Date(`${month.from}T12:00:00Z`))
     collectedFigure = figure('collected', tx(FIN.collected, { month: monthName }), sums, 0, countWords(count, PAYMENTS, locale))
   }

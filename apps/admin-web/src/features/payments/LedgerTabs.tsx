@@ -54,7 +54,7 @@ import {
   paymentCreditsLessons,
   useCopy,
 } from './copy'
-import { Money, sumByCurrency } from './Money'
+import { FailedTag, Money, sumByCurrency } from './Money'
 import {
   useCardAttempts,
   useDownloadInvoice,
@@ -85,14 +85,19 @@ const ATTEMPT_FILTERS: readonly AttemptFilter[] = ['failed', 'open', 'expired', 
 /** The server caps the search at 100 characters. */
 const MAX_SEARCH = 100
 
-const STATUS_TONE: Record<TransactionStatus, Tone> = { standing: 'ok', partially_refunded: 'warn', refunded: 'outline', voided: 'outline' }
-const ATTEMPT_TONE: Record<AttemptStatus, Tone> = { open: 'info', complete: 'ok', expired: 'outline', failed: 'danger' }
+/*
+ * Three state colours only. Done is green; waiting (open, to look at again) is
+ * amber; what a person must act on now is the solid urgent tag; what failed and
+ * asks nothing more is the red dot (FailedTag), so "failed" never reads as "urgent".
+ */
+const STATUS_TONE: Record<TransactionStatus, Tone> = { standing: 'ok', partially_refunded: 'info', refunded: 'neutral', voided: 'neutral' }
+const ATTEMPT_TONE: Record<Exclude<AttemptStatus, 'failed'>, Tone> = { open: 'waiting', complete: 'ok', expired: 'neutral' }
+/** Outcomes that went wrong and are over: Stripe said no, nothing is left to do here. */
+const FAILED_OUTCOMES: ReadonlySet<string> = new Set(['payment_failed', 'checkout_failed'])
 const OUTCOME_TONE: Record<string, Tone> = {
   recorded: 'ok',
   refund_recorded: 'ok',
   mismatch: 'danger',
-  payment_failed: 'warn',
-  checkout_failed: 'warn',
   refund_deferred: 'warn',
   unknown_session: 'warn',
   refund_failed_after_record: 'danger',
@@ -128,17 +133,29 @@ function byDay<T>(rows: readonly T[], dayOf: (row: T) => string): Array<{ day: s
   return days
 }
 
-/** A day's heading across a ledger: the day in words, and what the day came to where that is known. */
+/**
+ * A day's heading across a ledger: the day in words; what the day came to, where
+ * that is known, sits in the amount column (the one before the actions) so the
+ * day's sum lines up with the amounts under it.
+ */
 function DayRow({ day, span, children }: { day: string; span: number; children?: ReactNode }) {
   const { locale } = useI18n()
+  if (!children) {
+    return (
+      <tr className="tx-day">
+        <th scope="rowgroup" colSpan={span}>
+          <span className="tx-day__name">{dayHeading(day, locale)}</span>
+        </th>
+      </tr>
+    )
+  }
   return (
     <tr className="tx-day">
-      <th scope="rowgroup" colSpan={span}>
-        <span className="tx-day__in">
-          <span className="tx-day__name">{dayHeading(day, locale)}</span>
-          {children}
-        </span>
+      <th scope="rowgroup" colSpan={span - 2}>
+        <span className="tx-day__name">{dayHeading(day, locale)}</span>
       </th>
+      <td className="tx-day__sum tx-end">{children}</td>
+      <td className="tx-day__pad" />
     </tr>
   )
 }
@@ -175,7 +192,7 @@ export function TransactionStatusBadge({ status }: { status: TransactionStatus }
 function OverpaidBadge({ overpaid }: { overpaid: Overpaid }) {
   const tx = useCopy()
   return (
-    <Badge tone={overpaid.settled ? 'outline' : 'danger'}>
+    <Badge tone={overpaid.settled ? 'neutral' : 'danger'}>
       {tx(overpaid.settled ? LED.overpaidSettled : LED.overpaid)}
     </Badge>
   )
@@ -183,8 +200,9 @@ function OverpaidBadge({ overpaid }: { overpaid: Overpaid }) {
 
 function AttemptStatusBadge({ status }: { status: AttemptStatus }) {
   const tx = useCopy()
+  if (status === 'failed') return <FailedTag>{tx(ATTEMPT_STATUS.failed)}</FailedTag>
   return (
-    <Badge tone={ATTEMPT_TONE[status] ?? 'outline'} dot>
+    <Badge tone={ATTEMPT_TONE[status] ?? 'neutral'} dot>
       {tx(ATTEMPT_STATUS[status] ?? raw(status))}
     </Badge>
   )
@@ -192,6 +210,7 @@ function AttemptStatusBadge({ status }: { status: AttemptStatus }) {
 
 function OutcomeBadge({ outcome }: { outcome: string }) {
   const tx = useCopy()
+  if (FAILED_OUTCOMES.has(outcome)) return <FailedTag title={outcome}>{tx(EVENT_OUTCOME[outcome] ?? raw(outcome))}</FailedTag>
   return (
     <Badge tone={OUTCOME_TONE[outcome] ?? 'neutral'}>
       <span title={outcome}>{tx(EVENT_OUTCOME[outcome] ?? raw(outcome))}</span>
@@ -460,7 +479,9 @@ function forWhat(request: Transaction['request'], locale: 'ar' | 'en', tx: Retur
   if (!request) return null
   const parts = [tx(PURPOSE_LABEL[request.purpose] ?? raw(request.purpose))]
   if (request.planMonths) parts.push(monthsLabel(request.planMonths, locale))
-  return parts.join(' · ')
+  const said = parts.join(locale === 'ar' ? '، ' : ', ')
+  // A label that already says it ("Balance") needs no second line.
+  return said.trim() === request.label.trim() ? null : said
 }
 
 /**
@@ -509,11 +530,10 @@ function Totals({ totals }: { totals: TransactionTotal[] }) {
               <span className="pay-sum__op" aria-hidden="true">
                 =
               </span>
+              {/* The net stands under the amount column, digits on its edge, its currency beside them. */}
               <span className="pay-sum__term pay-sum__term--net">
                 <span className="pay-sum__k">{tx(LED.net)}</span>
-                <span className="pay-sum__v" dir="ltr">
-                  {figure(t.netMinor)}
-                </span>
+                <Money amountMinor={t.netMinor} currency={t.currency} />
               </span>
             </li>
           )
@@ -568,10 +588,10 @@ function TransactionRow({ t, onOpen, onInvoice }: { t: Transaction; onOpen: () =
         {t.request ? (
           <>
             <bdi>{t.request.label}</bdi>
-            <span className="pay-sub">{forWhat(t.request, locale, tx)}</span>
+            {forWhat(t.request, locale, tx) && <span className="pay-sub">{forWhat(t.request, locale, tx)}</span>}
           </>
         ) : (
-          <span className="pay-quiet">—</span>
+          <span className="pay-quiet">{tx(LED.noRequestShort)}</span>
         )}
       </td>
       <td className="tx-c-method">
@@ -585,7 +605,7 @@ function TransactionRow({ t, onOpen, onInvoice }: { t: Transaction; onOpen: () =
           </span>
         )}
       </td>
-      <td className="tx-c-ref">{invoice ? <bdi className="pay-invoice" dir="ltr">{invoice.number}</bdi> : <span className="pay-quiet">—</span>}</td>
+      <td className="tx-c-ref">{invoice ? <bdi className="pay-invoice" dir="ltr">{invoice.number}</bdi> : <span className="pay-quiet">{tx(LED.noInvoice)}</span>}</td>
       <td className="tx-c-amount tx-end">
         <Money amountMinor={t.amountMinor} currency={t.currency} />
         <span className="tx-states">
@@ -688,7 +708,7 @@ function TransactionDetailBody({ d }: { d: TransactionDetail }) {
             {tx(METHOD[p.method] ?? raw(p.method))}
             {card && (
               <>
-                {' · '}
+                {locale === 'ar' ? '، ' : ', '}
                 <bdi dir="ltr">{card}</bdi>
               </>
             )}
@@ -738,10 +758,12 @@ function TransactionDetailBody({ d }: { d: TransactionDetail }) {
           {p.voided && (
             <>
               <dt>{tx(LED.voided)}</dt>
-              <dd dir="auto">
-                {dateTime(p.voided.at)}
-                {p.voided.by ? ` · ${p.voided.by.name}` : ''}
-                {p.voided.reason ? ` · ${p.voided.reason}` : ''}
+              <dd>
+                <span className="pay-why">
+                  <span>{dateTime(p.voided.at)}</span>
+                  {p.voided.by && <bdi>{tx(LED.voidedBy, { name: p.voided.by.name })}</bdi>}
+                  {p.voided.reason && <bdi className="pay-sub">{p.voided.reason}</bdi>}
+                </span>
               </dd>
             </>
           )}
@@ -761,7 +783,7 @@ function TransactionDetailBody({ d }: { d: TransactionDetail }) {
       </Section>
 
       {p.stripe && (
-        <Section title={tx(LED.stripeRefs)} aside={p.stripe.livemode === false ? <Badge tone="warn">{tx(LED.testMode)}</Badge> : undefined}>
+        <Section title={tx(LED.stripeRefs)} aside={p.stripe.livemode === false ? <Badge tone="neutral">{tx(LED.testMode)}</Badge> : undefined}>
           <dl className="tf-kv pay-refs">
             {refs.map((r) => (
               <Fragment key={r.key}>
@@ -859,7 +881,7 @@ function TransactionDetailBody({ d }: { d: TransactionDetail }) {
                 <div className="pf-entry__head">
                   <Code>{e.type}</Code>
                   <OutcomeBadge outcome={e.outcome} />
-                  {!e.livemode && <Badge tone="warn">{tx(LED.testMode)}</Badge>}
+                  {!e.livemode && <Badge tone="neutral">{tx(LED.testMode)}</Badge>}
                 </div>
                 <p className="pf-entry__meta">{dateTime(e.receivedAt)}</p>
               </li>
@@ -1055,7 +1077,7 @@ export function AttemptsTab() {
  */
 function AttemptRow({ a, onOpenPayment }: { a: CardAttemptRow; onOpenPayment: (paymentId: string) => void }) {
   const tx = useCopy()
-  const { dateTime, number } = useI18n()
+  const { time, number, locale } = useI18n()
   const paymentId = a.paymentId
   return (
     <tr>
@@ -1072,8 +1094,13 @@ function AttemptRow({ a, onOpenPayment }: { a: CardAttemptRow; onOpenPayment: (p
             )}
             <span className="entity__sub">
               <bdi>{a.request.label}</bdi>
-              <span aria-hidden="true"> · </span>
-              <span>{tx(PURPOSE_LABEL[a.request.purpose] ?? raw(a.request.purpose))}</span>
+              {/* The purpose, unless the label already says it ("Renewal, 1 month"). */}
+              {!a.request.label.toLocaleLowerCase().includes(tx(PURPOSE_LABEL[a.request.purpose] ?? raw(a.request.purpose)).toLocaleLowerCase()) && (
+                <span className="pay-purpose">
+                  {locale === 'ar' ? '، ' : ', '}
+                  {tx(PURPOSE_LABEL[a.request.purpose] ?? raw(a.request.purpose))}
+                </span>
+              )}
             </span>
           </div>
         </div>
@@ -1081,16 +1108,22 @@ function AttemptRow({ a, onOpenPayment }: { a: CardAttemptRow; onOpenPayment: (p
       <td className="tx-c-why">
         <FailureWords a={a} />
         <span className="pay-sub tx-declines">
-          <span>
-            {tx(LED.colTries)} <span className="pay-count">{number(a.failureCount)}</span>
-          </span>
-          {a.lastFailedAt && <span>{tx(LED.lastFailedAt, { date: dateTime(a.lastFailedAt) })}</span>}
+          {/* No decline is no news. */}
+          {a.failureCount > 0 && (
+            <span>
+              {tx(LED.colTries)} <span className="pay-count">{number(a.failureCount)}</span>
+            </span>
+          )}
+          {/* The day heads the group: the time is enough. */}
+          {a.lastFailedAt && <span>{tx(LED.lastFailedAt, { date: time(a.lastFailedAt) })}</span>}
         </span>
       </td>
       <td className="tx-c-state">
         <AttemptStatusBadge status={a.status} />
+        {/* The second fact, apart from the attempt's own status: was the money paid in the end. */}
         <span className="pay-sub tx-paid">
-          {tx(LED.colPaid)} <Badge tone={paymentId ? 'ok' : 'outline'}>{tx(paymentId ? LED.yes : LED.no)}</Badge>
+          {tx(LED.colPaid)}:{' '}
+          <strong className={paymentId ? 'tx-paid__yes' : 'tx-paid__no'}>{tx(paymentId ? LED.yes : LED.no)}</strong>
         </span>
       </td>
       <td className="tx-c-amount tx-end">
@@ -1230,7 +1263,7 @@ function EventRow({ e }: { e: StripeEvent }) {
         <OutcomeBadge outcome={e.outcome} />
       </td>
       <td className="tx-c-object">{e.objectId ? <Code>{e.objectId}</Code> : <span className="pay-quiet">—</span>}</td>
-      <td className="tx-c-mode">{e.livemode ? tx(LED.live) : <Badge tone="warn">{tx(LED.testMode)}</Badge>}</td>
+      <td className="tx-c-mode">{e.livemode ? tx(LED.live) : <Badge tone="neutral">{tx(LED.testMode)}</Badge>}</td>
     </tr>
   )
 }

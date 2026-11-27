@@ -1,7 +1,8 @@
-/* PD-27 Payments. One masthead with the tabs on its lower edge; under it each
-   tab is its own composition: a review desk, a ledger sheet, a settings sheet.
+/* PD-27 Payments. One masthead with the tabs under it; each tab is its own
+   composition: a review desk, ledger sheets grouped by day, a settings sheet.
    The lists the Parent Profile shares (.pf-* entries, .tf-* layout) come with it.
-   Logical properties only. */
+   Tokens from core/theme/system.css only; logical properties only; no gold
+   (gold is "here and now" and lives in the navigation). */
 @import '../profiles/profiles.css';
 @import './finance.css';
 
@@ -15,89 +16,127 @@
 
 .pay-sub { display: block; margin: 0; font-size: var(--fs-xs); color: var(--ink-muted); }
 .pay-quiet { color: var(--ink-muted); }
-.pay-code { font-family: var(--font-mono, ui-monospace, monospace); font-size: var(--fs-xs); overflow-wrap: anywhere; unicode-bidi: isolate; }
+.pay-code { font-family: var(--font-mono); font-size: var(--fs-xs); overflow-wrap: anywhere; unicode-bidi: isolate; }
 .pay-inline { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; min-inline-size: 0; }
-.pay-more { display: flex; justify-content: center; padding: var(--space-3); border-block-start: 1px solid var(--hairline-soft); }
-.pay-count { font-family: var(--display); font-weight: 600; font-variant-numeric: tabular-nums lining-nums; color: var(--ink); }
-.pay-invoice { font-size: var(--fs-xs); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pay-more { display: flex; justify-content: center; padding: var(--space-3); border-block-start: 1px solid var(--line-2); }
+.pay-count { font-family: var(--font-head); font-weight: 600; font-variant-numeric: tabular-nums lining-nums; color: var(--ink); }
+.pay-invoice { font-size: var(--fs-xs); font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--ink-2); }
 .pay-why { display: grid; gap: 2px; }
+.pay-purpose { margin: 0; }
 
-/* The ledger's rules, kept in view under the lists they protect. */
-.pay-rules {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: baseline;
-  gap: 4px var(--space-5);
-  margin-block-start: var(--space-5);
-  padding-inline: var(--space-4);
+/* The ledger's rules, kept under the lists they protect: a quiet foot, not a band. */
+.pay-rules { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px var(--space-5); margin-block-start: var(--space-5); padding-inline: var(--space-1); }
+.pay-rules__label { margin: 0; white-space: nowrap; color: var(--ink-muted); }
+.pay-rules__list { display: flex; flex-wrap: wrap; gap: 4px var(--space-5); margin: 0; padding: 0; list-style: none; font-size: var(--fs-sm); color: var(--ink-muted); }
+.pay-rules__list li { display: inline-flex; align-items: baseline; gap: 8px; }
+.pay-rules__list li::before { content: ''; flex: none; inline-size: 5px; block-size: 5px; border-radius: 50%; background: var(--line-strong); transform: translateY(-2px); }
+
+/* One masthead height on every tab, so switching tabs never moves the page:
+   the figures sit on one short line and give the work its height. */
+@media (min-width: 768px) {
+  .pay-page .figures { margin-block-start: var(--space-4); }
+  .pay-page .figure { padding-block: 8px 10px; }
+  .pay-page .figure__n { font-size: 28px; }
+  .pay-page .mast__tabs { margin-block-start: var(--space-3); }
 }
-.pay-rules__label { white-space: nowrap; }
-.pay-rules__list { display: flex; flex-wrap: wrap; gap: 4px 0; margin: 0; padding: 0; list-style: none; font-size: var(--fs-sm); color: var(--ink-muted); }
-.pay-rules__list li { margin-inline-end: var(--space-4); padding-inline-end: var(--space-4); border-inline-end: 1px solid var(--hairline); }
-.pay-rules__list li:last-child { margin-inline-end: 0; padding-inline-end: 0; border-inline-end: 0; }
 
 /* ------------------------------------------------------ receipts: the desk */
 
-/* The queue at the start, the receipt being read beside it. The inspector is
-   a sheet of its own, wide enough to read an image in. */
-.rv-desk { --rq-panel: clamp(420px, 42vw, 580px); }
-.rv-desk .rq__panel { padding-inline-start: 0; border-inline-start: 0; }
+/* The queue at the start, the receipt being read beside it on its own white
+   sheet, wide enough to read an image in. */
+.rv-desk { --rq-panel: clamp(460px, 46vw, 660px); }
+/* The panel is only the track; the receipt's own sheet is the one surface (no box in a box). */
+.rv-desk .rq__panel, .rv-desk .rq__panel.sheet { padding-inline-start: 0; border: 0; background: none; }
 .rv-desk .rq__panel > .rq-detail {
   inline-size: auto;
   padding: var(--space-4) var(--space-5) 0;
-  border: 1px solid var(--hairline);
+  border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   background: var(--surface);
 }
 .rv-desk .rq-panel__head { padding-block-end: var(--space-3); }
+.rv-desk .rq-foot { border-block-start-color: var(--line-2); border-end-start-radius: var(--radius-lg); border-end-end-radius: var(--radius-lg); }
 .rv-desk .rq-actions { margin-inline: calc(-1 * var(--space-5)); padding-inline: var(--space-5); background: var(--surface); border-end-start-radius: var(--radius-lg); border-end-end-radius: var(--radius-lg); }
-.rv-desk .rq-actions .btn { min-block-size: 40px; }
+.rv-desk .rq-actions .btn { min-block-size: 44px; }
 
 /* As a workspace (from 1100px, with the height for it) the desk takes what the masthead leaves:
    the queue and the receipt scroll on their own and the decision stays on screen. */
 @media (min-width: 1100px) and (min-height: 620px) {
   .rq-page .rv-desk { flex: 1; min-block-size: 0; display: flex; flex-direction: column; }
   .rq-page .rv-desk > .rq { flex: 1; min-block-size: 0; }
-  /* The receipt's own sheet is what scrolls, so its decision bar stays inside its frame. */
   .rq-page .rv-desk .rq__panel { overflow: hidden; padding-block-end: var(--space-4); }
   .rq-page .rv-desk .rq__panel > .rq-detail { block-size: 100%; min-block-size: 0; overflow-y: auto; scrollbar-width: thin; }
   .rq-page .pay-rules { margin-block: var(--space-3); }
+  /* The receipt beside what it is checked against: the facts in a narrow column at the start, the
+     proof filling the rest of the sheet at its width, read by scrolling inside its own frame. */
+  .rq-page .rv-desk .rv {
+    display: grid;
+    grid-template-columns: minmax(160px, 28%) minmax(0, 1fr);
+    grid-template-rows: auto auto auto auto minmax(0, 1fr) auto;
+    grid-template-areas: 'amount image' 'facts image' 'said image' 'file image' '. image' 'foot foot';
+    gap: var(--space-4) var(--space-5);
+  }
+  .rq-page .rv-desk .rv__amount { grid-area: amount; grid-template-columns: minmax(0, 1fr); padding: 0; border: 0; }
+  .rq-page .rv-desk .rv__amount .rv__sub { justify-self: start; padding: 0; }
+  .rq-page .rv-desk .money--lg { flex-wrap: wrap; }
+  .rq-page .rv-desk .money--lg .money__n { font-size: 28px; }
+  .rq-page .rv-desk .rv__facts { grid-area: facts; grid-template-columns: minmax(0, 1fr); margin: 0; }
+  .rq-page .rv-desk .rv__said { grid-area: said; }
+  .rq-page .rv-desk .rv__said .rv__note { font-size: var(--fs-sm); }
+  .rq-page .rv-desk .rv__file { grid-area: file; }
+  .rq-page .rv-desk .rv__image { position: relative; grid-area: image; min-block-size: 0; max-block-size: none; place-items: start center; overflow: auto; scrollbar-width: thin; }
+  /* The whole receipt is in view, fitted to its frame (a tall phone screenshot included); the image opens full size. */
+  .rq-page .rv-desk .rv__image:not(.rv__image--file) { overflow: hidden; }
+  .rq-page .rv-desk .rv__zoom { position: absolute; inset: 8px; display: block; cursor: zoom-in; }
+  .rq-page .rv-desk .rv__zoom img { inline-size: 100%; block-size: 100%; max-inline-size: none; object-fit: contain; }
+  .rq-page .rv-desk .rv__image img { inline-size: 100%; max-inline-size: 640px; max-block-size: none; }
+  .rq-page .rv-desk .rv__image--file { place-items: center; }
+  .rq-page .rv-desk .rv > .rq-foot { grid-area: foot; }
+  /* The sheet is the receipt: no word above its title, a smaller title, the amount on one line. */
+  .rv-desk .rq-kind { visibility: hidden; }
+  .rv-desk .rq-panel__top { min-block-size: 0; block-size: 0; }
+  .rv-desk .rq-panel__close { position: relative; inset-block-start: 14px; }
+  html .rv-desk .rq-panel__title { font-size: var(--fs-xl); margin-block: 0 4px; }
 }
 .rv-queue { overflow: hidden; }
 .tx-sheet > .state, .rv-queue > .state, .rn > .state { padding: var(--space-5) var(--space-4); }
-.rv-queue__note { padding: 8px var(--space-4); border-block-end: 1px solid var(--hairline-soft); }
+.rv-queue__note { padding: 10px var(--space-4); border-block-end: 1px solid var(--line-2); }
 .rv-keys { gap: 5px; font-size: var(--fs-xs); color: var(--ink-muted); }
 .rv-keys span { margin-inline-end: 8px; }
 .rv-rows { margin: 0; padding: 0; list-style: none; }
-.rv-rows__item { border-block-end: 1px solid var(--hairline-soft); }
-.rv-rows__item:last-child { border-block-end: 0; }
+.rv-rows__item + .rv-rows__item { border-block-start: 1px solid var(--line-2); }
 .rv-row {
+  position: relative;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto minmax(96px, auto);
+  grid-template-columns: auto minmax(0, 1fr) 8.5rem;
   align-items: center;
-  gap: 4px var(--space-4);
+  gap: 4px var(--space-3);
   inline-size: 100%;
-  min-block-size: 60px;
-  padding: 10px var(--space-4);
+  min-block-size: 64px;
+  padding: 12px var(--space-4);
   border: 0;
   background: none;
   color: inherit;
   font: inherit;
-  font-size: var(--fs-sm);
   text-align: start;
   cursor: pointer;
   transition: background var(--dur-fast) var(--ease-out);
 }
 .rv-row:hover { background: var(--surface-hover); }
 .rv-row:focus-visible { outline-offset: -2px; }
-/* The receipt being read: tinted, with the gold marker that says "you are here". */
-.rv-row[aria-current='true'] { background: var(--teal-tint); box-shadow: inset 3px 0 0 var(--gold); }
-[dir='rtl'] .rv-row[aria-current='true'] { box-shadow: inset -3px 0 0 var(--gold); }
-.rv-row__who { display: grid; gap: 1px; min-inline-size: 0; }
-.rv-row__name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.rv-row__for { font-size: var(--fs-xs); color: var(--ink-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.rv-row__when { font-size: var(--fs-xs); color: var(--ink-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
-.rv-row__amount { justify-self: end; }
+/* The receipt being read: tinted, with a teal edge drawn inside its padding so nothing moves. */
+.rv-row[aria-current='true'] { background: var(--teal-tint); }
+.rv-row[aria-current='true']::before { content: ''; position: absolute; inset-block: 10px; inset-inline-start: 0; inline-size: 3px; border-start-end-radius: 3px; border-end-end-radius: 3px; background: var(--teal); }
+.rv-row__who { display: grid; gap: 2px; min-inline-size: 0; }
+.rv-row__name { font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rv-row__for { display: flex; align-items: baseline; gap: var(--space-3); min-inline-size: 0; font-size: var(--fs-sm); color: var(--ink-muted); overflow: hidden; white-space: nowrap; }
+.rv-row__for > bdi { overflow: hidden; text-overflow: ellipsis; }
+.rv-row__note { display: inline-flex; flex: none; align-items: center; gap: 4px; color: var(--teal); }
+.rv-row__note .icon { align-self: center; }
+/* The amount column of the queue: digits to its physical right edge, as in every money column. */
+.rv-row__end { display: grid; justify-items: right; gap: 1px; }
+[dir='ltr'] .rv-row__end .money__c { display: inline-block; min-inline-size: 2.4em; text-align: left; }
+.rv-row__when { font-size: var(--fs-xs); color: var(--ink-muted); white-space: nowrap; }
 
 /* The receipt being read. */
 .rv { display: flex; flex-direction: column; gap: var(--space-4); flex: 1; min-block-size: 0; }
@@ -108,30 +147,44 @@
   min-block-size: 300px;
   max-block-size: min(60vh, 620px);
   overflow: auto;
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius);
-  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
 }
-.rv__image img { display: block; max-inline-size: 100%; block-size: auto; }
+/* The whole receipt in view, fitted to the room there is; the file opens full size for zoom. */
+.rv__image img { display: block; max-inline-size: 100%; max-block-size: min(52vh, 600px); inline-size: auto; block-size: auto; object-fit: contain; }
 .rv__image--file { align-content: center; gap: var(--space-3); min-block-size: 180px; color: var(--ink-muted); }
 .rv__failed { margin: 0; padding: var(--space-5); max-inline-size: 32ch; text-align: center; font-size: var(--fs-sm); color: var(--ink-muted); }
-.rv__amount { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 0 var(--space-4); padding-block: var(--space-3); border-block: 1px solid var(--hairline); }
-.rv__amount .section-label { grid-column: 1 / -1; }
+.rv__amount { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 2px var(--space-4); padding-block: 4px var(--space-4); border-block-end: 1px solid var(--line-2); }
+.rv__amount .section-label { grid-column: 1 / -1; margin: 0; }
 .rv__amount .rv__sub { justify-self: end; padding-block-end: 6px; }
 .rv__sub { font-size: var(--fs-sm); color: var(--ink-muted); }
-.rv__facts { margin-block-start: calc(-1 * var(--space-2)); }
+/* The facts as a short band: each label over its value, side by side. */
+.rv__facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--space-2) var(--space-5); margin-block-start: calc(-1 * var(--space-2)); }
+.rv__facts .rq-field { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; padding: 0; border: 0; }
+.rv__facts .rq-field dt { font-size: var(--fs-xs); }
+.rv__by { white-space: nowrap; }
 /* What the parent wrote, set off as their words. */
-.rv__note { padding-inline-start: 8px; border-inline-start: 2px solid var(--gold-line); }
+.rv__said { display: grid; gap: 4px; margin: 0; }
+.rv__said-who { font-size: var(--fs-xs); color: var(--ink-muted); }
+.rv__note { margin: 0; font-size: var(--fs-md); line-height: 1.6;  padding-inline-start: 10px; border-inline-start: 2px solid var(--line-strong); font-weight: 400; color: var(--ink); }
 .rv__file { display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; color: var(--teal); font-size: var(--fs-sm); font-weight: 500; text-decoration: none; }
 .rv__file:hover { text-decoration: underline; }
 .rv > .rq-actions { margin-block-start: auto; }
+
+/* The approve dialog opens on what is approved: the family, then the amount, large. */
+.rv-approve { display: grid; gap: 2px; margin-block-end: var(--space-3); padding-block-end: var(--space-3); border-block-end: 1px solid var(--line-2); }
+.rv-approve__who { font-family: var(--font-head); font-size: var(--fs-md); font-weight: 600; color: var(--ink-2); }
+.rv-approve .money--lg .money__n { font-size: 30px; }
 
 /* ------------------------------------------------------- the ledger sheets */
 
 .tx-sheet { position: relative; }
 .tx-filters__toggle { gap: 6px; }
-.tx-filters__toggle[aria-expanded='true'] { background: var(--teal-tint); border-color: var(--brand-200); color: var(--teal-dark); }
-.tx-filters__fields { --control-h: 34px; display: grid; grid-template-columns: repeat(auto-fit, minmax(148px, 1fr)); align-items: end; gap: var(--space-3); padding: var(--space-3) var(--space-4) var(--space-4); border-block-end: 1px solid var(--hairline-soft); background: var(--paper); }
+/* The search names four things to look for: room for all of them. */
+.tx-filters .sheet-bar .search { flex: 1 1 420px; max-inline-size: 520px; }
+.tx-filters__toggle[aria-expanded='true'] { background: var(--teal-tint); border-color: var(--teal-tint-2); color: var(--teal-dark); }
+.tx-filters__fields { --control-h: 36px; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); align-items: end; gap: var(--space-3); padding: var(--space-3) var(--space-4) var(--space-4); border-block-end: 1px solid var(--line-2); background: var(--surface-2); }
 .tx-filters__fields[hidden] { display: none; }
 .tx-filters__fields > .field { margin: 0; min-inline-size: 0; }
 .tx-filters__fields .input, .tx-filters__fields .select { padding-block: 5px; font-size: var(--fs-sm); }
@@ -142,195 +195,235 @@
 [dir='rtl'] .tx-filters__fields input[type='date'] { flex-direction: row-reverse; }
 [dir='rtl'] .tx-filters__fields input[type='date']::-webkit-datetime-edit { text-align: end; }
 /* A filter that is set: named, with its own way out. */
-.tx-set { display: inline-flex; align-items: center; gap: 2px; min-block-size: 30px; padding-inline: 10px 2px; border-radius: var(--radius); background: var(--teal-tint); color: var(--teal-dark); font-size: var(--fs-sm); font-weight: 500; }
-.tx-set__x { display: grid; place-items: center; inline-size: 26px; block-size: 26px; padding: 0; border: 0; border-radius: var(--radius-sm); background: none; color: inherit; cursor: pointer; }
-.tx-set__x:hover { background: var(--brand-100); }
+.tx-set { display: inline-flex; align-items: center; gap: 2px; min-block-size: 32px; padding-inline: 10px 2px; border-radius: var(--radius-sm); background: var(--teal-tint); color: var(--teal-dark); font-size: var(--fs-sm); font-weight: 500; }
+.tx-set__x { display: grid; place-items: center; inline-size: 28px; block-size: 28px; padding: 0; border: 0; border-radius: var(--radius-sm); background: none; color: inherit; cursor: pointer; }
+.tx-set__x:hover { background: var(--teal-tint-2); }
 /* A bar whose controls are labelled fields. */
-.tx-bar--fields { --control-h: 34px; align-items: flex-end; }
+.tx-bar--fields { --control-h: 36px; align-items: flex-end; }
 .tx-bar--fields > .field { flex: 0 1 220px; margin: 0; min-inline-size: 0; }
 .tx-bar--fields .input, .tx-bar--fields .select { padding-block: 5px; font-size: var(--fs-sm); }
 .tx-bar--fields .field__label { margin-block-end: 3px; }
 .tx-bar--fields .btn { gap: 6px; }
-.tx-sweep { padding: var(--space-3) var(--space-4); border-block-end: 1px solid var(--hairline-soft); }
+.tx-sweep { padding: var(--space-3) var(--space-4); border-block-end: 1px solid var(--line-2); }
 
-.table.tx-table td { vertical-align: top; }
+.table.tx-table td { vertical-align: top; padding-block: 12px; }
 .tx-table .entity { align-items: flex-start; gap: 10px; }
 .tx-table .entity__text { display: grid; gap: 1px; }
+.tx-table .entity__sub { font-size: var(--fs-sm); }
+/* A label in the other script keeps its own direction but lines up with its column. */
+.tx-c-for > bdi { display: block; }
+[dir='ltr'] .tx-c-for > bdi { text-align: left; }
+[dir='rtl'] .tx-c-for > bdi { text-align: right; }
 /* The column heads stay in view down the page (the page scrolls inside its own padding). */
-.table.tx-table thead th { inset-block-start: calc(-1 * var(--space-6)); }
+.table.tx-table thead th { inset-block-start: -28px; }
 /* A day's heading runs the width of the ledger: the day at the start, what it came to at the end. */
-.table.tx-table .tx-day th { padding: 7px var(--space-4); background: var(--surface); border-block: 1px solid var(--hairline-soft); font-size: var(--fs-sm); font-weight: 600; color: var(--ink); text-align: start; }
-.table.tx-table tbody:first-of-type .tx-day th { border-block-start: 0; }
-.tx-day__in { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-4); }
-.tx-day__net { display: inline-flex; flex-wrap: wrap; align-items: baseline; justify-content: flex-end; gap: 2px var(--space-3); font-weight: 400; }
+.table.tx-table .tx-day > * { padding-block: 8px; background: var(--surface-2); border-block: 1px solid var(--line-2); vertical-align: middle; }
+.table.tx-table .tx-day th { padding-inline: var(--space-4); font-family: var(--font-head); font-size: var(--fs-sm); font-weight: 600; color: var(--ink); text-align: start; }
+.table.tx-table tbody:first-of-type .tx-day > * { border-block-start: 0; }
+.tx-day__net { display: inline-flex; flex-wrap: wrap; align-items: baseline; justify-content: flex-end; gap: 2px var(--space-3); font-family: var(--font); font-weight: 400; }
 .tx-day__k { font-size: var(--fs-xs); color: var(--ink-muted); }
 .table.tx-table .tx-day:hover { background: none; }
 
-/* Amounts end the row and line up on the decimal point in both directions. */
-.table.tx-table .tx-end { text-align: end; white-space: nowrap; }
-.tx-states { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 2px 8px; margin-block-start: 3px; }
+/* Amounts end the row, the heaviest thing on it; its state sits under it. */
+.table.tx-table .tx-end { text-align: right; white-space: nowrap; }
+[dir='ltr'] .tx-end .money__c { display: inline-block; min-inline-size: 2.4em; text-align: left; }
+[dir='rtl'] .tx-states { justify-content: flex-start; }
+.tx-c-who { min-inline-size: 12rem; }
+.tx-states { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 2px 10px; margin-block-start: 4px; }
 .pay-refunded { display: inline-flex; align-items: baseline; gap: 5px; }
+/* The refunded amount keeps its digits on the column's edge, its word after it. */
+[dir='rtl'] :is(.pay-refunded, .tx-day__net) { flex-direction: row-reverse; }
 .tx-method { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
-.tx-method .icon { flex: none; color: var(--teal); }
-.tx-method__card { padding-inline-start: 24px; }
+.tx-method .icon { flex: none; color: var(--ink-muted); }
+.tx-method__card { padding-inline-start: 25px; }
 .pay-row { cursor: pointer; }
 .pay-row--voided .money__n { color: var(--ink-muted); font-weight: 500; text-decoration: line-through; }
 .tx-c-why { max-inline-size: 26rem; }
 .tx-declines { display: flex; flex-wrap: wrap; gap: 0 var(--space-3); margin-block-start: 2px; }
-.tx-paid { display: flex; align-items: center; gap: 6px; margin-block-start: 4px; }
+.tx-paid { display: block; margin-block-start: 4px; }
+.tx-paid strong { font-weight: 500; color: var(--ink-muted); }
+.tx-paid .tx-paid__yes { color: var(--done); }
 .tx-c-time { white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--ink-muted); }
+/* Live is the rule and stays quiet; test mode, the exception, is the tag. */
+.tx-c-mode { color: var(--ink-muted); font-size: var(--fs-sm); }
 
 /* What the sheet is, in one quiet line at its foot. */
-.tx-foot { margin: 0; padding: 9px var(--space-4); border-block-start: 1px solid var(--hairline-soft); font-size: var(--fs-xs); color: var(--ink-muted); }
+.tx-foot { margin: 0; padding: 10px var(--space-4); border-block-start: 1px solid var(--line-2); font-size: var(--fs-xs); color: var(--ink-muted); }
 
 /* The totals: the sheet's foot, in view while the ledger scrolls. One line per currency, written as a sum. */
 .tx-totals {
   position: sticky;
-  inset-block-end: calc(-1 * var(--space-7));
+  inset-block-end: -56px;
   z-index: 2;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: baseline;
   gap: 0 var(--space-5);
-  padding: 8px var(--space-4);
-  border-block-start: 1px solid var(--border-strong);
+  padding: 10px var(--space-4);
+  border-block-start: 1px solid var(--line-strong);
   border-end-start-radius: var(--radius-lg);
   border-end-end-radius: var(--radius-lg);
   background: var(--surface);
+  /* It floats over the rows while they scroll: a soft shadow says so. */
+  box-shadow: 0 -6px 16px rgba(13, 47, 55, 0.06);
 }
-.tx-totals__name { font-size: 12.5px; font-weight: 600; color: var(--ink-muted); }
+.tx-totals__name { font-family: var(--font-head); font-size: var(--fs-sm); font-weight: 600; color: var(--ink-2); }
 .tx-totals__lines { margin: 0; padding: 0; list-style: none; }
 .pay-sum__line { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: flex-end; gap: 0 var(--space-3); padding-block: 3px; }
-.pay-sum__line + .pay-sum__line { border-block-start: 1px solid var(--hairline-soft); }
-.pay-sum__currency { margin-inline-end: auto; font-size: var(--fs-sm); font-weight: 600; color: var(--gold-text); }
+.pay-sum__line + .pay-sum__line { border-block-start: 1px solid var(--line-2); }
+/* The line's currency is said once, beside its net; the line keeps its name for assistive technology. */
+.pay-sum__currency { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 .pay-sum__term { display: inline-flex; align-items: baseline; gap: 6px; }
 .pay-sum__k { font-size: var(--fs-xs); color: var(--ink-muted); }
-.pay-sum__v { font-family: var(--display); font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums lining-nums; }
-.pay-sum__term--net .pay-sum__v { font-size: 20px; color: var(--teal); }
-.pay-sum__op { font-family: var(--display); font-size: 15px; color: var(--ink-muted); }
+.pay-sum__v { font-family: var(--font-head); font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums lining-nums; }
+/* Net sits in the amount column's own box (the actions column's width kept clear after it), so its
+   digits share the rows' edge; numerals end on the physical right in both languages. */
+.tx-table--payments .tx-end { inline-size: 12.5rem; }
+.tx-table--payments :is(td, th).cell-actions { inline-size: 8rem; }
+/* Fixed column widths (from the head) so the foot can stand exactly under the amount column. */
+@media (min-width: 768px) {
+  .table.tx-table--payments { table-layout: fixed; }
+  .tx-table--payments thead th:nth-child(4) { inline-size: 9.5rem; }
+}
+/* In a fixed table a column's width includes its padding: the box repeats the amount cell exactly,
+   and the margin is the actions column less the foot's own padding. */
+.pay-sum__term--net { box-sizing: border-box; display: inline-flex; justify-content: flex-end; gap: 8px; inline-size: 12.5rem; padding-inline: 14px; margin-inline-end: calc(8rem - var(--space-4)); }
+[dir='rtl'] .pay-sum__term--net { flex-direction: row-reverse; }
+.pay-sum__term--net .money__n { font-size: 20px; font-weight: 700; color: var(--ink); }
+[dir='ltr'] .pay-sum__term--net .money__c { display: inline-block; min-inline-size: 2.4em; text-align: left; }
+.pay-sum__op { font-family: var(--font-head); font-size: 15px; color: var(--ink-muted); }
 
-/* What a reconcile found: a ruled note, not a coloured band. */
+/* What a reconcile found: a note with a teal edge, not a coloured band. */
 .banner.pay-result { display: grid; gap: var(--space-2); margin-block-start: var(--space-2); padding-block: 8px; padding-inline: var(--space-3) 0; border: 0; border-inline-start: 2px solid var(--teal); background: none; color: var(--ink); font-weight: 400; }
-.banner--warn.pay-result { border-inline-start-color: var(--gold-line); }
+.banner--warn.pay-result { border-inline-start-color: var(--waiting); }
 .pay-result__lead { margin: 0; font-weight: 500; }
 .pay-compare { inline-size: auto; }
 
-/* The payment's sheet: ruled sections, entries without boxes. */
+/* The payment's sheet: sections, entries without boxes. */
 .pay-detail { display: grid; gap: var(--space-4); }
-.pay-detail__section { min-inline-size: 0; margin: 0; }
-.pay-detail__section + .pay-detail__section { padding-block-start: var(--space-4); border-block-start: 1px solid var(--hairline); }
-.pay-detail .tf-section__title { font-family: var(--display); font-size: var(--fs-lg); font-weight: 600; }
-html[lang='ar'] .pay-detail .tf-section__title { font-weight: 700; }
-.pay-detail .tf-kv { font-size: var(--fs-sm); }
-.pay-detail .tf-kv dt { font-size: 12.5px; color: var(--ink-muted); }
+/* Inside the sheet the sections are not boxes of their own: one surface, divided by space and a soft line. */
+.pay-detail > .tf-section.pay-detail__section { min-inline-size: 0; margin: 0; padding: 0; background: none; border: 0; border-radius: 0; }
+.pay-detail .pay-detail__section > .tf-section__head { margin-inline: 0; margin-block-end: var(--space-2); padding: 0; min-block-size: 36px; border-block-end: 0; }
+.pay-detail > .tf-section.pay-detail__section + .pay-detail__section { padding-block-start: var(--space-4); border-block-start: 1px solid var(--line-2); }
+.pay-detail .tf-section__title { font-family: var(--font-head); font-size: var(--fs-lg); font-weight: 600; }
+.pay-detail .tf-kv { font-size: var(--fs-sm); row-gap: 2px; }
+/* Facts read as pairs by their rhythm, not by a rule under each. */
+.pay-detail .tf-kv :is(dt, dd) { border: 0; padding-block: 5px; }
+.pay-detail .tf-section__head { justify-content: flex-start; gap: var(--space-3); }
+.pay-detail .tf-kv dt { font-size: var(--fs-xs); color: var(--ink-muted); }
 .pay-detail .pf-timeline { gap: 0; margin-block-start: var(--space-2); }
-.pay-detail .pf-entry { padding: 10px 0; border: 0; border-block-end: 1px solid var(--hairline-soft); border-radius: 0; font-size: var(--fs-sm); }
+.pay-detail .pf-entry { padding: 10px 0; border: 0; border-block-end: 1px solid var(--line-2); border-radius: 0; font-size: var(--fs-sm); }
 .pay-detail .pf-entry:last-child { border-block-end: 0; }
+.pay-detail .pf-entry__meta > span + span::before { content: none; }
+.pay-detail .pf-entry__meta { gap: 2px var(--space-4); }
 .pay-detail .tf-muted { margin: var(--space-2) 0 0; font-size: var(--fs-sm); color: var(--ink-muted); }
-.pay-detail .pf-amount { font-family: var(--display); font-weight: 600; font-variant-numeric: tabular-nums lining-nums; }
+.pay-detail .pf-amount { font-family: var(--font-head); font-weight: 600; font-variant-numeric: tabular-nums lining-nums; }
 
 /* ------------------------------------------------------------------ settings */
 
 /* The groups as a list at the start; one group's sheet beside it; one Save. */
-.set { display: grid; grid-template-columns: 232px minmax(0, 720px); align-items: start; gap: var(--space-5) var(--space-6); }
+.set { display: grid; grid-template-columns: 240px minmax(0, 1fr); align-items: start; gap: var(--space-5) var(--space-6); }
 .set__list { position: sticky; inset-block-start: 0; display: grid; gap: 2px; }
 .set__item {
   display: flex;
   align-items: center;
   gap: 10px;
-  min-block-size: 42px;
+  min-block-size: 44px;
   padding: 0 var(--space-3);
-  border: 0;
-  border-radius: var(--radius);
+  border: 1px solid transparent;
+  border-radius: 8px;
   background: none;
-  color: var(--ink);
+  color: var(--ink-2);
   font: inherit;
+  font-family: var(--font-head);
   font-size: var(--fs-sm);
   font-weight: 500;
   text-align: start;
   cursor: pointer;
 }
 .set__item .icon { flex: none; color: var(--ink-muted); }
-.set__item:hover { background: var(--surface); }
-.set__item[aria-current='true'] { background: var(--surface); color: var(--teal-dark); font-weight: 600; box-shadow: inset 3px 0 0 var(--gold), 0 0 0 1px var(--hairline); }
-[dir='rtl'] .set__item[aria-current='true'] { box-shadow: inset -3px 0 0 var(--gold), 0 0 0 1px var(--hairline); }
+.set__item:hover { background: var(--surface-hover); color: var(--ink); }
+/* The open group: lifted onto white, its icon in teal. */
+.set__item[aria-current='true'] { background: var(--teal-tint); color: var(--ink); font-weight: 600; }
 .set__item[aria-current='true'] .icon { color: var(--teal); }
-.set__item-name { flex: 1; min-inline-size: 0; }
-.set__edited-dot { display: block; inline-size: 8px; block-size: 8px; border-radius: 50%; background: var(--gold); }
+.set__item-name { flex: 0 1 auto; min-inline-size: 0; }
+/* Edited and not saved: waiting. */
+.set__edited-dot { display: block; inline-size: 8px; block-size: 8px; border-radius: 50%; background: var(--teal); }
 
 .set__sheet fieldset { min-inline-size: 0; margin: 0; padding: 0; border: 0; }
-.set__lock { padding: 9px var(--space-4); border-block-end: 1px solid var(--hairline-soft); }
-.set__head { align-items: flex-start; padding-block: var(--space-4) var(--space-3); }
-.set__title { font-family: var(--display); font-size: var(--fs-xl); line-height: 1.25; }
-html[lang='ar'] .set__title { font-weight: 700; line-height: 1.45; }
+.set__lock { padding: 10px var(--space-4); border-block-end: 1px solid var(--line-2); }
+.set__head { align-items: flex-start; padding-block: var(--space-4) var(--space-3); padding-inline: var(--space-5); }
+.set__title { font-family: var(--font-head); font-size: var(--fs-xl); font-weight: 700; line-height: 1.3; }
 .set__hint { margin: 4px 0 0; max-inline-size: 60ch; font-size: var(--fs-sm); color: var(--ink-muted); }
-.set__body { min-block-size: 132px; }
-.set-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 var(--space-4); }
+.set__body { min-block-size: 132px; padding: var(--space-5); }
+.set-grid { max-inline-size: 760px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 var(--space-4); }
 .set-grid > .field--wide { grid-column: 1 / -1; }
 .set-grid > .field:last-child { margin-block-end: 0; }
 .set-grid .input { inline-size: 100%; }
 .set-grid .tf-textarea { min-block-size: 4.2rem; }
 /* Read only: the values stay legible, the boxes step back. */
-.set__sheet fieldset:disabled .input { border-color: var(--hairline); background-color: transparent; color: var(--ink); opacity: 1; }
+.set__sheet fieldset:disabled .input { border-color: var(--line); background-color: var(--surface-2); color: var(--ink); opacity: 1; }
 .set-none { margin: 0 0 var(--space-3); font-size: var(--fs-sm); color: var(--ink-muted); }
-.set-card { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3) var(--space-5); }
-.set-card__state { display: grid; gap: 8px; justify-items: start; }
+.set-card { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-4) var(--space-5); }
+.set-card__state { display: grid; gap: 10px; justify-items: start; }
 /* Paused: the state, and under it what the pause means. */
 .set-paused { display: grid; gap: 4px; justify-items: start; }
+.set-paused .badge { font-size: var(--fs-md); font-weight: 600; color: var(--ink); }
 .set-paused__why { max-inline-size: 56ch; font-size: var(--fs-sm); color: var(--ink-muted); }
 
-/* Reminders in the order they fire: before the due date, on it (the gold mark), after it. */
-.set-reminders { display: flex; flex-wrap: wrap; margin: 4px 0 0; padding: 0; list-style: none; }
-.set-reminder { position: relative; flex: 1 0 auto; padding-block: 12px 2px; padding-inline-end: var(--space-4); border-block-start: 1px solid var(--border-strong); }
-.set-reminder::before { content: ''; position: absolute; inset-block-start: -1px; inset-inline-start: 7px; inline-size: 1px; block-size: 7px; background: var(--border-control); }
-.set-reminder--due::before { inset-inline-start: 6px; inline-size: 3px; block-size: 9px; background: var(--gold); }
-.set-reminder label { display: inline-flex; align-items: center; gap: var(--space-2); min-block-size: 32px; font-size: var(--fs-sm); white-space: nowrap; cursor: pointer; }
-.set-reminder input { inline-size: 16px; block-size: 16px; margin: 0; accent-color: var(--teal); }
+/* Reminders in the order they fire: before the due date, on it (a teal mark), after it. */
+/* A short line down the start: each reminder a stop on it, the due date filled. */
+.set-reminders { display: grid; margin: 0 0 0 0; margin-inline-start: 6px; padding: 0; list-style: none; border-inline-start: 2px solid var(--line); }
+.set-reminder { position: relative; padding-block: 2px; padding-inline-start: var(--space-5); }
+/* The stop is not a control: a small mark on the line, filled when that reminder is on. */
+.set-reminder::before { content: ''; position: absolute; inset-block-start: 17px; inset-inline-start: -5px; inline-size: 8px; block-size: 8px; border-radius: 50%; background: var(--line-strong); }
+.set-reminder:has(input:checked)::before { background: var(--teal); }
+.set-reminder--due::before { inset-block-start: 15px; inset-inline-start: -7px; inline-size: 12px; block-size: 12px; }
+.set-reminder label { display: inline-flex; align-items: center; gap: var(--space-3); min-block-size: 40px; font-size: var(--fs-md); cursor: pointer; }
+.set-reminder input { flex: none; inline-size: 18px; block-size: 18px; margin: 0; accent-color: var(--teal); }
 .set-reminder--due label { font-weight: 600; }
 fieldset:disabled .set-reminder label { cursor: default; }
 
 /* One save, at the sheet's foot and in reach while it scrolls. */
 .set-save {
   position: sticky;
-  inset-block-end: calc(-1 * var(--space-7));
+  inset-block-end: -56px;
   z-index: 2;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2) var(--space-4);
-  padding: var(--space-3) var(--space-4);
-  border-block-start: 1px solid var(--hairline);
+  padding: var(--space-3) var(--space-5);
+  border-block-start: 1px solid var(--line-2);
   border-end-start-radius: var(--radius-lg);
   border-end-end-radius: var(--radius-lg);
   background: var(--surface);
 }
 .set-save__state { font-size: var(--fs-sm); color: var(--ink-muted); }
-.set-save__state--ok { display: inline-flex; align-items: center; gap: 6px; color: var(--success); font-weight: 500; }
+.set-save__state--ok { display: inline-flex; align-items: center; gap: 6px; color: var(--done); font-weight: 500; }
 
 /* ------------------------------------------------------------ narrower screens */
 
 @media (max-width: 1099px) {
   .set { grid-template-columns: minmax(0, 1fr); gap: var(--space-3); }
-  /* The groups run along the top; the sheet takes the width. */
-  .set__list { position: static; display: flex; gap: var(--space-2); overflow-x: auto; scrollbar-width: none; padding-block: 2px; }
+  /* The groups run along the top as a segmented row; the sheet takes the width. */
+  .set__list { position: static; display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; padding: 3px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line-2); }
   .set__list::-webkit-scrollbar { display: none; }
-  .set__item { flex: none; min-block-size: 44px; background: var(--surface); box-shadow: 0 0 0 1px var(--hairline); margin: 1px; }
-  .set__item[aria-current='true'], [dir='rtl'] .set__item[aria-current='true'] { background: var(--teal); color: var(--text-inverse); box-shadow: none; }
-  .set__item[aria-current='true'] .icon { color: var(--text-inverse); }
+  .set__item { flex: none; min-block-size: 44px; }
 }
 
 @media (max-width: 767px) {
-  .pay-rules { grid-template-columns: minmax(0, 1fr); padding-inline: 0; }
+  /* The top bar already names the page: the work starts higher. */
+  .pay-page .page-header__title:not(:has(.badge)) { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .pay-page .mast__row:has(.page-header__title) { min-block-size: 0; }
+  .pay-page .figures { margin-block-start: 0; }
+  .pay-rules { display: grid; gap: 6px; }
   .pay-rules__list { display: grid; gap: 4px; }
-  .pay-rules__list li { margin: 0; padding: 0; border: 0; }
 
-  /* Receipts: who and how much on the first line, when and where it stands on the second. */
-  .rv-row { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: 'av who amount' 'av when state'; gap: 4px var(--space-3); padding-block: 12px; }
-  .rv-row > .avatar { grid-area: av; align-self: start; }
-  .rv-row__who { grid-area: who; }
-  .rv-row__amount { grid-area: amount; }
-  .rv-row__when { grid-area: when; }
-  .rv-row__state { grid-area: state; justify-self: end; }
+  /* Receipts: who and how much on the first line, what for and when on the second. */
+  .rv-row { padding-block: 12px; min-block-size: 68px; }
+  /* The note is a mark here; the plan keeps the line. */
+  .rv-row__note-word { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip: rect(0 0 0 0); }
   .rv__image { min-block-size: 200px; max-block-size: none; }
   .dialog .rv .rq-actions .btn { min-block-size: 48px; flex: 1 1 0; }
 
@@ -340,14 +433,28 @@ fieldset:disabled .set-reminder label { cursor: default; }
   .tx-bar--fields > .field { flex: 1 1 140px; }
   .tx-bar--fields .sheet-bar__end { flex-basis: 100%; }
   .tx-bar--fields .sheet-bar__end .btn { flex: 1; justify-content: center; }
-  .tx-set { min-block-size: 36px; }
-  .tx-set__x { inline-size: 36px; block-size: 36px; }
+  .tx-set { min-block-size: 40px; }
+  .tx-set__x { inline-size: 40px; block-size: 40px; }
   .tx-table, .tx-table tbody { display: block; }
   .tx-table thead { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip: rect(0 0 0 0); }
-  .table.tx-table tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 6px var(--space-3); padding: 12px var(--space-4); border-block-end: 1px solid var(--hairline-soft); }
+  .table.tx-table tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 6px var(--space-3); padding: 14px var(--space-4); border-block-end: 1px solid var(--line-2); }
   .table.tx-table tbody tr td, .table.tx-table tbody tr th { display: block; padding: 0; border: 0; inline-size: auto; max-inline-size: none; }
-  .table.tx-table tr.tx-day { display: block; padding: 8px var(--space-4); background: var(--paper); }
-  .table.tx-table .tx-day th { background: none; }
+  .table.tx-table tr.tx-day { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); padding: 8px var(--space-4); background: var(--surface-2); }
+  .table.tx-table tr.tx-day > * { display: block; background: none; border: 0; padding: 0; }
+  .table.tx-table .tx-day__pad { display: none; }
+  /* Payments on a phone: who and how much; what for and how, one line each; the invoice waits in the payment's sheet. */
+  .table.tx-table--payments .tx-c-for { grid-column: 1; grid-row: 2; padding-inline-start: 38px !important; }
+  .tx-table--payments .tx-c-for > .pay-sub, .tx-table--payments .tx-method__card, .tx-table--payments .tx-c-ref { display: none !important; }
+  .table.tx-table--payments .tx-c-method { grid-column: 1; grid-row: 3; padding-inline-start: 38px !important; color: var(--ink-muted); }
+  /* The row itself opens the payment (its sheet holds the invoice): no buttons on the row. */
+  .table.tx-table--payments td.cell-actions { position: absolute !important; inline-size: 1px; block-size: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .table.tx-table--payments .tx-c-amount { grid-row: 1 / span 3; }
+  /* One money edge down the ledger: the amount block has one width, its tags wrap inside it. */
+  .table.tx-table--payments tr:not(.tx-day) { grid-template-columns: minmax(0, 1fr) 9.5rem; }
+  .table.tx-table--payments .tx-c-amount { justify-self: stretch; text-align: right; }
+  [dir='rtl'] .table.tx-table--payments .tx-states { align-items: flex-start; }
+  .table.tx-table--payments .tx-states .badge { white-space: normal; text-align: right; }
+  .tx-table--payments .tx-end { inline-size: auto; }
   .tx-table .tx-c-who { grid-column: 1; grid-row: 1; }
   .tx-table .tx-c-amount { grid-column: 2; grid-row: 1; justify-self: end; }
   .tx-table .tx-states { flex-direction: column; align-items: flex-end; gap: 3px; }
@@ -370,10 +477,14 @@ fieldset:disabled .set-reminder label { cursor: default; }
   /* The totals rest at the foot: a phone has no room to hold them over the rows. */
   .tx-totals { position: static; grid-template-columns: minmax(0, 1fr); }
   .pay-sum__line { justify-content: flex-start; }
+  .pay-sum__term--net { inline-size: auto; padding: 0; margin: 0; }
   .pay-sum__currency { flex-basis: 100%; }
 
+  .set__head, .set__body { padding-inline: var(--space-4); }
   .set-grid { grid-template-columns: minmax(0, 1fr); }
   .set-reminder label { min-block-size: 44px; }
+  /* Sticky to the screen's foot, just above the tab bar (the page's own bottom padding is overlapped). */
+  .set-save { position: sticky; inset-block-end: calc(-1 * var(--space-7)); padding-inline: var(--space-4); box-shadow: 0 -6px 16px rgba(13, 47, 55, 0.08); }
   .set-save .btn { flex: 1 1 100%; justify-content: center; min-block-size: 48px; }
 }
 
@@ -382,10 +493,11 @@ fieldset:disabled .set-reminder label { cursor: default; }
 .pf-entry--closed { opacity: 0.8; }
 /* ReceiptFile, on the Parent Profile: the image inline. */
 .pay-receipt__thumb { display: block; inline-size: 9rem; }
-.pay-receipt__thumb img { display: block; inline-size: 100%; max-block-size: 12rem; object-fit: contain; border: 1px solid var(--hairline); border-radius: var(--radius); background: var(--paper); }
-.pay-link { display: grid; gap: var(--space-2); margin-block: var(--space-2); padding: var(--space-3); border: 1px solid var(--hairline); border-radius: var(--radius); }
-.pay-link__what { margin: 0; }
-.pay-link__url { inline-size: 100%; font-family: var(--font-mono, ui-monospace, monospace); font-size: var(--fs-sm); }
+.pay-receipt__thumb img { display: block; inline-size: 100%; max-block-size: 12rem; object-fit: contain; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); }
+.pay-link { display: grid; gap: var(--space-2); margin-block: var(--space-2); padding: var(--space-3) var(--space-4); border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); }
+.pay-link__what { margin: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px var(--space-3); }
+.pay-link__what .pf-amount { font-family: var(--font-head); font-weight: 600; }
+.pay-link__url { inline-size: 100%; font-family: var(--font-mono); font-size: var(--fs-sm); }
 .pay-summary { margin-block: 0 var(--space-3); color: var(--ink-muted); }
 .pay-schedule { display: grid; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
 .pay-schedule__row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-2); }

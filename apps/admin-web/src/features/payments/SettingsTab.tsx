@@ -154,11 +154,6 @@ function SettingsForm({ settings }: { settings: BillingSettings }) {
             </h2>
             {hint && <p className="set__hint">{tx(hint)}</p>}
           </div>
-          {edited[group] && (
-            <Badge tone="gold" dot>
-              {tx(PAY.edited)}
-            </Badge>
-          )}
         </div>
 
         <div className="sheet__body set__body">
@@ -170,7 +165,7 @@ function SettingsForm({ settings }: { settings: BillingSettings }) {
                 {settings.cardPaused ? (
                   <CardPausedNote />
                 ) : (
-                  <Badge tone={settings.cardAvailable ? 'ok' : 'outline'} dot>
+                  <Badge tone={settings.cardAvailable ? 'ok' : 'neutral'} dot>
                     {tx(settings.cardAvailable ? PAY.cardOn : PAY.cardOff)}
                   </Badge>
                 )}
@@ -182,7 +177,7 @@ function SettingsForm({ settings }: { settings: BillingSettings }) {
               </div>
               {/* W63: the kill switch. Shown when there is something to pause (Stripe configured) or to undo. */}
               {editable && (settings.cardConfigured || settings.cardPaused) && (
-                <button type="button" className={settings.cardPaused ? 'btn btn--primary' : 'btn btn--danger'} onClick={() => setConfirmPause(true)}>
+                <button type="button" className={settings.cardPaused ? 'btn btn--primary' : 'btn'} onClick={() => setConfirmPause(true)}>
                   {tx(settings.cardPaused ? PAY.resumeCard : PAY.pauseCard)}
                 </button>
               )}
@@ -268,7 +263,9 @@ function SettingsForm({ settings }: { settings: BillingSettings }) {
           )}
         </div>
 
-        {editable && (
+        {/* The card switch is its own confirmed act: its group carries no Save unless another group waits to be saved. */}
+        {/* One Save for every group, shown once there is something to save (or it just saved). */}
+        {editable && (editedNames.length > 0 || saved) && (
           <div className="set-save">
             <button type="button" className="btn btn--primary" disabled={save.isPending || editedNames.length === 0} onClick={submit}>
               {save.isPending ? tx(PAY.saving) : tx(PAY.save)}

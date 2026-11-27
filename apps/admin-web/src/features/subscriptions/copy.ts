@@ -71,8 +71,8 @@ export const S = {
   // Renewal requests (Payments)
   renewalsTitle: { en: 'Renewal requests', ar: 'طلبات التجديد' },
   renewalsHint: {
-    en: 'Parents of locked children with nothing to pay yet asked to renew (last 30 days). Send the renewal link from the Parent Profile.',
-    ar: 'أولياء أمور أطفال موقوفين بلا مبلغ مستحق طلبوا التجديد (آخر 30 يومًا). أرسل رابط التجديد من ملف ولي الأمر.',
+    en: 'Parents of locked children with nothing to pay yet asked to renew (last 30 days). From the student, open the family’s Parent Profile and send the renewal link there.',
+    ar: 'أولياء أمور أطفال موقوفين بلا مبلغ مستحق طلبوا التجديد (آخر 30 يومًا). من ملف الطالب افتح ملف ولي الأمر وأرسل منه رابط التجديد.',
   },
   noRenewals: { en: 'A renewal request appears here when a parent asks to renew.', ar: 'يظهر طلب التجديد هنا عندما يطلب ولي الأمر التجديد.' },
   noRenewalsHint: { en: 'It stays for 30 days, with the child it is for. None is open now.', ar: 'يبقى 30 يومًا مع اسم الطفل المعني. لا طلب مفتوح الآن.' },
@@ -81,7 +81,8 @@ export const S = {
   openStudentNamed: { en: 'Open the Student Profile of {name}', ar: 'فتح ملف الطالب {name}' },
   renewalsDenied: { en: 'You do not have access to renewal requests.', ar: 'لا تملك صلاحية عرض طلبات التجديد.' },
   renewed: { en: 'Renewed', ar: 'تم التجديد' },
-  waiting: { en: 'Waiting', ar: 'بانتظار' },
+  askedBy: { en: '{name} asked to renew', ar: 'طلب {name} التجديد' },
+  waiting: { en: 'Waiting for a renewal link', ar: 'بانتظار رابط التجديد' },
   // The chat banner (staff view)
   lockedBanner: {
     // PD-30 amendment, D-3 wording (owner, 2026-11-06).

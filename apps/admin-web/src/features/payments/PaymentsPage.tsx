@@ -88,7 +88,6 @@ export function PaymentsPage({ eyebrow }: { eyebrow?: string }) {
         <PageHeader
           eyebrow={eyebrow}
           title={tx(PAY.title)}
-          subtitle={tx(PAY.subtitle)}
           status={
             cardPaused ? (
               // A compact state beside the title; the whole sentence is said once, just below, and on Settings.
@@ -139,7 +138,8 @@ export function PaymentsPage({ eyebrow }: { eyebrow?: string }) {
         ) : (
           <SettingsTab />
         )}
-        {!waiting && (tab === 'receipts' || tab === 'transactions') && <LedgerRules />}
+        {/* The ledger's rules sit under the ledger; the desk keeps its height for the receipt. */}
+        {!waiting && tab === 'transactions' && <LedgerRules />}
       </div>
     </div>
   )
