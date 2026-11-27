@@ -213,8 +213,8 @@ function StoryList({
   else if (sort === 'taps') visible.sort((a, b) => b.ctaTapCount - a.ctaTapCount)
 
   const counted = stories.filter((s) => s.state !== 'deleted')
+  // How many are live is the Live state's own figure in the strip; these are what it does not say.
   const kpis = [
-    { key: 'live', label: tx(S.liveNow), value: stories.filter((s) => effectiveState(s, now) === 'published').length },
     { key: 'reach', label: tx(S.totalReach), value: counted.reduce((n, s) => n + s.recipientCount, 0) },
     { key: 'views', label: tx(S.totalViews), value: counted.reduce((n, s) => n + s.viewCount, 0) },
     { key: 'taps', label: tx(S.totalTaps), value: counted.reduce((n, s) => n + s.ctaTapCount, 0) },
@@ -245,15 +245,8 @@ function StoryList({
       }
       emptyIcon="stories"
     >
-      <section className="kpi-strip kpi-strip--line" aria-label={tx(S.insights)}>
-        {kpis.map((k) => (
-          <div key={k.key} className={`kpi kpi--${k.key}`}>
-            <span className="kpi__label">{k.label}</span>
-            <span className="kpi__value">{number(k.value)}</span>
-          </div>
-        ))}
-      </section>
-
+      {/* One ruled strip: the states to filter by, and the studio's totals as its last cell. */}
+      <div className="studio-strip">
       <nav className="status-tiles" aria-label={tx(S.status)}>
         {tiles.map((t) => (
           <Link
@@ -271,6 +264,15 @@ function StoryList({
           </Link>
         ))}
       </nav>
+      <section className="studio-totals" aria-label={tx(S.insights)}>
+        {kpis.map((k) => (
+          <div key={k.key} className="studio-totals__row">
+            <span className="studio-totals__label">{k.label}</span>
+            <span className="studio-totals__value">{number(k.value)}</span>
+          </div>
+        ))}
+      </section>
+      </div>
 
       <div className="toolbar">
         <SearchField value={search} onChange={setSearch} label={tx(S.searchStories)} clearLabel={tx(S.clearSearch)} />
@@ -348,9 +350,9 @@ function StoryRow({ story: s, basePath, now, audience }: { story: StudioStory; b
         <Link to={href} className="story-row__name" dir="auto">{name}</Link>
         <span className="story-row__meta">
           <span className="story-row__kind">{tx(KIND_LABEL[s.kind])}</span>
-          {s.cta && <span className="story-row__cta">· {tx(CTA_LABEL[s.cta.kind])}</span>}
-          <span>· {fill(tx(S.by), { name: s.creatorName })}</span>
-          <span>· {when}</span>
+          {s.cta && <span className="story-row__cta">{tx(CTA_LABEL[s.cta.kind])}</span>}
+          <span>{fill(tx(S.by), { name: s.creatorName })}</span>
+          <span>{when}</span>
         </span>
         <span className="story-row__audience" title={audience}>
           <Icon name="users" size={14} />
@@ -389,7 +391,7 @@ function StoryRow({ story: s, basePath, now, audience }: { story: StudioStory; b
             {tx(S.publish)}
           </button>
         ) : (
-          <Link to={href} className="btn btn--sm btn--ghost" aria-label={`${tx(S.viewInsights)}: ${name}`}>
+          <Link to={href} className="btn btn--sm btn--ghost" aria-label={`${tx(S.viewInsights)}: ${name}`} title={tx(S.viewInsights)}>
             <Icon name="chart" size={16} />
             <span className="story-row__action-text">{tx(S.viewInsights)}</span>
           </Link>

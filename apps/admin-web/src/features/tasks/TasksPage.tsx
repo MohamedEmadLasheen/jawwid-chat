@@ -9,7 +9,7 @@ import { Badge } from '@/shared/components/Badge'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
 import { PageHeader } from '@/shared/components/PageHeader'
 import { ReasonDialog } from '@/shared/components/ReasonDialog'
-import { QueryBoundary } from '@/shared/components/States'
+import { EmptyState, QueryBoundary } from '@/shared/components/States'
 import { ApiError } from '@/core/api/errors'
 import { Icon } from '@/shared/components/Icon'
 import { describeError } from '@/features/teacher-files/copy'
@@ -146,6 +146,7 @@ export function TasksPage({ eyebrow }: { eyebrow?: string }) {
 
   return (
     <div className="page tasks">
+      <div className="page__inner">
       <TasksAreaTabs />
       <PageHeader
         eyebrow={eyebrow}
@@ -219,14 +220,20 @@ export function TasksPage({ eyebrow }: { eyebrow?: string }) {
       </div>
       <div className="tasks__body">
         <div id="tasks-tabpanel" role="tabpanel" aria-labelledby={`tasks-tab-${tab}`}>
-          <QueryBoundary
-            isLoading={list.isLoading}
-            error={list.error}
-            isEmpty={items.length === 0}
-            emptyTitle={tx(C.empty)}
-            emptyHint={tx(tab === 'closed' ? C.emptyClosedHint : C.emptyHint)}
-            onRetry={() => list.refetch()}
-          >
+          <QueryBoundary isLoading={list.isLoading} error={list.error} onRetry={() => list.refetch()}>
+            {items.length === 0 && (
+              <EmptyState
+                title={tx(tab === 'closed' ? C.emptyClosed : C.empty)}
+                hint={tx(tab === 'closed' ? C.emptyClosedHint : C.emptyHint)}
+                action={
+                  canCreate && tab !== 'closed' ? (
+                    <button type="button" className="btn btn--sm" onClick={() => setCreating(true)}>
+                      {tx(C.emptyAction)}
+                    </button>
+                  ) : undefined
+                }
+              />
+            )}
             <ul className="tasks__list ruled">
               {items.map((t) => (
                 <TaskRow key={t.id} task={t} showAssignee={query.view !== 'mine'} selected={t.id === openId} onOpen={() => setOpenId(t.id)} />
@@ -241,6 +248,7 @@ export function TasksPage({ eyebrow }: { eyebrow?: string }) {
         </div>
         {/* Keyed by the task: a draft, a dialog or a date typed for one task never carries to the next. */}
         {openId && <TaskPanel key={openId} id={openId} onClose={() => setOpenId(null)} />}
+      </div>
       </div>
       {creating && <NewTaskDialog onClose={() => setCreating(false)} />}
     </div>
@@ -275,7 +283,12 @@ function TaskRow({ task, showAssignee, selected, onOpen }: { task: TaskSummary; 
           {title(task)}
         </button>
         <div className="tasks__meta">
-          <span className="tasks__source">{tx(SOURCE_LABEL[task.source?.type ?? 'manual'])}</span>
+          {/* Where it came from: the kind of work for a system task, the person for one somebody gave. */}
+          {task.source ? (
+            <span className="tasks__source">{tx(SOURCE_LABEL[task.source.type])}</span>
+          ) : (
+            task.createdBy && <span className="tasks__source" dir="auto">{tx(C.createdBy, { name: task.createdBy.name })}</span>
+          )}
           {task.category === 'financial' && <FinanceTag />}
           {showAssignee && <span dir="auto">{tx(C.assignedTo, { name: task.assigneeName })}</span>}
           {!closed && <span>{tx(C.age, { ago: duration(task.createdAt) })}</span>}
@@ -358,7 +371,8 @@ function TaskPanel({ id, onClose }: { id: string; onClose: () => void }) {
               {t.state !== 'completed' && t.state !== 'removed' && <PriorityChip task={t} />}
               {t.category === 'financial' && <FinanceTag />}
               <Badge tone={STATE_TONE[state]}>{tx(STATE_LABEL[state])}</Badge>
-              <Badge tone="outline">{tx(SOURCE_LABEL[t.source?.type ?? 'manual'])}</Badge>
+              {/* A person's task names the person just below; the general label is only for one with no name. */}
+              {(t.source || !t.createdBy) && <Badge tone="outline">{tx(SOURCE_LABEL[t.source?.type ?? 'manual'])}</Badge>}
             </div>
             <p className="tasks__meta tasks__meta--panel">
               <span dir="auto">{tx(C.assignedTo, { name: t.assigneeName })}</span>

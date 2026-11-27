@@ -7,14 +7,18 @@
  */
 export interface CallsPageCopy {
   title: string
+  subtitle: string
   search: string
   clearSearch: string
   upcoming: string
   favorites: string
   recent: string
   noUpcoming: string
+  noUpcomingHint: string
   noFavorites: string
+  noFavoritesHint: string
   noRecent: string
+  noRecentHint: string
   noMatches: string
   loadMore: string
   join: string
@@ -111,14 +115,18 @@ function duration(s: number): string {
 
 const ar: CallsPageCopy = {
   title: 'المكالمات',
+  subtitle: 'مكالمات صوتية فقط. يُعثر على العضو باسمه، لا برقمه.',
   search: 'ابحث بالاسم',
   clearSearch: 'مسح البحث',
   upcoming: 'القادمة',
   favorites: 'المفضلة',
   recent: 'الأخيرة',
-  noUpcoming: 'لا توجد مكالمات مجدولة.',
-  noFavorites: 'ثبّت محادثة لتظهر هنا.',
-  noRecent: 'لا توجد مكالمات بعد.',
+  noUpcoming: 'لا مكالمات مجدولة',
+  noUpcomingHint: 'تظهر هنا المكالمة المجدولة بساعتها، ويُفتح الانضمام قبل موعدها بعشر دقائق.',
+  noFavorites: 'لا محادثات مثبّتة',
+  noFavoritesHint: 'ثبّت محادثة في المحادثات لتتصل بها من هنا بنقرة واحدة.',
+  noRecent: 'لا مكالمات في سجلّك بعد',
+  noRecentHint: 'تظهر هنا كل مكالمة تجريها أو تصلك، مع اتجاهها وحالتها ومدتها.',
   noMatches: 'لا نتائج لهذا الاسم.',
   loadMore: 'عرض المزيد',
   join: 'انضمام',
@@ -205,14 +213,18 @@ const ar: CallsPageCopy = {
 
 const en: CallsPageCopy = {
   title: 'Calls',
+  subtitle: 'Voice only. A member is found by name, never by number.',
   search: 'Search name',
   clearSearch: 'Clear search',
   upcoming: 'Upcoming',
   favorites: 'Favorites',
   recent: 'Recent',
-  noUpcoming: 'No scheduled calls.',
-  noFavorites: 'Pin a chat to see it here.',
-  noRecent: 'No calls yet.',
+  noUpcoming: 'No scheduled calls',
+  noUpcomingHint: 'A scheduled call is listed here with its hour; Join opens 10 minutes before the start.',
+  noFavorites: 'No pinned chats',
+  noFavoritesHint: 'Pin a chat in Conversations to ring it from here in one click.',
+  noRecent: 'No calls in your history yet',
+  noRecentHint: 'Every call you make or receive is listed here with its direction, outcome and length.',
   noMatches: 'No matches for that name.',
   loadMore: 'Load more',
   join: 'Join',

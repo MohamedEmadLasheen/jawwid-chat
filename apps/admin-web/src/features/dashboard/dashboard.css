@@ -60,7 +60,11 @@ html[lang='ar'] .dash-section__title { font-weight: 700; }
   padding: 10px var(--space-4) 12px;
 }
 .dash-tile--large .dash-tile__label { order: -1; font-size: 12.5px; line-height: 1.45; color: var(--ink-muted); }
+/* Numerals share one baseline across a row: each is pushed to the foot of its cell, above
+   a line that is kept for the note whether or not there is one, so a label that wraps
+   to two lines never drops its figure below its neighbours'. */
 .dash-tile--large .dash-tile__value {
+  margin-block-start: auto;
   font-family: var(--display);
   font-size: var(--fs-kpi);
   font-weight: 600;
@@ -73,7 +77,9 @@ html[lang='ar'] .dash-section__title { font-weight: 700; }
   unicode-bidi: isolate;
 }
 .dash-tile--large:hover .dash-tile__value { color: var(--teal-dark); }
-.dash-tile__note { font-size: var(--fs-xs); color: var(--ink-muted); }
+.dash-tile__note { font-size: var(--fs-xs); line-height: 1.5; color: var(--ink-muted); }
+.dash-tile--large:not(:has(.dash-tile__note))::after { content: ''; block-size: calc(var(--fs-xs) * 1.5); }
+.dash-tile--late .dash-tile__value, .dash-tile--late:hover .dash-tile__value { color: var(--terracotta); }
 
 /* The rest of the section: a name, a figure. */
 .dash-lines {
@@ -85,7 +91,11 @@ html[lang='ar'] .dash-section__title { font-weight: 700; }
   list-style: none;
 }
 .dash-ledger + .dash-lines { margin-block-start: var(--space-2); }
+/* Every line in a row is as tall as the tallest, so their rules end together. */
+.dash-lines > li { display: flex; }
 .dash-tile--line {
+  flex: 1;
+  align-content: start;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: baseline;
@@ -109,7 +119,11 @@ html[lang='ar'] .dash-section__title { font-weight: 700; }
 @media (max-width: 767px) {
   .dash-ledger { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .dash-tile--large { padding-inline: var(--space-3); }
-  .dash-tile--line { min-block-size: 44px; padding-inline: 2px; align-items: center; }
+  .dash-ledger > li:nth-child(odd) .dash-tile--large { padding-inline-start: 3px; }
+  .dash-tile--line { min-block-size: 44px; padding-inline: 2px; padding-block: 11px 10px; }
+  /* One column here: the section's own rule closes the list, not a second hairline. */
+  .dash-lines > li:last-child .dash-tile--line { border-block-end: 0; }
+  .dash-section { padding-block-end: var(--space-3); }
 }
 
 .dash-section__clear,

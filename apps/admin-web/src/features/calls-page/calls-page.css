@@ -8,8 +8,11 @@
 /* ------------------------------------------------------------- the page */
 
 .cp-head { align-items: flex-end; margin-block-end: var(--space-4); }
-.cp-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+/* One thing to do first (start a call); the other three are quiet words beside it. */
+.cp-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; }
 .cp-action { gap: 7px; }
+.cp-action.btn--primary { margin-inline-end: var(--space-2); }
+.cp-action.btn--ghost { padding-inline: 10px; font-weight: 500; }
 .cp-action:not(.btn--primary) .icon { color: var(--teal); }
 
 .cp-notice {
@@ -41,9 +44,13 @@
   .cp-cols__side { order: -1; }
 }
 @media (max-width: 767px) {
-  .cp-actions { inline-size: 100%; display: grid; grid-template-columns: 1fr 1fr; }
-  .cp-action { justify-content: center; padding-inline: 8px; }
+  .cp-actions { inline-size: 100%; gap: 0 2px; }
+  .cp-action.btn--primary { flex: 1 0 100%; justify-content: center; margin: 0 0 4px; }
+  .cp-action.btn--ghost { flex: 1 1 auto; justify-content: center; padding-inline: 6px; }
   .cp-search { max-inline-size: none; }
+  /* Every button on the page, and every icon-only action, is a full touch target. */
+  .cp-page :is(.btn, .btn--sm) { min-block-size: 44px; }
+  .cp-page :is(.btn--icon, .btn--icon.btn--sm) { min-inline-size: 44px; }
 }
 
 .cp-section { min-inline-size: 0; }
@@ -59,6 +66,8 @@
   font-size: var(--fs-sm);
   color: var(--ink-muted);
 }
+.cp-section .state { padding-block: var(--space-3) var(--space-4); }
+.cp-section .state .btn { margin-block-start: var(--space-1); }
 .cp-more { margin-block-start: var(--space-3); }
 
 /* ------------------------------------------------------------ upcoming */
@@ -281,6 +290,13 @@
 .cp-card__line--sub { color: var(--ink-muted); }
 .cp-card__actions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); margin-block-start: var(--space-2); }
 .cp-card__hint { font-size: var(--fs-xs); color: var(--ink-muted); }
+/* A Join that is not open yet is plainly off: muted ink on the paper, not white on faded teal. */
+:is(.cp-card, .cp-landing__card) .btn--primary:disabled {
+  opacity: 1;
+  background: var(--surface-sunken);
+  border-color: var(--hairline);
+  color: var(--ink-muted);
+}
 
 /* ------------------------------------------------------- join landing */
 

@@ -177,27 +177,46 @@
 }
 .kpi__sub { font-size: var(--fs-xs); color: var(--ink-muted); }
 .kpi-strip--compact .kpi__value { font-size: var(--fs-2xl); }
-/* The studio's totals are a quiet line under the title; the status ledger below is the one to act on. */
-.kpi-strip--line {
-  display: flex; flex-wrap: wrap; align-items: baseline;
-  gap: 4px var(--space-6);
-  border: 0;
-  overflow: visible;
-}
-.kpi-strip--line .kpi { flex-direction: row-reverse; align-items: baseline; gap: 7px; padding: 0; margin: 0; border: 0; }
-.kpi-strip--line .kpi__value { font-size: var(--fs-xl); }
-.kpi-strip--line .kpi__label { font-size: var(--fs-sm); }
-.kpi-strip--line .kpi--live .kpi__value { color: var(--teal-dark); }
 @media (max-width: 767px) {
-  .kpi-strip:not(.kpi-strip--line) { grid-template-columns: 1fr 1fr; }
+  .kpi-strip { grid-template-columns: 1fr 1fr; }
   .kpi { padding-inline: var(--space-3); border-block-end: 1px solid var(--hairline-soft); margin-block-end: -1px; }
   .kpi__value { font-size: 26px; }
-  .kpi-strip--line { gap: 2px var(--space-5); }
+}
+
+/* The studio's one ruled strip: the five states to filter by, then its totals as plain lines. */
+.studio-strip {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  border-block: 1px solid var(--hairline);
+}
+.studio-strip .status-tiles { margin: 0; border: 0; }
+.studio-strip .status-tile { margin-block-end: 0; border-block-end: 0; }
+.studio-totals {
+  display: grid;
+  align-content: center;
+  gap: 1px;
+  min-inline-size: 220px;
+  padding-block: 8px;
+  padding-inline-start: var(--space-4);
+  border-inline-start: 1px solid var(--hairline);
+}
+.studio-totals__row { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-4); }
+.studio-totals__label { font-size: var(--fs-xs); color: var(--ink-muted); }
+.studio-totals__value { font-family: var(--display); font-size: var(--fs-md); font-weight: 600; font-variant-numeric: tabular-nums lining-nums; color: var(--ink); }
+@media (max-width: 899px) {
+  .studio-strip { grid-template-columns: minmax(0, 1fr); }
+  .studio-totals {
+    display: flex; flex-wrap: wrap; gap: 2px var(--space-4);
+    min-inline-size: 0;
+    padding: 7px 2px 8px;
+    border-inline-start: 0;
+    border-block-start: 1px solid var(--hairline-soft);
+  }
+  .studio-totals__row { flex-direction: row-reverse; gap: 6px; }
 }
 
 .stories-studio .status-tiles { margin-block-end: 0; }
 .stories-studio .status-tile { text-decoration: none; }
-.stories-studio .status-tile[aria-current='true'] { border-block-end-color: var(--hairline-soft); }
 .stories-studio .status-tile:first-child { border-inline-start: 0; }
 @media (max-width: 767px) {
   /* Five states stay one row on a phone; it scrolls sideways rather than stacking. */
@@ -231,7 +250,8 @@
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .story-row__name:hover { color: var(--teal-dark); }
-.story-row__meta { display: flex; flex-wrap: wrap; gap: 4px; font-size: var(--fs-xs); color: var(--ink-muted); }
+/* Kind, button, author, age: set apart by space, so a wrapped line never opens on a stray dot. */
+.story-row__meta { display: flex; flex-wrap: wrap; gap: 0 var(--space-3); font-size: var(--fs-xs); color: var(--ink-muted); }
 .story-row__kind { font-weight: 500; }
 .story-row__audience {
   display: inline-flex; align-items: center; gap: 6px;
@@ -551,7 +571,10 @@ html[lang='ar'] .compose-step__title { font-weight: 700; }
   .story-row__perf { grid-column: 2 / -1; }
   .story-row__status { grid-row: 1; grid-column: 3; }
   .story-row__actions { grid-column: 2 / -1; justify-content: flex-start; }
-  .story-row__action-text { display: none; }
+  /* The phone reads the form first; the preview, the reach and Save / Publish follow it. */
+  .composer__aside { order: 0; }
+  /* Every button in the studio is a full touch target, and none is a bare glyph. */
+  .stories-studio :is(.btn, .btn--sm) { min-block-size: 44px; }
   .composer__sticky { grid-template-columns: minmax(0, 1fr); }
   .composer__sticky > :not(.story-phone) { grid-column: 1; }
   .composer__sticky > .story-phone { grid-row: auto; inline-size: min(100%, 200px); }

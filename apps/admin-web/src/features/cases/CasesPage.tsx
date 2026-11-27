@@ -5,7 +5,7 @@ import { useI18n } from '@/core/i18n/I18nProvider'
 import { Badge } from '@/shared/components/Badge'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
 import { PageHeader } from '@/shared/components/PageHeader'
-import { QueryBoundary } from '@/shared/components/States'
+import { EmptyState, QueryBoundary } from '@/shared/components/States'
 import { describeError } from '@/features/teacher-files/copy'
 import { casesApi, type CaseDetail, type CaseStatus, type CaseSummary, type CaseTab } from './api'
 import { C, EVENT_LABEL, STATUS_LABEL, SUBJECT_LABEL, TAB_LABEL, TARGET_LABEL, useCopy } from './copy'
@@ -52,6 +52,7 @@ export function CasesPage({ header }: { header?: React.ReactNode }) {
 
   return (
     <div className="page cases">
+      <div className="page__inner">
       {header ?? <TasksAreaTabs />}
       <PageHeader title={tx(C.title)} subtitle={tx(C.subtitle)} />
       <div className="cases__bar">
@@ -77,14 +78,20 @@ export function CasesPage({ header }: { header?: React.ReactNode }) {
         </label>
       </div>
       <div className="cases__body">
-        <QueryBoundary
-          isLoading={list.isLoading}
-          error={list.error}
-          isEmpty={cases.length === 0}
-          emptyTitle={tx(C.empty)}
-          emptyHint={tx(C.emptyHint)}
-          onRetry={() => list.refetch()}
-        >
+        <QueryBoundary isLoading={list.isLoading} error={list.error} onRetry={() => list.refetch()}>
+          {cases.length === 0 && (
+            <EmptyState
+              title={tx(closed ? C.emptyAll : C.empty)}
+              hint={tx(C.emptyHint)}
+              action={
+                closed ? undefined : (
+                  <button type="button" className="btn btn--sm" onClick={() => setClosed(true)}>
+                    {tx(C.showClosed)}
+                  </button>
+                )
+              }
+            />
+          )}
           <ul className="cases__list ruled">
             {cases.map((c) => (
               <CaseRow key={c.id} c={c} selected={c.id === openId} onOpen={() => setOpenId(c.id)} />
@@ -92,6 +99,7 @@ export function CasesPage({ header }: { header?: React.ReactNode }) {
           </ul>
         </QueryBoundary>
         {openId && <CasePanel id={openId} onClose={() => setOpenId(null)} />}
+      </div>
       </div>
     </div>
   )

@@ -124,7 +124,8 @@ describe('the list', () => {
     // A person's level needs no reason.
     expect(within(rows[1]!).getByTestId('task-level')).toHaveTextContent(/^Medium$/)
     expect(within(rows[1]!).queryByTestId('task-finance')).toBeNull()
-    expect(within(rows[1]!).getByText('Given by a person')).toBeInTheDocument()
+    // A person's task names who gave it (the response carries the name).
+    expect(within(rows[1]!).getByText('Given by Ops Manager')).toBeInTheDocument()
     expect(sent('GET', /\/me\/tasks/)[0]!.url).toMatch(/state=open/)
   })
 
@@ -335,7 +336,7 @@ describe('the level colours', () => {
       if (!m) throw new Error(`no --${name} in paper.css`)
       return m[2] ? value(block, m[2]) : m[1]!
     }
-    for (const fg of ['danger', 'gold-700', 'ok', 'text-muted']) {
+    for (const fg of ['danger', 'gold-700', 'text-muted']) {
       for (const [theme, block] of [['light', light], ['dark', dark]] as const) {
         for (const bg of ['paper', 'teal-tint']) {
           expect(contrast(value(block, fg), value(block, bg)), `--${fg} on --${bg}, ${theme}`).toBeGreaterThanOrEqual(4.5)

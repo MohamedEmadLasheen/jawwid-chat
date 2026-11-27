@@ -9,7 +9,7 @@ import { Badge } from '@/shared/components/Badge'
 import { Dialog } from '@/shared/components/Dialog'
 import { Icon, type IconName } from '@/shared/components/Icon'
 import { SearchField } from '@/shared/components/SearchField'
-import { ErrorState, LoadingState } from '@/shared/components/States'
+import { EmptyState, ErrorState, LoadingState } from '@/shared/components/States'
 import { useCall } from '@/features/calls/CallProvider'
 import type { ChatConversation } from '@/features/chat/chatApi'
 import { chatCopyFor } from '@/features/chat/copy'
@@ -131,6 +131,7 @@ function UpcomingRow({
               aria-haspopup="menu"
               aria-expanded={menuOpen}
               aria-label={copy.rowMenu(name)}
+              title={copy.rowMenu(name)}
               onClick={() => setMenuOpen((v) => !v)}
             >
               <Icon name="more" size={18} />
@@ -215,6 +216,7 @@ function RecentRow({
             data-cp-item
             disabled={!actions.available || actions.busy}
             aria-label={copy.callTo(name)}
+            title={copy.callTo(name)}
             onClick={() => void actions.startCall(conversation)}
           >
             <Icon name="phone" size={16} />
@@ -316,7 +318,20 @@ export function CallsPage() {
       ) : upcoming.error ? (
         <ErrorState compact error={upcoming.error} onRetry={() => void upcoming.refetch()} />
       ) : upcomingRows.length === 0 ? (
-        <p className="cp-empty">{searching ? copy.noMatches : copy.noUpcoming}</p>
+        searching ? (
+          <EmptyState compact title={copy.noMatches} />
+        ) : (
+          <EmptyState
+            compact
+            title={copy.noUpcoming}
+            hint={copy.noUpcomingHint}
+            action={
+              <button type="button" className="btn btn--sm" onClick={() => setFlow({ kind: 'picker', mode: 'schedule' })}>
+                {copy.scheduleCall}
+              </button>
+            }
+          />
+        )
       ) : (
         <ul className="cp-list" onKeyDown={onListKeyDown}>
           {upcomingRows.map((c) => (
@@ -337,7 +352,11 @@ export function CallsPage() {
       ) : conversations.error ? (
         <ErrorState compact error={conversations.error} onRetry={() => void conversations.refetch()} />
       ) : favorites.length === 0 ? (
-        <p className="cp-empty">{searching ? copy.noMatches : copy.noFavorites}</p>
+        searching ? (
+          <EmptyState compact title={copy.noMatches} />
+        ) : (
+          <EmptyState compact title={copy.noFavorites} hint={copy.noFavoritesHint} />
+        )
       ) : (
         <ul className="cp-list" onKeyDown={onListKeyDown}>
           {favorites.map((c) => {
@@ -358,6 +377,7 @@ export function CallsPage() {
                     data-cp-item
                     disabled={!actions.available || actions.busy}
                     aria-label={copy.callTo(n)}
+                    title={copy.callTo(n)}
                     onClick={() => void actions.startCall(c)}
                   >
                     <Icon name="phone" size={16} />
@@ -381,7 +401,20 @@ export function CallsPage() {
       ) : history.error ? (
         <ErrorState compact error={history.error} onRetry={() => void history.refetch()} />
       ) : recentRows.length === 0 ? (
-        <p className="cp-empty">{searching ? copy.noMatches : copy.noRecent}</p>
+        searching ? (
+          <EmptyState compact title={copy.noMatches} />
+        ) : (
+          <EmptyState
+            compact
+            title={copy.noRecent}
+            hint={copy.noRecentHint}
+            action={
+              <button type="button" className="btn btn--sm" onClick={() => setFlow({ kind: 'picker', mode: 'call' })}>
+                {copy.startCall}
+              </button>
+            }
+          />
+        )
       ) : (
         <table className="table cp-table">
           <thead>
@@ -422,13 +455,14 @@ export function CallsPage() {
             <h1 className="page-header__title" id="cp-title">
               {copy.title}
             </h1>
+            <p className="page-header__subtitle">{copy.subtitle}</p>
           </div>
           <section className="cp-actions" aria-label={copy.actions}>
             {ACTIONS.map((t) => (
               <button
                 key={t.mode}
                 type="button"
-                className={t.primary ? 'btn btn--primary cp-action' : 'btn cp-action'}
+                className={t.primary ? 'btn btn--primary cp-action' : 'btn btn--ghost cp-action'}
                 onClick={() => {
                   setNotice(null)
                   setFlow({ kind: 'picker', mode: t.mode })
@@ -448,6 +482,7 @@ export function CallsPage() {
               type="button"
               className="btn btn--ghost btn--icon btn--sm"
               aria-label={copy.dismiss}
+              title={copy.dismiss}
               onClick={() => setNotice(null)}
             >
               <Icon name="close" size={16} />
