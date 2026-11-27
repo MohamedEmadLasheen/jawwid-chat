@@ -16,16 +16,17 @@ export function OutcomeBars({ categories }: { categories: CategoryStats[] }) {
   const fmt = useFormat()
   const shown = categories.filter((c) => c.key !== 'upcoming' && c.lessons > 0)
   if (shown.length === 0) return <p className="tsx-quiet tsx-bars__none">{tx(TS.outcomesNone)}</p>
-  const max = Math.max(...shown.map((c) => c.lessons))
+  // Each outcome as a share of all the month's lessons that have one, so the bars read as parts of one whole.
+  const total = shown.reduce((n, c) => n + c.lessons, 0)
   return (
     <ul className="tsx-bars">
       {shown.map((c) => {
         const alarm = ALARM.has(c.key)
         return (
-          <li key={c.key} className={alarm ? 'tsx-bar tsx-bar--alarm' : c.counted ? 'tsx-bar' : 'tsx-bar tsx-bar--info'}>
+          <li key={c.key} className={alarm ? 'tsx-bar tsx-bar--alarm' : 'tsx-bar'}>
             <span className="tsx-bar__label">{tx(CATEGORY_LABEL[c.key])}</span>
             <span className="tsx-bar__track" aria-hidden="true">
-              <span className="tsx-bar__fill" style={{ inlineSize: `${Math.max(2, (c.lessons / max) * 100)}%` }} />
+              <span className="tsx-bar__fill" style={{ inlineSize: `${Math.max(2, (c.lessons / total) * 100)}%` }} />
             </span>
             <span className="tsx-bar__n">{fmt.number(c.lessons)}</span>
           </li>

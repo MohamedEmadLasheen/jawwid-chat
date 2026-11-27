@@ -111,6 +111,10 @@ export function rank(rows: TeacherRow[], th: TeacherAttentionThresholds, collato
       // A lesson a family lost outweighs a report not yet written.
       if (a.flags.noShow !== b.flags.noShow) return b.flags.noShow - a.flags.noShow
       if (a.row.unreported.lessons !== b.row.unreported.lessons) return b.row.unreported.lessons - a.row.unreported.lessons
+      // Then the weaker habit first, the same in either language.
+      const oa = a.row.reportsOnTimeRate ?? 1
+      const ob = b.row.reportsOnTimeRate ?? 1
+      if (oa !== ob) return oa - ob
     } else if (a.level === 'watch') {
       const da = shortfall(a.row.attendanceRate, th.attendanceWatch) + shortfall(a.row.reportsOnTimeRate, th.onTimeWatch)
       const db = shortfall(b.row.attendanceRate, th.attendanceWatch) + shortfall(b.row.reportsOnTimeRate, th.onTimeWatch)

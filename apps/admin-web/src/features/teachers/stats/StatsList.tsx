@@ -13,7 +13,7 @@ import { EmptyState, QueryBoundary } from '@/shared/components/States'
 import { T, TS } from '../copy'
 import { useTeacherStats } from '../hooks'
 import { downloadCsv, toCsv } from './exportCsv'
-import { LATE_REPORTS, LESSONS_AFTER, MORE_TEACHERS, Pct, TEACHERS, percentText, useCopy, useCopyNodes, useFormat } from './format'
+import { LATE_REPORTS, LESSONS_AFTER, MORE_TEACHERS, Pct, TEACHERS, monogramName, percentText, useCopy, useCopyNodes, useFormat } from './format'
 import { MessageTeacher } from './MessageTeacher'
 import { matches, rank, totals, type Filter, type Level, type Ranked } from './priority'
 import { useReason } from './reason'
@@ -36,6 +36,9 @@ export function Denied() {
       </span>
       <div className="state__title">{t('common.forbidden')}</div>
       <div className="state__body">{tx(TS.deniedHint)}</div>
+      <Link className="btn btn--sm" to="/today">
+        {tx(TS.goToday)}
+      </Link>
     </div>
   )
 }
@@ -199,7 +202,7 @@ export function StatsList({
   return (
     <div className="tsx-page">
       {/* The tabs belong to the area, so they sit under the title; the figures sit on the list they filter. */}
-      <PageHeader title={tx(T.title)} actions={actions} tabs={tabs} />
+      <PageHeader title={tx(T.title)} actions={actions} tabs={forbidden ? undefined : tabs} />
       {figures.length > 0 && (
         <div className="tsx-figures">
           <MastFigures figures={figures} />
@@ -252,7 +255,7 @@ export function StatsList({
                     const items = visible.filter((r) => r.level === level)
                     if (items.length === 0) return null
                     const folded = level === 'ok' && collapsing && items.length > OK_SHOWN + 1
-                    const askReports = level === 'urgent' && items.some((r) => r.flags.late)
+                    const askReports = level === 'urgent' ? items.filter((r) => r.flags.late).reduce((n, r) => n + r.row.unreported.lessons, 0) : 0
                     return (
                       <tbody key={level} className={`tsx-group tsx-group--${level}`}>
                         <tr className="tsx-ghead">
@@ -261,9 +264,9 @@ export function StatsList({
                               <span className={`tsx-dot tsx-dot--${level}`} aria-hidden="true" />
                               <span className="tsx-ghead__label">{tx(TS[level])}</span>
                               <span className="count">{fmt.number(items.length)}</span>
-                              {askReports && (
+                              {askReports > 0 && (
                                 <Link className="card__link tsx-ghead__link" to={needsActionHref}>
-                                  {tx(TS.askReports, { reports: fmt.count(sums.lateLessons, LATE_REPORTS) })}
+                                  {tx(TS.askReports, { reports: fmt.count(askReports, LATE_REPORTS) })}
                                 </Link>
                               )}
                             </span>
@@ -340,7 +343,7 @@ function Row({
     <tr className={`tsx-row tsx-row--${level}`} hidden={folded} onClick={onOpen}>
       <th scope="row">
         <div className="tsx-who">
-          <Avatar name={name} seed={row.teacher.id} />
+          <Avatar name={monogramName(name)} seed={row.teacher.id} />
           <div className="tsx-who__text">
             <span className="tsx-who__line">
               <button type="button" className="tsx-name" dir="auto" onClick={(e) => (e.stopPropagation(), onOpen())}>
@@ -357,13 +360,13 @@ function Row({
           {fmt.number(row.unreported.lessons)}
         </span>
         {row.reportsOnTimeRate !== null && (
-          <span className={flags.onTime ? 'tsx-sub is-watch' : 'tsx-sub'}>
+          <span className={flags.onTime && level === 'watch' ? 'tsx-sub is-watch' : 'tsx-sub'}>
             <Pct value={row.reportsOnTimeRate} /> {tx(TS.onTime)}
           </span>
         )}
       </td>
       <td className="num tsx-cell" data-label={tx(TS.shortAttendance)}>
-        <span className={`tsx-n${flags.attendance ? ' is-watch' : ''}${row.attendanceRate === null ? ' is-zero' : ''}`}>
+        <span className={`tsx-n${flags.attendance && level === 'watch' ? ' is-watch' : ''}${row.attendanceRate === null ? ' is-zero' : ''}`}>
           <Pct value={row.attendanceRate} />
         </span>
       </td>

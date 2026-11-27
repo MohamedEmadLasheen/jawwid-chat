@@ -79,14 +79,14 @@ export function TeacherSheet({
             <dt>{tx(TS.shortLate)}</dt>
             <dd className={`tsx-fig__n${flags.late ? ' is-breach' : ''}${row.unreported.lessons === 0 ? ' is-zero' : ''}`}>{fmt.number(row.unreported.lessons)}</dd>
             {row.reportsOnTimeRate !== null && (
-              <dd className={flags.onTime ? 'tsx-fig__sub is-watch' : 'tsx-fig__sub'}>
+              <dd className={flags.onTime && level === 'watch' ? 'tsx-fig__sub is-watch' : 'tsx-fig__sub'}>
                 <Pct value={row.reportsOnTimeRate} /> {tx(TS.onTime)}
               </dd>
             )}
           </div>
           <div className="tsx-fig">
             <dt>{tx(TS.shortAttendance)}</dt>
-            <dd className={flags.attendance ? 'tsx-fig__n is-watch' : 'tsx-fig__n'}>
+            <dd className={flags.attendance && level === 'watch' ? 'tsx-fig__n is-watch' : 'tsx-fig__n'}>
               <Pct value={row.attendanceRate} />
             </dd>
           </div>

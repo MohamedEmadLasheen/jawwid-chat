@@ -16,6 +16,14 @@ export const MORE_TEACHERS: CountedNoun = {
   ar: { one: 'معلمًا آخر', two: 'معلمَين آخرَين', few: 'معلمين آخرين', many: 'معلمًا آخر' },
 }
 
+/**
+ * The name an avatar draws its initials from. Two joined Arabic letters read as
+ * a word ("مص"), so an Arabic name gives one letter; a Latin name keeps two.
+ */
+export function monogramName(name: string): string {
+  return /[\u0600-\u06FF]/.test(name) ? (name.trim().split(/\s+/)[0] ?? name) : name
+}
+
 /** "Ask for 9 late reports". */
 export const LATE_REPORTS: CountedNoun = {
   en: { one: 'late report', other: 'late reports' },

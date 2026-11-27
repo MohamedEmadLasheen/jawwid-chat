@@ -51,7 +51,7 @@ export const T = {
   completion: { en: 'Completion', ar: 'الإتمام' },
   completionHint: { en: 'Held ÷ every lesson closed and counted', ar: 'المنعقدة ÷ كل الحصص المغلقة والمحتسبة' },
   reliability: { en: 'Teacher reliability', ar: 'التزام المعلم' },
-  reliabilityHint: { en: 'Lessons not lost through the teacher', ar: 'الحصص التي لم تضع بسبب المعلم' },
+  reliabilityHint: { en: 'Share of lessons the teacher did not miss or cancel', ar: 'الحصص التي لم تضع بسبب المعلم' },
 
   reports: { en: 'Lesson reports', ar: 'تقارير الحصص' },
   onTime: { en: 'On time (within 24 h)', ar: 'في موعدها (خلال 24 ساعة)' },
@@ -110,7 +110,7 @@ export const TS = {
   figAttendance: { en: 'Low student attendance', ar: 'حضور طلاب منخفض' },
   figAttendanceNote: { en: 'teachers below {p}', ar: 'معلمون دون {p}' },
   figNoShow: { en: 'Teacher no-shows', ar: 'غياب المعلمين' },
-  figNoShowNote: { en: 'lessons, across {teachers}', ar: 'حصص، عند {teachers}' },
+  figNoShowNote: { en: 'missed lessons, across {teachers}', ar: 'غياب دون إشعار، عند {teachers}' },
   figNoShowNone: { en: 'none this month', ar: 'لا غياب هذا الشهر' },
 
   // The list.
@@ -122,8 +122,8 @@ export const TS = {
   onTime: { en: 'on time', ar: 'في موعدها' },
   onTimeOf: { en: '{p} on time', ar: '{p} في موعدها' },
   shortLate: { en: 'Late reports', ar: 'تقارير متأخرة' },
-  shortAttendance: { en: 'Attendance', ar: 'الحضور' },
-  shortLessons: { en: 'Held', ar: 'المنعقدة' },
+  shortAttendance: { en: 'Student attendance', ar: 'حضور الطلاب' },
+  shortLessons: { en: 'Lessons held', ar: 'الحصص المنعقدة' },
   urgent: { en: 'Urgent', ar: 'عاجل' },
   watch: { en: 'Watch', ar: 'للمتابعة' },
   ok: { en: 'On track', ar: 'منتظم' },
@@ -173,6 +173,7 @@ export const TS = {
   deniedHint: { en: 'Only the staff who run the teachers’ lessons, and the super admin, can open this page. Ask your manager if you need it.', ar: 'هذه الصفحة لفريق متابعة حصص المعلمين ولمدير النظام. اطلبها من مديرك إن احتجت إليها.' },
   sheetExpand: { en: 'Open as a full page', ar: 'فتح في صفحة كاملة' },
   moreActions: { en: 'More actions', ar: 'إجراءات أخرى' },
+  goToday: { en: 'Back to Today', ar: 'العودة إلى اليوم' },
   studentExcuses: { en: 'Student excuses', ar: 'أعذار الطلاب' },
   studentExcusesSplit: { en: '{b} before the start, {a} after', ar: '{b} قبل البداية، {a} بعدها' },
   teacherExcuses: { en: 'Teacher excuses', ar: 'أعذار المعلم' },
@@ -182,15 +183,15 @@ export const TS = {
 } satisfies Record<string, Pair>
 
 export const CATEGORY_LABEL: Record<StatCategory, Pair> = {
-  held: { en: 'Completed lessons', ar: 'الحصص المنعقدة' },
+  held: { en: 'Lessons held', ar: 'الحصص المنعقدة' },
   upcoming: { en: 'Scheduled lessons', ar: 'الحصص المجدولة' },
   unreported: { en: 'Awaiting report', ar: 'بانتظار التقرير' },
-  student_apology: { en: 'Student apology', ar: 'اعتذار الطالب' },
-  teacher_apology: { en: 'Teacher apology', ar: 'اعتذار المعلم' },
+  student_apology: { en: 'Student excused', ar: 'اعتذار الطالب' },
+  teacher_apology: { en: 'Teacher excused', ar: 'اعتذار المعلم' },
   student_no_show: { en: 'Student absent', ar: 'غياب الطالب' },
   teacher_no_show: { en: 'Teacher absent', ar: 'غياب المعلم' },
   admin_cancelled: { en: 'Cancelled', ar: 'ملغاة' },
-  rescheduled: { en: 'Moved', ar: 'منقولة' },
+  rescheduled: { en: 'Rescheduled', ar: 'منقولة' },
   suspended: { en: 'Paused', ar: 'موقوفة' },
 }
 

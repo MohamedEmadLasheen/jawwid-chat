@@ -175,9 +175,9 @@ describe('the statistics', () => {
     // A teacher no-show makes the row urgent, whatever the other figures say; the reason says so.
     expect(within(one.closest('tbody')!).getByRole('columnheader', { name: /Urgent/ })).toBeInTheDocument()
     expect(within(one).getByText(/Missed 1 lesson without notice/)).toBeInTheDocument()
-    // Late reports below the threshold are not red; an on-time rate below its watch threshold is amber.
+    // On an urgent row only its trigger is coloured: late reports below the threshold are not red, and a low on-time rate is not amber.
     expect(within(one).getByText('2')).not.toHaveClass('is-breach')
-    expect(within(one).getByText('75%').closest('.tsx-sub')).toHaveClass('is-watch')
+    expect(within(one).getByText('75%').closest('.tsx-sub')).not.toHaveClass('is-watch')
     const two = within(table).getByRole('button', { name: 'Teacher Two' }).closest('tr')!
     expect(within(two.closest('tbody')!).getByRole('columnheader', { name: /On track/ })).toBeInTheDocument()
     // The thresholds in use are stated under the list.
@@ -213,7 +213,7 @@ describe('the statistics', () => {
   it('opens one teacher: category cards broken down by length, like the Core dashboard, and what only Chat knows', async () => {
     renderWithProviders(<AppRoutes />, { staff: makeStaff({ role: 'manager' }), route: '/teachers?month=2026-10' })
     await openFullRecord()
-    const held = await screen.findByRole('article', { name: 'Completed lessons' })
+    const held = await screen.findByRole('article', { name: 'Lessons held' })
     expect(within(held).getByText('99')).toBeInTheDocument()
     expect(within(held).getByText('63 lessons')).toBeInTheDocument()
     expect(within(held).getByText('40 min')).toBeInTheDocument()

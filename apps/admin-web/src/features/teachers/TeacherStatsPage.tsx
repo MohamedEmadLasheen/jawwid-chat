@@ -17,7 +17,7 @@ import { OutcomeBars } from './stats/OutcomeBars'
 import { clausesOf, flagsOf, isFilter, levelOf } from './stats/priority'
 import { useReason } from './stats/reason'
 import { LEVEL_TONE } from './stats/TeacherSheet'
-import { Pct, useCopy, useCopyNodes, useFormat } from './stats/format'
+import { Pct, monogramName, useCopy, useCopyNodes, useFormat } from './stats/format'
 import { TEACHER_ATTENTION_THRESHOLDS as TH } from './stats/thresholds'
 import './teachers.css'
 import './stats/stats.css'
@@ -145,7 +145,7 @@ function TeacherDetailView({
     <div className="tsx-full">
       <PageHeader
         back={{ to: `?${back.toString()}`, label: tx(T.back) }}
-        lead={d ? <Avatar name={d.teacher.name} seed={d.teacher.id} size="lg" /> : undefined}
+        lead={d ? <Avatar name={monogramName(d.teacher.name)} seed={d.teacher.id} size="lg" /> : undefined}
         title={d?.teacher.name ?? tx(T.title)}
         subtitle={tx(T.detailSubtitle, { month: fmt.month(month) })}
         actions={
