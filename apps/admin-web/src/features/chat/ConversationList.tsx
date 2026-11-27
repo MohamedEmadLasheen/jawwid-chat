@@ -15,7 +15,7 @@ import { Highlighted, SEARCH_ACROSS_MIN, searchable, snippetAround, useDebounced
 import { Avatar } from '@/shared/components/Avatar'
 import { chatCopyFor } from './copy'
 import { LabelChip, LabelsDialog } from './LabelsDialog'
-import { ConversationAvatar, conversationName, isGroup, isMuted, previewParts, textDir } from './chatView'
+import { ConversationAvatar, conversationName, isGroup, isMuted, previewParts, textDir, toneOfKind } from './chatView'
 import { useConversationPreferences } from './useChatActions'
 import { TrialBadge, isTrialGroup } from '@/shared/components/TrialBadge'
 
@@ -198,7 +198,9 @@ export function ConversationList({
                   return (
                     <li key={m.id}>
                       <button type="button" className="cw-hit-row" onClick={() => onOpenMessage?.(conversationId, m.id)}>
-                        <Avatar name={who || where || '?'} seed={m.authorId ?? m.authorKind} size="sm" src={m.authorAvatarUrl} />
+                        <span className={`cw-who cw-who--${toneOfKind(m.authorKind)}`}>
+                          <Avatar name={who || where || '?'} seed={m.authorId ?? m.authorKind} size="sm" src={m.authorAvatarUrl} />
+                        </span>
                         <span className="cw-hit-row__main">
                           <span className="cw-hit-row__top">
                             <span className="cw-hit-row__where" dir="auto">{where}</span>

@@ -298,7 +298,9 @@ function AddMemberDialog({ c, familyId, onClose }: { c: ChatConversation; family
                 onClick={() => add.mutate(p)}
               >
                 <span className="cw-member">
-                  <Avatar name={p.name} seed={p.id} size="sm" />
+                  <span className={`cw-who cw-who--${toneOfKind(p.kind)}`}>
+                    <Avatar name={p.name} seed={p.id} size="sm" />
+                  </span>
                   <span dir="auto" className="dc-person__name">{p.name}</span>
                 </span>
                 <span className="dc-person__kind">{add.isPending ? copy.adding : copy.role[p.kind]}</span>

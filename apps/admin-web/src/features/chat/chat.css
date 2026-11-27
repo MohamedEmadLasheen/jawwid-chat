@@ -96,6 +96,9 @@ html[lang='ar'] .cw .workspace__title { font-size: 28px; }
 .cw .conv-row__bottom { min-block-size: 22px; }
 .cw .conv-row .badge { flex: none; gap: 5px; font-size: var(--fs-xs); white-space: nowrap; }
 .cw .conv-row--attention .conv-row__time { color: var(--terracotta); font-weight: 600; }
+/* "Trial" is a word in the lead's lilac beside its own glyph: no pill, and no second marker. */
+.cw .badge.badge--trial { background: none; color: var(--lilac-text); font-size: var(--fs-xs); gap: 4px; }
+.cw .badge.badge--trial::before { display: none; }
 
 /* Where you are: pale teal, and the gold marker on the row's leading edge. */
 .cw .conv-row[aria-current='true'] { background: var(--teal-tint); box-shadow: none; }
@@ -577,6 +580,8 @@ html[lang='ar'] .cw .thread-head__name { font-weight: 700; line-height: 1.5; }
   resize: none;
 }
 .cw-composer__input:focus { outline: none; }
+/* The hint stays on one line; what does not fit is cut, never wrapped under the buttons. */
+.cw-composer__input::placeholder { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink-muted); }
 .cw-send {
   display: grid;
   place-items: center;

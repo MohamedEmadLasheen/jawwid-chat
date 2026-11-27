@@ -16,6 +16,8 @@ export function conversationName(c: ChatConversation, selfId: string | undefined
   return copy.kind[c.type] ?? c.type
 }
 
+const CARD_FAMILIES = ['call', 'case', 'leave', 'trial', 'lesson'] as const
+
 /**
  * The one-line preview under a row's name, worded by the client (never raw
  * JSON): what was said, and "You" when the viewer said it. Kept apart so the
@@ -28,8 +30,12 @@ export function previewParts(
 ): { who: string | null; text: string } {
   if (!m) return { who: null, text: '' }
   if (m.deleted) return { who: null, text: copy.preview.deleted ?? '' }
-  const text = m.text ?? (m.systemKind ? (copy.system[m.systemKind] ?? copy.system.fallback)!({}) : copy.preview[m.type] ?? '')
-  return { who: m.authorId && m.authorId === selfId && !m.systemKind ? copy.you : null, text }
+  // A card has no text of its own: it is named by its family (a call, a lesson, a case...);
+  // one this client does not know leaves the line to the row's fallback.
+  const family = m.type === 'card' ? CARD_FAMILIES.find((f) => m.cardKind?.startsWith(`${f}_`)) : undefined
+  const kind = family ? `card.${family}` : m.type
+  const text = m.text ?? (m.systemKind ? (copy.system[m.systemKind] ?? copy.system.fallback)!({}) : copy.preview[kind] ?? '')
+  return { who: text !== '' && m.authorId && m.authorId === selfId && !m.systemKind ? copy.you : null, text }
 }
 
 export function previewText(m: ChatLastMessage | null | undefined, selfId: string | undefined, copy: ChatCopy): string {

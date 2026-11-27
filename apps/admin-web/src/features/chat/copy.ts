@@ -103,7 +103,7 @@ export const chatCopy = {
     pinnedMark: 'مثبّتة',
     mutedMark: 'مكتومة',
     you: 'أنت',
-    preview: { image: 'صورة', video: 'فيديو', voice: 'رسالة صوتية', file: 'ملف', deleted: 'رسالة محذوفة' } as Record<string, string>,
+    preview: { image: 'صورة', video: 'فيديو', voice: 'رسالة صوتية', file: 'ملف', deleted: 'رسالة محذوفة', 'card.call': 'مكالمة مجدولة', 'card.case': 'تصعيد', 'card.leave': 'طلب إجازة', 'card.trial': 'حصة تجريبية', 'card.lesson': 'تحديث عن حصة' } as Record<string, string>,
     messageActions: 'خيارات الرسالة',
     reply: 'رد',
     star: 'تمييز بنجمة',
@@ -276,7 +276,8 @@ export const chatCopy = {
     // The empty thread pane: which conversation to answer first.
     startUnread: 'غير مقروءة',
     startOpen: 'فتح المحادثة',
-    startMore: (n: number) => (n === 1 ? 'ومحادثة أخرى تنتظر' : n === 2 ? 'ومحادثتان أخريان تنتظران' : `و${n} محادثات أخرى تنتظر`),
+    startMore: (n: number) =>
+      n === 1 ? 'ومحادثة أخرى تنتظر' : n === 2 ? 'ومحادثتان أخريان تنتظران' : n <= 10 ? `و ${n} محادثات أخرى تنتظر` : `و ${n} محادثة أخرى تنتظر`,
     startNone: 'لا توجد محادثة بانتظار رد.',
     keysMove: 'تنقّل',
     keysOpen: 'فتح',
@@ -409,7 +410,7 @@ export const chatCopy = {
     pinnedMark: 'Pinned',
     mutedMark: 'Muted',
     you: 'You',
-    preview: { image: 'Photo', video: 'Video', voice: 'Voice message', file: 'File', deleted: 'Deleted message' } as Record<string, string>,
+    preview: { image: 'Photo', video: 'Video', voice: 'Voice message', file: 'File', deleted: 'Deleted message', 'card.call': 'Scheduled call', 'card.case': 'Escalation', 'card.leave': 'Leave request', 'card.trial': 'Trial lesson', 'card.lesson': 'Lesson update' } as Record<string, string>,
     messageActions: 'Message options',
     reply: 'Reply',
     star: 'Star',
