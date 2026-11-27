@@ -991,6 +991,11 @@ function MessageItem({
   // A card is a reference, not something somebody typed: it is drawn as a ruled card, not a bubble.
   const isCard = live && m.type === 'card'
   const tone = toneOfKind(m.authorKind)
+  // What used to be a one-line system note is drawn as a card now, and stays
+  // what it was: a notice. It offers no message actions and is not selectable.
+  // (A lesson's excuse card always was a message, and keeps its menu.)
+  const notice = m.authorKind === 'system' && m.type === 'card' && !excuseCard
+  const selectable = selectMode && !notice
   // A lesson report's card is changed only from its lesson record (PD-15).
   const reportCard = m.type === 'card' && m.card?.kind === 'lesson_report'
   const items: MenuItem[] = live
@@ -1027,13 +1032,13 @@ function MessageItem({
 
   return (
     <li
-      className={`bubble-row ${SIDE_CLASS[side]} cw-msg${runStart ? ' cw-msg--run-start' : ''}${identity !== 'none' ? ' cw-msg--with-sender' : ''}${selectMode ? ' cw-msg--selectable' : ''}${isSelected ? ' cw-msg--selected' : ''}${m.mentionsViewer && !m.deletedForAll ? ' cw-msg--mentions-me' : ''}${isCard ? ' cw-msg--card' : ''}`}
+      className={`bubble-row ${SIDE_CLASS[side]} cw-msg${runStart ? ' cw-msg--run-start' : ''}${identity !== 'none' ? ' cw-msg--with-sender' : ''}${selectable ? ' cw-msg--selectable' : ''}${isSelected ? ' cw-msg--selected' : ''}${m.mentionsViewer && !m.deletedForAll ? ' cw-msg--mentions-me' : ''}${isCard ? ' cw-msg--card' : ''}`}
       data-seq={m.seq ?? undefined}
       data-msg-id={m.id}
-      onClick={selectMode ? onToggleSelect : undefined}
+      onClick={selectable ? onToggleSelect : undefined}
     >
       <div className="cw-msg__line">
-        {selectMode && (
+        {selectable && (
           <input
             type="checkbox"
             className="cw-msg__check"
@@ -1136,7 +1141,7 @@ function MessageItem({
             {mine && <Ticks status={m.status} />}
           </span>
         </div>
-        {!selectMode && <Menu
+        {!selectMode && !notice && <Menu
           label={copy.messageActions}
           className="cw-msg__menu"
           align={side === 'out' ? 'end' : 'start'}

@@ -385,8 +385,9 @@ describe('reference cards in the thread', () => {
     const row = link.closest('li') as HTMLElement
     expect(row).toHaveClass('cw-msg--card')
     expect(row).not.toHaveClass('bubble-row--system')
-    // Jawwid posted it: there is no sender to picture.
+    // Jawwid posted it: there is no sender to picture, and, as when it was a system line, nothing to do to it.
     expect(row.querySelector('.cw-msg__avatar')).toBeNull()
+    expect(within(row).queryByRole('button', { name: 'Message options' })).not.toBeInTheDocument()
   })
 
   it('draws a card it has no drawing for from its own words: the first line is the title, the leading mark is dropped', async () => {
