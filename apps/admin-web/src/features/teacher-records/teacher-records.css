@@ -11,7 +11,7 @@
 .tr-strip__file { margin-inline-start: auto; padding-inline-end: 0; border-inline-start: 0 !important; color: var(--teal); font-weight: 600; text-decoration: none; }
 .tr-strip__file:hover { color: var(--teal-dark); text-decoration: underline; text-underline-offset: 3px; }
 @media (max-width: 767px) {
-  .tr-strip { display: grid; gap: 4px; }
+  .tr-strip { display: grid; gap: 4px; justify-items: start; }
   .tr-strip > * + * { padding-inline-start: 0; border-inline-start: 0; }
   .tr-strip__file { margin-inline-start: 0; min-block-size: 44px; display: inline-flex; align-items: center; }
 }

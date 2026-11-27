@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { ApiError } from '@/core/api/errors'
 import { LOCALE_TAG, useI18n } from '@/core/i18n/I18nProvider'
 import { HOURS, LESSONS, countLabel, durationLabel } from '@/core/i18n/counts'
 import { PageHeader } from '@/shared/components/PageHeader'
@@ -61,6 +62,19 @@ export function TeacherStatsPage({ inTeachersArea = false }: { inTeachersArea?: 
   )
 }
 
+const isForbidden = (error: unknown) => error instanceof ApiError && error.isForbidden
+
+/** The server said no: one calm line and a lock. It offers no retry, as a refusal is an answer. */
+function Denied() {
+  const { t } = useI18n()
+  return (
+    <p className="ts-denied" role="alert">
+      <Icon name="lock" size={18} />
+      <span>{t('common.forbidden')}</span>
+    </p>
+  )
+}
+
 // ---------------------------------------------------------------------------
 // The list
 // ---------------------------------------------------------------------------
@@ -77,6 +91,7 @@ function TeacherList({ month, onOpen }: { month: string; onOpen: (id: string) =>
     return needle ? all.filter((r) => r.teacher.name.toLowerCase().includes(needle)) : all
   }, [q.data, query])
 
+  if (isForbidden(q.error)) return <Denied />
   return (
     <QueryBoundary isLoading={q.isLoading} error={q.error} onRetry={() => void q.refetch()}>
       <div className="ts-toolbar">
@@ -113,8 +128,8 @@ function TeacherList({ month, onOpen }: { month: string; onOpen: (id: string) =>
                       </button>
                       {!r.teacher.isActive && <span className="ts-muted"> · {tx(T.inactive)}</span>}
                     </th>
-                    <td className={quiet(r.held.lessons)}>{fmt.lessonsHours(r.held)}</td>
-                    <td className={quiet(r.scheduled.lessons)}>{fmt.lessonsHours(r.scheduled)}</td>
+                    <td className={`${quiet(r.held.lessons)} ts-words`}>{fmt.lessonsHours(r.held)}</td>
+                    <td className={`${quiet(r.scheduled.lessons)} ts-words`}>{fmt.lessonsHours(r.scheduled)}</td>
                     <td className={quiet(r.notHeld.lessons)}>{fmt.number(r.notHeld.lessons)}</td>
                     <td className={r.unreported.lessons > 0 ? 'num ts-attention' : quiet(0)}>{fmt.number(r.unreported.lessons)}</td>
                     <td className={quiet(r.attendanceRate)}>{fmt.percent(r.attendanceRate)}</td>
@@ -164,9 +179,13 @@ function TeacherDetailView({
         {tx(T.back)}
       </button>
       <PageHeader title={d?.teacher.name ?? tx(T.title)} subtitle={tx(T.detailSubtitle, { month: fmt.month(month) })} actions={monthPicker} />
-      <QueryBoundary isLoading={q.isLoading} error={q.error} onRetry={() => void q.refetch()}>
-        {d && <DetailBody detail={d} />}
-      </QueryBoundary>
+      {isForbidden(q.error) ? (
+        <Denied />
+      ) : (
+        <QueryBoundary isLoading={q.isLoading} error={q.error} onRetry={() => void q.refetch()}>
+          {d && <DetailBody detail={d} />}
+        </QueryBoundary>
+      )}
     </>
   )
 }
