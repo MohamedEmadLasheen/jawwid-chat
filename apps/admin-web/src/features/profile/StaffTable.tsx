@@ -144,17 +144,15 @@ export function StaffTable({ rows, showManager }: { rows: StaffSummary[]; showMa
                   <div><dt>{tx(T.colApprovals)}</dt><dd>{number(r.workload.pendingApprovals)}</dd></div>
                 </dl>
                 <div className="sp-row__meta sp-small">
-                  <div>
-                    {tx(T.colProfile)}: {tx(T.completeOf, { done: r.completeness.complete, total: r.completeness.total })}
+                  <div className="sp-row__file">
+                    <span>{tx(T.colProfile)}: {tx(T.completeOf, { done: r.completeness.complete, total: r.completeness.total })}</span>
                     {r.completeness.missing.length > 0 && (
-                      <span className="sp-muted"> ({r.completeness.missing.map((m) => tx(MISSING_LABEL[m])).join(' · ')})</span>
+                      <span className="sp-muted sp-row__missing"> ({r.completeness.missing.map((m) => tx(MISSING_LABEL[m])).join(' · ')})</span>
                     )}
                   </div>
-                  <div className="sp-muted">
-                    {tx(T.colActivity)}: {r.lastActivityAt ? date(r.lastActivityAt) : tx(T.never)}
-                  </div>
-                  <div className="sp-muted">
-                    {r.access.canEditProfessional || r.access.canManageResponsibilities ? tx(T.canEditBadge) : tx(T.viewOnlyBadge)}
+                  <div className="sp-muted sp-row__facts">
+                    <span>{tx(T.colActivity)}: {r.lastActivityAt ? date(r.lastActivityAt) : tx(T.never)}</span>
+                    <span>{r.access.canEditProfessional || r.access.canManageResponsibilities ? tx(T.canEditBadge) : tx(T.viewOnlyBadge)}</span>
                   </div>
                 </div>
               </li>

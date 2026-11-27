@@ -72,9 +72,9 @@ export function ProfileHead({
       </div>
       <div className="pp-head__text">
         <h1 className="pp-head__eyebrow">{heading}</h1>
-        <p className="pp-head__name" dir="auto">{profile.displayName}</p>
+        <p className="pp-head__name"><bdi>{profile.displayName}</bdi></p>
         {/* A missing title is named once, in the completeness line; the head stays clean. */}
-        {profile.jobTitle && <p className="sp-head__title" dir="auto">{profile.jobTitle}</p>}
+        {profile.jobTitle && <p className="sp-head__title"><bdi>{profile.jobTitle}</bdi></p>}
         <p className="pp-head__meta">
           {profile.isActive ? (
             <span className="badge badge--ok">{tx(T.active)}</span>

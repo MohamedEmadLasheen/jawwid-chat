@@ -29,9 +29,17 @@
 
 .pp-money { margin: 0; border-block-start: 0; }
 .pp-money + .pp-money { border-block-start: 0; }
-.pp-money .ledger__value { font-size: var(--fs-2xl); }
-/* A currency written in Arabic keeps its own direction beside the figure. */
-.pp-money .ledger__unit { display: inline-block; unicode-bidi: plaintext; }
+/* The figure reads left to right; the currency follows it in the page's own direction,
+   as the entries below write it. */
+.pp-money .ledger__value, [dir='rtl'] .pp-money .ledger__value { font-size: var(--fs-2xl); direction: inherit; unicode-bidi: normal; text-align: start; }
+.pp-money .ledger__unit { display: inline-block; }
+@media (max-width: 767px) {
+  /* On a phone each figure is a line: its name at the start, the amount at the end. */
+  .pp-money.ledger { grid-template-columns: minmax(0, 1fr); }
+  .pp-money .ledger__cell, .pp-money .ledger__cell:nth-child(odd) { flex-direction: row; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px var(--space-3); padding: 10px 2px; border-inline-start: 0; border-block-start: 1px solid var(--hairline-soft); }
+  .pp-money .ledger__cell:first-child { border-block-start: 0; }
+  .pp-money .ledger__value, [dir='rtl'] .pp-money .ledger__value { font-size: 23px; }
+}
 /* The terms the money is paid on: three facts in one line under the ledger. */
 .pp-terms { display: flex; flex-wrap: wrap; gap: 4px var(--space-6); margin: 12px 0 0; font-size: var(--fs-sm); }
 .pp-terms > div { display: flex; align-items: baseline; gap: 8px; }

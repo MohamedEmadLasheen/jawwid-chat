@@ -527,8 +527,8 @@ function ChildrenSection({ profile }: { profile: ParentProfile }) {
           {profile.children.map((c) => (
             <li key={c.id} className="pp-row pp-child">
               <Avatar name={c.name} seed={c.id} src={c.avatarUrl} size="sm" />
-              <Link className="pp-row__name" to={studentPath(c.id)} aria-label={`${tx(P.viewProfile)}: ${c.name}`} dir="auto">
-                {c.name}
+              <Link className="pp-row__name" to={studentPath(c.id)} aria-label={`${tx(P.viewProfile)}: ${c.name}`}>
+                <bdi>{c.name}</bdi>
               </Link>
               <ChildStanding learnerId={c.id} />
             </li>
@@ -778,7 +778,7 @@ function TotalsLedger({ totals, locale }: { totals: FamilyBilling['totals'][numb
           <div key={c.key} className={c.late ? 'ledger__cell ledger__cell--late' : 'ledger__cell'}>
             <span className="ledger__label">{c.label}</span>
             <span className="ledger__value">
-              {m.amount}
+              <bdi dir="ltr">{m.amount}</bdi>
               <span className="ledger__unit">{m.unit}</span>
             </span>
           </div>

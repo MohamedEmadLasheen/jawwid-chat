@@ -12,6 +12,12 @@
 .dev-meta { display: flex; flex-direction: column; gap: 2px; margin-block-start: var(--space-1); }
 .dev-table .field__hint { font-size: var(--fs-xs); }
 .dev-table td:last-child { inline-size: 1%; white-space: nowrap; }
-/* Signing a device out is said in terracotta words, not in a red box on every row. */
-.dev-signout.btn--ghost { color: var(--terracotta); }
+/* Signing a device out is a word at the row's end: quiet at rest, terracotta under the
+   pointer or the keyboard, never a red box on every row. */
+.dev-signout.btn--ghost { color: var(--ink-muted); }
+.dev-table tr:hover .dev-signout.btn--ghost,
+.dev-table tr:focus-within .dev-signout.btn--ghost { color: var(--terracotta); }
 .dev-signout.btn--ghost:hover:not(:disabled) { color: var(--terracotta); background: var(--terracotta-tint); }
+@media (hover: none) {
+  .dev-signout.btn--ghost { color: var(--terracotta); }
+}

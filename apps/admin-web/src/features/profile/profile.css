@@ -90,7 +90,7 @@
 .sp-period { inline-size: 168px; }
 .sp-period .ss__input { min-block-size: var(--control-h-sm); block-size: var(--control-h-sm); padding-block: 0; font-size: var(--fs-sm); }
 /* The same act several times in a row is one line and a count. */
-.sp-times { margin-inline-start: 8px; font-size: var(--fs-xs); font-weight: 500; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+.sp-repeat { margin-inline: 8px; font-size: var(--fs-xs); font-weight: 500; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
 
 /* ------------------------------------------------- responsibilities: tags */
 
@@ -154,7 +154,12 @@ html[lang='ar'] .pp-side > .sp-card > .sp-card__title { font-size: 13.5px; }
 .sp-row__nums dt { font-size: 11.5px; color: var(--ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 html[lang='ar'] .sp-row__nums dt { font-size: 12.5px; }
 .sp-row__nums dd { margin: 0; font-family: var(--display); font-size: var(--fs-lg); font-weight: 600; line-height: 1.2; font-variant-numeric: tabular-nums lining-nums; }
-.sp-row__meta { display: flex; flex-direction: column; gap: 1px; min-inline-size: 0; overflow-wrap: anywhere; }
+.sp-row__meta { display: flex; flex-direction: column; gap: 1px; min-inline-size: 0; }
+/* What a profile still lacks stays on one line; the row keeps its height. */
+.sp-row__file { display: flex; gap: 4px; min-inline-size: 0; white-space: nowrap; }
+.sp-row__missing { min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; }
+.sp-row__facts { display: flex; flex-wrap: wrap; gap: 0 var(--space-3); }
+.sp-row__facts > span + span::before { content: '·'; margin-inline-end: var(--space-3); color: var(--border-strong); }
 
 /* The organization overview's tabs and lists. */
 .sp-tabs { display: flex; gap: var(--space-5); flex-wrap: wrap; border-block-end: 1px solid var(--hairline); margin-block-start: var(--space-3); }

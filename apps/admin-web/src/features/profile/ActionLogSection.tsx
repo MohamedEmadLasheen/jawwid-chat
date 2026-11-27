@@ -88,6 +88,8 @@ function sessionAct(e: ActionLogEntry): Pair | null {
   if (e.action === 'session.revoked') return e.reason === 'rotated' ? L.renewed : L.signedOut
   return null
 }
+/** How many lines the log shows before "Load more". */
+const GLANCE = 8
 const MACHINE_REASONS = new Set(['login', 'refresh', 'rotated', 'logout'])
 
 interface Line {
@@ -154,6 +156,8 @@ export function ActionLogSection({ staffId }: { staffId: string }) {
   const tx = useCopy()
   const { dateTime } = useI18n()
   const [days, setDays] = useState(30)
+  // A glance first: the newest few lines, and the rest on request.
+  const [expanded, setExpanded] = useState(false)
   const query = useInfiniteQuery({
     queryKey: ['action-log', staffId, days],
     initialPageParam: null as string | null,
@@ -201,13 +205,13 @@ export function ActionLogSection({ staffId }: { staffId: string }) {
           <p className="pp-empty">{tx(L.empty)}</p>
         ) : (
           <ol className="pp-tl pp-tl--newest-first">
-            {lines.map(({ entry: e, label, times, session }) => {
+            {(expanded ? lines : lines.slice(0, GLANCE)).map(({ entry: e, label, times, session }) => {
               const to = linkFor(e)
               return (
                 <li key={e.id}>
                   <div>
                     {to ? <Link to={to}>{label}</Link> : <strong>{label}</strong>}
-                    {times > 1 && <span className="sp-times ltr">×{times}</span>}
+                    {times > 1 && <span className="sp-repeat ltr">×{times}</span>}
                   </div>
                   <div className="pp-tl__when">
                     <time dateTime={e.at}>{dateTime(e.at)}</time>
@@ -223,8 +227,18 @@ export function ActionLogSection({ staffId }: { staffId: string }) {
             })}
           </ol>
         )}
-        {query.hasNextPage && (
-          <button type="button" className="btn btn--sm" disabled={query.isFetchingNextPage} onClick={() => void query.fetchNextPage()}>
+        {(query.hasNextPage || (!expanded && lines.length > GLANCE)) && (
+          <button
+            type="button"
+            className="btn btn--sm"
+            disabled={query.isFetchingNextPage}
+            onClick={() => {
+              // First the lines already here; once they are all shown, the next page.
+              const hidden = !expanded && lines.length > GLANCE
+              setExpanded(true)
+              if (!hidden) void query.fetchNextPage()
+            }}
+          >
             {tx(L.more)}
           </button>
         )}

@@ -96,7 +96,7 @@ export function AccountsPage({ eyebrow }: { eyebrow?: string }) {
           onRetry={() => void list.refetch()}
         >
           <div className="table-wrap">
-            <table className="table">
+            <table className="table pp-stack">
               <thead>
                 <tr>
                   <th scope="col">{tx(A.person)}</th>
@@ -112,11 +112,11 @@ export function AccountsPage({ eyebrow }: { eyebrow?: string }) {
                       <span className="pp-cell-two">
                         <Avatar name={a.name} seed={a.accountId} size="sm" />
                         <span>
-                          <span className="acct-who" dir="auto">
-                            <strong>{a.name}</strong> <span className="acct-kind">{tx(KIND[a.kind])}</span>
+                          <span className="acct-who">
+                            <strong><bdi>{a.name}</bdi></strong> <span className="acct-kind">{tx(KIND[a.kind])}</span>
                           </span>
                           {a.familyName && (
-                            <span className="pp-cell-sub" dir="auto">
+                            <span className="pp-cell-sub">
                               {a.familyName}
                               {a.children.length > 0 && ` · ${tx(A.children, { names: a.children.join('، ') })}`}
                             </span>
@@ -124,15 +124,15 @@ export function AccountsPage({ eyebrow }: { eyebrow?: string }) {
                         </span>
                       </span>
                     </td>
-                    <td>
+                    <td data-at="end">
                       <Badge tone={STATUS_TONE[a.status]} dot>
                         {tx(STATUS[a.status])}
                       </Badge>{' '}
                       {!a.hasLogin && <Badge tone="outline">{tx(A.noLogin)}</Badge>}{' '}
                       {a.lockedUntil && <Badge tone="warn">{tx(A.locked)}</Badge>}
                     </td>
-                    <td className="cell-nowrap">{a.lastLoginAt ? <time dateTime={a.lastLoginAt}>{dateTime(a.lastLoginAt)}</time> : <span className="acct-kind">{tx(A.never)}</span>}</td>
-                    <td>
+                    <td className="cell-nowrap" data-label={tx(A.lastLogin)}>{a.lastLoginAt ? <time dateTime={a.lastLoginAt}>{dateTime(a.lastLoginAt)}</time> : <span className="acct-never">{tx(A.never)}</span>}</td>
+                    <td data-wide="">
                       <div className="acct-cell-actions">
                         <AccountActionButtons account={a} onAct={setPending} />
                         {grantees && a.kind === 'family' && a.familyId && (

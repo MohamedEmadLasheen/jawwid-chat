@@ -293,7 +293,7 @@ function QuickActions({ onTab }: { onTab: (t: Tab) => void }) {
           <button type="button" className="btn btn--sm btn--ghost" onClick={() => onTab('health')}>{tx(T.qaHealth)}</button>
         </li>
         <li className="sp-list__item">
-          <Link to={adminSectionPath('users')} className="btn btn--sm">{tx(T.qaUsers)}</Link>
+          <Link to={adminSectionPath('users')} className="btn btn--sm btn--ghost">{tx(T.qaUsers)}</Link>
         </li>
         <li className="sp-list__item">
           <Link to="/accounts/staff" className="btn btn--sm btn--ghost">{tx(T.qaStaffAccounts)}</Link>

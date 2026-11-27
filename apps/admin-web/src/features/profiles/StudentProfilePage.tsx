@@ -61,8 +61,8 @@ export function StudentProfilePage() {
                           {data.family.parents.map((p) => (
                             <li key={p.id} className="pp-row">
                               <Avatar name={p.name} seed={p.id} size="sm" />
-                              <Link className="pp-row__name" to={parentPath(p.id)} dir="auto">
-                                {p.name}
+                              <Link className="pp-row__name" to={parentPath(p.id)}>
+                                <bdi>{p.name}</bdi>
                               </Link>
                             </li>
                           ))}
@@ -149,11 +149,11 @@ function StudentFile({ s }: { s: StudentProfile }) {
             )}
             <div>
               <dt>{tx(P.course)}</dt>
-              <dd dir="auto">{s.course?.name ?? notSet}</dd>
+              <dd>{s.course ? <bdi>{s.course.name}</bdi> : notSet}</dd>
             </div>
             <div>
               <dt>{tx(P.teacher)}</dt>
-              <dd dir="auto">{s.teacher?.name ?? notSet}</dd>
+              <dd>{s.teacher ? <bdi>{s.teacher.name}</bdi> : notSet}</dd>
             </div>
           </dl>
         </div>

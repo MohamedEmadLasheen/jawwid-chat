@@ -128,7 +128,7 @@ export function ParentsPage({ eyebrow }: { eyebrow?: string }) {
             onRetry={() => void list.refetch()}
           >
             <div className="table-wrap">
-              <table className="table">
+              <table className="table pp-stack">
                 <thead>
                   <tr>
                     <th scope="col">{tx(P.parent)}</th>
@@ -144,12 +144,12 @@ export function ParentsPage({ eyebrow }: { eyebrow?: string }) {
                       <td>
                         <Link to={parentPath(p.id)} className="pp-cell-who">
                           <Avatar name={p.name} seed={p.id} src={p.avatarUrl} size="sm" />
-                          <span dir="auto">{p.name}</span>
+                          <bdi>{p.name}</bdi>
                         </Link>
                       </td>
-                      <td dir="auto">{p.family.name}</td>
-                      <td className="num">{p.childrenCount}</td>
-                      <td>{p.location ? <LocationText value={p.location} /> : '—'}</td>
+                      <td data-label={tx(P.family)}><bdi>{p.family.name}</bdi></td>
+                      <td className="num" data-label={tx(P.children)}>{p.childrenCount}</td>
+                      <td data-label={tx(P.location)}>{p.location ? <LocationText value={p.location} /> : '—'}</td>
                       <td className="pp-cell-end">
                         {/* The name is the link; this is only a larger target for the pointer. */}
                         <span className="row-actions" aria-hidden="true">

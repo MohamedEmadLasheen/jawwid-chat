@@ -11,8 +11,19 @@
 .acct-actions { display: contents; }
 .acct-cell-actions .btn { padding-inline: 8px; }
 .acct-cell-actions .btn:first-child { margin-inline-start: -8px; }
-.acct-danger.btn--ghost { color: var(--terracotta); }
-.acct-danger.btn--ghost:hover:not(:disabled) { color: var(--terracotta); background: var(--terracotta-tint); }
+/* At rest the words are quiet; the row under the pointer (or the keyboard) wakes its own. */
+.acct-cell-actions .btn--ghost { color: var(--ink-muted); }
+.acct-page tr:hover .acct-cell-actions .btn--ghost,
+.acct-page tr:focus-within .acct-cell-actions .btn--ghost { color: var(--teal); }
+.acct-page tr:hover .acct-cell-actions .acct-danger,
+.acct-page tr:focus-within .acct-cell-actions .acct-danger,
+.acct-cell-actions .acct-danger:hover:not(:disabled) { color: var(--terracotta); }
+.acct-cell-actions .acct-danger:hover:not(:disabled) { background: var(--terracotta-tint); }
+@media (hover: none) {
+  .acct-cell-actions .btn--ghost { color: var(--teal); }
+  .acct-cell-actions .acct-danger { color: var(--terracotta); }
+}
+.acct-never { color: var(--ink-muted); }
 
 .acct-check { display: flex; gap: var(--space-2); align-items: flex-start; margin-block: var(--space-3); font-size: var(--fs-sm); }
 .acct-check input { margin-block-start: 3px; accent-color: var(--teal); }

@@ -143,7 +143,7 @@ export function StudentDirectoryPage() {
             onRetry={() => void list.refetch()}
           >
             <div className="table-wrap">
-              <table className="table">
+              <table className="table pp-stack">
                 <thead>
                   <tr>
                     <th scope="col">{tx(S.student)}</th>
@@ -161,18 +161,18 @@ export function StudentDirectoryPage() {
                         <span className="pp-cell-two">
                           <Avatar name={s.name} seed={s.id} size="sm" />
                           <span>
-                            <Link to={studentPath(s.id)} className="pp-cell-name" dir="auto">{s.name}</Link>
-                            <span className="pp-cell-sub" dir="auto">{s.family.displayName}</span>
+                            <Link to={studentPath(s.id)} className="pp-cell-name"><bdi>{s.name}</bdi></Link>
+                            <span className="pp-cell-sub"><bdi>{s.family.displayName}</bdi></span>
                           </span>
                         </span>
                       </td>
-                      <td dir="auto">{s.teacher ? s.teacher.name : <span className="muted">{tx(S.noTeacher)}</span>}</td>
-                      <td dir="auto">{s.supervisor ? s.supervisor.name : '—'}</td>
-                      <td>
+                      <td data-label={tx(S.teacher)}>{s.teacher ? <bdi>{s.teacher.name}</bdi> : <span className="muted">{tx(S.noTeacher)}</span>}</td>
+                      <td data-label={tx(S.supervisor)}>{s.supervisor ? <bdi>{s.supervisor.name}</bdi> : '—'}</td>
+                      <td data-at="end">
                         <Badge tone={TONE[s.status]} dot>{tx(S[s.status])}</Badge>
                         {s.status === 'paused' && s.returnOn && <> <span className="muted pp-cell-sub">{tx(S.until, { day: s.returnOn })}</span></>}
                       </td>
-                      <td className="num">{s.weeklySlots}</td>
+                      <td className="num" data-label={tx(S.weekly)}>{s.weeklySlots}</td>
                       <td className="pp-cell-end">
                         {/* The name is the link; this is only a larger target for the pointer. */}
                         <span className="row-actions" aria-hidden="true">
