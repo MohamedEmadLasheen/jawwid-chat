@@ -19,7 +19,7 @@
 ## Spacing, shape, icons
 - 4px base: 4, 8, 12, 16, 24, 32, 48. Dense lists use 12px row padding; page sections 32px apart.
 - Radius by role: 6 controls and tags, 10 surfaces, 14 floating sheets. Not one radius on everything.
-- **Lucide** icons, stroke 1.6, 18px in content and 20px in navigation; each navigation item has its own icon and a visible label.
+- **Lucide** icons, stroke 1.6, 18px in content and 20px in navigation; each navigation item has its own icon. On desktop the sidebar is a collapsible rail, folded to icons by default with each name in a tooltip, and opened to icon and label by a toggle at its foot (the owner's instruction of 2026-11-27, replacing the earlier "labelled navigation").
 
 ## RTL
 - Arabic first: logical properties everywhere; the sidebar on the right; directional icons mirror; the schedule's time axis runs right to left with the page (and left to right in English); clock times, phones, amounts and ids are isolated (`<bdi>`/`dir="ltr"`); user-entered names take their own direction but align with their column. Western digits, Arabic month names.

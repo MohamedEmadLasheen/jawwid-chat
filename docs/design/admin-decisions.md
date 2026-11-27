@@ -60,6 +60,18 @@ One line each: what was decided, and why. Newest at the end of each section.
 - Search marks the matched letters with a teal tint (gold is "now" only).
 - People & Organization is shortened to "People" on the sidebar; its full name stays the accessible name and the flyout title.
 
+## Collapsible rail (owner's instruction, 2026-11-27)
+This replaces the earlier "labelled navigation" instruction.
+- On desktop (1024px and wider) the sidebar is folded to icons by default (60px). The toggle at its foot (Lucide panel icon, mirrored for Arabic) opens it to icon and label (260px) and closes it again. The choice is kept per device in `localStorage` under `jawwid.sidebar.expanded` (`RAIL_EXPANDED_KEY` in `app/AppShell.tsx`). It is read before the first paint, so a page never loads in one state and jumps to the other.
+- **Width.** It animates over 200ms. The page column is the grid's second track and follows the same transition, so content flows with it rather than jumping, and the icons do not move (each sits at the same inline offset in both states). Under `prefers-reduced-motion` the change is instant.
+- **Folded rail.**
+  - Every control keeps its word as visually hidden text, so its accessible name is unchanged. A tooltip names it on hover and on keyboard focus (`:focus-visible`), beside the rail at the inline end (left in Arabic). The tooltip takes over a native `title` while shown, so two never stack, and it hides for an open place menu.
+  - Counts sit on the icon's corner. The current place carries the pill and gold mark itself (its pages are not listed under it), and its pages still open in the flyout beside the rail.
+  - The account shows only the avatar. Its menu opens beside the rail and starts with the person's name and role.
+- **Logo.** The lockup has no separate mark, so the folded rail crops to its middle (the W under the open book). A proper square mark is an open item for the owner.
+- **Phones and tablets (under 1024px)** are unchanged: a top bar, a drawer and the bottom tab bar. A drawer is opened on purpose, so it shows labels.
+- **Main content.** There is no overlay mode. The content reflows with the rail so nothing is hidden behind it, and an opened rail is a lasting choice, not a peek.
+
 ## Lead decisions while integrating
 - Shared fixes the builders reported went into `system.css` (outline tags without dashes, table row headers, neutral dots visible on white, stacked-sheet spacing, Arabic count size, switch buttons, one-letter Arabic avatars, a neutral note under an urgent figure); the teachers stylesheet's global `.sheet + .sheet` rule moved into the system.
 - "Teacher profiles" in Arabic reads "مؤهلات المعلمين" (credentials review): it shared its name with Teacher files.
