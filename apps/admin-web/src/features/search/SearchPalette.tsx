@@ -152,7 +152,7 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
       id: `p:${p.id}`,
       icon: 'parents' as const,
       text: p.name,
-      sub: fill(tx(S.family), { name: p.family.name }),
+      sub: p.family.name,
       to: parentPath(p.id),
     })))
 

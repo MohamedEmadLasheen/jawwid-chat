@@ -15,8 +15,6 @@ export const S = {
   move: { en: 'Move', ar: 'تنقّل' },
   go: { en: 'Open', ar: 'فتح' },
   close: { en: 'Close', ar: 'إغلاق' },
-  children: { en: '{n} children', ar: 'الأبناء: {n}' },
-  family: { en: '{name} family', ar: 'عائلة {name}' },
   results: { en: 'Results', ar: 'النتائج' },
   recordPayment: { en: 'Record a payment', ar: 'تسجيل دفعة' },
   lateInstalments: { en: 'Open late instalments', ar: 'فتح الأقساط المتأخرة' },

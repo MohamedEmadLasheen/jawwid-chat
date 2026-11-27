@@ -174,7 +174,7 @@ export function TodayPage() {
               {cells.map((c) => (
                 <Link key={c.key} to={c.to} className={c.late ? 'ledger__cell ledger__cell--late' : 'ledger__cell'}>
                   <span className="ledger__label">{c.label}</span>
-                  <span className="ledger__value">{num.format(c.value)}</span>
+                  <span className={c.value === 0 ? 'ledger__value ledger__value--none' : 'ledger__value'}>{num.format(c.value)}</span>
                   {c.note && <span className="ledger__note">{c.note}</span>}
                 </Link>
               ))}
@@ -243,7 +243,7 @@ export function TodayPage() {
                 </ol>
               )}
 
-              {week.data && (
+              {week.data && weekDays.some((d) => d.lessons > 0) && (
                 <div className="today__week" aria-label={tx(T.week)}>
                   <h2 className="section-label">{tx(T.week)}</h2>
                   <ol className="weekticks">
