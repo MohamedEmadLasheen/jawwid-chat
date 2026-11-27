@@ -355,7 +355,7 @@ export function AccountGroup({ profile, completenessShown = false }: { profile: 
   )
   // Nothing of their own to say here (a manager reading an active colleague): only the rules, quietly.
   if (!profile.signInIdentity && !statusNeedsSaying && status && profile.reportingManager && !completenessShown) {
-    return <div className="aside-group rec-group" data-section="account">{rules}</div>
+    return <div className="aside-group rec-group rec-rules" data-section="account">{rules}</div>
   }
   return (
     <section className="aside-group rec-group" aria-labelledby="sp-account" data-section="account">

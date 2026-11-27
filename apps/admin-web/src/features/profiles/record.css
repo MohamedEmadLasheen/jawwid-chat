@@ -154,6 +154,8 @@
 .rec-aside > * + * { margin-block-start: var(--space-5); padding-block-start: var(--space-5); border-block-start: 1px solid var(--line); }
 .rec-aside > .rec-note, .rec-aside > .rec-note + * { padding-block-start: 0; border-block-start: 0; }
 .rec-aside > .rec-slot:empty { display: none; }
+/* The small print under the last group follows it without a rule of its own. */
+.rec-aside > .rec-rules { margin-block-start: var(--space-3); padding-block-start: 0; border-block-start: 0; }
 .rec-aside > .rec-slot:empty + * { margin-block-start: var(--space-5); }
 /* The context is written first and set at the end: on a narrow screen it leads. */
 @media (min-width: 1100px) {
