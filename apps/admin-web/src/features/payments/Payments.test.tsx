@@ -130,11 +130,18 @@ describe('Payments > Receipts', () => {
     expect(within(alpha!).getByText('Family Alpha')).toBeInTheDocument()
     expect(within(alpha!).getByText('3-month subscription')).toBeInTheDocument()
     expect(within(alpha!).getByText(/1,200\.00/)).toBeInTheDocument()
-    expect(within(alpha!).getByText('Sent from my account')).toBeInTheDocument()
-    expect(within(alpha!).getByText('by Parent Alpha')).toBeInTheDocument()
-    expect(within(alpha!).getByRole('img', { name: 'Receipt for 3-month subscription' })).toHaveAttribute('src', PENDING[0]!.fileUrl)
-    expect(within(beta!).getByRole('link', { name: 'Open the PDF' })).toHaveAttribute('href', PENDING[1]!.fileUrl)
-    expect(within(beta!).queryByRole('img')).not.toBeInTheDocument()
+    // The queue row opens the receipt: its note, who sent it and its file are read there.
+    await userEvent.click(within(alpha!).getByRole('button'))
+    let sheet = await screen.findByRole('dialog', { name: 'Family Alpha' })
+    expect(within(sheet).getByText('Sent from my account')).toBeInTheDocument()
+    expect(within(sheet).getByText('by Parent Alpha')).toBeInTheDocument()
+    expect(within(sheet).getByRole('img', { name: 'Receipt for 3-month subscription' })).toHaveAttribute('src', PENDING[0]!.fileUrl)
+    await userEvent.click(within(sheet).getByRole('button', { name: 'Close' }))
+    await userEvent.click(within(beta!).getByRole('button'))
+    sheet = await screen.findByRole('dialog', { name: 'Family Beta' })
+    expect(within(sheet).getByRole('link', { name: 'Open the PDF' })).toHaveAttribute('href', PENDING[1]!.fileUrl)
+    expect(within(sheet).queryByRole('img')).not.toBeInTheDocument()
+    await userEvent.click(within(sheet).getByRole('button', { name: 'Close' }))
     expect(calls('GET', /\/payment-receipts\?status=pending$/)).toHaveLength(1)
 
     const filter = screen.getByRole('group', { name: 'Status' })
@@ -142,6 +149,9 @@ describe('Payments > Receipts', () => {
     expect(within(filter).getByRole('button', { name: /Approved/ })).toHaveTextContent('5')
     await userEvent.click(within(filter).getByRole('button', { name: /Approved/ }))
     await waitFor(() => expect(calls('GET', /\/payment-receipts\?status=approved$/)).toHaveLength(1))
+    // Who decided, and when, is in the decided receipt's sheet.
+    await waitFor(() => expect(within(screen.getByRole('list', { name: 'Receipts' })).getAllByRole('listitem')).toHaveLength(1))
+    await userEvent.click(within(screen.getByRole('list', { name: 'Receipts' })).getByRole('button'))
     const approved = await screen.findByText(/^Approved by Operations Manager/)
     expect(approved).toBeInTheDocument()
     // A decided receipt is not decided again.
@@ -156,7 +166,9 @@ describe('Payments > Receipts', () => {
     const list = await screen.findByRole('list', { name: 'Receipts' })
     const [alpha, beta] = within(list).getAllByRole('listitem')
 
-    await userEvent.click(within(alpha!).getByRole('button', { name: 'Approve' }))
+    // The decision is made beside the receipt: the row opens it, its sheet holds Approve.
+    await userEvent.click(within(alpha!).getByRole('button'))
+    await userEvent.click(within(await screen.findByRole('dialog', { name: 'Family Alpha' })).getByRole('button', { name: 'Approve' }))
     let dialog = screen.getByRole('dialog', { name: 'Approve the receipt: 3-month subscription' })
     expect(within(dialog).getByLabelText('Paid on')).toHaveValue('2026-10-21')
     await userEvent.type(within(dialog).getByLabelText('Amount received (optional)'), '1,150')
@@ -169,7 +181,10 @@ describe('Payments > Receipts', () => {
     // The lists are re-read after a decision.
     await waitFor(() => expect(calls('GET', /\/payment-receipts\?status=pending$/).length).toBeGreaterThan(1))
 
-    await userEvent.click(within(beta!).getByRole('button', { name: 'Approve' }))
+    // On a narrow screen the decided receipt's sheet closes; the next one is opened from the queue.
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    await userEvent.click(within(beta!).getByRole('button'))
+    await userEvent.click(within(await screen.findByRole('dialog', { name: 'Family Beta' })).getByRole('button', { name: 'Approve' }))
     dialog = screen.getByRole('dialog', { name: 'Approve the receipt: Spring term' })
     await userEvent.click(within(dialog).getByRole('button', { name: 'Approve' }))
     await waitFor(() => expect(calls('POST', /\/payment-receipts\/rc-2\/approve$/)).toHaveLength(1))
@@ -181,7 +196,8 @@ describe('Payments > Receipts', () => {
     on('POST', /\/payment-receipts\/rc-1\/reject$/, () => json({ receipt: receipt({ status: 'rejected', rejectReason: 'amount not received' }) }))
     renderWithProviders(<AppRoutes />, { staff: opsManager, route: '/payments' })
     const list = await screen.findByRole('list', { name: 'Receipts' })
-    await userEvent.click(within(within(list).getAllByRole('listitem')[0]!).getByRole('button', { name: 'Reject' }))
+    await userEvent.click(within(within(list).getAllByRole('listitem')[0]!).getByRole('button'))
+    await userEvent.click(within(await screen.findByRole('dialog', { name: 'Family Alpha' })).getByRole('button', { name: 'Reject' }))
     const dialog = screen.getByRole('dialog', { name: 'Reject the receipt: 3-month subscription' })
     await userEvent.click(within(dialog).getByRole('button', { name: 'Reject' }))
     expect(within(dialog).getByText('Say why.')).toBeInTheDocument()
@@ -197,9 +213,12 @@ describe('Payments > Receipts', () => {
     renderWithProviders(<AppRoutes />, { staff: makeStaff({ role: 'admin' }), route: '/payments' })
     const list = await screen.findByRole('list', { name: 'Receipts' })
     expect(within(list).getAllByRole('listitem')).toHaveLength(2)
+    expect(screen.getByText(/approved or rejected by the payment recorders/)).toBeInTheDocument()
+    // Nor beside the receipt, once it is open.
+    await userEvent.click(within(within(list).getAllByRole('listitem')[0]!).getByRole('button'))
+    await screen.findByRole('dialog', { name: 'Family Alpha' })
     expect(screen.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Reject' })).not.toBeInTheDocument()
-    expect(screen.getByText(/approved or rejected by the payment recorders/)).toBeInTheDocument()
   })
 
   it('the super admin opens it as an Admin Portal section, in Arabic', async () => {
@@ -208,7 +227,11 @@ describe('Payments > Receipts', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'المدفوعات' })).toBeInTheDocument()
     expect(document.documentElement.dir).toBe('rtl')
     const list = await screen.findByRole('list', { name: 'الإيصالات' })
-    expect(within(list).getAllByRole('button', { name: 'اعتماد' })).toHaveLength(2)
+    const rows = within(list).getAllByRole('listitem')
+    expect(rows).toHaveLength(2)
+    // Each receipt opens to its decision.
+    await userEvent.click(within(rows[0]!).getByRole('button'))
+    expect(within(await screen.findByRole('dialog', { name: 'Family Alpha' })).getByRole('button', { name: 'اعتماد' })).toBeInTheDocument()
   })
 })
 
@@ -221,20 +244,25 @@ describe('Payments > Settings', () => {
 
     const card = await screen.findByRole('region', { name: 'Card payments' })
     expect(within(card).getByText('Not configured: no card option anywhere.')).toBeInTheDocument()
+    // One group's sheet at a time: each is opened from the list of groups, and what was typed in one is kept while another is open.
+    await userEvent.click(screen.getByRole('button', { name: /^Bank account/ }))
     const bank = screen.getByRole('region', { name: 'Bank account' })
     expect(within(bank).getByLabelText('IBAN')).toHaveValue('AE07 0331 2345 6789 0123 456')
     expect(within(bank).getByLabelText('IBAN')).toHaveAttribute('dir', 'ltr')
+    await userEvent.type(within(bank).getByLabelText('Note for parents'), 'Write the child’s name.')
+    const accountNumber = within(bank).getByLabelText('Account number')
+    await userEvent.type(accountNumber, '0123456789')
+
+    await userEvent.click(screen.getByRole('button', { name: /^Invoice issuer/ }))
+    const issuer = screen.getByRole('region', { name: 'Invoice issuer' })
+    await userEvent.clear(within(issuer).getByLabelText('Address'))
+    await userEvent.type(within(issuer).getByLabelText('Tax registration number'), '100200300')
+
+    await userEvent.click(screen.getByRole('button', { name: /^Payment reminders/ }))
     const reminders = screen.getByRole('region', { name: 'Payment reminders' })
     expect(within(reminders).getByRole('checkbox', { name: '7 days before' })).toBeChecked()
     expect(within(reminders).getByRole('checkbox', { name: 'On the due date' })).toBeChecked()
     expect(within(reminders).getByRole('checkbox', { name: '3 days after' })).not.toBeChecked()
-
-    await userEvent.type(within(bank).getByLabelText('Note for parents'), 'Write the child’s name.')
-    const accountNumber = within(bank).getByLabelText('Account number')
-    await userEvent.type(accountNumber, '0123456789')
-    const issuer = screen.getByRole('region', { name: 'Invoice issuer' })
-    await userEvent.clear(within(issuer).getByLabelText('Address'))
-    await userEvent.type(within(issuer).getByLabelText('Tax registration number'), '100200300')
     await userEvent.click(within(reminders).getByRole('checkbox', { name: '3 days after' }))
     await userEvent.click(within(reminders).getByRole('checkbox', { name: '7 days before' }))
     await userEvent.click(screen.getByRole('button', { name: 'Save' }))
@@ -264,6 +292,7 @@ describe('Payments > Settings', () => {
     on('GET', /\/billing\/settings$/, () => json(settings()))
     on('POST', /\/billing\/settings$/, () => json(settings({ bankAccount: null })))
     renderWithProviders(<AppRoutes />, { staff: opsManager, route: '/payments?tab=settings' })
+    await userEvent.click(await screen.findByRole('button', { name: /^Bank account/ }))
     const bank = await screen.findByRole('region', { name: 'Bank account' })
     await userEvent.clear(within(bank).getByLabelText('Account name'))
     await userEvent.click(screen.getByRole('button', { name: 'Save' }))
@@ -279,13 +308,16 @@ describe('Payments > Settings', () => {
     access()
     on('GET', /\/billing\/settings$/, () => json(settings({ canEdit: false, cardAvailable: true, webhookConfigured: true })))
     renderWithProviders(<AppRoutes />, { staff: makeStaff({ role: 'admin' }), route: '/payments?tab=settings' })
-    const bank = await screen.findByRole('region', { name: 'Bank account' })
-    expect(within(bank).getByLabelText('IBAN')).toBeDisabled()
-    expect(within(screen.getByRole('region', { name: 'Payment reminders' })).getByRole('checkbox', { name: '7 days before' })).toBeDisabled()
-    expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument()
-    expect(screen.getByText('Stripe connected')).toBeInTheDocument()
+    // The card group is open first; the others are opened from the list of groups.
+    expect(await screen.findByText('Stripe connected')).toBeInTheDocument()
     expect(screen.getByText('Webhook configured')).toBeInTheDocument()
     expect(screen.getByText(/Only the super admin and the Operations Manager change these settings/)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /^Bank account/ }))
+    const bank = await screen.findByRole('region', { name: 'Bank account' })
+    expect(within(bank).getByLabelText('IBAN')).toBeDisabled()
+    await userEvent.click(screen.getByRole('button', { name: /^Payment reminders/ }))
+    expect(within(screen.getByRole('region', { name: 'Payment reminders' })).getByRole('checkbox', { name: '7 days before' })).toBeDisabled()
+    expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument()
   })
 
   it('W63: the Operations Manager pauses card payments after confirming; only { cardPaused } is sent; the page then says so', async () => {
@@ -360,7 +392,8 @@ describe('Payments > Settings', () => {
     renderWithProviders(<AppRoutes />, { staff: opsManager, route: '/payments?tab=settings' })
     const card = await screen.findByRole('region', { name: 'Card payments' })
     expect(within(card).getByText('Not configured: no card option anywhere.')).toBeInTheDocument()
-    expect(within(card).queryByRole('button')).not.toBeInTheDocument()
+    // The group's sheet holds the form's one Save; what must not be offered is the card switch.
+    expect(within(card).queryByRole('button', { name: /card payments/i })).not.toBeInTheDocument()
   })
 
   it('W63: "Card payments paused" is shown on every tab, in Arabic too', async () => {

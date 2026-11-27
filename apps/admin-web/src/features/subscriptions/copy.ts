@@ -77,6 +77,8 @@ export const S = {
   noRenewals: { en: 'A renewal request appears here when a parent asks to renew.', ar: 'يظهر طلب التجديد هنا عندما يطلب ولي الأمر التجديد.' },
   noRenewalsHint: { en: 'It stays for 30 days, with the child it is for. None is open now.', ar: 'يبقى 30 يومًا مع اسم الطفل المعني. لا طلب مفتوح الآن.' },
   openParents: { en: 'Open Parents', ar: 'فتح أولياء الأمور' },
+  openStudent: { en: 'Open student', ar: 'فتح ملف الطالب' },
+  openStudentNamed: { en: 'Open the Student Profile of {name}', ar: 'فتح ملف الطالب {name}' },
   renewalsDenied: { en: 'You do not have access to renewal requests.', ar: 'لا تملك صلاحية عرض طلبات التجديد.' },
   renewed: { en: 'Renewed', ar: 'تم التجديد' },
   waiting: { en: 'Waiting', ar: 'بانتظار' },
