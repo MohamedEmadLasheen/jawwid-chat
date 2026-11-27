@@ -113,7 +113,7 @@ export const TR = {
   cancelReason: { en: 'Reason', ar: 'السبب' },
   absence: { en: 'Prospect absent', ar: 'غياب المهتم' },
   report: { en: 'Teacher\'s report', ar: 'تقرير المعلم' },
-  openGroup: { en: 'Trial group', ar: 'مجموعة التجريبية' },
+  openGroup: { en: 'Trial group', ar: 'مجموعة الحصة التجريبية' },
 
   outcome: { en: 'Outcome', ar: 'النتيجة' },
   recordOutcome: { en: 'Record outcome', ar: 'تسجيل النتيجة' },

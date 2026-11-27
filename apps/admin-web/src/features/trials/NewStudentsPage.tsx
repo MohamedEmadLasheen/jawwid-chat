@@ -57,7 +57,14 @@ const stageOf = (status: NewStudentStatus): Stage => (status === 'locked' ? 'wai
 /** When the family's present wait began: recorded, until someone is assigned; assigned, from then on. */
 const since = (s: NewStudentDto) => s.enrolment?.assignedAt ?? s.recordedAt
 /** A family nobody was assigned to since before today is late; a parent's turn is never late. */
-const assignLate = (s: NewStudentDto, status: NewStudentStatus) => status === 'unassigned' && waitedOvernight(s.recordedAt)
+/**
+ * Late, by the same rule as the Requests hub (waited since before today), but only where this desk acts:
+ * a family nobody was assigned to, a code the parent asked for, a locked sign-up. The parent's own turn is never late.
+ */
+const assignLate = (s: NewStudentDto, status: NewStudentStatus) =>
+  status === 'unassigned'
+    ? waitedOvernight(s.recordedAt)
+    : (status === 'locked' || s.enrolment?.parentSignup.state === 'code_waiting') && waitedOvernight(since(s))
 
 /**
  * The New Students page (trial journey): every family that subscribed after a
@@ -112,9 +119,6 @@ export function NewStudentsPage() {
   const searched = students.filter((s) => matchesSearch(s, search))
   const shown = searched.filter((s) => matchesFilter(statusOf(s), filter))
   const inStage = (stage: Stage) => searched.filter((s) => stageOf(statusOf(s)) === stage)
-  const unassigned = inStage('unassigned')
-  const late = unassigned.some((s) => assignLate(s, 'unassigned'))
-  const locked = searched.filter((s) => statusOf(s) === 'locked').length
 
 
   const mayEdit = (s: NewStudentDto) => access.sales && !s.enrolment // PD-16: a form that became a family is frozen.
@@ -215,7 +219,8 @@ export function NewStudentsPage() {
       key: stage,
       label: tx(STATUS[stage].label),
       count: families.length,
-      urgent: stage === 'unassigned' ? late : stage === 'waiting' && locked > 0,
+      // A solid red count only over cards whose red age asks this desk to act.
+      urgent: families.some((s) => assignLate(s, statusOf(s))),
       quiet: stage === 'signed_up',
       cards: families.map(card),
       empty: tx(NS.stageEmpty),

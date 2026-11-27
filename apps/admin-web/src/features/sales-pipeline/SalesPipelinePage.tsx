@@ -118,7 +118,7 @@ export function SalesPipelinePage() {
               ? {
                   id: openId,
                   title: lead?.displayName ?? openRow?.displayName ?? tx(P.lead),
-                  kind: { icon: 'pipeline', label: tx(P.kind) },
+                  kind: { icon: 'handshake', label: tx(P.kind) },
                   onClose: () => setOpenId(null),
                   body: <LeadPanel id={openId} onLead={setLoaded} />,
                 }

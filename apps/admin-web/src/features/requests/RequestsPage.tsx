@@ -40,7 +40,7 @@ type Filter = Kind | 'all'
 type Order = 'longest' | 'newest'
 const KINDS: readonly Kind[] = ['trial', 'family', 'certificate', 'renewal', 'receipt', 'lead']
 
-const ICON: Record<Kind, IconName> = { trial: 'trials', family: 'newStudents', certificate: 'certificates', renewal: 'instalments', receipt: 'payments', lead: 'pipeline' }
+const ICON: Record<Kind, IconName> = { trial: 'trials', family: 'newStudents', certificate: 'certificates', renewal: 'instalments', receipt: 'payments', lead: 'handshake' }
 const ONE = { trial: RQ.oneTrial, family: RQ.oneFamily, certificate: RQ.oneCertificate, renewal: RQ.oneRenewal, receipt: RQ.oneReceipt, lead: RQ.oneLead } as const
 
 /** The certificate lists that still wait on someone: not yet sent, not closed. */
