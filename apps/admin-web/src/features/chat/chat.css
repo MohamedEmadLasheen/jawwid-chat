@@ -1171,3 +1171,5 @@ mark.cw-hit { background: var(--teal-tint-2); color: inherit; border-radius: 3px
   .cw-queue__waited { margin-inline-start: 58px; }
   .cw-queue__row .btn { margin-inline-start: auto; }
 }
+/* The order picker's own input keeps to its slot (on a phone it ran 15px past the screen's edge). */
+.cw-admin__sort :is(input, .select, .ss__input) { box-sizing: border-box; inline-size: 100%; min-inline-size: 0; max-inline-size: 100%; }

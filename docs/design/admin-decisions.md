@@ -72,6 +72,19 @@ This replaces the earlier "labelled navigation" instruction.
 - **Phones and tablets (under 1024px)** are unchanged: a top bar, a drawer and the bottom tab bar. A drawer is opened on purpose, so it shows labels.
 - **Main content.** There is no overlay mode. The content reflows with the rail so nothing is hidden behind it, and an opened rail is a lasting choice, not a peek.
 
+### Rail critic round 1 (2026-11-27)
+- **Fit.** On a laptop 768px tall the folded and opened rails now keep every place in view:
+  - The rows and gaps tighten under 820px of height.
+  - Under the place you are in, only your page's group is listed (only your page on a short window); the rest stay one click away in the place's menu and the page's tabs.
+  - While more lies below, the list fades at its end; folded, its thin scrollbar shows.
+- **Toggle.** It uses double chevrons, because pages use the panel icon for their own side panels.
+- **Gold mark.** Its rounding uses logical radii, so it faces the page in Arabic too.
+- **Counts on icons.** The rail keeps the counts it already carried: unread conversations on Conversations, and unread notifications on the bell. Overdue counts on Finance or the Dashboard would make the shell fetch on every page; the shell deliberately adds no request of its own, and Today and the Dashboard already lead with what is overdue. This is logged for the owner as an option.
+- **Dashboard.** The calm column's 380px cap is kept: a name stays within reach of its figure.
+- **Room set by the container.** Figures, instalment rows, the payments ledger, the teacher statistics list and the chat reply queue now size by their own width (container queries), not the window's. A 1024px window with the rail open gives a page about 764px, and several pages had assumed more.
+  - At that width: amounts collided on Instalments, names were cut to two letters, the ledger squeezed names to 2px, statistics wrapped a name one word per line, and the leave table ran past its sheet. All are fixed.
+  - The screenshot check now also flags content cut off by a box that hides overflow, not only content spilling past the page.
+
 ## Lead decisions while integrating
 - Shared fixes the builders reported went into `system.css` (outline tags without dashes, table row headers, neutral dots visible on white, stacked-sheet spacing, Arabic count size, switch buttons, one-letter Arabic avatars, a neutral note under an urgent figure); the teachers stylesheet's global `.sheet + .sheet` rule moved into the system.
 - "Teacher profiles" in Arabic reads "مؤهلات المعلمين" (credentials review): it shared its name with Teacher files.
