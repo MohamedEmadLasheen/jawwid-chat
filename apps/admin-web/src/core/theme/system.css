@@ -137,7 +137,7 @@
   --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 
   /* English sizes; Arabic is one step larger below. */
-  --fs-xs: 12.5px;
+  --fs-xs: 13px; /* the floor for anything a person reads */
   --fs-sm: 13.5px;
   --fs-md: 15px;
   --fs-lg: 16.5px;
