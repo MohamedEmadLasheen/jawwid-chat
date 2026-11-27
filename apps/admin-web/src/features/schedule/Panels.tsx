@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { isoToAcademyWallClock } from '@/core/time/academyTime'
 import { Dialog } from '@/shared/components/Dialog'
+import { MastFigures, type MastFigure } from '@/shared/components/PageHeader'
 import { studentPath } from '@/features/profiles/api'
 import type { CalendarLesson, CalendarStats, Supervisor } from './api'
 import { CATEGORY_LABEL, KIND_LABEL, OUTCOME_LABEL, S, STATUS_LABEL, dayLabel, hoursOf, percentOf, useScheduleText } from './copy'
@@ -14,41 +15,21 @@ import { PALETTE, isPaletteKey, swatchClass } from './palette'
  * filters, so the bar and the grid read the same rows.
  */
 
-function Figure({
-  label,
-  value,
-  unit,
-  note,
-  mark,
-}: {
-  label: string
-  value: string
-  unit?: string
-  note?: string
-  /** The grid's own mark for this figure, so the number and the drawing are read together. */
-  mark?: 'empty' | 'outside' | 'leave'
-}) {
+/** "1.5 h": the numeral, and its unit as a quiet word after it. */
+function Hours({ value, unit }: { value: string; unit: string }) {
   return (
-    <div className="ledger__cell">
-      <span className="ledger__label">
-        {mark && <span className={`sc-key sc-key--${mark}`} aria-hidden="true" />}
-        {label}
-      </span>
-      <span className="sc-figure">
-        <span className="ledger__value">{value}</span>
-        {unit && (
-          <>
-            {' '}
-            <span className="ledger__unit">{unit}</span>
-          </>
-        )}
-      </span>
-      {note && <span className="ledger__note">{note}</span>}
-    </div>
+    <>
+      {value}
+      <span className="sc-unit"> {unit}</span>
+    </>
   )
 }
 
-export function StatsBar({ stats, loading }: { stats: CalendarStats | undefined; loading: boolean }) {
+/**
+ * The masthead's four figures for exactly what is shown: booked hours, how much
+ * of the shift time is used (the key figure), shift time nobody holds, and leave.
+ */
+export function MastStats({ stats, loading }: { stats: CalendarStats | undefined; loading: boolean }) {
   const tx = useScheduleText()
   const { locale } = useI18n()
   const h = (m: number) => tx(S.hours, { h: hoursOf(m, locale) })
@@ -60,76 +41,107 @@ export function StatsBar({ stats, loading }: { stats: CalendarStats | undefined;
   }
   const c = stats.capacity
   const base = c.shiftMinutes - c.inShiftLeaveMinutes
+  const figures: MastFigure[] = [
+    {
+      key: 'booked',
+      label: tx(S.teachingHours),
+      value: <Hours value={n(stats.teaching.bookedMinutes)} unit={unit} />,
+      note: tx(S.heldSoFar, { h: hoursOf(stats.teaching.heldMinutes, locale) }),
+    },
+    {
+      key: 'used',
+      label: tx(S.utilization),
+      value: percentOf(c.utilization, locale),
+      tone: 'key',
+      note: base > 0 ? tx(S.utilizationHint, { booked: hoursOf(c.inShiftBookedMinutes, locale), base: hoursOf(base, locale) }) : undefined,
+    },
+    { key: 'empty', label: tx(S.emptyHours), value: <Hours value={n(c.emptyMinutes)} unit={unit} /> },
+    {
+      key: 'leave',
+      label: tx(S.leaveHours),
+      value: <Hours value={n(c.inShiftLeaveMinutes)} unit={unit} />,
+      note: c.inShiftPausedMinutes > 0 ? `${tx(S.pausedHours)} ${h(c.inShiftPausedMinutes)}` : undefined,
+    },
+  ]
   return (
     <section className="sc-stats-wrap" aria-label={tx(S.statsLabel)} aria-busy={loading}>
-      <div className="ledger sc-ledger">
-        <Figure label={tx(S.teachingHours)} value={n(stats.teaching.bookedMinutes)} unit={unit} note={tx(S.heldSoFar, { h: hoursOf(stats.teaching.heldMinutes, locale) })} />
-        <Figure
-          label={tx(S.students)}
-          value={String(stats.students.distinct)}
-          // Only what there is: a zero is not an addend.
-          note={
-            [
-              stats.students.trial > 0 && tx(S.trialCount, { n: stats.students.trial }),
-              stats.students.paused > 0 && tx(S.pausedCount, { n: stats.students.paused }),
-            ]
-              .filter(Boolean)
-              .join(' · ') || undefined
-          }
-        />
-        <Figure
-          label={tx(S.utilization)}
-          value={percentOf(c.utilization, locale)}
-          note={base > 0 ? tx(S.utilizationHint, { booked: hoursOf(c.inShiftBookedMinutes, locale), base: hoursOf(base, locale) }) : undefined}
-        />
-        <Figure label={tx(S.emptyHours)} value={n(c.emptyMinutes)} unit={unit} mark="empty" />
-        <Figure label={tx(S.outsideHours)} value={n(c.outsideMinutes)} unit={unit} mark="outside" />
-        <Figure
-          label={tx(S.leaveHours)}
-          value={n(c.inShiftLeaveMinutes)}
-          unit={unit}
-          mark="leave"
-          note={c.inShiftPausedMinutes > 0 ? `${tx(S.pausedHours)} ${h(c.inShiftPausedMinutes)}` : undefined}
-        />
-        {c.workMinutes > 0 && <Figure label={tx(S.freeHours)} value={n(c.freeMinutes)} unit={unit} />}
-      </div>
-      {stats.lessonFilter && <p className="sc-hint">{tx(S.capacityNote)}</p>}
-      {stats.teachers.length > 0 && (
-        <details className="sc-byteacher">
-          <summary>{tx(S.byTeacher)}</summary>
-          <div className="table-wrap">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th scope="col">{tx(S.teacher)}</th>
-                  <th scope="col">{tx(S.fCategory)}</th>
-                  <th scope="col" className="num">{tx(S.colShift)}</th>
-                  <th scope="col" className="num">{tx(S.colBooked)}</th>
-                  <th scope="col" className="num">{tx(S.colUsed)}</th>
-                  <th scope="col" className="num">{tx(S.colRemaining)}</th>
-                  <th scope="col" className="num">{tx(S.colOutside)}</th>
-                  <th scope="col" className="num">{tx(S.colLeave)}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {stats.teachers.map((t) => (
-                  <tr key={t.id}>
-                    <th scope="row"><bdi>{t.name}</bdi></th>
-                    <td>{tx(CATEGORY_LABEL[t.category])}</td>
-                    <td className="sc-num">{t.totals.shiftMinutes > 0 ? h(t.totals.shiftMinutes) : t.totals.workMinutes > 0 ? h(t.totals.workMinutes) : '—'}</td>
-                    <td className="sc-num">{h(t.totals.bookedMinutes)}</td>
-                    <td className="sc-num">{percentOf(t.utilization, locale)}</td>
-                    <td className="sc-num">{t.totals.shiftMinutes > 0 ? h(t.totals.emptyMinutes) : h(t.totals.freeMinutes)}</td>
-                    <td className="sc-num">{h(t.totals.outsideMinutes)}</td>
-                    <td className="sc-num">{h(t.totals.inShiftLeaveMinutes)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </details>
-      )}
+      <MastFigures figures={figures} />
     </section>
+  )
+}
+
+/** The rest of the view's figures, as quiet facts in the sheet's own bar. */
+export function SheetFacts({ stats }: { stats: CalendarStats | undefined }) {
+  const tx = useScheduleText()
+  const { locale } = useI18n()
+  if (!stats) return null
+  const h = (m: number) => tx(S.hours, { h: hoursOf(m, locale) })
+  const c = stats.capacity
+  // Only what there is: a zero is not an addend.
+  const also = [
+    stats.students.trial > 0 && tx(S.trialCount, { n: stats.students.trial }),
+    stats.students.paused > 0 && tx(S.pausedCount, { n: stats.students.paused }),
+  ].filter(Boolean)
+  return (
+    <dl className="sc-facts">
+      <div>
+        <dt>{tx(S.students)}</dt>
+        <dd>
+          {stats.students.distinct}
+          {also.length > 0 && <span className="sc-facts__also"> ({also.join(' · ')})</span>}
+        </dd>
+      </div>
+      <div>
+        <dt>{tx(S.outsideHours)}</dt>
+        <dd>{h(c.outsideMinutes)}</dd>
+      </div>
+      {c.workMinutes > 0 && (
+        <div>
+          <dt>{tx(S.freeHours)}</dt>
+          <dd>{h(c.freeMinutes)}</dd>
+        </div>
+      )}
+    </dl>
+  )
+}
+
+/** Each teacher's own figures for the view: a true table, compared down the page. */
+export function ByTeacherTable({ stats }: { stats: CalendarStats }) {
+  const tx = useScheduleText()
+  const { locale } = useI18n()
+  const h = (m: number) => tx(S.hours, { h: hoursOf(m, locale) })
+  return (
+    <div className="sc-byteacher">
+      <table className="table">
+        <thead>
+          <tr>
+            <th scope="col">{tx(S.teacher)}</th>
+            <th scope="col" className="num">{tx(S.colShift)}</th>
+            <th scope="col" className="num">{tx(S.colBooked)}</th>
+            <th scope="col" className="num">{tx(S.colUsed)}</th>
+            <th scope="col" className="num">{tx(S.colRemaining)}</th>
+            <th scope="col" className="num">{tx(S.colOutside)} · {tx(S.colLeave)}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {stats.teachers.map((t) => (
+            <tr key={t.id}>
+              <th scope="row">
+                <bdi>{t.name}</bdi>
+                <span className="sc-byteacher__cat">{tx(CATEGORY_LABEL[t.category])}</span>
+              </th>
+              <td className="sc-num">{t.totals.shiftMinutes > 0 ? h(t.totals.shiftMinutes) : t.totals.workMinutes > 0 ? h(t.totals.workMinutes) : '—'}</td>
+              <td className="sc-num">{h(t.totals.bookedMinutes)}</td>
+              <td className="sc-num">{percentOf(t.utilization, locale)}</td>
+              <td className="sc-num">{t.totals.shiftMinutes > 0 ? h(t.totals.emptyMinutes) : h(t.totals.freeMinutes)}</td>
+              <td className="sc-num">
+                {h(t.totals.outsideMinutes)} · {h(t.totals.inShiftLeaveMinutes)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   )
 }
 

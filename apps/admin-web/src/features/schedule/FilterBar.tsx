@@ -5,6 +5,7 @@ import type { CalendarOptions, CalendarStatus, Category, LessonKind } from './ap
 import { CATEGORY_LABEL, KIND_LABEL, S, STATUS_LABEL, WEEKDAYS, useScheduleText, type Pair } from './copy'
 import { activeFilterCount, clearFilters, type ListFilter, type ScalarFilter, type ViewState } from './viewState'
 import { SearchableSelect, belongsToOpenPicker } from '@/shared/components/SearchableSelect'
+import { Icon, type IconName } from '@/shared/components/Icon'
 
 /**
  * PD-38 filters (the owner's top priority). Every chip is a multi-select that
@@ -29,10 +30,13 @@ interface Choice {
 function Menu({
   label,
   count,
+  icon,
   children,
 }: {
   label: string
   count: number
+  /** What the filter is, at a glance: the rail folds down to these. */
+  icon: IconName
   children: ReactNode
 }) {
   const { open, setOpen } = useContext(OpenFilter)
@@ -74,12 +78,14 @@ function Menu({
         type="button"
         className={`chip sc-filter__trigger${count > 0 ? ' sc-filter--on' : ''}`}
         aria-label={count > 0 ? `${label} (${count})` : label}
+        title={label}
         aria-expanded={isOpen}
         aria-controls={isOpen ? panelId : undefined}
         aria-haspopup="dialog"
         onClick={() => setOpen(isOpen ? null : label)}
       >
-        {label}
+        <Icon name={icon} size={18} />
+        <span className="sc-filter__label">{label}</span>
         {count > 0 && <span className="sc-filter__count">{count}</span>}
         <span className="sc-filter__caret" aria-hidden="true" />
       </button>
@@ -153,8 +159,8 @@ export function FilterBar({
   state: ViewState
   options: CalendarOptions | undefined
   onChange: (next: ViewState) => void
-  /** `sheet`: stacked, full width, for the phone's bottom sheet. */
-  layout?: 'inline' | 'sheet'
+  /** `sheet`: stacked, full width, for the phone's bottom sheet. `rail`: the desktop's filter rail. */
+  layout?: 'inline' | 'sheet' | 'rail'
 }) {
   const tx = useScheduleText()
   const { locale } = useI18n()
@@ -180,11 +186,11 @@ export function FilterBar({
 
   return (
     <OpenFilter.Provider value={openFilter}>
-    <div className={`sc-filters${layout === 'sheet' ? ' sc-filters--sheet' : ''}`} role="group" aria-label={tx(S.filters)}>
-      <Menu label={tx(S.fTeacher)} count={list('teacherIds').length}>
+    <div className={`sc-filters${layout === 'inline' ? '' : ` sc-filters--${layout}`}`} role="group" aria-label={tx(S.filters)}>
+      <Menu icon="teachers" label={tx(S.fTeacher)} count={list('teacherIds').length}>
         <Checklist name={tx(S.fTeacher)} choices={teachers} selected={list('teacherIds')} onChange={setList('teacherIds')} searchable />
       </Menu>
-      <Menu label={tx(S.fCategory)} count={list('categories').length}>
+      <Menu icon="tag" label={tx(S.fCategory)} count={list('categories').length}>
         <Checklist
           name={tx(S.fCategory)}
           choices={pairs<Category>(CATEGORY_LABEL, ['full_shift', 'part_shift', 'hourly', 'unset'])}
@@ -192,13 +198,13 @@ export function FilterBar({
           onChange={setList('categories')}
         />
       </Menu>
-      <Menu label={tx(S.fSupervisor)} count={list('supervisorIds').length}>
+      <Menu icon="userCheck" label={tx(S.fSupervisor)} count={list('supervisorIds').length}>
         <Checklist name={tx(S.fSupervisor)} choices={supervisors} selected={list('supervisorIds')} onChange={setList('supervisorIds')} />
       </Menu>
-      <Menu label={tx(S.fStudent)} count={list('learnerIds').length}>
+      <Menu icon="students" label={tx(S.fStudent)} count={list('learnerIds').length}>
         <Checklist name={tx(S.fStudent)} choices={learners} selected={list('learnerIds')} onChange={setList('learnerIds')} searchable />
       </Menu>
-      <Menu label={tx(S.fStatus)} count={list('statuses').length}>
+      <Menu icon="circle" label={tx(S.fStatus)} count={list('statuses').length}>
         <Checklist
           name={tx(S.fStatus)}
           choices={pairs<CalendarStatus>(STATUS_LABEL, ['active', 'trial', 'paused', 'moved'])}
@@ -206,10 +212,10 @@ export function FilterBar({
           onChange={setList('statuses')}
         />
       </Menu>
-      <Menu label={tx(S.fKind)} count={list('kinds').length}>
+      <Menu icon="book" label={tx(S.fKind)} count={list('kinds').length}>
         <Checklist name={tx(S.fKind)} choices={pairs<LessonKind>(KIND_LABEL, ['regular', 'makeup', 'trial'])} selected={list('kinds')} onChange={setList('kinds')} />
       </Menu>
-      <Menu label={tx(S.fDays)} count={list('weekdays').length}>
+      <Menu icon="calendar" label={tx(S.fDays)} count={list('weekdays').length}>
         <Checklist
           name={tx(S.fDays)}
           choices={WEEKDAYS.map((w) => ({ value: String(w.iso), label: tx(w.label) }))}
@@ -217,7 +223,7 @@ export function FilterBar({
           onChange={setList('weekdays')}
         />
       </Menu>
-      <Menu label={tx(S.fHours)} count={(state.scalars.timeFrom ? 1 : 0) + (state.scalars.timeTo ? 1 : 0)}>
+      <Menu icon="clock" label={tx(S.fHours)} count={(state.scalars.timeFrom ? 1 : 0) + (state.scalars.timeTo ? 1 : 0)}>
         <div className="sc-hours">
           <label className="field">
             <span className="field__label">{tx(S.from)}</span>
@@ -235,7 +241,7 @@ export function FilterBar({
           </label>
         </div>
       </Menu>
-      <Menu label={tx(S.fUtilization)} count={list('utilization').length}>
+      <Menu icon="gauge" label={tx(S.fUtilization)} count={list('utilization').length}>
         <Checklist
           name={tx(S.fUtilization)}
           choices={[
@@ -247,7 +253,7 @@ export function FilterBar({
           onChange={setList('utilization')}
         />
       </Menu>
-      <Menu label={tx(S.fEmpty)} count={state.scalars.emptyMinutesGte ? 1 : 0}>
+      <Menu icon="hourglass" label={tx(S.fEmpty)} count={state.scalars.emptyMinutesGte ? 1 : 0}>
         <label className="field">
           <span className="field__label">{tx(S.fEmpty)}</span>
           <SearchableSelect className="select select--sm" value={state.scalars.emptyMinutesGte ?? ''} onValueChange={(v) => setScalar('emptyMinutesGte', v)}>
@@ -264,11 +270,12 @@ export function FilterBar({
           checked={state.scalars.onlyMatching !== 'false'}
           onChange={(e) => setScalar('onlyMatching', e.target.checked ? '' : 'false')}
         />
-        <span>{tx(S.onlyMatching)}</span>
+        <span className="sc-filter__label">{tx(S.onlyMatching)}</span>
       </label>
       {n > 0 && (
-        <button type="button" className="btn btn--sm btn--ghost" onClick={() => onChange(clearFilters(state))}>
-          {tx(S.clearAll)} ({n})
+        <button type="button" className="btn btn--sm btn--ghost sc-filters__clear" onClick={() => onChange(clearFilters(state))}>
+          <Icon name="close" size={16} />
+          <span className="sc-filter__label">{tx(S.clearAll)} ({n})</span>
         </button>
       )}
     </div>
