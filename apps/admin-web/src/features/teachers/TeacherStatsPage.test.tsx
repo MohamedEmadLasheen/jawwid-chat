@@ -175,6 +175,8 @@ describe('the statistics', () => {
     // A teacher no-show makes the row urgent, whatever the other figures say; the reason says so.
     expect(within(one.closest('tbody')!).getByRole('columnheader', { name: /Urgent/ })).toBeInTheDocument()
     expect(within(one).getByText(/Missed 1 lesson without notice/)).toBeInTheDocument()
+    // The no-show is the red figure that put it there.
+    expect(within(one).getByText('teacher missed 1')).toHaveClass('is-breach')
     // On an urgent row only its trigger is coloured: late reports below the threshold are not red, and a low on-time rate is not amber.
     expect(within(one).getByText('2')).not.toHaveClass('is-breach')
     expect(within(one).getByText('75%').closest('.tsx-sub')).not.toHaveClass('is-watch')

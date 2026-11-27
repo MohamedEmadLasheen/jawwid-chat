@@ -109,7 +109,7 @@ export const TS = {
   figLateNone: { en: 'every lesson reported', ar: 'كل الحصص بتقاريرها' },
   figAttendance: { en: 'Low student attendance', ar: 'حضور طلاب منخفض' },
   figAttendanceNote: { en: 'teachers below {p}', ar: 'معلمون دون {p}' },
-  figNoShow: { en: 'Teacher no-shows', ar: 'غياب المعلمين' },
+  figNoShow: { en: 'Teacher no‑shows', ar: 'غياب المعلمين' },
   figNoShowNote: { en: 'missed lessons, across {teachers}', ar: 'غياب دون إشعار، عند {teachers}' },
   figNoShowNone: { en: 'none this month', ar: 'لا غياب هذا الشهر' },
 
@@ -124,6 +124,8 @@ export const TS = {
   shortLate: { en: 'Late reports', ar: 'تقارير متأخرة' },
   shortAttendance: { en: 'Student attendance', ar: 'حضور الطلاب' },
   shortLessons: { en: 'Lessons held', ar: 'الحصص المنعقدة' },
+  cellLessons: { en: 'Lessons held', ar: 'المنعقدة' },
+  missedByTeacher: { en: 'teacher missed {n}', ar: 'غياب المعلم: {n}' },
   urgent: { en: 'Urgent', ar: 'عاجل' },
   watch: { en: 'Watch', ar: 'للمتابعة' },
   ok: { en: 'On track', ar: 'منتظم' },
@@ -132,7 +134,7 @@ export const TS = {
   showAll: { en: 'Show every teacher', ar: 'عرض كل المعلمين' },
   noMatch: { en: 'No teacher in this view this month.', ar: 'لا يوجد معلم ضمن هذا العرض هذا الشهر.' },
   noName: { en: 'No teacher by that name.', ar: 'لا يوجد معلم بهذا الاسم.' },
-  askReports: { en: 'Ask for {reports} in Needs action', ar: 'اطلب {reports} من «بحاجة إلى إجراء»' },
+  askReports: { en: 'Ask for {reports} in Needs action', ar: 'اطلب {reports} في «بحاجة إلى إجراء»' },
   thresholdsUrgent: { en: 'Urgent: {late} or more without a report, or any teacher no-show.', ar: 'عاجل: {late} أو أكثر دون تقرير، أو أي غياب للمعلم دون إشعار.' },
   thresholdsWatch: { en: 'Watch: student attendance below {att}, or fewer than {ot} of reports on time.', ar: 'للمتابعة: حضور الطلاب دون {att}، أو أقل من {ot} من التقارير في موعدها.' },
 

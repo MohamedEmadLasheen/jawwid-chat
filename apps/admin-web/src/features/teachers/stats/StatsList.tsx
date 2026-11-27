@@ -370,10 +370,12 @@ function Row({
           <Pct value={row.attendanceRate} />
         </span>
       </td>
-      <td className="num tsx-cell" data-label={tx(TS.shortLessons)}>
+      <td className="num tsx-cell" data-label={tx(TS.cellLessons)}>
         <bdi dir="ltr" className={`ltr tsx-ratio${row.scheduled.lessons === 0 ? ' is-zero' : ''}`}>
           {`${fmt.number(row.held.lessons)} / ${fmt.number(row.scheduled.lessons)}`}
         </bdi>
+        {/* A no-show makes the row urgent on its own: its count is the red figure. */}
+        {flags.noShow > 0 && <span className="tsx-sub is-breach">{tx(TS.missedByTeacher, { n: fmt.number(flags.noShow) })}</span>}
       </td>
       <td className="tsx-act">
         <RowActions

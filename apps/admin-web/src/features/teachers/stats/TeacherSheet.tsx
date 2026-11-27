@@ -96,6 +96,7 @@ export function TeacherSheet({
               <bdi dir="ltr" className="ltr">{`${fmt.number(row.held.lessons)} / ${fmt.number(row.scheduled.lessons)}`}</bdi>
             </dd>
             <dd className="tsx-fig__sub">{tx(TS.colLessonsKey)}</dd>
+            {flags.noShow > 0 && <dd className="tsx-fig__sub is-breach">{tx(TS.missedByTeacher, { n: fmt.number(flags.noShow) })}</dd>}
           </div>
         </dl>
 

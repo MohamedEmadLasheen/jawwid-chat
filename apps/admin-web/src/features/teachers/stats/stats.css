@@ -13,7 +13,7 @@
 .tsx-figures .figure--link { transition: background var(--dur-fast) var(--ease); }
 .tsx-figures .figure--link:hover .figure__label { color: var(--ink); text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 3px; }
 .tsx-page .mast__tabs { margin-block-start: var(--space-3); }
-.tsx-denied.state--forbidden { margin: var(--space-5) 0 0; }
+.tsx-denied.state--forbidden { margin: var(--space-5) 0 0; text-align: start; justify-content: flex-start; }
 
 /* ------------------------------------------------------------- the list */
 .tsx-list { overflow: clip; }
@@ -90,6 +90,7 @@
 .tsx-ratio { font-size: var(--fs-md); color: var(--ink); font-variant-numeric: tabular-nums lining-nums; white-space: nowrap; }
 
 .tsx-act { white-space: nowrap; text-align: end; }
+.tsx-act .row-actions2 { display: flex; justify-content: flex-end; }
 /* The stated action shows on hover and focus (always on touch); "more" is always there. */
 .tsx-row .row-actions2 > :not(.menu) { opacity: 0; transition: opacity var(--dur-fast) var(--ease); }
 .tsx-row:hover .row-actions2 > :not(.menu), .tsx-row:focus-within .row-actions2 > :not(.menu), .tsx-row .row-actions2 > :has(.tsx-message__error) { opacity: 1; }
@@ -175,10 +176,12 @@
 .tsx-sheet__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 0; font-size: var(--fs-sm); color: var(--ink-muted); }
 .tsx-sheet__reason { margin: 8px 0 0; font-size: var(--fs-md); line-height: 1.5; color: var(--ink-2); }
 
-.tsx-figs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: var(--space-4) 0 0; border: 1px solid var(--line); border-radius: var(--radius-lg); }
-.tsx-fig { display: grid; align-content: start; gap: 2px; min-inline-size: 0; padding: 12px 14px; }
+/* Labels may wrap; the rows are shared (subgrid) so the three values stay on one line. */
+.tsx-figs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: auto auto auto auto; margin: var(--space-4) 0 0; border: 1px solid var(--line); border-radius: var(--radius-lg); }
+.tsx-fig { display: grid; grid-row: span 4; grid-template-rows: subgrid; align-content: start; row-gap: 2px; min-inline-size: 0; padding: 12px 14px; }
+.tsx-fig dt { align-self: end; }
 .tsx-fig + .tsx-fig { border-inline-start: 1px solid var(--line-2); }
-.tsx-fig dt { font-size: var(--fs-xs); font-weight: 500; color: var(--ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tsx-fig dt { font-size: var(--fs-xs); font-weight: 500; line-height: 1.35; color: var(--ink-muted); }
 .tsx-fig dd { margin: 0; }
 .tsx-fig__n { font-family: var(--font-head); font-size: 26px; font-weight: 700; line-height: 1.2; color: var(--ink); font-variant-numeric: tabular-nums lining-nums; }
 .tsx-fig__n--ratio { font-size: var(--fs-xl); line-height: 1.4; }
