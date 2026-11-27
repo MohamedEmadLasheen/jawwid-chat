@@ -14,12 +14,36 @@ import { PALETTE, isPaletteKey, swatchClass } from './palette'
  * filters, so the bar and the grid read the same rows.
  */
 
-function Tile({ label, value, hint, tone }: { label: string; value: string; hint?: string; tone?: 'alert' }) {
+function Figure({
+  label,
+  value,
+  unit,
+  note,
+  mark,
+}: {
+  label: string
+  value: string
+  unit?: string
+  note?: string
+  /** The grid's own mark for this figure, so the number and the drawing are read together. */
+  mark?: 'empty' | 'outside' | 'leave'
+}) {
   return (
-    <div className={`metric card sc-tile${tone === 'alert' ? ' metric--alert' : ''}`}>
-      {hint && <span className="sc-tile__hint">{hint}</span>}
-      <span className="metric__value">{value}</span>
-      <span className="metric__label">{label}</span>
+    <div className="ledger__cell">
+      <span className="ledger__label">
+        {mark && <span className={`sc-key sc-key--${mark}`} aria-hidden="true" />}
+        {label}
+      </span>
+      <span className="sc-figure">
+        <span className="ledger__value">{value}</span>
+        {unit && (
+          <>
+            {' '}
+            <span className="ledger__unit">{unit}</span>
+          </>
+        )}
+      </span>
+      {note && <span className="ledger__note">{note}</span>}
     </div>
   )
 }
@@ -28,6 +52,9 @@ export function StatsBar({ stats, loading }: { stats: CalendarStats | undefined;
   const tx = useScheduleText()
   const { locale } = useI18n()
   const h = (m: number) => tx(S.hours, { h: hoursOf(m, locale) })
+  // "h" / "س": the unit on its own, beside the numeral.
+  const unit = tx(S.hours, { h: '' }).trim()
+  const n = (m: number) => hoursOf(m, locale)
   if (!stats) {
     return <section className="sc-stats" aria-label={tx(S.statsLabel)} aria-busy={loading} />
   }
@@ -35,22 +62,28 @@ export function StatsBar({ stats, loading }: { stats: CalendarStats | undefined;
   const base = c.shiftMinutes - c.inShiftLeaveMinutes
   return (
     <section className="sc-stats-wrap" aria-label={tx(S.statsLabel)} aria-busy={loading}>
-      <div className="sc-stats">
-        <Tile label={tx(S.teachingHours)} value={h(stats.teaching.bookedMinutes)} hint={tx(S.heldSoFar, { h: hoursOf(stats.teaching.heldMinutes, locale) })} />
-        <Tile
+      <div className="ledger sc-ledger">
+        <Figure label={tx(S.teachingHours)} value={n(stats.teaching.bookedMinutes)} unit={unit} note={tx(S.heldSoFar, { h: hoursOf(stats.teaching.heldMinutes, locale) })} />
+        <Figure
           label={tx(S.students)}
           value={String(stats.students.distinct)}
-          hint={tx(S.studentsHint, { trial: stats.students.trial, paused: stats.students.paused })}
+          note={tx(S.studentsHint, { trial: stats.students.trial, paused: stats.students.paused })}
         />
-        <Tile
+        <Figure
           label={tx(S.utilization)}
           value={percentOf(c.utilization, locale)}
-          hint={base > 0 ? tx(S.utilizationHint, { booked: hoursOf(c.inShiftBookedMinutes, locale), base: hoursOf(base, locale) }) : undefined}
+          note={base > 0 ? tx(S.utilizationHint, { booked: hoursOf(c.inShiftBookedMinutes, locale), base: hoursOf(base, locale) }) : undefined}
         />
-        <Tile label={tx(S.emptyHours)} value={h(c.emptyMinutes)} tone={c.emptyMinutes > 0 ? 'alert' : undefined} />
-        <Tile label={tx(S.outsideHours)} value={h(c.outsideMinutes)} />
-        <Tile label={tx(S.leaveHours)} value={h(c.inShiftLeaveMinutes)} hint={c.inShiftPausedMinutes > 0 ? `${tx(S.pausedHours)} ${h(c.inShiftPausedMinutes)}` : undefined} />
-        {c.workMinutes > 0 && <Tile label={tx(S.freeHours)} value={h(c.freeMinutes)} />}
+        <Figure label={tx(S.emptyHours)} value={n(c.emptyMinutes)} unit={unit} mark="empty" />
+        <Figure label={tx(S.outsideHours)} value={n(c.outsideMinutes)} unit={unit} mark="outside" />
+        <Figure
+          label={tx(S.leaveHours)}
+          value={n(c.inShiftLeaveMinutes)}
+          unit={unit}
+          mark="leave"
+          note={c.inShiftPausedMinutes > 0 ? `${tx(S.pausedHours)} ${h(c.inShiftPausedMinutes)}` : undefined}
+        />
+        {c.workMinutes > 0 && <Figure label={tx(S.freeHours)} value={n(c.freeMinutes)} unit={unit} />}
       </div>
       {stats.lessonFilter && <p className="sc-hint">{tx(S.capacityNote)}</p>}
       {stats.teachers.length > 0 && (
@@ -62,25 +95,25 @@ export function StatsBar({ stats, loading }: { stats: CalendarStats | undefined;
                 <tr>
                   <th scope="col">{tx(S.teacher)}</th>
                   <th scope="col">{tx(S.fCategory)}</th>
-                  <th scope="col">{tx(S.colShift)}</th>
-                  <th scope="col">{tx(S.colBooked)}</th>
-                  <th scope="col">{tx(S.colUsed)}</th>
-                  <th scope="col">{tx(S.colRemaining)}</th>
-                  <th scope="col">{tx(S.colOutside)}</th>
-                  <th scope="col">{tx(S.colLeave)}</th>
+                  <th scope="col" className="num">{tx(S.colShift)}</th>
+                  <th scope="col" className="num">{tx(S.colBooked)}</th>
+                  <th scope="col" className="num">{tx(S.colUsed)}</th>
+                  <th scope="col" className="num">{tx(S.colRemaining)}</th>
+                  <th scope="col" className="num">{tx(S.colOutside)}</th>
+                  <th scope="col" className="num">{tx(S.colLeave)}</th>
                 </tr>
               </thead>
               <tbody>
                 {stats.teachers.map((t) => (
                   <tr key={t.id}>
-                    <th scope="row" dir="auto">{t.name}</th>
+                    <th scope="row"><bdi>{t.name}</bdi></th>
                     <td>{tx(CATEGORY_LABEL[t.category])}</td>
-                    <td>{t.totals.shiftMinutes > 0 ? h(t.totals.shiftMinutes) : t.totals.workMinutes > 0 ? h(t.totals.workMinutes) : '—'}</td>
-                    <td>{h(t.totals.bookedMinutes)}</td>
-                    <td>{percentOf(t.utilization, locale)}</td>
-                    <td>{t.totals.shiftMinutes > 0 ? h(t.totals.emptyMinutes) : h(t.totals.freeMinutes)}</td>
-                    <td>{h(t.totals.outsideMinutes)}</td>
-                    <td>{h(t.totals.inShiftLeaveMinutes)}</td>
+                    <td className="sc-num">{t.totals.shiftMinutes > 0 ? h(t.totals.shiftMinutes) : t.totals.workMinutes > 0 ? h(t.totals.workMinutes) : '—'}</td>
+                    <td className="sc-num">{h(t.totals.bookedMinutes)}</td>
+                    <td className="sc-num">{percentOf(t.utilization, locale)}</td>
+                    <td className="sc-num">{t.totals.shiftMinutes > 0 ? h(t.totals.emptyMinutes) : h(t.totals.freeMinutes)}</td>
+                    <td className="sc-num">{h(t.totals.outsideMinutes)}</td>
+                    <td className="sc-num">{h(t.totals.inShiftLeaveMinutes)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -109,34 +142,35 @@ export function Legend({
   const tx = useScheduleText()
   return (
     <section className="sc-legend" aria-label={tx(S.legend)}>
-      <div className="sc-legend__group" role="group" aria-label={tx(S.supervisorsLegend)}>
-        {supervisors.map((s) => (
-          <button
-            key={s.id}
-            type="button"
-            className="sc-legend__sup"
-            aria-pressed={selected.includes(s.id)}
-            onClick={() => onToggle(s.id)}
-            title={isPaletteKey(s.colorKey) ? tx(PALETTE[s.colorKey].name) : tx(S.noColor)}
-          >
-            <span className={`sc-dot ${swatchClass(s.colorKey)}`} aria-hidden="true" />
-            <span dir="auto">{s.name}</span>
-          </button>
-        ))}
-      </div>
-      <span className="sc-legend__sep" aria-hidden="true" />
       <ul className="sc-legend__group" aria-label={tx(S.statusLegend)}>
         <li><span className="sc-key sc-key--empty" aria-hidden="true" />{tx(S.emptySlot)}</li>
         <li><span className="sc-key sc-key--outside" aria-hidden="true" />{tx(S.outsideShift)}</li>
         <li><span className="sc-key sc-key--leave" aria-hidden="true" />{tx(S.leaveBand)}</li>
         <li><span className="sc-key sc-key--work" aria-hidden="true" />{tx(S.workBand)}</li>
       </ul>
-      <span className="sc-legend__sep" aria-hidden="true" />
       <ul className="sc-legend__group" aria-label={tx(S.statusLegend)}>
-        <li><span className="sc-key sc-key--trial" aria-hidden="true" />{tx(STATUS_LABEL.trial)}</li>
         <li><span className="sc-key sc-key--active" aria-hidden="true" />{tx(STATUS_LABEL.active)}</li>
+        <li><span className="sc-key sc-key--trial" aria-hidden="true" />{tx(STATUS_LABEL.trial)}</li>
         <li><span className="sc-key sc-key--paused" aria-hidden="true" />{tx(STATUS_LABEL.paused)}</li>
+        <li><span className="sc-key sc-key--held" aria-hidden="true" />{tx(S.paymentHold)}</li>
       </ul>
+      {supervisors.length > 0 && (
+        <div className="sc-legend__group sc-legend__group--people" role="group" aria-label={tx(S.supervisorsLegend)}>
+          {supervisors.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              className="sc-legend__sup"
+              aria-pressed={selected.includes(s.id)}
+              onClick={() => onToggle(s.id)}
+              title={isPaletteKey(s.colorKey) ? tx(PALETTE[s.colorKey].name) : tx(S.noColor)}
+            >
+              <span className={`sc-dot ${swatchClass(s.colorKey)}`} aria-hidden="true" />
+              <span dir="auto">{s.name}</span>
+            </button>
+          ))}
+        </div>
+      )}
     </section>
   )
 }

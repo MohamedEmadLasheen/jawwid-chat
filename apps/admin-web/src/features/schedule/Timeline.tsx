@@ -10,8 +10,9 @@ import { daysOf, isoWeekday, minuteOfDay } from './viewState'
  * PD-38 grids. Custom CSS grid on the academy's clock (no calendar library:
  * the academy view is teachers x time, and the layers -- shift band, red empty
  * time, grey out-of-shift, hatched leave, supervisor fill with solid / dashed /
- * dotted borders -- are ours). Positions use inset-inline-start, so under
- * dir="rtl" the time axis runs right to left with no override.
+ * dotted borders -- are ours). Positions use inset-inline-start, and every
+ * grid sits in a dir="ltr" wrapper: a time axis reads left to right in both
+ * languages, with the teachers' names at its origin.
  *
  * Rows use `content-visibility: auto` (schedule.css): a hundred teachers cost
  * only the rows on screen.
@@ -139,6 +140,8 @@ export function Track({
           `sc-lesson--${l.status}`,
           notTaught(l) ? 'sc-lesson--not-taught' : '',
           l.outsideShift ? 'sc-lesson--outside' : '',
+          // A lesson held for payment is the one real problem a block can carry: a terracotta edge.
+          !l.anonymous && l.suspendedFor === 'payment' ? 'sc-lesson--held' : '',
         ].join(' ')
         const box: CSSProperties = { ...style, insetBlockStart: `${(lane.lane / lane.of) * 100}%`, blockSize: `${100 / lane.of}%` }
         // How much fits: name and time, the name, or nothing (the tooltip and the details still say it all).
@@ -206,7 +209,7 @@ export function DayView({ data, day, onLesson }: { data: CalendarWindow; day: st
   // A fixed width per hour: a long day scrolls instead of squeezing its labels together.
   const width = { '--sc-day-w': `${((hi - lo) / 60) * DAY_HOUR_PX}px` } as CSSProperties
   return (
-    <div className="sc-grid sc-grid--day" role="table" aria-label={tx(S.title)} style={width} data-hours={(hi - lo) / 60}>
+    <div className="sc-grid sc-grid--day" dir="ltr" role="table" aria-label={tx(S.title)} style={width} data-hours={(hi - lo) / 60}>
       <div className="sc-row sc-row--axis" role="row">
         <div className="sc-row__head" role="columnheader">{tx(S.teacher)}</div>
         <div role="columnheader"><HourAxis lo={lo} hi={hi} /></div>
@@ -248,7 +251,7 @@ export function WeekView({
   const lessons = useMemo(() => lessonsByTeacherDay(data.lessons), [data.lessons])
   const week = daysOf(data.from, data.to)
   return (
-    <div className="sc-grid sc-grid--week" role="table" aria-label={tx(S.title)}>
+    <div className="sc-grid sc-grid--week" dir="ltr" role="table" aria-label={tx(S.title)}>
       <div className="sc-row sc-row--axis" role="row">
         <div className="sc-row__head" role="columnheader">{tx(S.teacher)}</div>
         {week.map((d) => (
@@ -291,13 +294,13 @@ function heat(cell: { utilization: number | null; shiftMinutes: number; bookedMi
 
 export function MonthView({ data, onOpenDay }: { data: CalendarSummary; onOpenDay: (day: string, teacherId: string) => void }) {
   const tx = useScheduleText()
-  const { locale } = useI18n()
+  const { locale, dir } = useI18n()
   const month = daysOf(data.from, data.to)
   const cells = useMemo(() => new Map(data.cells.map((c) => [`${c.teacherId}|${c.day}`, c])), [data.cells])
   return (
     <>
-      <p className="sc-hint">{tx(S.monthHint)}</p>
-      <div className="sc-grid sc-grid--month" role="table" aria-label={tx(S.title)} style={{ '--sc-days': month.length } as CSSProperties}>
+      <p className="sc-hint sc-hint--month" dir={dir}>{tx(S.monthHint)}</p>
+      <div className="sc-grid sc-grid--month" dir="ltr" role="table" aria-label={tx(S.title)} style={{ '--sc-days': month.length } as CSSProperties}>
         <div className="sc-row sc-row--axis" role="row">
           <div className="sc-row__head" role="columnheader">{tx(S.teacher)}</div>
           {month.map((d) => (

@@ -29,6 +29,7 @@ export const S = {
   viewLabel: { en: 'View', ar: 'طريقة العرض' },
   teacher: { en: 'Teacher', ar: 'المعلم' },
   noTeachers: { en: 'No teacher matches these filters.', ar: 'لا يوجد معلم يطابق عوامل التصفية هذه.' },
+  noTeachersHint: { en: 'Clear a filter to see the others.', ar: 'امسح أحد العوامل لرؤية الآخرين.' },
   monthHint: {
     en: 'Each cell is one teacher\'s day: shift used, and empty hours in the shift. Open a day to see its lessons.',
     ar: 'كل خانة يوم لمعلم: نسبة إشغال الشيفت والساعات الفارغة فيه. افتح اليوم لرؤية حصصه.',
