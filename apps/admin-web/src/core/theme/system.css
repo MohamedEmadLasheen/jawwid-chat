@@ -1048,3 +1048,4 @@ a.ledger__cell:hover, button.ledger__cell:hover { background: var(--surface-hove
 .side__menu { box-shadow: var(--shadow-pop); }
 .side__me-button, .side__me-button * { text-decoration: none; }
 .tabbar__item .side__count { position: absolute; inset-block-start: 4px; inset-inline-end: calc(50% - 26px); }
+.badge--outline { border: 0; }
