@@ -282,8 +282,8 @@ function History({ kind, file, finance, onOpen }: { kind: 'bonus' | 'deduction';
               {rows.map((r) => (
                 <tr key={r.key}>
                   <td>{r.date}</td>
-                  <td dir="auto">{r.reason}</td>
-                  <td dir="auto">{r.by}</td>
+                  <td><bdi>{r.reason}</bdi></td>
+                  <td><bdi>{r.by}</bdi></td>
                   {finance && (
                     <td>
                       {r.live === null ? (

@@ -1,4 +1,5 @@
 import { Fragment, useMemo, useState, type ReactNode } from 'react'
+import '@/features/teachers/stack-table.css'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { LOCALE_TAG, useI18n } from '@/core/i18n/I18nProvider'
@@ -111,7 +112,7 @@ function LessonTable({ lessons }: { lessons: LessonDto[] }) {
   if (lessons.length === 0) return <p className="tf-muted">{tx(T.noLessons, { n: SCHEDULE_DAYS })}</p>
   return (
     <div className="table-wrap tf-table-wrap">
-      <table className="table">
+      <table className="table stack-table">
         <thead>
           <tr>
             <th scope="col">{tx(T.lessonWhen)}</th>
@@ -127,10 +128,10 @@ function LessonTable({ lessons }: { lessons: LessonDto[] }) {
             return (
               <tr key={l.id}>
                 <td>{dateTime(l.startsAt)}</td>
-                <td dir="auto">{l.learner.name}</td>
-                <td>{tx(T.minutesShort, { m: number(l.durationMinutes) })}</td>
-                <td>{tx(l.kind === 'makeup' ? T.makeup : T.regular)}</td>
-                <td>
+                <td data-label={tx(T.child)}><bdi>{l.learner.name}</bdi></td>
+                <td data-label={tx(T.lessonLength)}>{tx(T.minutesShort, { m: number(l.durationMinutes) })}</td>
+                <td data-label={tx(T.lessonKind)}>{tx(l.kind === 'makeup' ? T.makeup : T.regular)}</td>
+                <td data-label={tx(T.status)}>
                   <Badge tone={phase.tone} dot>{tx(phase.label)}</Badge>
                 </td>
               </tr>

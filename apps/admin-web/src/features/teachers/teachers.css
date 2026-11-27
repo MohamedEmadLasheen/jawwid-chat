@@ -50,8 +50,11 @@
 .monthpick__step:hover { background: var(--surface-hover); color: var(--teal-dark); }
 .monthpick__step--prev .icon { transform: rotate(180deg); }
 [dir='rtl'] .monthpick__step--prev .icon { transform: scaleX(-1) rotate(180deg); }
-.monthpick__input { min-inline-size: 10.5rem; padding: 0 var(--space-2); border: 0; border-inline: 1px solid var(--hairline); background: none; color: var(--ink); font: inherit; font-family: var(--display); font-size: var(--fs-lg); font-weight: 600; font-variant-numeric: tabular-nums; text-align: center; }
-.monthpick__input:focus-visible { outline-offset: -2px; }
+/* The month in the app's language; the browser's own month field lies over it, unseen. */
+.monthpick__field { position: relative; display: grid; place-items: center; min-inline-size: 10.5rem; padding: 0 var(--space-3); border-inline: 1px solid var(--hairline); }
+.monthpick__text { font-family: var(--display); font-size: var(--fs-lg); font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ink); white-space: nowrap; pointer-events: none; }
+.monthpick__input { position: absolute; inset: 0; inline-size: 100%; block-size: 100%; margin: 0; padding: 0; border: 0; opacity: 0; cursor: pointer; font: inherit; }
+.monthpick__field:focus-within { outline: 2px solid var(--focus); outline-offset: -2px; }
 @media (max-width: 767px), (pointer: coarse) { .monthpick__step { inline-size: 44px; min-block-size: 44px; } }
 
 /* ----------------------------------------------------------- statistics */
@@ -64,9 +67,10 @@
 .ts-table tbody th[scope='row'] { position: sticky; inset-inline-start: 0; z-index: 1; background: var(--paper); font-weight: 600; white-space: nowrap; border-block-end: 1px solid var(--hairline-soft); padding-block: 9px; }
 .ts-table tbody tr:hover th[scope='row'] { background: var(--surface-hover); }
 .ts-table td.num { white-space: nowrap; }
-/* A figure with its unit in words reads in the page's direction; a bare numeral or a ratio stays left to right. */
-.ts-table td.ts-words, [dir='rtl'] .ts-table td.ts-words { direction: inherit; unicode-bidi: normal; text-align: start; }
-.ts-table .ts-zero { color: var(--border-control); }
+/* A zero is quiet, never faint: muted ink, and what is there carries the weight. */
+.ts-table .ts-zero { color: var(--ink-muted); }
+.ts-table td.num:not(.ts-zero) { font-weight: 500; }
+.ts-key { margin: 0 0 var(--space-3); color: var(--ink-muted); font-size: var(--fs-xs); }
 
 /* One teacher: the month's ledger, then every lesson as a tick. */
 .ts-ledger { margin-block: var(--space-2) var(--space-5); }
@@ -82,7 +86,7 @@
 .ts-cat__title { margin: 0; font-size: var(--fs-md); font-weight: 600; }
 .ts-cat__count { font-family: var(--display); font-size: var(--fs-2xl); font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums lining-nums; direction: ltr; unicode-bidi: isolate; }
 .ts-cat--danger .ts-cat__count { color: var(--terracotta); }
-.ts-cat--none .ts-cat__count { color: var(--border-control); }
+.ts-cat--none .ts-cat__count { color: var(--ink-muted); font-weight: 400; }
 .ts-cat__empty { margin: 0; font-size: var(--fs-sm); }
 /* One tick a lesson; a wider gap separates one lesson length from the next. */
 .ts-ticks { display: flex; flex-wrap: wrap; gap: 4px 10px; min-block-size: 12px; }
@@ -155,6 +159,18 @@
 .ts-actions-cell .btn:hover:not(:disabled) { background: var(--surface-hover); border-color: transparent; color: var(--teal-dark); }
 .ts-actions-cell .btn + .btn { margin-inline-start: 2px; }
 @media (max-width: 767px), (pointer: coarse) { .ts-actions-cell .btn { min-block-size: 40px; } }
+/* On a long list the actions stay in sight but quiet; the row in hand shows them in teal. */
+@media (hover: hover) and (min-width: 768px) {
+  .ts-actions-cell--quiet .btn { color: var(--ink-muted); }
+  tr:hover .ts-actions-cell--quiet .btn, .ts-actions-cell--quiet .btn:focus-visible { color: var(--teal); }
+}
+@media (max-width: 767px) {
+  /* A row's actions on a phone: words on one or two lines, each a full touch target. */
+  .stack-table .ts-actions-cell { gap: 0 var(--space-1); margin-inline-start: -8px; }
+  .stack-table .ts-actions-cell .btn { min-block-size: 44px; padding-inline: 8px; }
+  .ts-table tbody th[scope='row'] { white-space: normal; }
+  .ts-table { min-inline-size: 0; }
+}
 
 /* Working hours: one line a window. */
 .ts-windows { display: grid; gap: 0; margin-block: var(--space-2); }

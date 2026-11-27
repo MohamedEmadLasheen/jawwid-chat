@@ -90,7 +90,7 @@ export function NeedsActionPage() {
         <TeachersAreaTabs />
         <PageHeader title={tx(O.needsTitle)} subtitle={tx(O.needsSubtitle)} />
         <QueryBoundary isLoading={q.isLoading} error={q.error} onRetry={() => void q.refetch()}>
-          {empty && <EmptyState title={tx(O.allClear)} />}
+          {empty && <EmptyState title={tx(O.allClear)} hint={tx(O.allClearHint)} />}
           {d && flow.length > 1 && (
             <div className="ledger ts-flow" role="group" aria-label={tx(FLOW)}>
               {flow.map((f) => (

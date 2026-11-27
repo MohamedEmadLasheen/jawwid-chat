@@ -116,7 +116,7 @@ export function OpenSupervisionButton({ teacherId }: { teacherId: string }) {
     <>
       <button
         type="button"
-        className="btn btn--sm"
+        className="btn"
         disabled={open.isPending}
         onClick={() => open.mutate(teacherId, { onSuccess: (r) => go(r.conversationId) })}
       >

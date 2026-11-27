@@ -14,10 +14,12 @@ export interface Pair {
 export const T = {
   title: { en: 'Teacher statistics', ar: 'إحصائيات المعلمين' },
   subtitle: {
-    en: 'Counted by the server from the lessons themselves. Nothing is typed in.',
-    ar: 'يحسبها الخادم من الحصص نفسها. لا شيء يُدخل يدويًا.',
+    en: 'Counted from the recorded lessons; not editable here.',
+    ar: 'تُحسب من الحصص المسجّلة، ولا تُعدَّل من هنا.',
   },
   month: { en: 'Month', ar: 'الشهر' },
+  keyMakeups: { en: 'Make-up classes: completed / all.', ar: 'الحصص التعويضية: المنفّذة / الكل.' },
+  keyExcuses: { en: 'Student excuses: before the start + after it.', ar: 'أعذار الطالب: قبل البداية + بعدها.' },
   search: { en: 'Search a teacher', ar: 'ابحث عن معلم' },
   colTeacher: { en: 'Teacher', ar: 'المعلم' },
   colHeld: { en: 'Held', ar: 'المنعقدة' },

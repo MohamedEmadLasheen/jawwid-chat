@@ -18,6 +18,7 @@ import type { SupervisedComplaint } from './api'
 import { H, useCopy } from './copy'
 import { useDeductionDefaults, useRecordReward, useRewards, useSetDeductionDefault, useSupervisedComplaints } from './hooks'
 import { SectionIntro } from './SectionIntro'
+import '@/features/teachers/stack-table.css'
 import { SearchableSelect } from '@/shared/components/SearchableSelect'
 import { AboutPicker } from '@/features/teacher-records/AboutPicker'
 import { aboutFields } from '@/features/teacher-records/api'
@@ -48,10 +49,12 @@ export function RewardsSection({
   const rows = list.data?.rewards ?? []
   return (
     <>
+      {/* With nothing recorded yet, the one action sits with the empty line; with rows, beside the rule. */}
       <SectionIntro
         hint={tx(H.rewardsHint)}
         actions={
-          canRecord && (
+          canRecord &&
+          rows.length > 0 && (
             <button type="button" className="btn btn--sm" onClick={() => setRecording(true)}>
               {tx(H.recordReward)}
             </button>
@@ -63,10 +66,20 @@ export function RewardsSection({
       ) : (
         <QueryBoundary isLoading={list.isLoading} error={null} onRetry={() => void list.refetch()}>
           {rows.length === 0 ? (
-            <EmptyState title={tx(H.emptyRewards)} />
+            <EmptyState
+              title={tx(H.emptyRewards)}
+              hint={tx(H.emptyRewardsHint)}
+              action={
+                canRecord && (
+                  <button type="button" className="btn btn--sm btn--primary" onClick={() => setRecording(true)}>
+                    {tx(H.recordReward)}
+                  </button>
+                )
+              }
+            />
           ) : (
             <div className="table-wrap">
-              <table className="table">
+              <table className="table stack-table">
                 <thead>
                   <tr>
                     <th scope="col">{tx(H.teacher)}</th>
@@ -79,15 +92,15 @@ export function RewardsSection({
                 <tbody>
                   {rows.map((r) => (
                     <tr key={r.id}>
-                      <td dir="auto">
+                      <td>
                         <TeacherName basePath={basePath} teacher={r.teacher} />
                       </td>
-                      <td dir="auto">{r.reason}</td>
+                      <td className="stack-wide" data-label={tx(H.reason)}><bdi>{r.reason}</bdi></td>
                       {canViewAmounts && (
-                        <td className="th-money">{r.amount ? money(r.amount.amount, r.amount.currency) : <span className="th-muted">{tx(H.awaitingAmount)}</span>}</td>
+                        <td className="th-money" data-label={tx(H.amount)}>{r.amount ? money(r.amount.amount, r.amount.currency) : <span className="th-muted">{tx(H.awaitingAmount)}</span>}</td>
                       )}
-                      <td>{dateTime(r.recordedAt)}</td>
-                      <td dir="auto">{r.recordedBy.name}</td>
+                      <td data-label={tx(H.date)}>{dateTime(r.recordedAt)}</td>
+                      <td data-label={tx(H.recordedBy)}><bdi>{r.recordedBy.name}</bdi></td>
                     </tr>
                   ))}
                 </tbody>
@@ -199,6 +212,12 @@ function DeductionDefaults() {
   const defaults = useDeductionDefaults(true)
   const save = useSetDeductionDefault()
   const [extra, setExtra] = useState('')
+  const [typed, setTyped] = useState('')
+  const currencyId = useId()
+  const addCurrency = () => {
+    setExtra(typed)
+    setTyped('')
+  }
   const [draft, setDraft] = useState<Record<string, string>>({})
   const currencies = [...new Set([...(defaults.data?.currencies ?? []), ...(/^[A-Z]{3}$/.test(extra) ? [extra] : [])])]
   if (defaults.error) return null
@@ -265,10 +284,29 @@ function DeductionDefaults() {
           </table>
         </div>
       )}
-      <label className="field th-currency">
-        <span className="field__label">{tx(H.addCurrency)}</span>
-        <input className="input" dir="ltr" maxLength={3} value={extra} onChange={(e) => setExtra(e.target.value.toUpperCase())} />
-      </label>
+      <div className="th-currency">
+        <label className="field__label" htmlFor={currencyId}>
+          {tx(H.addCurrency)}
+        </label>
+        <div className="th-currency__row">
+          <input
+            id={currencyId}
+            className="input"
+            dir="ltr"
+            maxLength={3}
+            value={typed}
+            aria-describedby={`${currencyId}-hint`}
+            onChange={(e) => setTyped(e.target.value.toUpperCase())}
+            onKeyDown={(e) => e.key === 'Enter' && /^[A-Z]{3}$/.test(typed) && addCurrency()}
+          />
+          <button type="button" className="btn btn--sm" disabled={!/^[A-Z]{3}$/.test(typed)} onClick={addCurrency}>
+            {tx(H.addCurrencyAction)}
+          </button>
+        </div>
+        <span id={`${currencyId}-hint`} className="field__hint">
+          {tx(H.addCurrencyHint)}
+        </span>
+      </div>
       {save.error ? (
         <div className="banner banner--danger" role="alert">
           {describeError(save.error, locale)}
@@ -340,7 +378,7 @@ export function ComplaintsSection({ canDecide = true, requireAbout = false }: { 
       ) : (
         <QueryBoundary isLoading={list.isLoading} error={null} onRetry={() => void list.refetch()}>
           {rows.length === 0 ? (
-            <EmptyState title={tx(H.emptyComplaints)} />
+            <EmptyState title={tx(H.emptyComplaints)} hint={tx(H.emptyComplaintsHint)} />
           ) : (
             <ul className="tf-entries th-complaints">
               {rows.map((c) => (

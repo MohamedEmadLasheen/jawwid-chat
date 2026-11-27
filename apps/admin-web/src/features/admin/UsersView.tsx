@@ -11,8 +11,8 @@ import { FilterChips } from '@/shared/components/FilterChips'
 import { PageHeader } from '@/shared/components/PageHeader'
 import { SearchField } from '@/shared/components/SearchField'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
-import { RefreshAction, matches, useEyebrow, useRoleLabel } from './common'
-import { ACCOUNT_STATUS, PLURAL, PRINCIPAL_KIND, PRINCIPAL_KIND_PLURAL, TEXT, listTime, useLabel, usePlural, useText } from './copy'
+import { RefreshAction, matches, useRoleLabel } from './common'
+import { ACCOUNT_STATUS, PRINCIPAL_KIND, PRINCIPAL_KIND_PLURAL, TEXT, listTime, useLabel, useText } from './copy'
 import type { AdminSection } from './sections'
 import { SearchableSelect } from '@/shared/components/SearchableSelect'
 import './admin.css'
@@ -32,10 +32,8 @@ const userKey = (u: AdminUser) => `${u.principalKind}:${u.id}`
  */
 export function UsersView({ section }: { section: AdminSection }) {
   const tx = useText()
-  const eyebrow = useEyebrow(section)
   const label = useLabel()
   const roleLabel = useRoleLabel()
-  const plural = usePlural()
   const { number, locale } = useI18n()
   const [search, setSearch] = useState('')
   // The kind filter is in the URL, so the dashboard can link to "family contacts".
@@ -95,12 +93,11 @@ export function UsersView({ section }: { section: AdminSection }) {
   }
 
   return (
-    <div className="page">
+    <div className="page adm-users">
       <div className="page__inner">
+        {/* The count is said once, in the ledger below; the top bar already says where this page sits. */}
         <PageHeader
-          eyebrow={eyebrow}
           title={tx(section.label)}
-          subtitle={query.data ? plural(PLURAL.people, users.length) : undefined}
           actions={
             <RefreshAction
               updatedAt={query.dataUpdatedAt}
@@ -134,7 +131,7 @@ export function UsersView({ section }: { section: AdminSection }) {
               onChange={setKind}
               formatCount={number}
               options={[
-                { value: 'all', label: tx(TEXT.all), count: searched.length },
+                { value: 'all', label: tx(TEXT.all) },
                 ...kinds.map((k) => ({ value: k, label: label(PRINCIPAL_KIND_PLURAL, k), count: kindCount(k) })),
               ]}
             />

@@ -18,6 +18,8 @@ import { useLeaveOverview } from './hooks'
 import { SectionIntro } from './SectionIntro'
 import { MonthPicker } from '@/features/teachers/MonthPicker'
 import './teacher-supervision.css'
+import '@/features/teachers/stack-table.css'
+import { DAYS, countLabel } from '@/core/i18n/counts'
 
 /**
  * The attendance sections of PD-52's Attendance & Complaints page (page A):
@@ -59,10 +61,10 @@ export function LeaveSection({ basePath }: { basePath: string }) {
       ) : (
         <QueryBoundary isLoading={overview.isLoading} error={null} onRetry={() => void overview.refetch()}>
           {rows.length === 0 ? (
-            <EmptyState title={tx(H.emptyLeave)} />
+            <EmptyState title={tx(H.emptyLeave)} hint={tx(H.emptyLeaveHint)} />
           ) : (
             <div className="table-wrap">
-              <table className="table">
+              <table className="table stack-table">
                 <thead>
                   <tr>
                     <th scope="col">{tx(H.teacher)}</th>
@@ -74,22 +76,32 @@ export function LeaveSection({ basePath }: { basePath: string }) {
                 <tbody>
                   {rows.map((t) => (
                     <tr key={t.id}>
-                      <td dir="auto">
+                      <td>
                         <TeacherName basePath={basePath} teacher={t} />
                       </td>
                       {balances && (
-                        <td>
+                        <td className="th-nowrap" data-label={tx(H.balance)}>
                           {t.used === undefined ? (
                             <span className="th-muted">—</span>
                           ) : t.allowance === null || t.allowance === undefined ? (
-                            <span className="th-muted">{tx(H.notTracked, { used: number(t.used) })}</span>
+                            <span className="th-muted">
+                              {t.used === 0 ? tx(H.notTrackedNone) : tx(H.notTracked, { days: countLabel(t.used, number(t.used), DAYS, locale) })}
+                            </span>
                           ) : (
-                            tx(H.balanceOf, { left: number(t.balance ?? 0), allowance: number(t.allowance) })
+                            tx(H.balanceOf, { left: number(t.balance ?? 0), days: countLabel(t.allowance, number(t.allowance), DAYS, locale) })
                           )}
                         </td>
                       )}
-                      <td>{t.away ? <AwayBadge away={t.away} /> : <span className="th-muted">{tx(H.available)}</span>}</td>
-                      <td>
+                      <td data-label={tx(H.status)}>
+                        {t.away ? (
+                          <AwayBadge away={t.away} />
+                        ) : (
+                          <Badge tone="ok" dot>
+                            {tx(H.available)}
+                          </Badge>
+                        )}
+                      </td>
+                      <td data-label={tx(H.requests)}>
                         {t.pendingRequests > 0 ? (
                           <Badge tone="warn" dot>
                             {tx(H.pending, { n: number(t.pendingRequests) })}
@@ -153,7 +165,7 @@ function ViolationTable({
   query: ViolationQuery
   canDecide: boolean
   /** What the empty list says: nothing waiting, or nothing in the month. */
-  empty: string
+  empty: { title: string; hint: string }
   filter?: (v: Violation) => boolean
   extraHead?: ReactNode
   extraCell?: (v: Violation) => ReactNode
@@ -167,10 +179,10 @@ function ViolationTable({
   return (
     <QueryBoundary isLoading={list.isLoading} error={null} onRetry={() => void list.refetch()}>
       {rows.length === 0 ? (
-        <EmptyState title={empty} />
+        <EmptyState title={empty.title} hint={empty.hint} />
       ) : (
         <div className="table-wrap dc-table-wrap">
-          <table className="table">
+          <table className="table stack-table">
             <thead>
               <tr>
                 <th scope="col">{tx(H.teacher)}</th>
@@ -215,11 +227,11 @@ export function ExcusesSection({ canRecord, canDecide }: AttendanceRights) {
       <ViolationTable
         query={query}
         canDecide={canDecide}
-        empty={tx(w.window === 'open' ? H.emptyOpen : H.emptyMonth)}
+        empty={w.window === 'open' ? { title: tx(H.emptyOpen), hint: tx(H.emptyOpenHint) } : { title: tx(H.emptyMonth), hint: tx(H.emptyMonthHint) }}
         extraHead={<th scope="col">{tx(H.excuseCategory)}</th>}
         extraCell={(v) => {
           const label = excuseCategoryLabel(v.lesson?.excuseCategory)
-          return <td>{label ? tx(label) : <span className="th-muted">—</span>}</td>
+          return <td data-label={tx(H.excuseCategory)}>{label ? tx(label) : <span className="th-muted">—</span>}</td>
         }}
       />
       {recording && <AbsenceDialog onClose={() => setRecording(false)} />}
@@ -264,7 +276,7 @@ export function LatenessSection({ canRecord, canDecide, trialsOnly = false }: At
       <ViolationTable
         query={query}
         canDecide={canDecide}
-        empty={tx(w.window === 'open' ? H.emptyOpen : H.emptyMonth)}
+        empty={w.window === 'open' ? { title: tx(H.emptyOpen), hint: tx(H.emptyOpenHint) } : { title: tx(H.emptyMonth), hint: tx(H.emptyMonthHint) }}
         // An older server sends no lesson kind: everything reads as regular.
         filter={(v) => (v.lesson?.kind ?? 'regular') === type}
         extraHead={
@@ -275,8 +287,8 @@ export function LatenessSection({ canRecord, canDecide, trialsOnly = false }: At
         }
         extraCell={(v) => (
           <>
-            <td>{tx(v.lesson?.kind === 'trial' ? H.trial : H.regular)}</td>
-            <td>{tx(H.minutes, { n: v.lateMinutes ?? 0 })}</td>
+            <td data-label={tx(H.lessonType)}>{tx(v.lesson?.kind === 'trial' ? H.trial : H.regular)}</td>
+            <td data-label={tx(H.delay)}>{tx(H.minutes, { n: v.lateMinutes ?? 0 })}</td>
           </>
         )}
       />

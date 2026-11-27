@@ -13,6 +13,7 @@ import { DueClockView } from './DueClockView'
 import { isNotAvailable, useForgetReport, useNow, useReports, useTake } from './hooks'
 import { ReportDetail, SubjectView } from './ReportDetail'
 import './moderation.css'
+import '@/features/teachers/stack-table.css'
 
 /** A report's status as a dot and a word: waiting is gold, in hand is teal, closed is quiet. */
 const STATUS_TONE: Partial<Record<ReportStatus, Tone>> = { open: 'warn', in_review: 'info', actioned: 'ok' }
@@ -100,7 +101,7 @@ export function ReportsPage() {
       )}
       <QueryBoundary isLoading={list.isLoading} error={list.error} isEmpty={rows.length === 0} emptyTitle={tx(MOD.empty)} onRetry={() => void list.refetch()}>
         <div className="table-wrap">
-          <table className="table">
+          <table className="table stack-table">
             <thead>
               <tr>
                 <th>{tx(MOD.colReason)}</th>
@@ -124,10 +125,10 @@ export function ReportsPage() {
                         </Badge>
                       )}
                     </td>
-                    <td>
+                    <td className="stack-wide" data-label={tx(MOD.colTarget)}>
                       <SubjectView subject={r.subject} targetKind={r.targetKind} testId="row-subject" />
                     </td>
-                    <td>
+                    <td data-label={tx(MOD.colStatus)}>
                       <span className="mod-status">
                         <Badge tone={STATUS_TONE[r.status] ?? 'neutral'} dot>
                           {tx(STATUS[r.status] ?? { ar: r.status, en: r.status })}
@@ -135,11 +136,11 @@ export function ReportsPage() {
                         {r.reporterAnsweredAt ? <span className="mod-answered">{tx(MOD.answered)}</span> : null}
                       </span>
                     </td>
-                    <td>
+                    <td data-label={tx(MOD.colDue)}>
                       <DueClockView dueAt={r.dueAt} status={r.status} nowMs={nowMs} overdueAt={r.overdueAt} />
                     </td>
-                    <td className="mod-when">{dateTime(r.createdAt)}</td>
-                    <td className="mod-actions">
+                    <td className="mod-when" data-label={tx(MOD.colFiled)}>{dateTime(r.createdAt)}</td>
+                    <td className="mod-actions stack-actions">
                       <button type="button" className="btn btn--sm btn--ghost" onClick={() => { setGoneNotice(false); setOpenId(r.id) }}>
                         {tx(MOD.view)}
                       </button>

@@ -38,7 +38,7 @@ export function ViolationRow({ v, onDecide, extra }: { v: Violation; onDecide?: 
     <tr>
       <td dir="auto">{v.teacher.name}</td>
       {extra}
-      <td>
+      <td className="stack-wide" data-label={tx(D.what)}>
         <div className="dc-cell">
           <strong>{violationWhat(v, tx)}</strong>
           <span className="dc-muted" dir="auto">
@@ -52,7 +52,7 @@ export function ViolationRow({ v, onDecide, extra }: { v: Violation; onDecide?: 
           <span className="dc-muted">{source}</span>
         </div>
       </td>
-      <td>
+      <td data-label={tx(D.step)}>
         {/* PD-52 PR-5: Sales reads no step. */}
         {v.step !== null && (
           <Badge tone={STEP_TONE[v.step] ?? 'neutral'} dot>
@@ -60,7 +60,7 @@ export function ViolationRow({ v, onDecide, extra }: { v: Violation; onDecide?: 
           </Badge>
         )}
       </td>
-      <td>
+      <td className="stack-wide" data-label={tx(D.outcome)}>
         {v.decision ? (
           <div className="dc-cell">
             <span>{tx(DECISION_LABEL[v.decision])}</span>

@@ -16,10 +16,11 @@ export const O = {
   // Needs action
   needsTitle: { en: 'Needs action', ar: 'بحاجة إلى إجراء' },
   needsSubtitle: {
-    en: 'Waiting on a decision today. The server checks and records each action.',
-    ar: 'بانتظار قرار اليوم. يتحقق الخادم من كل إجراء ويسجّله.',
+    en: 'Waiting on a decision today. Each action is checked and recorded.',
+    ar: 'بانتظار قرار اليوم. يُراجَع كل إجراء ويُسجَّل.',
   },
-  allClear: { en: 'Nothing is waiting. Every lesson is closed and every request answered.', ar: 'لا شيء ينتظر. كل الحصص مغلقة وكل الطلبات مُجاب عنها.' },
+  allClear: { en: 'Nothing is waiting.', ar: 'لا شيء ينتظر.' },
+  allClearHint: { en: 'Every lesson is closed and every request answered.', ar: 'كل الحصص مغلقة وكل الطلبات مُجاب عنها.' },
   overdue: { en: 'Reports overdue', ar: 'تقارير متأخرة' },
   overdueHint: { en: 'Ended more than a day ago with no outcome. Remind the teacher, or record what happened.', ar: 'انتهت منذ أكثر من يوم دون نتيجة. ذكّر المعلم أو سجّل ما حدث.' },
   awaiting: { en: 'Awaiting report', ar: 'بانتظار التقرير' },
@@ -66,7 +67,7 @@ export const O = {
   },
   chooseTeacher: { en: 'Teacher', ar: 'المعلم' },
   pickTeacher: { en: 'Choose a teacher', ar: 'اختر معلمًا' },
-  pickTeacherFirst: { en: 'Choose a teacher to see their working hours and students.', ar: 'اختر معلمًا لعرض ساعات عمله وطلابه.' },
+  pickTeacherFirst: { en: 'Their working hours and students appear here.', ar: 'تظهر هنا ساعات عمله وطلابه.' },
   workingHours: { en: 'Working hours', ar: 'ساعات العمل' },
   timezone: { en: 'Time zone', ar: 'المنطقة الزمنية' },
   addWindow: { en: 'Add hours', ar: 'إضافة ساعات' },
@@ -113,8 +114,10 @@ export const O = {
   package: { en: 'Package left', ar: 'المتبقي من الباقة' },
   packageUnknown: { en: 'Kept in Core', ar: 'في النظام الأساسي' },
   noneList: { en: 'Nobody here.', ar: 'لا أحد هنا.' },
-  nonePaused: { en: 'No student is paused. A pause appears here with its return date.', ar: 'لا طالب موقوف مؤقتًا. يظهر الإيقاف هنا مع تاريخ العودة.' },
-  noneStopped: { en: 'No student has stopped. A stop appears here with its reason.', ar: 'لا طالب متوقف نهائيًا. يظهر التوقف هنا مع سببه.' },
+  nonePaused: { en: 'No student is paused.', ar: 'لا طالب موقوف مؤقتًا.' },
+  nonePausedHint: { en: 'A pause appears here with its return date.', ar: 'يظهر الإيقاف هنا مع تاريخ العودة.' },
+  noneStopped: { en: 'No student has stopped.', ar: 'لا طالب متوقف نهائيًا.' },
+  noneStoppedHint: { en: 'A stop appears here with its reason.', ar: 'يظهر التوقف هنا مع سببه.' },
 
   // PD-31: weekly times
   weeklyTitle: { en: 'Weekly times — {name}', ar: 'المواعيد الأسبوعية — {name}' },

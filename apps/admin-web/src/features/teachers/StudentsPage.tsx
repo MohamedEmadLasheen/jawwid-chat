@@ -9,6 +9,7 @@ import { opsApi, type SuspensionDto } from './opsApi'
 import { O, SUSPENSION_REASON, describeOpsError, formatDay } from './opsCopy'
 import { useOp, useSuspensions } from './opsHooks'
 import './teachers.css'
+import './stack-table.css'
 
 type Kind = 'temporary' | 'permanent'
 
@@ -42,10 +43,10 @@ export function StudentsPage() {
         </div>
         <QueryBoundary isLoading={q.isLoading} error={q.error} onRetry={() => void q.refetch()}>
           {rows.length === 0 ? (
-            <EmptyState title={tx(kind === 'temporary' ? O.nonePaused : O.noneStopped)} />
+            <EmptyState title={tx(kind === 'temporary' ? O.nonePaused : O.noneStopped)} hint={tx(kind === 'temporary' ? O.nonePausedHint : O.noneStoppedHint)} />
           ) : (
             <div className="table-wrap">
-                <table className="table ts-plain-rows">
+                <table className="table ts-plain-rows stack-table">
                   <thead>
                     <tr>
                       <th scope="col">{tx(O.learner)}</th>
@@ -62,16 +63,16 @@ export function StudentsPage() {
                     {rows.map((s) => (
                       <tr key={s.id}>
                         <th scope="row">{s.learner.name}</th>
-                        <td>{s.family?.displayName ?? '—'}</td>
-                        <td>{s.teacher?.name ?? '—'}</td>
-                        <td>
+                        <td data-label={tx(O.family)}>{s.family?.displayName ?? '—'}</td>
+                        <td data-label={tx(O.teacher)}>{s.teacher?.name ?? '—'}</td>
+                        <td className="stack-wide" data-label={tx(O.reason)}>
                           {tx(SUSPENSION_REASON[s.reason] ?? { en: s.reason, ar: s.reason })}
                           {s.note && <div className="ts-muted" dir="auto">{s.note}</div>}
                         </td>
-                        <td>{formatDay(s.startsOn, locale)}</td>
-                        {kind === 'temporary' && <td>{s.returnOn ? formatDay(s.returnOn, locale) : '—'}</td>}
-                        <td className="ts-muted">{s.packageBalance ?? tx(O.packageUnknown)}</td>
-                        <td className="ts-actions-cell">
+                        <td data-label={tx(O.since)}>{formatDay(s.startsOn, locale)}</td>
+                        {kind === 'temporary' && <td data-label={tx(O.returnOn)}>{s.returnOn ? formatDay(s.returnOn, locale) : '—'}</td>}
+                        <td className="ts-muted" data-label={tx(O.package)}>{s.packageBalance ?? tx(O.packageUnknown)}</td>
+                        <td className="ts-actions-cell stack-actions">
                           {kind === 'temporary' && (
                             <button type="button" className="btn btn--sm" onClick={() => setExtending(s)}>{tx(O.extend)}</button>
                           )}

@@ -7,8 +7,8 @@ import { adminSectionPath, sectionsInGroup, type AdminSection } from './sections
 import './admin.css'
 
 /**
- * An unbuilt section: its name, one line saying what it will be for, and what
- * it is waiting on. No table, no zero, no button -- nothing here could be mistaken for data
+ * An unbuilt section: its name, its own line saying what it will do, and what
+ * stands in for it meanwhile. No table, no zero, no button -- nothing here could be mistaken for data
  * or for an action that works. The only links lead to sections in the same
  * group that do work today.
  */
@@ -21,12 +21,12 @@ export function DevelopmentPlaceholder({ section }: { section: AdminSection }) {
     <div className="page">
       <div className="page__inner">
         <PageHeader eyebrow={eyebrow} title={tx(section.label)} status={<StatusBadge status={section.status} />} />
-        {/* One calm line: that it is not built, and what it will be for. */}
+        {/* The section speaks for itself first: what it will do. Then, quietly, that it is not open yet. */}
         <div className="adm-soon" role="note" data-testid="development-placeholder">
-          <p className="adm-soon__line">
-            <strong>{tx(TEXT.placeholderTitle)}</strong> {tx(section.purpose)}
+          <p className="adm-soon__line">{tx(section.purpose)}</p>
+          <p className="adm-soon__note">
+            <span className="adm-soon__status">{tx(TEXT.placeholderTitle)}</span> {tx(section.note)}
           </p>
-          <p className="adm-soon__note">{tx(section.note)}</p>
           {section.legacy && (
             <details className="disclosure adm-soon__legacy">
               <summary>{tx(TEXT.prototypeTitle)}</summary>

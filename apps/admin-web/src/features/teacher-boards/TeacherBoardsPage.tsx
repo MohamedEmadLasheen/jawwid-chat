@@ -52,7 +52,7 @@ export function TeacherBoardsPage({ basePath }: { basePath: string }) {
           </SearchableSelect>
         </div>
         {!teacherId ? (
-          <p className="tb-hint">{tx(B.chooseTeacherHint)}</p>
+          <EmptyState title={tx(B.chooseTeacher)} hint={tx(B.chooseTeacherHint)} />
         ) : forbidden ? (
           <EmptyState title={tx(B.notYours)} hint={tx(B.notYoursHint)} />
         ) : (
