@@ -8,7 +8,7 @@ import { FilterChips } from '@/shared/components/FilterChips'
 import { Icon } from '@/shared/components/Icon'
 import { PageHeader } from '@/shared/components/PageHeader'
 import { EmptyState, LoadingState, QueryBoundary } from '@/shared/components/States'
-import type { BankAccount, BillingSettings, BillingSettingsUpdate, InvoiceIssuer, Receipt, ReceiptStatus } from './api'
+import type { BankAccount, BillingSettings, InvoiceIssuer, Receipt, ReceiptStatus } from './api'
 import { LED, PAY, describeError, type Pair, formatDay, formatMoney, reminderLabel, toMinor, useCopy } from './copy'
 import { RenewalRequestsPanel } from '@/features/subscriptions/RenewalRequestsPanel'
 import { S } from '@/features/subscriptions/copy'
@@ -551,12 +551,11 @@ function SettingsForm({ settings }: { settings: BillingSettings }) {
     setErrors(next)
     setSaved(false)
     if (Object.keys(next).length > 0) return
-    // One request, carrying only the groups that changed: the server leaves the others as they are.
-    const body: BillingSettingsUpdate = {}
-    if (edited.bank) body.bankAccount = bankOf(bank)
-    if (edited.issuer) body.issuer = issuerOf(issuer)
-    if (edited.reminders) body.reminders = reminders.map((r) => ({ key: r.key, enabled: r.enabled }))
-    save.mutate(body, { onSuccess: () => setSaved(true) })
+    // The same request as ever: all three groups, whichever of them was edited.
+    save.mutate(
+      { bankAccount: bankOf(bank), issuer: issuerOf(issuer), reminders: reminders.map((r) => ({ key: r.key, enabled: r.enabled })) },
+      { onSuccess: () => setSaved(true) },
+    )
   }
 
   const cardLive = settings.cardAvailable || (settings.cardPaused && settings.cardConfigured)
