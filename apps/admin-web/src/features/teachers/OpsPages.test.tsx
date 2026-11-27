@@ -239,11 +239,13 @@ describe('Students', () => {
     // A calendar day, formatted -- never shifted by the reader's zone.
     expect(within(row).getByText('Nov 1, 2026')).toBeInTheDocument()
     expect(within(row).getByText('Travel')).toBeInTheDocument()
-    expect(within(row).getByText('Kept in Core')).toBeInTheDocument()
+    // Package left is Core's: said once for the list while Core has not published it (round 3).
+    expect(screen.getByText('Kept in Core')).toBeInTheDocument()
     await userEvent.click(within(row).getByRole('button', { name: 'End pause now' }))
     await waitFor(() => expect(fetchMock.mock.calls.some(([u, i]) => /\/suspensions\/s-1\/end$/.test(String(u)) && (i as RequestInit).method === 'POST')).toBe(true))
 
-    await userEvent.click(screen.getByRole('tab', { name: 'Stopped' }))
+    // Both switches carry their count (round 3): "Stopped 0".
+    await userEvent.click(screen.getByRole('tab', { name: /^Stopped/ }))
     expect(await screen.findByText('No student has stopped.')).toBeInTheDocument()
   })
 })

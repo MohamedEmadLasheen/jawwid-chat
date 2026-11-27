@@ -46,10 +46,12 @@ export function StudentScheduleDesk({ students, teachers }: { students: Schedule
     setDialog({ title, fields, submit: (v) => op.mutateAsync(() => submit(v)) })
 
   // One sheet per teacher (students with no teacher first: they are the ones waiting), or one sheet in all.
+  // Inside a sheet, the students still waiting for regular times come first and the paused or stopped last.
   const groups = useMemo(() => {
-    if (!teachers) return [{ key: 'all', name: null as string | null, rows: students }]
+    const ordered = [...students].sort((a, b) => need(a) - need(b))
+    if (!teachers) return [{ key: 'all', name: null as string | null, rows: ordered }]
     const by = new Map<string, ScheduleLearner[]>()
-    for (const l of students) by.set(l.teacherId ?? '', [...(by.get(l.teacherId ?? '') ?? []), l])
+    for (const l of ordered) by.set(l.teacherId ?? '', [...(by.get(l.teacherId ?? '') ?? []), l])
     const named = teachers.filter((t) => by.has(t.id)).map((t) => ({ key: t.id, name: t.name as string | null, rows: by.get(t.id)! }))
     return by.has('') ? [{ key: '', name: tx(NO_TEACHER) as string | null, rows: by.get('')! }, ...named] : named
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -75,10 +77,13 @@ export function StudentScheduleDesk({ students, teachers }: { students: Schedule
     )
 
   const row = (l: ScheduleLearner) => {
+    // The row's stated action is its next step: a teacher first, then regular times, then any change to them.
+    const noTeacher = l.teacherId === null && !l.suspension
     const more: MenuItem[] = [
+      ...(noTeacher ? [{ key: 'weekly', label: tx(O.editTimes), icon: 'clock' as const, onSelect: () => setOpen({ kind: 'weekly', learner: l }) }] : []),
       { key: 'add', label: tx(O.addLesson), icon: 'calendarPlus', onSelect: () => setOpen({ kind: 'add', learner: l }) },
       { key: 'lessons', label: tx(O.lessons), icon: 'listBullets', onSelect: () => setOpen({ kind: 'lessons', learner: l }) },
-      { key: 'teacher', label: tx(O.changeTeacher), icon: 'swap', onSelect: () => setOpen({ kind: 'teacher', learner: l }) },
+      ...(!noTeacher ? [{ key: 'teacher', label: tx(O.changeTeacher), icon: 'swap' as const, onSelect: () => setOpen({ kind: 'teacher', learner: l }) }] : []),
       ...(!l.suspension ? [{ key: 'suspend', label: tx(O.suspend), icon: 'pause' as const, onSelect: () => suspend(l) }] : []),
     ]
     return (
@@ -104,8 +109,9 @@ export function StudentScheduleDesk({ students, teachers }: { students: Schedule
               ))}
             </ul>
           ) : (
-            // A student with no weekly times is a gap to fill: said in the waiting colour (round 3).
-            <span className="ts-gap">{tx(O.noTimesYet)}</span>
+            // A student with no weekly times is a gap to fill: said in the waiting colour (round 3),
+            // unless they are paused or stopped and nothing is due.
+            <span className={l.suspension ? 'ts-gap ts-gap--quiet' : 'ts-gap'}>{tx(O.noTimesYet)}</span>
           )}
         </td>
         <td className="rw-tags">
@@ -120,9 +126,15 @@ export function StudentScheduleDesk({ students, teachers }: { students: Schedule
         <td className="cell-actions">
           <RowActions
             primary={
-              <button type="button" className="btn btn--sm" onClick={() => setOpen({ kind: 'weekly', learner: l })}>
-                {tx(O.editTimes)}
-              </button>
+              noTeacher ? (
+                <button type="button" className="btn btn--sm" onClick={() => setOpen({ kind: 'teacher', learner: l })}>
+                  {tx(O.assignTeacher)}
+                </button>
+              ) : (
+                <button type="button" className="btn btn--sm" onClick={() => setOpen({ kind: 'weekly', learner: l })}>
+                  {tx(need(l) === 0 ? O.setTimes : O.editTimes)}
+                </button>
+              )
             }
             more={more}
             label={fill(tx(MORE), { name: l.name })}
@@ -186,6 +198,11 @@ export function StudentScheduleDesk({ students, teachers }: { students: Schedule
       )}
     </>
   )
+}
+
+/** 0: waiting for regular times, 1: has them, 2: paused or stopped. */
+export function need(l: ScheduleLearner): number {
+  return l.suspension ? 2 : l.slots.length === 0 ? 0 : 1
 }
 
 function slotLabel(tx: (p: Pair) => string, s: WeeklySlot, locale: 'ar' | 'en'): string {

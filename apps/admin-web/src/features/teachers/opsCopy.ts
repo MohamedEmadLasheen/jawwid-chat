@@ -128,6 +128,14 @@ export const O = {
   nonePausedHint: { en: 'A pause appears here with its return date.', ar: 'يظهر الإيقاف هنا مع تاريخ العودة.' },
   noneStopped: { en: 'No student has stopped.', ar: 'لا طالب متوقف نهائيًا.' },
   noneStoppedHint: { en: 'A stop appears here with its reason.', ar: 'يظهر التوقف هنا مع سببه.' },
+  // Round 3: how near a return is, under its date; the family is told two days before.
+  returnsToday: { en: 'Returns today', ar: 'يعود اليوم' },
+  returnsTomorrow: { en: 'Tomorrow', ar: 'غدًا' },
+  returnsTwo: { en: 'In 2 days', ar: 'بعد يومين' },
+  returnsIn: { en: 'In {n} days', ar: 'بعد {n} أيام' },
+  returnsInMany: { en: 'In {n} days', ar: 'بعد {n} يومًا' },
+  noTeacherYet: { en: 'No teacher yet', ar: 'بلا معلم بعد' },
+  endStop: { en: 'End the stop', ar: 'إلغاء التوقف النهائي' },
 
   // PD-31: weekly times
   weeklyTitle: { en: 'Weekly times — {name}', ar: 'المواعيد الأسبوعية — {name}' },
@@ -217,6 +225,8 @@ export const O = {
 
   // PD-31: changing the teacher
   changeTeacher: { en: 'Change teacher', ar: 'تغيير المعلم' },
+  assignTeacher: { en: 'Assign teacher', ar: 'تعيين معلم' },
+  setTimes: { en: 'Set times', ar: 'تحديد المواعيد' },
   changeTeacherTitle: { en: 'Change teacher — {name}', ar: 'تغيير المعلم — {name}' },
   changeTeacherHint: {
     en: 'Past lessons and reports stay with the current teacher. Future lessons and weekly times move to the new one, in one step.',
@@ -321,7 +331,10 @@ export function describeOpsError(error: unknown, locale: 'ar' | 'en'): string {
 export function formatDay(day: string, locale: 'ar' | 'en'): string {
   const d = new Date(`${day}T00:00:00Z`)
   if (Number.isNaN(d.getTime())) return day
-  return new Intl.DateTimeFormat(locale === 'ar' ? 'ar-EG-u-nu-latn' : 'en', { dateStyle: 'medium', timeZone: 'UTC' }).format(d)
+  // Arabic month names with Western digits (the rationale's RTL rule): "29 نوفمبر 2026", never "2026/11/29".
+  return locale === 'ar'
+    ? new Intl.DateTimeFormat('ar-EG-u-nu-latn', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }).format(d)
+    : new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeZone: 'UTC' }).format(d)
 }
 
 /** "from → to" in the reading direction: in Arabic the arrow points left, to the new value. */
