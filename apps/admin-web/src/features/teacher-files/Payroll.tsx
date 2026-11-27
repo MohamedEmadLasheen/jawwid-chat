@@ -108,10 +108,10 @@ function Employment({
       action={
         <>
           {file.access.canEditPersonal && (
-            <button type="button" className="btn btn--ghost btn--sm" onClick={onEdit}>{tx({ en: 'Edit', ar: 'تعديل' })}</button>
+            <button type="button" className="btn btn--sm" onClick={onEdit}>{tx({ en: 'Edit', ar: 'تعديل' })}</button>
           )}
           {finance && (
-            <button type="button" className="btn btn--ghost btn--sm" onClick={() => onOpen({ kind: 'terms' })}>{tx(P.setTerms)}</button>
+            <button type="button" className="btn btn--sm" onClick={() => onOpen({ kind: 'terms' })}>{tx(P.setTerms)}</button>
           )}
         </>
       }
@@ -119,8 +119,6 @@ function Employment({
       <dl className="tf-kv">
         <dt>{tx(P.teachingMarket)}</dt>
         <dd dir="auto">{file.employment?.teachingMarket ?? missing}</dd>
-        <dt>{tx(P.currentStudents)}</dt>
-        <dd>{file.employment?.studentCount ?? file.assignedStudents.length}</dd>
         {finance && (
           <>
             <dt>{tx(P.salaryType)}</dt>

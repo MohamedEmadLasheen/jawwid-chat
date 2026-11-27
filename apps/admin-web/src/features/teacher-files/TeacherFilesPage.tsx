@@ -5,7 +5,8 @@ import { Avatar } from '@/shared/components/Avatar'
 import { Badge } from '@/shared/components/Badge'
 import { FilterChips } from '@/shared/components/FilterChips'
 import type { MenuItem } from '@/shared/components/Menu'
-import { PageHeader, type MastFigure } from '@/shared/components/PageHeader'
+import { PageHeader } from '@/shared/components/PageHeader'
+import { useTeacherAssignments } from '@/features/organization/hooks'
 import { RowActions } from '@/shared/components/RowActions'
 import { SearchField } from '@/shared/components/SearchField'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
@@ -60,21 +61,19 @@ export function TeacherFilesPage({ basePath, eyebrow }: { basePath: string; eyeb
       .filter((x) => view !== 'unsupervised' || x.unsupervised)
   }, [all, query, view])
 
-  const figures: MastFigure[] = list.data
-    ? [
-        { key: 'all', label: tx(T.rosterTeachers), value: number(all.length), tone: 'key' },
-
-      ]
-    : []
+  // Who supervises each teacher, where the viewer may read the organization; otherwise the row says less.
+  const assignments = useTeacherAssignments(true)
+  const supervisorOf = useMemo(
+    () => new Map((assignments.data?.teachers ?? []).map((a) => [a.id, a.supervisor?.name ?? null] as const)),
+    [assignments.data],
+  )
 
   return (
-    <div className="page">
+    <div className="page tf-roster">
       <div className="page__inner">
         <PageHeader
           eyebrow={eyebrow}
           title={tx(basePath.startsWith('/admin') ? T.title : T.filesTitle)}
-          subtitle={tx(T.subtitle)}
-          figures={figures}
           actions={
             <>
               {assigns && unsupervised > 0 && (
@@ -119,7 +118,6 @@ export function TeacherFilesPage({ basePath, eyebrow }: { basePath: string; eyeb
                     <tr>
                       <th scope="col">{tx(T.name)}</th>
                       <th scope="col">{tx(T.students)}</th>
-                      <th scope="col">{tx(T.openComplaints)}</th>
                       <th scope="col">{tx(T.status)}</th>
                       <th scope="col">{tx(T.openFile)}</th>
                     </tr>
@@ -141,20 +139,25 @@ export function TeacherFilesPage({ basePath, eyebrow }: { basePath: string; eyeb
                               <Link className="rw-name" to={to}>
                                 <bdi>{row.name}</bdi>
                               </Link>
-                              <span className="rw-sub">{tx(row.isActive ? T.active : T.inactive)}</span>
+                              <span className="rw-sub">
+                                {!row.isActive
+                                  ? tx(T.inactive)
+                                  : supervisorOf.get(row.id)
+                                    ? <>{tx(T.rowSupervisedBy)} <bdi>{supervisorOf.get(row.id)}</bdi></>
+                                    : tx(T.active)}
+                              </span>
                             </span>
                           </td>
                           <td className="rw-fact">
                             <span className={row.studentCount > 0 ? 'rw-fact__n' : 'rw-fact__n rw-fact__n--quiet'}>{number(row.studentCount)}</span>
                             <span className="rw-fact__label">{tx(T.students)}</span>
                           </td>
-                          <td className="rw-fact">
-                            <span className={row.openComplaints > 0 ? 'rw-fact__n rw-fact__n--late' : 'rw-fact__n rw-fact__n--quiet'}>{number(row.openComplaints)}</span>
-                            <span className="rw-fact__label">{tx(T.openComplaints)}</span>
-                          </td>
                           <td className="rw-tags rw-meta">
                             <AwayBadge away={row.away} />
-                            {row.unsupervised && <Badge tone="danger">{tx(T.noSupervisorBadge)}</Badge>}
+                            {row.openComplaints > 0 && (
+                              <Badge tone="warn">{row.openComplaints === 1 ? tx(T.oneOpenComplaint) : tx(T.nOpenComplaints, { n: number(row.openComplaints) })}</Badge>
+                            )}
+                            {row.unsupervised && <Badge tone="warn">{tx(T.noSupervisorBadge)}</Badge>}
                             {setupIncomplete(row) && <Badge tone="warn">{tx(T.setupIncomplete)}</Badge>}
                             {row.signIn === 'none' && <Badge tone="outline">{tx(T.noSignIn)}</Badge>}
                           </td>
@@ -176,6 +179,7 @@ export function TeacherFilesPage({ basePath, eyebrow }: { basePath: string; eyeb
                 </table>
               )}
             </section>
+            <p className="list-footnote">{tx(T.subtitle)}</p>
           </QueryBoundary>
         )}
         {adding && offer && <AddTeacherDialog offer={offer} basePath={basePath} onClose={() => setAdding(false)} />}

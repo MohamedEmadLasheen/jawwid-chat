@@ -100,7 +100,6 @@ function TeacherRecord({ data, basePath }: { data: TeacherFile; basePath: string
       requestAnimationFrame(() => document.getElementById('tf-setup')?.scrollIntoView?.({ block: 'center', behavior: 'smooth' }))
     },
     records: () => setTab('records'),
-    reactivate: data.access.canWriteSupervision && data.onboarding?.canReactivate && !data.teacher.isActive ? () => press('reactivate') : undefined,
   })
 
   const canWrite = data.access.canWriteSupervision
@@ -111,6 +110,7 @@ function TeacherRecord({ data, basePath }: { data: TeacherFile; basePath: string
         ...(signIn?.canSendCode ? [{ key: 'code', label: tx(T.sendNewCode), icon: 'send' as const, onSelect: () => press('code') }] : []),
         ...(signIn?.canChange ? [{ key: 'signin', label: tx(T.changeSignIn), icon: 'mail' as const, onSelect: () => press('signin') }] : []),
         { key: 'case', label: tx(T.escalate), icon: 'alert' as const, onSelect: () => press('case') },
+        ...(data.onboarding?.canReactivate && !data.teacher.isActive ? [{ key: 'reactivate', label: tx(T.reactivate), icon: 'undo' as const, onSelect: () => press('reactivate') }] : []),
         ...(data.onboarding?.canOffboard && data.teacher.isActive ? [{ key: 'offboard', label: tx(T.offboard), icon: 'userMinus' as const, danger: true, onSelect: () => press('offboard') }] : []),
       ]
     : []
@@ -140,7 +140,7 @@ function TeacherRecord({ data, basePath }: { data: TeacherFile; basePath: string
               ) : undefined
             }
           />
-          <RecordHighlights file={data} tab={tab} onTab={setTab} />
+          <RecordHighlights file={data} onTab={setTab} />
           {callout && <RecordCallout callout={callout} />}
           {/* PD-56 O-3: the teacher asked to delete their account (shown only while pending), offboarded or not. */}
           <DeletionRequestBanner teacherId={data.teacher.id} name={data.teacher.name} />
@@ -164,7 +164,7 @@ function TeacherRecord({ data, basePath }: { data: TeacherFile; basePath: string
             </span>
             {/* PD-43 PR-1b: the server says who may (the routes re-check). */}
             <span data-act="reactivate">
-              <ReactivateButton show={!!data.onboarding?.canReactivate && !data.teacher.isActive} teacherId={data.teacher.id} name={data.teacher.name} hidden />
+              <ReactivateButton show={!!data.onboarding?.canReactivate && !data.teacher.isActive} teacherId={data.teacher.id} name={data.teacher.name} />
             </span>
             <span data-act="offboard">
               <OffboardButton show={!!data.onboarding?.canOffboard && data.teacher.isActive} teacherId={data.teacher.id} name={data.teacher.name} />
@@ -311,7 +311,7 @@ function SetupChecklist({ file }: { file: TeacherFile }) {
           <li key={key} className={setup[key] ? 'is-done' : undefined}>
             <Icon name={setup[key] ? 'checkCircle' : 'circle'} size={18} />
             <span className="tf-setup__label">{tx(label)}</span>
-            <span className="tf-setup__state">{tx(setup[key] ? T.done : T.stepNotDone)}</span>
+            <span className="sr-only">{tx(setup[key] ? T.done : T.stepNotDone)}</span>
           </li>
         ))}
       </ul>
@@ -381,7 +381,7 @@ function Personal({ file, onEdit }: { file: TeacherFile; onEdit: () => void }) {
       title={tx(T.personal)}
       action={
         file.access.canEditPersonal && (
-          <button type="button" className="btn btn--ghost btn--sm" onClick={onEdit} aria-label={tx(T.editPersonal)}>
+          <button type="button" className="btn btn--sm" onClick={onEdit} aria-label={tx(T.editPersonal)}>
             {tx(T.edit)}
           </button>
         )

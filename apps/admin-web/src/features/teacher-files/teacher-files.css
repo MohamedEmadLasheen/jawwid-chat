@@ -15,7 +15,7 @@
 .tf-head__name { margin: 0; font-family: var(--font-head); font-size: var(--fs-title); font-weight: 700; line-height: 1.2; color: var(--ink); overflow-wrap: anywhere; }
 html[dir='rtl'] .tf-head__name[dir='auto'] { text-align: right; }
 .tf-head__line { display: flex; align-items: baseline; gap: 8px; margin: 6px 0 0; font-size: var(--fs-md); color: var(--ink-2); }
-.tf-head__person { font-weight: 600; color: var(--ink); }
+.tf-head__person { font-weight: 600; color: var(--ink); white-space: nowrap; }
 .tf-head__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-block-end: 4px; }
 .tf-head__actions .field__error { flex-basis: 100%; }
 .tf-dot { flex: none; inline-size: 8px; block-size: 8px; border-radius: 50%; background: var(--done); transform: translateY(-1px); }
@@ -24,6 +24,7 @@ html[dir='rtl'] .tf-head__name[dir='auto'] { text-align: right; }
 .tf-highlights .figures { margin-block-start: var(--space-5); }
 .tf-highlights .figure { flex-basis: 150px; }
 .tf-highlights .figure__unit { font-size: var(--fs-sm); }
+.tf-highlights .figure--urgent .figure__note { color: var(--ink-muted); }
 .tf-fig-wait { display: inline-block; inline-size: 44px; block-size: 30px; vertical-align: middle; }
 .tf-head .mast__tabs { margin-block-start: var(--space-5); }
 
@@ -33,7 +34,9 @@ html[dir='rtl'] .tf-head__name[dir='auto'] { text-align: right; }
 .tf-callout__text { min-inline-size: 0; }
 .tf-callout__title { margin: 0; font-family: var(--font-head); font-size: var(--fs-md); font-weight: 600; line-height: 1.45; color: var(--ink); }
 .tf-callout__body { margin: 2px 0 0; font-size: var(--fs-sm); color: var(--ink-2); max-inline-size: 80ch; }
-.tf-callout--urgent { background: var(--surface); border-color: var(--urgent-line); }
+.tf-callout { border-color: var(--line); }
+.tf-callout--waiting { border-color: #f1dfb8; }
+.tf-callout--urgent { background: var(--surface); }
 .tf-callout--urgent .tf-callout__icon { color: var(--urgent); }
 .tf-callout--neutral { background: var(--surface-2); }
 .tf-callout--neutral .tf-callout__icon { color: var(--ink-muted); }
@@ -48,7 +51,8 @@ html[dir='rtl'] .tf-head__name[dir='auto'] { text-align: right; }
 
 /* On a phone the highlights are a compact three-across grid: the figure and its word, no notes. */
 @media (max-width: 767px) {
-  .tf-highlights .figures { grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 2px; }
+  .tf-highlights .figures { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 2px; }
+  .tf-highlights .figure { align-content: space-between; }
   .tf-highlights .figure { padding: 10px 10px 12px; }
   .tf-highlights .figure__label { font-size: var(--fs-xs); line-height: 1.35; }
   .tf-highlights .figure__n { font-size: 22px; }
@@ -115,12 +119,8 @@ html[dir='rtl'] .tf-head__name[dir='auto'] { text-align: right; }
 .tf-section .tf-section__head ~ .tf-section__head { margin-block-start: var(--space-4); border-block-start: 1px solid var(--hairline-soft); }
 .tf-section .table-wrap { margin-inline: calc(-1 * var(--space-4)); border: 0; border-radius: 0; border-block-start: 1px solid var(--hairline-soft); }
 .tf-section > .table-wrap:last-child { margin-block-end: calc(-1 * var(--space-4)); border-end-start-radius: var(--radius-lg); border-end-end-radius: var(--radius-lg); overflow: hidden; }
-.tf-subtitle { margin: var(--space-4) 0 var(--space-2); font-size: 12.5px; font-weight: 600; color: var(--ink-muted); }
+.tf-subtitle { margin: var(--space-4) 0 var(--space-2); font-family: var(--font-head); font-size: var(--fs-sm); font-weight: 600; color: var(--ink-2); }
 /* Who the teacher is: labelled facts on the canvas, no surface of their own. */
-.tf-file__side .tf-section { padding: 0; background: none; border: 0; border-radius: 0; }
-.tf-file__side .tf-section + .tf-section { margin-block-start: var(--space-5); padding-block-start: var(--space-5); border-block-start: 1px solid var(--hairline); }
-.tf-file__side .tf-section__head { margin-inline: 0; margin-block-end: var(--space-1); padding: 0; min-block-size: 32px; border-block-end: 0; }
-.tf-file__side .tf-section__title { font-size: 12.5px; font-weight: 600; color: var(--ink-muted); }
 .tf-file__side .tf-kv { grid-template-columns: minmax(6.5rem, max-content) 1fr; }
 /* Sections other features bring into the file are sheets like the rest. */
 .page section.card.panel { margin-block-end: var(--space-5); }
@@ -151,11 +151,12 @@ html[dir='rtl'] .tf-head__name[dir='auto'] { text-align: right; }
 
 /* The month in figures: a ruled line of numerals, not a grid of boxes. */
 .tf-month { display: inline-flex; gap: var(--space-2); align-items: center; }
-.tf-kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 8.5rem), 1fr)); gap: 0 var(--space-5); margin: 0; }
-.tf-kpi { display: grid; align-content: start; gap: 1px; padding: 10px 0 9px; border: 0; border-block-end: 1px solid var(--hairline-soft); border-radius: 0; }
-.tf-kpi dt { color: var(--ink-muted); font-size: 12.5px; }
+.tf-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-4) var(--space-5); margin: 0 0 var(--space-3); }
+@media (max-width: 767px) { .tf-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.tf-kpi { display: grid; align-content: start; gap: 1px; padding: 4px 0; border: 0; border-radius: 0; }
+.tf-kpi dt { color: var(--ink-muted); font-size: var(--fs-xs); }
 .tf-kpi dd { margin: 0; display: grid; gap: 1px; }
-.tf-kpi dd strong { font-family: var(--display); font-size: var(--fs-xl); font-weight: 600; line-height: 1.2; font-variant-numeric: tabular-nums lining-nums; }
+.tf-kpi dd strong { font-family: var(--font-head); font-size: var(--fs-xl); font-weight: 700; line-height: 1.2; font-variant-numeric: tabular-nums lining-nums; }
 .tf-kpi__hint { font-size: var(--fs-xs); }
 
 /* PD-35: evaluations and improvement plans. */
@@ -175,7 +176,8 @@ html[dir='rtl'] .tf-head__name[dir='auto'] { text-align: right; }
 .tf-code__value { font-family: var(--font-mono, ui-monospace, monospace); font-size: 1.5rem; letter-spacing: 0.2em; direction: ltr; unicode-bidi: isolate; }
 
 /* PD-43 PR-1b: the set-up checklist and the offboard preview's lessons. */
-.tf-setup { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr)); gap: 0 var(--space-5); font-size: var(--fs-sm); }
+.tf-setup { list-style: none; margin: 0; padding: 0; display: grid; font-size: var(--fs-sm); }
+.tf-setup li:last-child { border-block-end: 0; }
 .tf-setup li { display: flex; align-items: center; gap: 10px; min-block-size: 40px; border-block-end: 1px solid var(--line-2); color: var(--ink); font-weight: 600; }
 .tf-setup li .icon { color: var(--ink-muted); }
 .tf-setup li.is-done { color: var(--ink-muted); font-weight: 400; }

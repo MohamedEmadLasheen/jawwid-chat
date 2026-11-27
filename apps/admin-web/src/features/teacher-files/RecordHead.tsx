@@ -36,7 +36,7 @@ export function RecordIdentity({
   const cal = useCalendarDate()
   const sentence = useIdentitySentence(file)
   const t = file.teacher
-  const tone = !t.isActive ? 'left' : t.away ? 'away' : 'active'
+  const tone = !t.isActive ? 'left' : t.away || (file.setup?.missing ?? 0) > 0 ? 'away' : 'active'
   return (
     <div className="tf-head__row">
       <div className="tf-head__lead">
@@ -87,15 +87,16 @@ function useIdentitySentence(file: TeacherFile): ReactNode {
   if (!t.isActive) {
     parts.push(t.leftAt ? tx(T.idLeftOn, { date: cal.day(t.leftAt.slice(0, 10)) }) : tx(T.idLeft))
   } else {
-    parts.push(joined ? tx(T.idActiveSince, { date: cal.month(joined.slice(0, 7)) }) : tx(T.idActive))
+    if (file.setup && file.setup.missing > 0) parts.push(tx(T.idInSetup))
+    else parts.push(joined ? tx(T.idActiveSince, { date: cal.month(joined.slice(0, 7)) }) : tx(T.idActive))
     const named = assignments.data?.teachers.find((a) => a.id === t.id)
     if (named?.supervisor) {
       const [before, after] = tx(T.idSupervisedBy, { name: '\u0000' }).split('\u0000')
       parts.push(
         <span key="sup">
           {before}
-          <strong className="tf-head__person" dir="auto">
-            {named.supervisor.name}
+          <strong className="tf-head__person">
+            <bdi>{named.supervisor.name}</bdi>
           </strong>
           {after}
         </span>,
@@ -118,7 +119,7 @@ function useIdentitySentence(file: TeacherFile): ReactNode {
 }
 
 /** At most six highlights of the month, each opening the tab that explains it. */
-export function RecordHighlights({ file, tab, onTab }: { file: TeacherFile; tab: FileTab; onTab: (t: FileTab) => void }) {
+export function RecordHighlights({ file, onTab }: { file: TeacherFile; onTab: (t: FileTab) => void }) {
   const tx = useCopy()
   const { number, locale } = useI18n()
   const month = currentMonth()
@@ -136,7 +137,6 @@ export function RecordHighlights({ file, tab, onTab }: { file: TeacherFile; tab:
       label: tx(T.hlStudents),
       value: number(file.assignedStudents.length),
       onClick: () => onTab('students'),
-      pressed: tab === 'students',
     },
   ]
   if (detail.isLoading || d) {
@@ -149,34 +149,22 @@ export function RecordHighlights({ file, tab, onTab }: { file: TeacherFile; tab:
     })
   }
   if (reports.isLoading || counts) {
-    const late = counts ? counts.late + counts.missing : 0
+    // Red only while the teacher works here: a missed report of someone who left asks nothing of anyone.
     figures.push({
-      key: 'late',
-      label: tx(T.hlLate),
-      value: counts ? number(late) : pending,
-      tone: counts && counts.missing > 0 ? 'urgent' : late === 0 ? 'quiet' : undefined,
-      note: counts ? (counts.missing > 0 ? tx(T.hlLateMissing, { n: number(counts.missing) }) : late === 0 && counts.reports > 0 ? tx(T.hlLateNone) : undefined) : undefined,
+      key: 'missing',
+      label: tx(T.hlMissing),
+      value: counts ? number(counts.missing) : pending,
+      tone: counts && counts.missing > 0 && file.teacher.isActive ? 'urgent' : counts && counts.missing === 0 ? 'quiet' : undefined,
+      note: counts && counts.late > 0 ? tx(T.hlLateWritten, { n: number(counts.late) }) : undefined,
       onClick: () => onTab('records'),
-      pressed: tab === 'records',
     })
   }
   if (detail.isLoading || d) {
     const att = d ? pct(d.rates.attendance) : null
     const rel = d ? pct(d.rates.teacherReliability) : null
-    figures.push({
-      key: 'attendance',
-      label: tx(T.hlAttendance),
-      value: !d ? pending : (att ?? '—'),
-      tone: d && att === null ? 'quiet' : undefined,
-      note: d && att === null ? tx(T.noRate) : undefined,
-    })
-    figures.push({
-      key: 'reliability',
-      label: tx(T.hlReliability),
-      value: !d ? pending : (rel ?? '—'),
-      tone: d && rel === null ? 'quiet' : undefined,
-      note: d && rel === null ? tx(T.noRate) : undefined,
-    })
+    // A rate with no lessons behind it is left out, not shown as a dash.
+    if (!d || att !== null) figures.push({ key: 'attendance', label: tx(T.hlAttendance), value: !d ? pending : (att as string) })
+    if (!d || rel !== null) figures.push({ key: 'reliability', label: tx(T.hlReliability), value: !d ? pending : (rel as string) })
   }
   const setup = file.setup
   if (setup && file.teacher.isActive && setup.missing > 0) {
@@ -219,7 +207,7 @@ export interface CalloutAction {
  */
 export function useRecordCallout(
   file: TeacherFile,
-  go: { setup: () => void; records: () => void; reactivate?: () => void },
+  go: { setup: () => void; records: () => void },
 ): { tone: 'waiting' | 'urgent' | 'neutral'; icon: IconName; title: string; body?: string; action?: CalloutAction } | null {
   const tx = useCopy()
   const { number, locale } = useI18n()
@@ -227,15 +215,8 @@ export function useRecordCallout(
   const reports = useLessonReports(file.teacher.id, currentMonth(), null)
   if (deletion.data?.request?.state === 'pending') return null
   const t = file.teacher
-  if (!t.isActive) {
-    return {
-      tone: 'neutral',
-      icon: 'archive',
-      title: t.leftAt ? tx(T.idLeftOn, { date: new Intl.DateTimeFormat(LOCALE_TAG[locale], { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(`${t.leftAt.slice(0, 10)}T00:00:00Z`)) }) : tx(T.idLeft),
-      body: go.reactivate ? tx(T.calloutLeftBody) : undefined,
-      action: go.reactivate ? { label: tx(T.reactivate), onClick: go.reactivate } : undefined,
-    }
-  }
+  // A teacher who left needs nothing done; the sentence under the name says so.
+  if (!t.isActive) return null
   const setup = file.setup
   if (setup && setup.missing > 0) {
     const sep = locale === 'ar' ? '، ' : ', '
@@ -249,13 +230,16 @@ export function useRecordCallout(
       action: { label: tx(T.finishSetup), onClick: go.setup },
     }
   }
-  const missing = reports.data?.pages[0]?.counts.missing ?? 0
+  const page = reports.data?.pages[0]
+  const missing = page?.counts.missing ?? 0
   if (missing > 0) {
+    const sep = locale === 'ar' ? '، ' : ', '
+    const who = (page?.lessons ?? []).filter((l) => l.status === 'missing' && l.learner?.name && !l.anotherFamily).map((l) => l.learner!.name as string)
     return {
       tone: 'urgent',
       icon: 'file',
       title: missing === 1 ? tx(T.calloutMissingOne) : tx(T.calloutMissingTitle, { n: number(missing) }),
-      body: tx(T.calloutMissingBody),
+      body: who.length > 0 ? tx(T.calloutMissingWho, { names: [...new Set(who)].slice(0, 3).join(sep) }) : undefined,
       action: { label: tx(T.calloutMissingAction), onClick: go.records },
     }
   }

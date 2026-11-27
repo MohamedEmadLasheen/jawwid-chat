@@ -21,6 +21,9 @@ export const T = {
   // The roster
   rosterTeachers: { en: 'Teachers', ar: 'المعلمون' },
   rosterAll: { en: 'All', ar: 'الكل' },
+  oneOpenComplaint: { en: 'An open complaint', ar: 'شكوى مفتوحة' },
+  nOpenComplaints: { en: '{n} open complaints', ar: 'شكاوى مفتوحة: {n}' },
+  rowSupervisedBy: { en: 'Supervisor:', ar: 'المشرف:' },
   openFile: { en: 'Open file', ar: 'فتح الملف' },
   rowStats: { en: 'This month’s statistics', ar: 'إحصائيات هذا الشهر' },
   rowSchedule: { en: 'Schedule', ar: 'الجدول' },
@@ -168,6 +171,10 @@ export const T = {
   // The record's head: who, in one sentence; six highlights; one callout.
   idActiveSince: { en: 'Active since {date}', ar: 'نشط منذ {date}' },
   idActive: { en: 'Active', ar: 'نشط' },
+  idInSetup: { en: 'Being set up', ar: 'قيد التجهيز' },
+  hlMissing: { en: 'Missing reports', ar: 'تقارير مفقودة' },
+  hlLateWritten: { en: '{n} written late', ar: '{n} كُتبت متأخرة' },
+  calloutMissingWho: { en: 'Lessons of {names}.', ar: 'حصص {names}.' },
   idLeft: { en: 'Left the academy', ar: 'غادر الأكاديمية' },
   idLeftOn: { en: 'Left the academy on {date}', ar: 'غادر الأكاديمية في {date}' },
   idSupervisedBy: { en: 'supervised by {name}', ar: 'يشرف عليه {name}' },

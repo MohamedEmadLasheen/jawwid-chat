@@ -70,18 +70,17 @@ export function SupervisionTimeline({ teacherId, canWrite }: { teacherId: string
           </div>
         )}
       </div>
-      <p className="field__hint">{tx(T.timelineHint)}</p>
       <FilterChips<Filter>
         label={tx(T.timeline)}
         value={filter}
         onChange={setFilter}
-        options={[
+        options={([
           { value: 'all', label: tx(T.filterAll), count: items.length },
           { value: 'recognition', label: tx(T.filterRecognition), count: count('recognition') },
           { value: 'concerns', label: tx(T.filterConcerns), count: count('concerns') },
           { value: 'lessons', label: tx(T.filterLessons), count: count('lessons') },
           { value: 'moves', label: tx(T.filterMoves), count: count('moves') },
-        ]}
+        ] as Array<{ value: Filter; label: string; count: number }>).filter((o) => o.value === 'all' || o.value === filter || o.count > 0)}
       />
       {shown.length === 0 ? (
         <p className="tf-muted">{tx(T.noTimeline)}</p>
