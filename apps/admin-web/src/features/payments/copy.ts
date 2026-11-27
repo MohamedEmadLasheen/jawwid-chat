@@ -1,6 +1,6 @@
 import { ApiError } from '@/core/api/errors'
 import type { Pair } from '@/features/organization/copy'
-import { formatMoney } from '@/features/instalments/copy'
+import { formatMoney, type CountForms } from '@/features/instalments/copy'
 import { minorDigits } from '@/features/profiles/copy'
 import type {
   AttemptFilter,
@@ -17,7 +17,7 @@ import type {
 } from './api'
 
 export { useCopy, type Pair } from '@/features/organization/copy'
-export { formatDay, formatMoney } from '@/features/instalments/copy'
+export { countWords, formatDay, formatMoney, moneyParts, type CountForms } from '@/features/instalments/copy'
 export { toMinor } from '@/features/profiles/copy'
 
 /**
@@ -30,14 +30,42 @@ export const PAY = {
   // The Payments area
   title: { en: 'Payments', ar: 'المدفوعات' },
   subtitle: {
-    en: 'Bank-transfer receipts parents uploaded, waiting for verification, and the academy’s payment settings.',
-    ar: 'إيصالات التحويل البنكي التي رفعها أولياء الأمور بانتظار التحقق، وإعدادات الدفع في الأكاديمية.',
+    en: 'Receipts to confirm, every payment received, and how the academy is paid.',
+    ar: 'إيصالات بانتظار التأكيد، وكل دفعة مستلمة، وطرق الدفع للأكاديمية.',
   },
   tabs: { en: 'Payments', ar: 'المدفوعات' },
   receiptsTab: { en: 'Receipts', ar: 'الإيصالات' },
   settingsTab: { en: 'Settings', ar: 'الإعدادات' },
   status: { en: 'Status', ar: 'الحالة' },
   noReceipts: { en: 'No receipts here.', ar: 'لا توجد إيصالات هنا.' },
+  noPendingHint: {
+    en: 'Nothing waits for a decision. A bank-transfer receipt a parent uploads in the app appears here.',
+    ar: 'لا شيء بانتظار قرار. يظهر هنا إيصال التحويل البنكي الذي يرفعه ولي الأمر من التطبيق.',
+  },
+  noDecidedHint: {
+    en: 'Decided receipts stay here with who decided and when.',
+    ar: 'تبقى الإيصالات التي بُتّ فيها هنا مع اسم من قرّر ومتى.',
+  },
+  seeTransactions: { en: 'See transactions', ar: 'عرض المعاملات' },
+  backToPending: { en: 'Back to pending', ar: 'العودة إلى قيد الانتظار' },
+  transferredLine: { en: 'Transferred {date}', ar: 'حُوِّل {date}' },
+  viewReceipt: { en: 'View the receipt for {label}', ar: 'عرض إيصال {label}' },
+  imageFailed: { en: 'The image did not load. Open the file instead.', ar: 'تعذّر تحميل الصورة. افتح الملف بدلًا منها.' },
+  decision: { en: 'Decision', ar: 'القرار' },
+  from: { en: 'From', ar: 'من' },
+  // The ledger's rules, one line each.
+  rules: { en: 'Ledger rules', ar: 'قواعد السجل' },
+  ruleEdit: { en: 'A payment is never edited: a mistake is voided with a reason.', ar: 'لا تُعدَّل الدفعة أبدًا: يُلغى الخطأ مع ذكر السبب.' },
+  ruleRefund: { en: 'Money given back is a refund, recorded on its own.', ar: 'المبلغ المُعاد استرداد يُسجَّل مستقلًا.' },
+  ruleInvoice: { en: 'One invoice per payment, frozen when issued.', ar: 'فاتورة واحدة لكل دفعة، ثابتة منذ إصدارها.' },
+  // Settings: what changed and has not been saved yet.
+  edited: { en: 'Edited', ar: 'معدَّل' },
+  unsaved: { en: 'Not saved yet: {groups}', ar: 'لم يُحفظ بعد: {groups}' },
+  nothingToSave: { en: 'No changes.', ar: 'لا تغييرات.' },
+  saveScope: { en: 'One save for the changed groups.', ar: 'حفظ واحد للمجموعات المعدَّلة.' },
+  stripe: { en: 'Stripe', ar: 'Stripe' },
+  webhook: { en: 'Webhook', ar: 'Webhook' },
+  dueDay: { en: 'Due date', ar: 'يوم الاستحقاق' },
   family: { en: 'Family', ar: 'الأسرة' },
   forWhat: { en: 'For', ar: 'عن' },
   amountSent: { en: 'Amount sent', ar: 'المبلغ المحوَّل' },
@@ -305,6 +333,20 @@ export const PAY = {
   saving: { en: 'Saving…', ar: 'جارٍ الحفظ…' },
 } satisfies Record<string, Pair>
 
+/** The ledger at the head of Instalments and Payments: what is due, late, waiting and collected. */
+export const FIN = {
+  ledger: { en: 'Money at a glance', ar: 'نظرة على المال' },
+  late: { en: 'Late', ar: 'متأخر' },
+  dueToday: { en: 'Due today', ar: 'مستحق اليوم' },
+  upcoming: { en: 'Upcoming', ar: 'قادم' },
+  toConfirm: { en: 'To confirm', ar: 'بانتظار التأكيد' },
+  collected: { en: 'Collected in {month}', ar: 'محصَّل في {month}' },
+  also: { en: 'also {amounts}', ar: 'و{amounts}' },
+} satisfies Record<string, Pair>
+
+export const RECEIPTS: CountForms = { en: ['receipt', 'receipts'], ar: ['إيصال', 'إيصالان', 'إيصالات', 'إيصالًا'] }
+export const PAYMENTS: CountForms = { en: ['{n} payment', '{n} payments'], ar: ['دفعة واحدة', 'دفعتان', '{n} دفعات', '{n} دفعة'] }
+
 export const PURPOSE_LABEL: Record<RequestPurpose, Pair> = {
   subscription: { en: 'Subscription', ar: 'اشتراك' },
   renewal: { en: 'Renewal', ar: 'تجديد' },
@@ -375,6 +417,13 @@ export const LED = {
   totalRefunded: { en: 'Refunded', ar: 'المسترد' },
   net: { en: 'Net', ar: 'الصافي' },
   noTransactions: { en: 'No payments match.', ar: 'لا توجد دفعات مطابقة.' },
+  noTransactionsHint: {
+    en: 'Card, bank-transfer and cash payments appear here once they are recorded.',
+    ar: 'تظهر هنا دفعات البطاقة والتحويل البنكي والنقد فور تسجيلها.',
+  },
+  noTransactionsFiltered: { en: 'No payment fits these filters.', ar: 'لا دفعة توافق عوامل التصفية هذه.' },
+  seeReceipts: { en: 'See receipts to confirm', ar: 'عرض الإيصالات بانتظار التأكيد' },
+  refundedInline: { en: 'refunded', ar: 'المسترد' },
   transactions: { en: 'Transactions', ar: 'المعاملات' },
   colFamily: { en: 'Family', ar: 'الأسرة' },
   colChild: { en: 'Child', ar: 'الطفل' },
@@ -440,10 +489,13 @@ export const LED = {
 
   // Card attempts
   attemptsHint: {
-    en: 'Each time a parent opened card payment. “Failed” covers declined cards, failed payments and links left unpaid until they expired.',
-    ar: 'كل مرة فتح فيها ولي الأمر الدفع بالبطاقة. تشمل «المتعثرة» البطاقات المرفوضة والدفعات الفاشلة والروابط التي انتهت دون دفع.',
+    en: 'Each time a parent opened card payment. “Failed” covers declines, failed payments and links left to expire.',
+    ar: 'كل مرة فتح فيها ولي الأمر الدفع بالبطاقة. تشمل «المتعثرة» الرفض والفشل والروابط التي انتهت دون دفع.',
   },
   noCardAttempts: { en: 'No card attempts here.', ar: 'لا توجد محاولات بطاقة هنا.' },
+  noFailedAttemptsHint: { en: 'No card was declined, failed or left unpaid.', ar: 'لم تُرفض بطاقة ولم تفشل دفعة ولم يُترك رابط دون دفع.' },
+  noAttemptsHint: { en: 'No card attempt has this status.', ar: 'لا محاولة بطاقة بهذه الحالة.' },
+  showAllAttempts: { en: 'Show all attempts', ar: 'عرض كل المحاولات' },
   colRequest: { en: 'Request', ar: 'الطلب' },
   colTries: { en: 'Declines', ar: 'مرات الرفض' },
   colWhy: { en: 'Why', ar: 'السبب' },
@@ -468,6 +520,8 @@ export const LED = {
   colMode: { en: 'Mode', ar: 'الوضع' },
   live: { en: 'Live', ar: 'حقيقي' },
   noStripeEvents: { en: 'No Stripe events here.', ar: 'لا توجد أحداث Stripe هنا.' },
+  noStripeEventsHint: { en: 'Each verified message from Stripe is listed as it arrives.', ar: 'تُدرج هنا كل رسالة موثّقة من Stripe فور وصولها.' },
+  noStripeEventsFiltered: { en: 'No event has this outcome and type.', ar: 'لا حدث بهذه النتيجة وهذا النوع.' },
   reconcileNow: { en: 'Reconcile now', ar: 'المطابقة الآن' },
   reconcileNowHint: {
     en: 'Asks Stripe about card attempts left open, and syncs refunds that arrived before their payment. It also runs by itself every few minutes.',

@@ -1,18 +1,22 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
+import { Avatar } from '@/shared/components/Avatar'
 import { Badge } from '@/shared/components/Badge'
 import { Dialog } from '@/shared/components/Dialog'
 import { FilterChips } from '@/shared/components/FilterChips'
+import { Icon } from '@/shared/components/Icon'
 import { PageHeader } from '@/shared/components/PageHeader'
 import { EmptyState, LoadingState, QueryBoundary } from '@/shared/components/States'
-import type { BankAccount, BillingSettings, InvoiceIssuer, Receipt, ReceiptStatus } from './api'
+import type { BankAccount, BillingSettings, BillingSettingsUpdate, InvoiceIssuer, Receipt, ReceiptStatus } from './api'
 import { LED, PAY, describeError, type Pair, formatDay, formatMoney, reminderLabel, toMinor, useCopy } from './copy'
 import { RenewalRequestsPanel } from '@/features/subscriptions/RenewalRequestsPanel'
 import { S } from '@/features/subscriptions/copy'
 import { useApproveReceipt, useBillingSettings, useLedgerAccess, useReceipts, useRejectReceipt, useSaveBillingSettings } from './hooks'
+import { FinanceLedger } from './FinanceLedger'
 import { AttemptsTab, StripeEventsTab, TransactionsTab } from './LedgerTabs'
-import { Field, Footer, ReasonDialog, ReceiptFile, ReceiptStatusBadge, ServerError } from './PaymentParts'
+import { Money } from './Money'
+import { Field, Footer, ReasonDialog, ReceiptStatusBadge, ServerError } from './PaymentParts'
 import './payments.css'
 
 type Tab = 'receipts' | 'transactions' | 'attempts' | 'events' | 'renewals' | 'settings'
@@ -59,14 +63,15 @@ export function PaymentsPage({ eyebrow }: { eyebrow?: string }) {
     setParams(p, { replace: true })
   }
   return (
-    <div className="page">
+    <div className="page pay-page">
       <div className="page__inner">
         <PageHeader eyebrow={eyebrow} title={tx(PAY.title)} subtitle={tx(PAY.subtitle)} />
         {cardPaused && (
-          <div className="banner banner--danger" role="status" data-testid="card-paused-banner">
+          <div className="pay-paused" role="status" data-testid="card-paused-banner">
             <strong>{tx(PAY.cardPausedBanner)}</strong>
           </div>
         )}
+        <FinanceLedger here="payments" />
         <div className="pay-tabs">
           <FilterChips<Tab>
             variant="tabs"
@@ -86,9 +91,9 @@ export function PaymentsPage({ eyebrow }: { eyebrow?: string }) {
         {waiting ? (
           <LoadingState />
         ) : tab === 'receipts' ? (
-          <ReceiptsTab />
+          <ReceiptsTab onSeeTransactions={() => choose('transactions')} />
         ) : tab === 'transactions' ? (
-          <TransactionsTab />
+          <TransactionsTab onSeeReceipts={() => choose('receipts')} />
         ) : tab === 'attempts' ? (
           <AttemptsTab />
         ) : tab === 'events' ? (
@@ -98,41 +103,86 @@ export function PaymentsPage({ eyebrow }: { eyebrow?: string }) {
         ) : (
           <SettingsTab />
         )}
+        {!waiting && (tab === 'receipts' || tab === 'transactions') && <LedgerRules />}
       </div>
     </div>
   )
 }
 
-function ReceiptsTab() {
+/** What protects the ledger, one line each. */
+function LedgerRules() {
+  const tx = useCopy()
+  return (
+    <aside className="pay-rules" aria-label={tx(PAY.rules)}>
+      <span className="section-label pay-rules__label">{tx(PAY.rules)}</span>
+      <ul className="pay-rules__list">
+        <li>{tx(PAY.ruleEdit)}</li>
+        <li>{tx(PAY.ruleRefund)}</li>
+        <li>{tx(PAY.ruleInvoice)}</li>
+      </ul>
+    </aside>
+  )
+}
+
+function ReceiptsTab({ onSeeTransactions }: { onSeeTransactions: () => void }) {
   const tx = useCopy()
   const { locale } = useI18n()
   const [status, setStatus] = useState<ReceiptStatus>('pending')
   const list = useReceipts(status)
   const canDecide = list.data?.canDecide === true
   const [deciding, setDeciding] = useState<{ kind: 'approve' | 'reject'; receipt: Receipt } | null>(null)
+  // The receipt whose image is open beside its amount. Kept by id: the list re-reads its signed links.
+  const [viewingId, setViewingId] = useState<string | null>(null)
+  const viewing = viewingId ? (list.data?.items.find((r) => r.id === viewingId) ?? null) : null
   const counts = list.data?.counts
+  const decided = () => {
+    setDeciding(null)
+    setViewingId(null)
+  }
 
   return (
     <>
-      <FilterChips<ReceiptStatus>
-        label={tx(PAY.status)}
-        value={status}
-        onChange={setStatus}
-        options={STATUSES.map((s) => ({ value: s, label: tx(FILTER_LABEL[s]), count: counts?.[s] }))}
-      />
-      {list.data && !canDecide && <p className="field__hint">{tx(PAY.decideOnly)}</p>}
+      <div className="pay-bar">
+        <FilterChips<ReceiptStatus>
+          label={tx(PAY.status)}
+          value={status}
+          onChange={setStatus}
+          options={STATUSES.map((s) => ({ value: s, label: tx(FILTER_LABEL[s]), count: counts?.[s] }))}
+        />
+        {list.data && !canDecide && (
+          <p className="pay-lock">
+            <Icon name="lockNote" size={16} />
+            <span>{tx(PAY.decideOnly)}</span>
+          </p>
+        )}
+      </div>
       {list.error ? (
         <EmptyState icon="alert" title={describeError(list.error, locale)} />
       ) : (
         <QueryBoundary isLoading={list.isLoading} error={null} onRetry={() => void list.refetch()}>
           {!list.data || list.data.items.length === 0 ? (
-            <EmptyState title={tx(PAY.noReceipts)} />
+            <EmptyState
+              title={tx(PAY.noReceipts)}
+              hint={tx(status === 'pending' ? PAY.noPendingHint : PAY.noDecidedHint)}
+              action={
+                status === 'pending' ? (
+                  <button type="button" className="btn btn--sm" onClick={onSeeTransactions}>
+                    {tx(PAY.seeTransactions)}
+                  </button>
+                ) : (
+                  <button type="button" className="btn btn--sm" onClick={() => setStatus('pending')}>
+                    {tx(PAY.backToPending)}
+                  </button>
+                )
+              }
+            />
           ) : (
-            <ul className="pay-receipts" aria-label={tx(PAY.receiptsTab)}>
+            <ul className="rc-list" aria-label={tx(PAY.receiptsTab)}>
               {list.data.items.map((r) => (
                 <ReceiptRow
                   key={r.id}
                   receipt={r}
+                  onView={() => setViewingId(r.id)}
                   onApprove={canDecide && r.status === 'pending' ? () => setDeciding({ kind: 'approve', receipt: r }) : undefined}
                   onReject={canDecide && r.status === 'pending' ? () => setDeciding({ kind: 'reject', receipt: r }) : undefined}
                 />
@@ -141,77 +191,205 @@ function ReceiptsTab() {
           )}
         </QueryBoundary>
       )}
-      {deciding?.kind === 'approve' && <ApproveDialog receipt={deciding.receipt} onClose={() => setDeciding(null)} />}
-      {deciding?.kind === 'reject' && <RejectDialog receipt={deciding.receipt} onClose={() => setDeciding(null)} />}
+      {viewing && (
+        <ReceiptDrawer
+          receipt={viewing}
+          // Escape belongs to the decision dialog while one is open over the drawer.
+          onClose={() => {
+            if (!deciding) setViewingId(null)
+          }}
+          onApprove={canDecide && viewing.status === 'pending' ? () => setDeciding({ kind: 'approve', receipt: viewing }) : undefined}
+          onReject={canDecide && viewing.status === 'pending' ? () => setDeciding({ kind: 'reject', receipt: viewing }) : undefined}
+        />
+      )}
+      {deciding?.kind === 'approve' && <ApproveDialog receipt={deciding.receipt} onClose={() => setDeciding(null)} onDone={decided} />}
+      {deciding?.kind === 'reject' && <RejectDialog receipt={deciding.receipt} onClose={() => setDeciding(null)} onDone={decided} />}
     </>
   )
 }
 
-function ReceiptRow({ receipt: r, onApprove, onReject }: { receipt: Receipt; onApprove?: () => void; onReject?: () => void }) {
+/**
+ * The proof beside the amount: an image opens in the side drawer, a PDF or any
+ * other file opens as the file it is. The link is signed for this viewer.
+ */
+function ReceiptProof({ receipt: r, onView }: { receipt: Receipt; onView: () => void }) {
+  const tx = useCopy()
+  const [failed, setFailed] = useState<string | null>(null)
+  if (!r.mimeType.startsWith('image/')) {
+    const name = tx(r.mimeType === 'application/pdf' ? PAY.openPdf : PAY.openFile)
+    return (
+      <a className="rc-proof rc-proof--file" href={r.fileUrl} target="_blank" rel="noopener noreferrer" aria-label={name} title={name}>
+        {r.mimeType === 'application/pdf' ? <span dir="ltr">PDF</span> : <Icon name="paperclip" size={18} />}
+      </a>
+    )
+  }
+  const name = tx(PAY.viewReceipt, { label: r.label })
+  return (
+    <span className="rc-proof">
+      {failed === r.fileUrl ? (
+        <Icon name="image" size={18} />
+      ) : (
+        <img src={r.fileUrl} alt={tx(PAY.receiptImage, { label: r.label })} loading="lazy" onError={() => setFailed(r.fileUrl)} />
+      )}
+      <button type="button" className="rc-proof__open" onClick={onView} aria-label={name} title={name} />
+    </span>
+  )
+}
+
+function ReceiptDecision({ receipt: r }: { receipt: Receipt }) {
+  const tx = useCopy()
+  const { dateTime } = useI18n()
+  return (
+    <>
+      {r.status !== 'pending' && r.reviewedBy && r.reviewedAt && (
+        <p className="rc-sub" dir="auto">
+          {tx(PAY.reviewedBy, { status: tx(DECIDED_LABEL[r.status]), name: r.reviewedBy.name, date: dateTime(r.reviewedAt) })}
+        </p>
+      )}
+      {r.rejectReason && (
+        <p className="rc-sub" dir="auto">
+          {tx(PAY.rejectedBecause, { reason: r.rejectReason })}
+        </p>
+      )}
+    </>
+  )
+}
+
+function ReceiptActions({ onApprove, onReject }: { onApprove?: () => void; onReject?: () => void }) {
+  const tx = useCopy()
+  if (!onApprove && !onReject) return null
+  return (
+    <div className="rc-actions">
+      {onApprove && (
+        <button type="button" className="btn btn--sm btn--primary" onClick={onApprove}>
+          {tx(PAY.approve)}
+        </button>
+      )}
+      {onReject && (
+        <button type="button" className="btn btn--sm" onClick={onReject}>
+          {tx(PAY.reject)}
+        </button>
+      )}
+    </div>
+  )
+}
+
+function ReceiptRow({ receipt: r, onView, onApprove, onReject }: { receipt: Receipt; onView: () => void; onApprove?: () => void; onReject?: () => void }) {
   const tx = useCopy()
   const { locale, dateTime } = useI18n()
   return (
-    <li className="card panel pay-receipt" aria-label={r.family ? `${r.family.name} · ${r.label}` : r.label}>
-      <div className="pay-receipt__body">
-        <div className="pf-entry__head">
-          <ReceiptStatusBadge status={r.status} />
-          {r.family && <strong dir="auto">{r.family.name}</strong>}
-          <span dir="auto">{r.label}</span>
-        </div>
-        <dl className="tf-kv">
-          <dt>{tx(PAY.amountSent)}</dt>
-          <dd className="pf-amount">{formatMoney(r.amountMinor, r.currency, locale)}</dd>
-          <dt>{tx(PAY.transferredOn)}</dt>
-          <dd>{formatDay(r.transferredOn, locale)}</dd>
-          <dt>{tx(PAY.uploadedAt)}</dt>
-          <dd>
-            {dateTime(r.uploadedAt)}
-            {r.uploadedBy && (
-              <>
-                {' '}
-                <span dir="auto">{tx(PAY.uploadedBy, { name: r.uploadedBy.name })}</span>
-              </>
-            )}
-          </dd>
-          {r.note && (
-            <>
-              <dt>{tx(PAY.note)}</dt>
-              <dd dir="auto">{r.note}</dd>
-            </>
+    <li className="rc" aria-label={r.family ? `${r.family.name} · ${r.label}` : r.label}>
+      <div className="rc__payer entity">
+        <Avatar name={r.family?.name ?? r.label} seed={r.family?.id ?? r.id} size="sm" />
+        <div className="entity__text">
+          {r.family && (
+            <strong className="entity__name">
+              <bdi>{r.family.name}</bdi>
+            </strong>
           )}
-        </dl>
-        {r.status !== 'pending' && r.reviewedBy && r.reviewedAt && (
-          <p className="pf-entry__meta" dir="auto">
-            {tx(PAY.reviewedBy, { status: tx(DECIDED_LABEL[r.status]), name: r.reviewedBy.name, date: dateTime(r.reviewedAt) })}
-          </p>
-        )}
-        {r.rejectReason && (
-          <p className="pf-entry__meta" dir="auto">
-            {tx(PAY.rejectedBecause, { reason: r.rejectReason })}
-          </p>
-        )}
-        {(onApprove || onReject) && (
-          <div className="tf-actions">
-            {onApprove && (
-              <button type="button" className="btn btn--sm btn--primary" onClick={onApprove}>
-                {tx(PAY.approve)}
-              </button>
-            )}
-            {onReject && (
-              <button type="button" className="btn btn--sm btn--ghost" onClick={onReject}>
-                {tx(PAY.reject)}
-              </button>
-            )}
-          </div>
+          <span className={r.family ? 'entity__sub' : 'entity__name'}>
+            <bdi>{r.label}</bdi>
+          </span>
+        </div>
+      </div>
+      <div className="rc__proof">
+        <ReceiptProof receipt={r} onView={onView} />
+        <div className="rc__amount">
+          <Money amountMinor={r.amountMinor} currency={r.currency} />
+          <span className="rc-sub">{tx(PAY.transferredLine, { date: formatDay(r.transferredOn, locale) })}</span>
+        </div>
+      </div>
+      <div className="rc__from">
+        <span className="rc__when">
+          <time dateTime={r.uploadedAt}>{dateTime(r.uploadedAt)}</time>
+          {r.uploadedBy && <bdi className="rc__by">{tx(PAY.uploadedBy, { name: r.uploadedBy.name })}</bdi>}
+        </span>
+        {r.note && (
+          <span className="rc__note">
+            <bdi>{r.note}</bdi>
+          </span>
         )}
       </div>
-      <ReceiptFile fileUrl={r.fileUrl} mimeType={r.mimeType} label={r.label} />
+      <div className="rc__status">
+        <ReceiptStatusBadge status={r.status} />
+        <ReceiptDecision receipt={r} />
+      </div>
+      <ReceiptActions onApprove={onApprove} onReject={onReject} />
     </li>
   )
 }
 
+/** The receipt's image at reading size, the amount the parent says they sent beside it, and the decision. */
+function ReceiptDrawer({ receipt: r, onClose, onApprove, onReject }: { receipt: Receipt; onClose: () => void; onApprove?: () => void; onReject?: () => void }) {
+  const tx = useCopy()
+  const { locale, dateTime } = useI18n()
+  const [failed, setFailed] = useState<string | null>(null)
+  return (
+    <Dialog variant="sheet" title={tx(PAY.receiptImage, { label: r.label })} onClose={onClose}>
+      <div className="rc-drawer">
+        <div className="rc-drawer__image">
+          {failed === r.fileUrl ? (
+            <p className="rc-drawer__failed">{tx(PAY.imageFailed)}</p>
+          ) : (
+            <img src={r.fileUrl} alt={tx(PAY.receiptImage, { label: r.label })} onError={() => setFailed(r.fileUrl)} />
+          )}
+        </div>
+        <div className="rc-drawer__facts">
+          <div className="rc-drawer__amount">
+            <span className="section-label">{tx(PAY.amountSent)}</span>
+            <Money amountMinor={r.amountMinor} currency={r.currency} size="lg" />
+          </div>
+          <dl className="rc-kv">
+            {r.family && (
+              <>
+                <dt>{tx(PAY.family)}</dt>
+                <dd>
+                  <bdi>{r.family.name}</bdi>
+                </dd>
+              </>
+            )}
+            <dt>{tx(PAY.forWhat)}</dt>
+            <dd>
+              <bdi>{r.label}</bdi>
+            </dd>
+            <dt>{tx(PAY.transferredOn)}</dt>
+            <dd>{formatDay(r.transferredOn, locale)}</dd>
+            <dt>{tx(PAY.uploadedAt)}</dt>
+            <dd>
+              {dateTime(r.uploadedAt)}
+              {r.uploadedBy && (
+                <>
+                  {' '}
+                  <bdi>{tx(PAY.uploadedBy, { name: r.uploadedBy.name })}</bdi>
+                </>
+              )}
+            </dd>
+            {r.note && (
+              <>
+                <dt>{tx(PAY.note)}</dt>
+                <dd>
+                  <bdi>{r.note}</bdi>
+                </dd>
+              </>
+            )}
+            <dt>{tx(PAY.status)}</dt>
+            <dd>
+              <ReceiptStatusBadge status={r.status} />
+              <ReceiptDecision receipt={r} />
+            </dd>
+          </dl>
+          <ReceiptActions onApprove={onApprove} onReject={onReject} />
+          <a className="rc-drawer__file" href={r.fileUrl} target="_blank" rel="noopener noreferrer">
+            {tx(PAY.openFile)}
+          </a>
+        </div>
+      </div>
+    </Dialog>
+  )
+}
+
 /** Approve, optionally correcting the amount and the date; only what was changed is sent. */
-function ApproveDialog({ receipt, onClose }: { receipt: Receipt; onClose: () => void }) {
+function ApproveDialog({ receipt, onClose, onDone }: { receipt: Receipt; onClose: () => void; onDone: () => void }) {
   const tx = useCopy()
   const { locale } = useI18n()
   const approve = useApproveReceipt()
@@ -228,7 +406,7 @@ function ApproveDialog({ receipt, onClose }: { receipt: Receipt; onClose: () => 
     setError(null)
     approve.mutate(
       { id: receipt.id, amountMinor, paidOn: paidOn && paidOn !== receipt.transferredOn ? paidOn : undefined },
-      { onSuccess: onClose },
+      { onSuccess: onDone },
     )
   }
   return (
@@ -253,7 +431,7 @@ function ApproveDialog({ receipt, onClose }: { receipt: Receipt; onClose: () => 
   )
 }
 
-function RejectDialog({ receipt, onClose }: { receipt: Receipt; onClose: () => void }) {
+function RejectDialog({ receipt, onClose, onDone }: { receipt: Receipt; onClose: () => void; onDone: () => void }) {
   const tx = useCopy()
   const reject = useRejectReceipt()
   return (
@@ -263,7 +441,7 @@ function RejectDialog({ receipt, onClose }: { receipt: Receipt; onClose: () => v
       confirmLabel={tx(PAY.reject)}
       pending={reject.isPending}
       error={reject.error}
-      onSubmit={(reason) => reject.mutate({ id: receipt.id, reason }, { onSuccess: onClose })}
+      onSubmit={(reason) => reject.mutate({ id: receipt.id, reason }, { onSuccess: onDone })}
       onClose={onClose}
     />
   )
@@ -284,118 +462,150 @@ function SettingsTab() {
 type BankDraft = Record<keyof BankAccount, string>
 type IssuerDraft = Record<keyof InvoiceIssuer, string>
 
-const BANK_FIELDS: ReadonlyArray<{ key: keyof BankAccount; label: keyof typeof PAY; dir: 'ltr' | 'auto' }> = [
+const BANK_FIELDS: ReadonlyArray<{ key: keyof BankAccount; label: keyof typeof PAY; dir: 'ltr' | 'auto'; wide?: boolean }> = [
   { key: 'accountName', label: 'accountName', dir: 'auto' },
   { key: 'bankName', label: 'bankName', dir: 'auto' },
-  { key: 'iban', label: 'iban', dir: 'ltr' },
+  { key: 'iban', label: 'iban', dir: 'ltr', wide: true },
   { key: 'accountNumber', label: 'accountNumber', dir: 'ltr' },
   { key: 'swift', label: 'swift', dir: 'ltr' },
 ]
 
 const orNull = (v: string) => (v.trim() === '' ? null : v.trim())
 
+const bankDraft = (b: BankAccount | null): BankDraft => ({
+  bankName: b?.bankName ?? '',
+  accountName: b?.accountName ?? '',
+  iban: b?.iban ?? '',
+  accountNumber: b?.accountNumber ?? '',
+  swift: b?.swift ?? '',
+  note: b?.note ?? '',
+})
+const issuerDraft = (i: InvoiceIssuer | null): IssuerDraft => ({ name: i?.name ?? '', address: i?.address ?? '', taxId: i?.taxId ?? '' })
+
+/** What a draft sends: null when every field is empty. */
+const bankOf = (d: BankDraft): BankAccount | null =>
+  Object.values(d).some((v) => v.trim() !== '')
+    ? {
+        accountName: d.accountName.trim(),
+        bankName: orNull(d.bankName),
+        iban: orNull(d.iban),
+        accountNumber: orNull(d.accountNumber),
+        swift: orNull(d.swift),
+        note: orNull(d.note),
+      }
+    : null
+const issuerOf = (d: IssuerDraft): InvoiceIssuer | null =>
+  Object.values(d).some((v) => v.trim() !== '') ? { name: d.name.trim(), address: orNull(d.address), taxId: orNull(d.taxId) } : null
+const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
+
+/** One group of settings: its name and what it is for at the start, its fields beside them. */
+function SettingsGroup({ id, title, hint, edited, children }: { id: string; title: string; hint?: string; edited?: boolean; children: ReactNode }) {
+  const tx = useCopy()
+  return (
+    <section className="set-group" aria-labelledby={id}>
+      <div className="set-group__head">
+        <h2 id={id} className="set-group__title">
+          {title}
+        </h2>
+        {hint && <p className="set-group__hint">{hint}</p>}
+        {edited && (
+          <Badge tone="gold" dot>
+            {tx(PAY.edited)}
+          </Badge>
+        )}
+      </div>
+      <div className="set-group__body">{children}</div>
+    </section>
+  )
+}
+
 function SettingsForm({ settings }: { settings: BillingSettings }) {
   const tx = useCopy()
   const { locale } = useI18n()
   const save = useSaveBillingSettings()
   const b = settings.bankAccount
-  const [bank, setBank] = useState<BankDraft>({
-    bankName: b?.bankName ?? '',
-    accountName: b?.accountName ?? '',
-    iban: b?.iban ?? '',
-    accountNumber: b?.accountNumber ?? '',
-    swift: b?.swift ?? '',
-    note: b?.note ?? '',
-  })
-  const [issuer, setIssuer] = useState<IssuerDraft>({
-    name: settings.issuer?.name ?? '',
-    address: settings.issuer?.address ?? '',
-    taxId: settings.issuer?.taxId ?? '',
-  })
+  const [bank, setBank] = useState<BankDraft>(() => bankDraft(b))
+  const [issuer, setIssuer] = useState<IssuerDraft>(() => issuerDraft(settings.issuer))
   const [reminders, setReminders] = useState(() => settings.reminders.map((r) => ({ ...r })))
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [saved, setSaved] = useState(false)
   const [confirmPause, setConfirmPause] = useState(false)
   const editable = settings.canEdit
 
+  // A group is edited while what it would send differs from what the server holds.
+  const edited = {
+    bank: !same(bankOf(bank), bankOf(bankDraft(b))),
+    issuer: !same(issuerOf(issuer), issuerOf(issuerDraft(settings.issuer))),
+    reminders: reminders.some((r) => settings.reminders.find((x) => x.key === r.key)?.enabled !== r.enabled),
+  }
+  const editedNames = [edited.bank && tx(PAY.bankAccount), edited.issuer && tx(PAY.issuer), edited.reminders && tx(PAY.reminders)].filter(
+    (name): name is string => typeof name === 'string',
+  )
+
   const submit = () => {
     const next: Record<string, string> = {}
-    const anyBank = Object.values(bank).some((v) => v.trim() !== '')
-    const anyIssuer = Object.values(issuer).some((v) => v.trim() !== '')
+    const anyBank = bankOf(bank) !== null
+    const anyIssuer = issuerOf(issuer) !== null
     if (anyBank && bank.accountName.trim() === '') next.accountName = tx(PAY.accountNameRequired)
     if (anyIssuer && issuer.name.trim() === '') next.issuerName = tx(PAY.issuerNameRequired)
     setErrors(next)
     setSaved(false)
     if (Object.keys(next).length > 0) return
-    save.mutate(
-      {
-        bankAccount: anyBank
-          ? {
-              accountName: bank.accountName.trim(),
-              bankName: orNull(bank.bankName),
-              iban: orNull(bank.iban),
-              accountNumber: orNull(bank.accountNumber),
-              swift: orNull(bank.swift),
-              note: orNull(bank.note),
-            }
-          : null,
-        issuer: anyIssuer ? { name: issuer.name.trim(), address: orNull(issuer.address), taxId: orNull(issuer.taxId) } : null,
-        reminders: reminders.map((r) => ({ key: r.key, enabled: r.enabled })),
-      },
-      { onSuccess: () => setSaved(true) },
-    )
+    // One request, carrying only the groups that changed: the server leaves the others as they are.
+    const body: BillingSettingsUpdate = {}
+    if (edited.bank) body.bankAccount = bankOf(bank)
+    if (edited.issuer) body.issuer = issuerOf(issuer)
+    if (edited.reminders) body.reminders = reminders.map((r) => ({ key: r.key, enabled: r.enabled }))
+    save.mutate(body, { onSuccess: () => setSaved(true) })
   }
+
+  const cardLive = settings.cardAvailable || (settings.cardPaused && settings.cardConfigured)
+  const inOrder = [...reminders].sort((x, y) => x.offsetDays - y.offsetDays)
 
   return (
     <div className="pay-settings">
-      {!editable && <p className="field__hint">{tx(PAY.readOnlySettings)}</p>}
+      {!editable && (
+        <p className="pay-lock">
+          <Icon name="lockNote" size={16} />
+          <span>{tx(PAY.readOnlySettings)}</span>
+        </p>
+      )}
       <ServerError error={save.error} />
 
-      <section className="card panel tf-section" aria-labelledby="pay-card">
-        <div className="tf-section__head">
-          <h2 id="pay-card" className="tf-section__title">
-            {tx(PAY.card)}
-          </h2>
-          {settings.cardPaused ? (
-            <Badge tone="danger" dot>
-              {tx(PAY.cardPausedBadge)}
-            </Badge>
-          ) : (
-            <Badge tone={settings.cardAvailable ? 'ok' : 'outline'} dot>
-              {tx(settings.cardAvailable ? PAY.cardOn : PAY.cardOff)}
-            </Badge>
-          )}
-        </div>
-        {(settings.cardAvailable || (settings.cardPaused && settings.cardConfigured)) && (
-          <p className="pf-entry__meta">
-            <Badge tone={settings.webhookConfigured ? 'ok' : 'danger'} dot>
-              {tx(settings.webhookConfigured ? PAY.webhookOn : PAY.webhookOff)}
-            </Badge>
-          </p>
-        )}
-        {/* W63: the kill switch. Shown when there is something to pause (Stripe configured) or to undo. */}
-        {editable && (settings.cardConfigured || settings.cardPaused) && (
-          <div className="tf-actions">
+      <SettingsGroup id="pay-card" title={tx(PAY.card)}>
+        <div className="set-card">
+          <div className="set-card__state">
+            {settings.cardPaused ? (
+              <Badge tone="danger" dot>
+                {tx(PAY.cardPausedBadge)}
+              </Badge>
+            ) : (
+              <Badge tone={settings.cardAvailable ? 'ok' : 'outline'} dot>
+                {tx(settings.cardAvailable ? PAY.cardOn : PAY.cardOff)}
+              </Badge>
+            )}
+            {cardLive && (
+              <Badge tone={settings.webhookConfigured ? 'ok' : 'danger'} dot>
+                {tx(settings.webhookConfigured ? PAY.webhookOn : PAY.webhookOff)}
+              </Badge>
+            )}
+          </div>
+          {/* W63: the kill switch. Shown when there is something to pause (Stripe configured) or to undo. */}
+          {editable && (settings.cardConfigured || settings.cardPaused) && (
             <button type="button" className={settings.cardPaused ? 'btn btn--primary' : 'btn btn--danger'} onClick={() => setConfirmPause(true)}>
               {tx(settings.cardPaused ? PAY.resumeCard : PAY.pauseCard)}
             </button>
-          </div>
-        )}
-      </section>
+          )}
+        </div>
+      </SettingsGroup>
       {confirmPause && <CardPauseDialog paused={settings.cardPaused} onClose={() => setConfirmPause(false)} />}
 
-      <section className="card panel tf-section" aria-labelledby="pay-bank">
-        <div className="tf-section__head">
-          <h2 id="pay-bank" className="tf-section__title">
-            {tx(PAY.bankAccount)}
-          </h2>
-        </div>
-        <p className="field__hint">{tx(PAY.bankHint)}</p>
-        {!b && !editable && <p className="tf-muted">{tx(PAY.noBankAccount)}</p>}
-        <fieldset disabled={!editable}>
+      <SettingsGroup id="pay-bank" title={tx(PAY.bankAccount)} hint={tx(PAY.bankHint)} edited={edited.bank}>
+        {!b && !editable && <p className="set-none">{tx(PAY.noBankAccount)}</p>}
+        <fieldset className="set-grid" disabled={!editable}>
           <legend className="sr-only">{tx(PAY.bankAccount)}</legend>
           {BANK_FIELDS.map((f) => (
-            <Field key={f.key} label={tx(PAY[f.label])} error={f.key === 'accountName' ? errors.accountName : null}>
+            <Field key={f.key} label={tx(PAY[f.label])} error={f.key === 'accountName' ? errors.accountName : null} wide={f.wide}>
               {(id, d) => (
                 <input
                   id={id}
@@ -409,7 +619,7 @@ function SettingsForm({ settings }: { settings: BillingSettings }) {
               )}
             </Field>
           ))}
-          <Field label={tx(PAY.bankNote)} hint={tx(PAY.bankNoteHint)}>
+          <Field label={tx(PAY.bankNote)} hint={tx(PAY.bankNoteHint)} wide>
             {(id, d) => (
               <textarea
                 id={id}
@@ -424,50 +634,39 @@ function SettingsForm({ settings }: { settings: BillingSettings }) {
             )}
           </Field>
         </fieldset>
-      </section>
+      </SettingsGroup>
 
-      <section className="card panel tf-section" aria-labelledby="pay-issuer">
-        <div className="tf-section__head">
-          <h2 id="pay-issuer" className="tf-section__title">
-            {tx(PAY.issuer)}
-          </h2>
-        </div>
-        <p className="field__hint">{tx(PAY.issuerHint)}</p>
-        <fieldset disabled={!editable}>
+      <SettingsGroup id="pay-issuer" title={tx(PAY.issuer)} hint={tx(PAY.issuerHint)} edited={edited.issuer}>
+        <fieldset className="set-grid" disabled={!editable}>
           <legend className="sr-only">{tx(PAY.issuer)}</legend>
           <Field label={tx(PAY.issuerName)} error={errors.issuerName}>
             {(id, d) => (
               <input id={id} className="input" dir="auto" value={issuer.name} maxLength={160} aria-describedby={d} onChange={(e) => setIssuer((v) => ({ ...v, name: e.target.value }))} />
             )}
           </Field>
-          <Field label={tx(PAY.address)}>
+          <Field label={tx(PAY.taxId)}>
+            {(id) => <input id={id} className="input" dir="ltr" value={issuer.taxId} maxLength={64} onChange={(e) => setIssuer((v) => ({ ...v, taxId: e.target.value }))} />}
+          </Field>
+          <Field label={tx(PAY.address)} wide>
             {(id) => (
               <textarea id={id} className="input tf-textarea" dir="auto" rows={2} maxLength={500} value={issuer.address} onChange={(e) => setIssuer((v) => ({ ...v, address: e.target.value }))} />
             )}
           </Field>
-          <Field label={tx(PAY.taxId)}>
-            {(id) => <input id={id} className="input" dir="ltr" value={issuer.taxId} maxLength={64} onChange={(e) => setIssuer((v) => ({ ...v, taxId: e.target.value }))} />}
-          </Field>
         </fieldset>
-      </section>
+      </SettingsGroup>
 
-      <section className="card panel tf-section" aria-labelledby="pay-reminders">
-        <div className="tf-section__head">
-          <h2 id="pay-reminders" className="tf-section__title">
-            {tx(PAY.reminders)}
-          </h2>
-        </div>
-        <p className="field__hint">{tx(PAY.remindersHint)}</p>
+      <SettingsGroup id="pay-reminders" title={tx(PAY.reminders)} hint={tx(PAY.remindersHint)} edited={edited.reminders}>
         <fieldset disabled={!editable}>
           <legend className="sr-only">{tx(PAY.reminders)}</legend>
-          <ul className="pay-reminders">
-            {reminders.map((r, i) => (
-              <li key={r.key}>
+          {/* Before the due date, on it, after it: the reminders in the order they fire. */}
+          <ul className="set-reminders">
+            {inOrder.map((r) => (
+              <li key={r.key} className={r.offsetDays === 0 ? 'set-reminder set-reminder--due' : 'set-reminder'}>
                 <label>
                   <input
                     type="checkbox"
                     checked={r.enabled}
-                    onChange={(e) => setReminders((rs) => rs.map((x, j) => (j === i ? { ...x, enabled: e.target.checked } : x)))}
+                    onChange={(e) => setReminders((rs) => rs.map((x) => (x.key === r.key ? { ...x, enabled: e.target.checked } : x)))}
                   />
                   {reminderLabel(r.offsetDays, locale)}
                 </label>
@@ -475,17 +674,22 @@ function SettingsForm({ settings }: { settings: BillingSettings }) {
             ))}
           </ul>
         </fieldset>
-      </section>
+      </SettingsGroup>
 
       {editable && (
-        <div className="tf-actions">
-          <button type="button" className="btn btn--primary" disabled={save.isPending} onClick={submit}>
+        <div className={editedNames.length > 0 ? 'set-save set-save--edited' : 'set-save'}>
+          <button type="button" className="btn btn--primary" disabled={save.isPending || editedNames.length === 0} onClick={submit}>
             {save.isPending ? tx(PAY.saving) : tx(PAY.save)}
           </button>
-          {saved && (
-            <span className="sp-ok" role="status">
-              {tx(PAY.saved)}
+          {editedNames.length > 0 ? (
+            <span className="set-save__state">{tx(PAY.unsaved, { groups: editedNames.join(locale === 'ar' ? '، ' : ', ') })}</span>
+          ) : saved ? (
+            <span className="set-save__state set-save__state--ok" role="status">
+              <Icon name="check" size={16} />
+              <span>{tx(PAY.saved)}</span>
             </span>
+          ) : (
+            <span className="set-save__state">{tx(PAY.saveScope)}</span>
           )}
         </div>
       )}

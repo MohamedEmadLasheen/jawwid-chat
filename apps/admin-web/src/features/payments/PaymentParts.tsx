@@ -62,17 +62,20 @@ export function Field({
   label,
   hint,
   error,
+  wide,
   children,
 }: {
   label: string
   hint?: string
   error?: string | null
+  /** In a two-column form: take the whole row. */
+  wide?: boolean
   children: (id: string, describedBy?: string) => ReactNode
 }) {
   const id = useId()
   const describedBy = [hint ? `${id}-hint` : '', error ? `${id}-err` : ''].filter(Boolean).join(' ') || undefined
   return (
-    <div className="field">
+    <div className={wide ? 'field field--wide' : 'field'}>
       <label className="field__label" htmlFor={id}>
         {label}
       </label>

@@ -32,3 +32,25 @@
   margin: 0;
   padding-inline-start: 1.2em;
 }
+
+/* Payments > Renewal requests: who asked, for which child, how long ago, where it stands. */
+.rn__hint { margin: 0 0 var(--space-3); max-inline-size: 86ch; font-size: var(--fs-sm); color: var(--ink-muted); }
+.rn-list { margin: 0; padding: 0; list-style: none; border-block-start: 1px solid var(--hairline); }
+.rn-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(110px, 150px);
+  align-items: center;
+  gap: var(--space-2) var(--space-5);
+  padding: 10px 2px;
+  border-block-end: 1px solid var(--hairline-soft);
+  font-size: var(--fs-sm);
+}
+.rn-row .entity { gap: 10px; }
+.rn-row .entity__text { display: grid; gap: 1px; }
+.rn-row__name { color: var(--ink); text-decoration: none; }
+.rn-row__name:hover { color: var(--teal-dark); text-decoration: underline; text-decoration-color: var(--brand-200); text-underline-offset: 3px; }
+.rn-row__when { color: var(--ink-muted); white-space: nowrap; }
+@media (max-width: 560px) {
+  .rn-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .rn-row__when { grid-column: 1; padding-inline-start: 38px; }
+}

@@ -1,0 +1,34 @@
+/* What Instalments and Payments share: an amount set as a numeral with its
+   currency small beside it, and the ledger at the head of both pages. */
+
+.money { display: inline-flex; align-items: baseline; gap: 5px; white-space: nowrap; }
+.money__n { font-family: var(--display); font-size: 17px; font-weight: 600; line-height: 1.2; font-variant-numeric: tabular-nums lining-nums; color: var(--ink); }
+.money__c { font-size: 11.5px; font-weight: 500; color: var(--ink-muted); }
+html[lang='ar'] .money__c { font-size: 12.5px; }
+.money--sm .money__n { font-size: 14px; font-weight: 500; }
+.money--lg { gap: 8px; }
+.money--lg .money__n { font-size: var(--fs-kpi); line-height: 1.15; }
+.money--lg .money__c { font-size: var(--fs-sm); }
+
+/* The ledger follows the page's direction: the numeral reads first, then its currency. */
+.fin { margin-block-end: var(--space-5); }
+.fin__ledger { margin-block-end: 0; }
+.fin .ledger__cell { min-block-size: 92px; }
+.fin__value, [dir='rtl'] .fin__value {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 6px;
+  direction: inherit;
+  unicode-bidi: normal;
+  text-align: start;
+}
+.fin__value .ledger__unit { margin-inline-start: 0; font-weight: 500; }
+.fin .ledger__note { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fin a.ledger__cell { transition: background var(--dur-fast) var(--ease-out); }
+.fin a.ledger__cell:focus-visible { outline-offset: -2px; }
+@media (max-width: 767px) {
+  .fin .ledger__cell { min-block-size: 0; }
+  /* An odd last cell takes the whole row instead of leaving half of it empty. */
+  .fin .ledger__cell:last-child:nth-child(odd) { grid-column: 1 / -1; }
+}

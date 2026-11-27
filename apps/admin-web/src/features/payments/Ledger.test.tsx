@@ -201,7 +201,8 @@ describe('Payments > Transactions', () => {
     const aed = within(totals).getByRole('listitem', { name: 'AED' })
     expect(within(aed).getByText('2')).toBeInTheDocument()
     expect(within(aed).getByText(/1,700\.00/)).toBeInTheDocument()
-    expect(within(aed).getByText(/^AED\s100\.00$/)).toBeInTheDocument()
+    // The currency names the line (the list item above), so the refunded figure stands without it.
+    expect(within(aed).getByText('100.00')).toBeInTheDocument()
     expect(within(aed).getByText(/1,600\.00/)).toBeInTheDocument()
     const usd = within(totals).getByRole('listitem', { name: 'USD' })
     expect(within(usd).getAllByText(/300\.00/)).toHaveLength(2)

@@ -71,10 +71,15 @@ export const S = {
   // Renewal requests (Payments)
   renewalsTitle: { en: 'Renewal requests', ar: 'طلبات التجديد' },
   renewalsHint: {
-    en: 'Parents of locked children with nothing to pay yet asked to renew (last 30 days). Send them a renewal link from the Parent Profile.',
-    ar: 'طلب أولياء أمور أطفال موقوفين بلا مبلغ مستحق تجديد الاشتراك (آخر 30 يومًا). أرسل رابط التجديد من ملف ولي الأمر.',
+    en: 'Parents of locked children with nothing to pay yet asked to renew (last 30 days). Send the renewal link from the Parent Profile.',
+    ar: 'أولياء أمور أطفال موقوفين بلا مبلغ مستحق طلبوا التجديد (آخر 30 يومًا). أرسل رابط التجديد من ملف ولي الأمر.',
   },
   noRenewals: { en: 'No renewal requests.', ar: 'لا توجد طلبات تجديد.' },
+  noRenewalsHint: {
+    en: 'A parent’s request to renew stays here for 30 days, with the child it is for.',
+    ar: 'يبقى طلب ولي الأمر للتجديد هنا 30 يومًا مع اسم الطفل المعني.',
+  },
+  openParents: { en: 'Open Parents', ar: 'فتح أولياء الأمور' },
   renewed: { en: 'Renewed', ar: 'تم التجديد' },
   waiting: { en: 'Waiting', ar: 'بانتظار' },
   // The chat banner (staff view)
