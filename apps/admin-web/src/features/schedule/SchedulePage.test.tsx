@@ -8,6 +8,7 @@ import type { CalendarOptions, CalendarStats, CalendarSummary, CalendarTeacher, 
 import { ShiftSection } from './ShiftSection'
 import { SupervisorColors } from './SupervisorColors'
 import { chooseOption, optionsOf } from '@/test/select'
+import { academyToday } from './viewState'
 
 /**
  * PD-38 Admin Web: the page's side of the contract, through the real routes and
@@ -104,6 +105,8 @@ const SUMMARY: CalendarSummary = {
 const manager = makeStaff({ role: 'manager' })
 
 beforeEach(() => {
+  // The page keeps a few of the person's choices on the browser (filters opened, panel folded, week start).
+  localStorage.clear()
   routes = []
   fetchMock = vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
     const url = String(input)
@@ -131,14 +134,14 @@ describe('the academy schedule', () => {
     expect(lastQuery(/\/calendar\?/).get('from')).toBe('2026-10-26')
     expect(lastQuery(/\/calendar\?/).get('to')).toBe('2026-10-27')
 
-    const active = within(row).getByRole('button', { name: /Child Alpha · 1:00 PM – 2:00 PM · Active/ })
+    const active = within(row).getByRole('button', { name: /Child Alpha, 1:00 PM – 2:00 PM, Active/ })
     expect(active).toHaveClass('sc-c-sky', 'sc-lesson--active')
-    expect(within(row).getByRole('button', { name: /Prospect P .* Trial/ })).toHaveClass('sc-lesson--trial')
-    // Two empty stretches, drawn as red outlines; the shift band behind them.
+    expect(within(row).getByRole('button', { name: /Prospect P.* Trial/ })).toHaveClass('sc-lesson--trial')
+    // Two empty stretches, from the server's intervals; the shift band behind them.
     expect(row.querySelectorAll('.sc-empty')).toHaveLength(2)
     expect(row.querySelectorAll('.sc-band--shift')).toHaveLength(1)
     // Another supervisor's child: "Booked", time and color only.
-    const other = within(screen.getByRole('row', { name: 'Teacher Two' })).getByRole('button', { name: /^Booked · 5:00 PM – 6:00 PM · Temporarily paused/ })
+    const other = within(screen.getByRole('row', { name: 'Teacher Two' })).getByRole('button', { name: /^Booked, 5:00 PM – 6:00 PM, Temporarily paused/ })
     expect(other).toHaveClass('sc-c-red', 'sc-lesson--paused')
   })
 
@@ -150,18 +153,23 @@ describe('the academy schedule', () => {
     expect(within(stats).getByText('Shift used').parentElement).toHaveTextContent('21%')
     expect(within(stats).getByText('Empty in shift').parentElement).toHaveTextContent('5.5 h')
     expect(lastQuery(/\/calendar\/stats\?/).toString()).toBe(lastQuery(/\/calendar\?/).toString())
+    // Third pass: the legend sits behind a "?" beside the views.
+    await userEvent.click(screen.getByRole('button', { name: 'What the shapes mean' }))
     const legend = screen.getByRole('region', { name: 'Legend' })
     expect(within(legend).getByRole('button', { name: 'Supervisor One' })).toHaveAttribute('aria-pressed', 'false')
-    expect(within(legend).getByText('Available time without a student')).toBeInTheDocument()
-    expect(within(legend).getByText('Outside the shift')).toBeInTheDocument()
+    expect(within(legend).getByText('Working hours')).toBeInTheDocument()
+    expect(within(legend).getByText('Outside working hours')).toBeInTheDocument()
   })
 
   it('every filter combines into the one query the calendar and the stats share', async () => {
     renderWithProviders(<AppRoutes />, { staff: manager, route: '/schedule?view=day&date=2026-10-26' })
     await screen.findByRole('row', { name: 'Teacher One' })
     const filters = screen.getByRole('group', { name: 'Filters' })
+    // Third pass: the teacher and supervisor stay in view; the rest open behind "More filters".
+    await userEvent.click(within(filters).getByRole('button', { name: 'More filters' }))
     await userEvent.click(within(filters).getByRole('button', { name: 'Category' }))
     await userEvent.click(within(filters).getByRole('checkbox', { name: 'Full shift' }))
+    await userEvent.click(screen.getByRole('button', { name: 'What the shapes mean' }))
     await userEvent.click(within(screen.getByRole('region', { name: 'Legend' })).getByRole('button', { name: 'Supervisor One' }))
     await waitFor(() => expect(lastQuery(/\/calendar\?/).get('supervisorIds')).toBe('sup-1'))
     expect(lastQuery(/\/calendar\?/).get('categories')).toBe('full_shift')
@@ -187,7 +195,7 @@ describe('the academy schedule', () => {
 
   it('a lesson opens its details, with the student\'s profile one click away', async () => {
     renderWithProviders(<AppRoutes />, { staff: manager, route: '/schedule?view=day&date=2026-10-26' })
-    await userEvent.click(await screen.findByRole('button', { name: /Child Alpha · 1:00 PM – 2:00 PM/ }))
+    await userEvent.click(await screen.findByRole('button', { name: /Child Alpha, 1:00 PM – 2:00 PM/ }))
     const dialog = await screen.findByRole('dialog', { name: 'Child Alpha' })
     expect(within(dialog).getByRole('link', { name: 'Open student profile' })).toHaveAttribute('href', '/students/k-1')
     expect(dialog).toHaveTextContent('Supervisor One')
@@ -217,6 +225,7 @@ describe('owner 2026-10-28: filters, the 12-hour clock, a readable day', () => {
     renderWithProviders(<AppRoutes />, { staff: manager, route: '/schedule?view=day&date=2026-10-26' })
     await screen.findByRole('row', { name: 'Teacher One' })
     const filters = screen.getByRole('group', { name: 'Filters' })
+    await userEvent.click(within(filters).getByRole('button', { name: 'More filters' }))
     const category = within(filters).getByRole('button', { name: 'Category' })
     const supervisor = within(filters).getByRole('button', { name: 'Supervisor' })
 
@@ -248,18 +257,20 @@ describe('owner 2026-10-28: filters, the 12-hour clock, a readable day', () => {
     renderWithProviders(<AppRoutes />, { staff: manager, route: '/schedule?view=day&date=2026-10-26' })
     const row = await screen.findByRole('row', { name: 'Teacher One' })
     const grid = screen.getByRole('table', { name: 'Schedule' })
-    // 10 AM to 10 PM: twelve hours at a fixed 120 px each, scrolled rather than squeezed.
-    expect(grid.style.getPropertyValue('--sc-day-w')).toBe('1440px')
+    // Third pass: from the earliest working hour (the 12 PM shift) to the latest end (the 8 PM
+    // working hours) plus half an hour, at least 96 px an hour: scrolled rather than squeezed.
+    expect(grid.style.getPropertyValue('--sc-day-w')).toBe('816px')
     const axis = grid.querySelector('.sc-axis')!
     const labels = [...axis.querySelectorAll('.sc-axis__tick')].map((t) => t.textContent)
-    expect(labels[0]).toBe('10 AM')
-    expect(labels).toContain('12 PM')
+    expect(labels[0]).toBe('12 PM')
+    expect(labels).toContain('8 PM')
     expect(labels.every((l) => !/\d{2}:\d{2}/.test(l ?? ''))).toBe(true)
     // A one-hour lesson has room for its name and its time.
     const block = within(row).getByRole('button', { name: /Child Alpha/ })
     expect(block).toHaveTextContent('Child Alpha')
     expect(block).toHaveTextContent('1:00 PM – 2:00 PM')
     // The hours filter speaks the same clock; its values stay HH:MM for the API.
+    await userEvent.click(within(screen.getByRole('group', { name: 'Filters' })).getByRole('button', { name: 'More filters' }))
     await userEvent.click(within(screen.getByRole('group', { name: 'Filters' })).getByRole('button', { name: 'Hours' }))
     const from = within(screen.getByRole('dialog', { name: 'Hours' })).getByRole('combobox', { name: 'From' })
     expect(await optionsOf(userEvent, from)).toContainEqual({ value: '13:00', label: '1:00 PM', disabled: false })
@@ -268,6 +279,7 @@ describe('owner 2026-10-28: filters, the 12-hour clock, a readable day', () => {
   it('a time in the Hours filter is picked with the mouse, and Escape closes the list before the filter', async () => {
     renderWithProviders(<AppRoutes />, { staff: manager, route: '/schedule?view=day&date=2026-10-26' })
     await screen.findByRole('row', { name: 'Teacher One' })
+    await userEvent.click(within(screen.getByRole('group', { name: 'Filters' })).getByRole('button', { name: 'More filters' }))
     const hours = within(screen.getByRole('group', { name: 'Filters' })).getByRole('button', { name: 'Hours' })
     await userEvent.click(hours)
     const panel = screen.getByRole('dialog', { name: 'Hours' })
@@ -290,8 +302,105 @@ describe('owner 2026-10-28: filters, the 12-hour clock, a readable day', () => {
 
   it('the lesson details say when on the same clock', async () => {
     renderWithProviders(<AppRoutes />, { staff: manager, route: '/schedule?view=day&date=2026-10-26' })
-    await userEvent.click(await screen.findByRole('button', { name: /Child Alpha · 1:00 PM/ }))
+    await userEvent.click(await screen.findByRole('button', { name: /Child Alpha, 1:00 PM/ }))
     expect(await screen.findByRole('dialog', { name: 'Child Alpha' })).toHaveTextContent('1:00 PM – 2:00 PM')
+  })
+})
+
+describe('third pass: what needs a person, the week board, the keys', () => {
+  // The panel starts folded on a narrow window (jsdom's is 1024 px): these open it as a person would have.
+  beforeEach(() => localStorage.setItem('jawwid.schedule.attention-folded', '0'))
+
+  // Teacher One: a second lesson over Child Alpha's (a double booking); Teacher Two on leave over the 4 PM lesson.
+  const busy = (): CalendarWindow => ({
+    ...WINDOW,
+    days: WINDOW.days.map((d) => (d.teacherId === 't-2' ? { ...d, leave: [['2026-10-26T13:00:00+00:00', '2026-10-26T17:00:00+00:00']] } : d)),
+    lessons: [
+      ...WINDOW.lessons,
+      {
+        id: 'l-9', teacherId: 't-1', startsAt: '2026-10-26T10:30:00Z', endsAt: '2026-10-26T11:00:00Z', kind: 'regular',
+        status: 'active', colorKey: null, matches: true, outsideShift: false,
+        learner: { id: 'k-9', name: 'Child Beta' }, prospect: null, outcome: null, suspendedFor: null, movedFrom: null,
+      },
+      {
+        id: 'l-10', teacherId: 't-2', startsAt: '2026-10-26T13:00:00Z', endsAt: '2026-10-26T13:30:00Z', kind: 'regular',
+        status: 'active', colorKey: null, matches: true, outsideShift: false,
+        learner: { id: 'k-10', name: 'Child Gamma' }, prospect: null, outcome: null, suspendedFor: 'payment', movedFrom: null,
+      },
+    ],
+  })
+
+  it('a double booking and a teacher on leave are listed, each with one action, and light their row', async () => {
+    on('GET', /\/calendar\?/, () => json(busy()))
+    renderWithProviders(<AppRoutes />, { staff: manager, route: '/schedule?view=day&date=2026-10-26' })
+    const row = await screen.findByRole('row', { name: 'Teacher One' })
+    // No conflict flag from the server: the two overlapping lessons are found, and drawn with the clash outline.
+    expect(within(row).getByRole('button', { name: /Child Alpha, .*Two lessons at once/ })).toHaveClass('sc-lesson--clash')
+    expect(within(row).getByRole('button', { name: /Child Beta, .*Two lessons at once/ })).toHaveClass('sc-lesson--clash')
+    // The lesson inside the leave is a ghost that needs a substitute.
+    const ghost = within(screen.getByRole('row', { name: 'Teacher Two' })).getByRole('button', { name: /Child Gamma, .*needs a substitute/ })
+    expect(ghost).toHaveClass('sc-lesson--ghost', 'sc-lesson--held')
+
+    const panel = screen.getByRole('complementary', { name: /Needs your attention/ })
+    const items = within(panel).getAllByRole('listitem')
+    expect(items.map((i) => i.textContent)).toEqual([
+      expect.stringContaining('Teacher One has two lessons at 1:00 PM: Child Alpha and Child Beta.'),
+      expect.stringContaining('Teacher Two is on leave with a lesson at 4:00 PM that needs a substitute.'),
+      expect.stringContaining('The lesson of Child Gamma with Teacher Two at 4:00 PM is suspended until the family pays.'),
+    ])
+    // The leave: the desk where a student's teacher is changed (the manager opens it).
+    expect(within(items[1]!).getByRole('link', { name: 'Open Teachers\' schedules' })).toHaveAttribute('href', '/teachers/schedules?teacher=t-2')
+    expect(within(items[2]!).getByRole('link', { name: 'Open student profile' })).toHaveAttribute('href', '/students/k-10')
+    // Pointing at an item lights its teacher's row and its lessons.
+    await userEvent.hover(within(items[0]!).getByText(/has two lessons/))
+    expect(row).toHaveClass('is-hl')
+    expect(within(row).getByRole('button', { name: /Child Beta/ })).toHaveClass('is-hl')
+    await userEvent.unhover(within(items[0]!).getByText(/has two lessons/))
+    expect(row).not.toHaveClass('is-hl')
+    // One action: review the lessons, whose details say what is wrong.
+    await userEvent.click(within(items[0]!).getByRole('button', { name: 'Review the lessons' }))
+    expect(await screen.findByRole('dialog', { name: 'Child Alpha' })).toHaveTextContent('Two lessons at once')
+  })
+
+  it('the panel folds away and stays folded', async () => {
+    const first = renderWithProviders(<AppRoutes />, { staff: manager, route: '/schedule?view=day&date=2026-10-26' })
+    await userEvent.click(await screen.findByRole('button', { name: 'Hide what needs attention' }))
+    expect(screen.queryByRole('heading', { name: /Needs your attention/ })).toBeNull()
+    first.unmount()
+    renderWithProviders(<AppRoutes />, { staff: manager, route: '/schedule?view=day&date=2026-10-26' })
+    await screen.findByRole('row', { name: 'Teacher One' })
+    expect(screen.getByRole('button', { name: /Needs your attention/ })).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  it('a week cell is load against working hours, marked only where something needs a person, and opens that day', async () => {
+    on('GET', /\/calendar\?/, () => json(busy()))
+    renderWithProviders(<AppRoutes />, { staff: manager, route: '/schedule?view=week&date=2026-10-26' })
+    const cell = await screen.findByRole('button', { name: /^Open Teacher One, Monday 26 October: 2 \/ 7 h, 3 lessons, Clash/ })
+    expect(cell).toHaveTextContent('2h')
+    expect(cell.querySelector('.sc-mark--conflict')).not.toBeNull()
+    await userEvent.click(cell)
+    await waitFor(() => expect(lastQuery(/\/calendar\?/).get('from')).toBe('2026-10-26'))
+    expect(lastQuery(/\/calendar\?/).get('to')).toBe('2026-10-27')
+  })
+
+  it('the week starts on Saturday unless the person chooses another day, kept on this browser', async () => {
+    renderWithProviders(<AppRoutes />, { staff: manager, route: '/schedule?view=week&date=2026-10-28' })
+    await screen.findByRole('row', { name: 'Teacher One' })
+    expect(lastQuery(/\/calendar\?/).get('from')).toBe('2026-10-24')
+    const filters = screen.getByRole('group', { name: 'Filters' })
+    await userEvent.click(within(filters).getByRole('button', { name: 'More filters' }))
+    await userEvent.click(within(filters).getByRole('button', { name: /Week starts on/ }))
+    await userEvent.click(screen.getByRole('radio', { name: 'Sunday' }))
+    await waitFor(() => expect(lastQuery(/\/calendar\?/).get('from')).toBe('2026-10-25'))
+    expect(localStorage.getItem('jawwid.schedule.week-start')).toBe('7')
+  })
+
+  it('T jumps to today from anywhere but a field', async () => {
+    renderWithProviders(<AppRoutes />, { staff: manager, route: '/schedule?view=day&date=2026-10-26' })
+    const row = await screen.findByRole('row', { name: 'Teacher One' })
+    within(row).getByRole('button', { name: /Child Alpha/ }).focus()
+    await userEvent.keyboard('t')
+    await waitFor(() => expect(lastQuery(/\/calendar\?/).get('from')).toBe(academyToday()))
   })
 })
 
@@ -315,7 +424,7 @@ describe('on a phone', () => {
       expect.stringContaining('12:00 PM – 1:00 PM'),
       expect.stringContaining('1:00 PM – 2:00 PM'),
     ]))
-    const lesson = within(day).getByRole('button', { name: /Child Alpha · 1:00 PM – 2:00 PM · Active/ })
+    const lesson = within(day).getByRole('button', { name: /Child Alpha, 1:00 PM – 2:00 PM, Active/ })
     expect(lesson).toHaveClass('sc-agenda__item', 'sc-c-sky')
     expect(within(day).getAllByText('Available, no student').length).toBeGreaterThan(0)
     await userEvent.click(lesson)
@@ -344,14 +453,14 @@ describe('on a phone', () => {
   it('a month is a list of days with their totals; a day opens its agenda', async () => {
     renderWithProviders(<AppRoutes />, { staff: manager, route: '/schedule?view=month&date=2026-10-26' })
     const day = await screen.findByRole('button', { name: /Mon 26 Oct/ })
-    expect(day).toHaveTextContent('Lessons: 2 · Empty: 5.5 h')
+    expect(day).toHaveTextContent('Lessons: 2, empty: 5.5 h')
     await userEvent.click(day)
     await waitFor(() => expect(lastQuery(/\/calendar\?/).get('from')).toBe('2026-10-26'))
   })
 
   it('in Arabic the agenda reads right to left on the 12-hour clock', async () => {
     renderWithProviders(<AppRoutes />, { staff: manager, route: '/schedule?view=day&date=2026-10-26', locale: 'ar' })
-    const lesson = await screen.findByRole('button', { name: /Child Alpha · 1:00 م – 2:00 م/ })
+    const lesson = await screen.findByRole('button', { name: /Child Alpha، 1:00 م – 2:00 م|Child Alpha, 1:00 م – 2:00 م/ })
     expect(document.documentElement.dir).toBe('rtl')
     expect(lesson).toHaveTextContent('1:00 م – 2:00 م')
   })

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  SCHEDULE_WEEK_START,
   academyToday,
   activeFilterCount,
   apiQuery,
@@ -35,6 +36,16 @@ describe('ranges', () => {
     expect(weekStart('2026-10-25')).toBe('2026-10-24') // Sunday
     expect(weekStart('2026-10-30')).toBe('2026-10-24') // Friday
     expect(rangeFor('week', '2026-10-28')).toEqual({ from: '2026-10-24', to: '2026-10-31' })
+  })
+
+  it('starts on Saturday by default, or on the day a person chose', () => {
+    expect(SCHEDULE_WEEK_START).toBe(6)
+    expect(weekStart('2026-10-28', 7)).toBe('2026-10-25') // Sunday
+    expect(weekStart('2026-10-25', 7)).toBe('2026-10-25')
+    expect(weekStart('2026-10-24', 1)).toBe('2026-10-19') // Monday
+    expect(rangeFor('week', '2026-10-28', 1)).toEqual({ from: '2026-10-26', to: '2026-11-02' })
+    const s = parseViewState(new URLSearchParams('view=week&date=2026-10-28'), '2026-10-26')
+    expect(apiQuery(s, 7)).toEqual({ from: '2026-10-25', to: '2026-11-01' })
   })
 
   it('a day and a month', () => {
