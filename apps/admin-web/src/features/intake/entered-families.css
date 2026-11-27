@@ -1,0 +1,58 @@
+/* PD-42: the families entered by hand, on New students: one headed sheet,
+   one row per family. Tokens only; logical properties only. */
+
+.ef { container: ef / inline-size; }
+.ef .sheet__title { cursor: default; }
+
+/* Without room for columns a row is who and its action, then its facts, each under its own label. */
+.ef__rows { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: var(--space-4); }
+.ef__cols { display: none; }
+.ef-row {
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
+  align-items: start;
+  row-gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-block-end: 1px solid var(--hairline-soft);
+}
+.ef-row:last-child { border-block-end: 0; }
+.ef-row__who { min-inline-size: 0; display: grid; gap: 2px; }
+.ef-row__title { display: flex; flex-wrap: wrap; align-items: center; gap: 6px var(--space-2); }
+/* A long tag wraps inside its column; it never runs under the next one. */
+.ef-row__title .badge { max-inline-size: 100%; white-space: normal; }
+.ef-row__name { margin: 0; font-size: var(--fs-md); font-weight: 600; line-height: 1.4; }
+.ef-row__children { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0 var(--space-2); font-size: var(--fs-sm); color: var(--ink-muted); }
+.ef-row__children li + li::before { content: '·'; margin-inline-end: var(--space-2); }
+.ef-row__byline { margin: 0; font-size: var(--fs-xs); color: var(--ink-muted); }
+.ef-row__facts { margin: 0; grid-column: 1 / -1; grid-row: 2; display: grid; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); gap: var(--space-2) var(--space-4); }
+.ef-row__facts > div { min-inline-size: 0; display: grid; align-content: start; gap: 1px; }
+.ef-row__facts dt { font-size: var(--fs-xs); color: var(--ink-muted); }
+.ef-row__facts dd { margin: 0; font-size: var(--fs-sm); font-weight: 500; overflow-wrap: anywhere; }
+.ef-row__note { font-weight: 400; }
+.ef-row__code { display: grid; gap: 4px; font-weight: 400; color: var(--ink-muted); }
+.ef-row__code-value { font-family: var(--display); font-size: 20px; font-weight: 600; line-height: 1.2; letter-spacing: 0.12em; font-variant-numeric: tabular-nums lining-nums; color: var(--ink); justify-self: start; border-block-end: 2px solid var(--gold); }
+.ef-row__actions { justify-self: end; }
+.ef-row__done { grid-column: 1 / -1; margin: 0; }
+
+/* On a phone the family has the full width; its one action closes the row. */
+@container ef (max-width: 520px) {
+  .ef__rows { grid-template-columns: minmax(0, 1fr); }
+  .ef-row__actions { grid-row: 3; justify-self: start; }
+}
+
+/* With room, the facts stand in columns named once at the head: every row reads across the same lines. */
+@container ef (min-width: 720px) {
+  .ef__rows { grid-template-columns: minmax(0, 1.5fr) minmax(0, 0.85fr) minmax(0, 0.75fr) minmax(0, 1.15fr) auto; }
+  .ef__cols {
+    display: grid;
+    grid-template-columns: subgrid;
+    grid-column: 1 / -1;
+    padding: 8px var(--space-4);
+    border-block-end: 1px solid var(--hairline-soft);
+    font-size: var(--fs-xs);
+    color: var(--ink-muted);
+  }
+  .ef-row__facts { display: contents; }
+  .ef-row__facts dt { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+}
