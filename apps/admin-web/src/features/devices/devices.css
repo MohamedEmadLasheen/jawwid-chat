@@ -1,6 +1,17 @@
-/* PD-23 devices & sessions. Uses the design system's table, badge and dialog. */
-.dev-page { display: flex; flex-direction: column; gap: var(--space-4); }
-.dev-name { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+/* PD-23 devices & sessions: one hairline table; the profile's second tab. */
+@import '../profiles/people.css';
+
+.dev-page { display: flex; flex-direction: column; gap: var(--space-3); }
+.dev-page .page-header { margin-block-end: var(--space-2); }
+.dev-tabs { padding-inline: 0; margin-block-end: var(--space-3); }
+.dev-tabs .seg__item { text-decoration: none; }
+.dev-name { display: flex; flex-wrap: wrap; gap: 2px var(--space-3); align-items: center; }
+.dev-name strong { font-weight: 600; }
 .dev-toolbar { display: flex; flex-wrap: wrap; gap: var(--space-2); justify-content: flex-end; align-items: center; }
 .dev-section { margin-block-start: var(--space-2); }
 .dev-meta { display: flex; flex-direction: column; gap: 2px; margin-block-start: var(--space-1); }
+.dev-table .field__hint { font-size: var(--fs-xs); }
+.dev-table td:last-child { inline-size: 1%; white-space: nowrap; }
+/* Signing a device out is said in terracotta words, not in a red box on every row. */
+.dev-signout.btn--ghost { color: var(--terracotta); }
+.dev-signout.btn--ghost:hover:not(:disabled) { color: var(--terracotta); background: var(--terracotta-tint); }

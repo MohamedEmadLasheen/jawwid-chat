@@ -13,8 +13,8 @@ type StatusFilter = 'all' | 'active' | 'inactive' | 'incomplete'
  * (the super admin). Filtering is client-side over rows the server already
  * decided this viewer may see -- it narrows, it never widens.
  *
- * Rows, not a <table>: on a phone each person becomes a stacked card instead
- * of a table that scrolls sideways.
+ * Rows, not a <table>: ruled lines that stack on a phone instead of a table
+ * that scrolls sideways.
  */
 export function StaffTable({ rows, showManager }: { rows: StaffSummary[]; showManager: boolean }) {
   const tx = useCopy()
@@ -108,60 +108,58 @@ export function StaffTable({ rows, showManager }: { rows: StaffSummary[]; showMa
         <p className="sp-muted">{tx(T.noMatches)}</p>
       ) : (
         <ul className="sp-rows">
-          {visible.map((r) => (
-            <li key={r.staffId} className="sp-row">
-              <div className="sp-row__who">
-                <StaffAvatar name={r.displayName} url={r.avatarUrl} size={40} />
-                <div className="sp-row__names">
-                  <Link to={`/profile/${r.staffId}`} className="sp-row__link">{r.displayName}</Link>
-                  <div className="sp-muted sp-small">
-                    {r.jobTitle ?? tx(ROLE_LABEL[r.role] ?? { en: r.role, ar: r.role })}
-                  </div>
-                  <div className="sp-chips">
-                    <span className="badge">{tx(ROLE_LABEL[r.role] ?? { en: r.role, ar: r.role })}</span>
-                    {!r.isActive && <span className="badge badge--danger">{tx(T.inactive)}</span>}
-                    {r.access.canEditProfessional || r.access.canManageResponsibilities ? (
-                      <span className="badge badge--ok">{tx(T.canEditBadge)}</span>
-                    ) : (
-                      <span className="badge">{tx(T.viewOnlyBadge)}</span>
-                    )}
+          {visible.map((r) => {
+            const role = tx(ROLE_LABEL[r.role] ?? { en: r.role, ar: r.role })
+            return (
+              <li key={r.staffId} className="sp-row">
+                <div className="sp-row__who">
+                  <StaffAvatar name={r.displayName} url={r.avatarUrl} size={36} />
+                  <div className="sp-row__names">
+                    <Link to={`/profile/${r.staffId}`} className="sp-row__link">{r.displayName}</Link>
+                    <div className="sp-row__sub">
+                      <span dir="auto">{r.jobTitle ? `${r.jobTitle} · ${role}` : role}</span>
+                      {!r.isActive && <span className="badge badge--danger">{tx(T.inactive)}</span>}
+                    </div>
                   </div>
                 </div>
-              </div>
-              <div className="sp-row__resp">
-                {r.responsibilities.length === 0 ? (
-                  <span className="sp-muted sp-small">{tx(T.noResponsibilities)}</span>
-                ) : (
-                  r.responsibilities.map((c) => (
-                    <span key={c} className="badge badge--coverage">{tx(CATEGORY_LABEL[c] ?? { en: c, ar: c })}</span>
-                  ))
-                )}
-                {showManager && (
-                  <div className="sp-small sp-muted">
-                    {tx(T.colManager)}: {r.reportingManager?.displayName ?? tx(T.unassignedOption)}
-                  </div>
-                )}
-              </div>
-              <dl className="sp-row__nums">
-                <div><dt>{tx(T.colFamilies)}</dt><dd>{number(r.workload.assignedFamilies)}</dd></div>
-                <div><dt>{tx(T.colStudents)}</dt><dd>{number(r.workload.studentsInAssignedFamilies)}</dd></div>
-                <div><dt>{tx(T.colOpen)}</dt><dd>{number(r.workload.openConversations)}</dd></div>
-                <div><dt>{tx(T.colAwaiting)}</dt><dd>{number(r.workload.awaitingReply)}</dd></div>
-                <div><dt>{tx(T.colApprovals)}</dt><dd>{number(r.workload.pendingApprovals)}</dd></div>
-              </dl>
-              <div className="sp-row__meta sp-small">
-                <div>
-                  {tx(T.colProfile)}: {tx(T.completeOf, { done: r.completeness.complete, total: r.completeness.total })}
-                  {r.completeness.missing.length > 0 && (
-                    <span className="sp-muted"> ({r.completeness.missing.map((m) => tx(MISSING_LABEL[m])).join(' · ')})</span>
+                <div className="sp-row__resp">
+                  {r.responsibilities.length === 0 ? (
+                    <span className="sp-muted sp-small">{tx(T.noResponsibilities)}</span>
+                  ) : (
+                    r.responsibilities.map((c) => (
+                      <span key={c} className="pp-tag">{tx(CATEGORY_LABEL[c] ?? { en: c, ar: c })}</span>
+                    ))
+                  )}
+                  {showManager && (
+                    <div className="sp-small sp-muted sp-row__manager">
+                      {tx(T.colManager)}: {r.reportingManager?.displayName ?? tx(T.unassignedOption)}
+                    </div>
                   )}
                 </div>
-                <div className="sp-muted">
-                  {tx(T.colActivity)}: {r.lastActivityAt ? date(r.lastActivityAt) : tx(T.never)}
+                <dl className="sp-row__nums">
+                  <div><dt>{tx(T.colFamilies)}</dt><dd>{number(r.workload.assignedFamilies)}</dd></div>
+                  <div><dt>{tx(T.colStudents)}</dt><dd>{number(r.workload.studentsInAssignedFamilies)}</dd></div>
+                  <div><dt>{tx(T.colOpen)}</dt><dd>{number(r.workload.openConversations)}</dd></div>
+                  <div><dt>{tx(T.colAwaiting)}</dt><dd>{number(r.workload.awaitingReply)}</dd></div>
+                  <div><dt>{tx(T.colApprovals)}</dt><dd>{number(r.workload.pendingApprovals)}</dd></div>
+                </dl>
+                <div className="sp-row__meta sp-small">
+                  <div>
+                    {tx(T.colProfile)}: {tx(T.completeOf, { done: r.completeness.complete, total: r.completeness.total })}
+                    {r.completeness.missing.length > 0 && (
+                      <span className="sp-muted"> ({r.completeness.missing.map((m) => tx(MISSING_LABEL[m])).join(' · ')})</span>
+                    )}
+                  </div>
+                  <div className="sp-muted">
+                    {tx(T.colActivity)}: {r.lastActivityAt ? date(r.lastActivityAt) : tx(T.never)}
+                  </div>
+                  <div className="sp-muted">
+                    {r.access.canEditProfessional || r.access.canManageResponsibilities ? tx(T.canEditBadge) : tx(T.viewOnlyBadge)}
+                  </div>
                 </div>
-              </div>
-            </li>
-          ))}
+              </li>
+            )
+          })}
         </ul>
       )}
     </div>

@@ -81,6 +81,10 @@ html[lang='ar'] .pp-head__name { font-weight: 700; line-height: 1.4; }
 .pp-head__meta .badge { display: inline-flex; }
 .pp-head__meta strong { font-weight: 600; color: var(--ink); }
 .pp-head__actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--space-2); }
+/* Actions over one quiet line (a hint, a saved notice). */
+.pp-head__actions.pp-head__actions--stack { flex-direction: column; align-items: flex-end; gap: 4px; max-inline-size: 340px; }
+.pp-head__buttons { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: var(--space-2); }
+.pp-head__hint { font-size: var(--fs-xs); color: var(--ink-muted); text-align: end; }
 
 /* Presence: a ring is away, a filled dot is here. */
 .pp-presence { display: inline-flex; align-items: center; gap: 7px; }
@@ -91,6 +95,9 @@ html[lang='ar'] .pp-head__name { font-weight: 700; line-height: 1.4; }
   .pp-head { grid-template-columns: auto minmax(0, 1fr); align-items: start; }
   .pp-head__mark .avatar, .pp-head__mark .sp-avatar, .pp-head__mark .pf-photo__img { inline-size: 56px; block-size: 56px; font-size: 22px; }
   .pp-head__actions { grid-column: 1 / -1; justify-content: flex-start; }
+  .pp-head__actions.pp-head__actions--stack { align-items: flex-start; max-inline-size: none; }
+  .pp-head__buttons { justify-content: flex-start; }
+  .pp-head__hint { text-align: start; }
 }
 
 /* ----------------------------------------------------------------- strip */
@@ -328,7 +335,7 @@ a.pp-row__name:hover { color: var(--teal-dark); text-decoration: underline; text
 
 /* A list page: the table's header sticks to the page, not to a scrolling box. */
 .pp-list .page-header { margin-block-end: var(--space-5); }
-.pp-list .seg { margin-block-end: var(--space-3); }
+.pp-list .seg { margin-block-end: var(--space-3); padding-inline: 0; }
 .pp-tools { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); margin-block-end: var(--space-3); }
 .pp-tools .search { flex: 1 1 260px; max-inline-size: 380px; }
 .pp-tools__end { margin-inline-start: auto; display: flex; align-items: center; gap: var(--space-3); font-size: var(--fs-sm); color: var(--ink-muted); }

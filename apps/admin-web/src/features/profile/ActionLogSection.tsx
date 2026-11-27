@@ -24,8 +24,8 @@ export interface ActionLogEntry {
 const L = {
   title: { en: 'Action log', ar: 'سجل الإجراءات' },
   hint: {
-    en: 'What they did, newest first, from the records the system already keeps. Choose a longer period to go further back. A case shows only that it was acted on; open it to see more.',
-    ar: 'ما قاموا به، الأحدث أولًا، من السجلات التي يحفظها النظام. اختر فترة أطول للرجوع أبعد. الحالة تظهر فقط أنه جرى عليها إجراء؛ افتحها لترى المزيد.',
+    en: 'Newest first, from the records the system keeps. A case shows only that it was acted on; open it to see more.',
+    ar: 'الأحدث أولًا، من السجلات التي يحفظها النظام. الحالة تُظهر فقط أنه جرى عليها إجراء؛ افتحها لترى المزيد.',
   },
   empty: { en: 'Nothing recorded in this period.', ar: 'لا شيء مسجّل في هذه الفترة.' },
   period: { en: 'Period', ar: 'الفترة' },
@@ -34,6 +34,13 @@ const L = {
   days365: { en: 'Last 12 months', ar: 'آخر 12 شهرًا' },
   more: { en: 'Load more', ar: 'عرض المزيد' },
   support: { en: 'During a support session', ar: 'خلال جلسة دعم' },
+  // An act the list has no wording for is named by what it was about, never by its record key.
+  acted: { en: 'Recorded an action', ar: 'سجّل إجراءً' },
+  // Signing in and out, in words. A renewal is the app keeping the same sign-in alive.
+  signedIn: { en: 'Signed in', ar: 'سجّل الدخول' },
+  renewed: { en: 'Stayed signed in', ar: 'بقي مسجّلًا للدخول' },
+  signedOut: { en: 'Signed out', ar: 'سجّل الخروج' },
+  actedOn: { en: 'Recorded an action on {thing}', ar: 'سجّل إجراءً على {thing}' },
 } satisfies Record<string, Pair>
 
 /** Readable names for the acts a supervisor does most; any other is shown as recorded. */
@@ -69,6 +76,38 @@ const ACTION: Record<string, Pair> = {
   'task.priority_changed': { en: 'Changed a task\'s level', ar: 'غيّر مستوى مهمة' },
   // PD-42: entering families by hand.
   ...ACTION_LOG,
+}
+
+/**
+ * A sign-in record in words. The server writes one line each time a sign-in is
+ * made, kept alive or ended; its reason there is a machine's word ("refresh",
+ * "rotated"), so it is worded here and that word is not shown.
+ */
+function sessionAct(e: ActionLogEntry): Pair | null {
+  if (e.action === 'session.created') return e.reason === 'login' ? L.signedIn : L.renewed
+  if (e.action === 'session.revoked') return e.reason === 'rotated' ? L.renewed : L.signedOut
+  return null
+}
+const MACHINE_REASONS = new Set(['login', 'refresh', 'rotated', 'logout'])
+
+interface Line {
+  entry: ActionLogEntry
+  label: string
+  /** How many records in a row say the same thing (a sign-in kept alive all morning is one line). */
+  times: number
+  session: boolean
+}
+
+/** What a line was about, for an act with no wording of its own. */
+const THING: Record<string, Pair> = {
+  supervision_case: { en: 'a case', ar: 'حالة' },
+  work_task: { en: 'a task', ar: 'مهمة' },
+  teacher: { en: 'a teacher', ar: 'معلم' },
+  learner: { en: 'a student', ar: 'طالب' },
+  conversation: { en: 'a conversation', ar: 'محادثة' },
+  staff: { en: 'a staff member', ar: 'موظف' },
+  contact: { en: 'a parent', ar: 'ولي أمر' },
+  family: { en: 'a family', ar: 'أسرة' },
 }
 
 /** Where a line's subject is opened -- each page decides for itself whether the viewer may see it. */
@@ -133,35 +172,49 @@ export function ActionLogSection({ staffId }: { staffId: string }) {
   if (query.error instanceof ApiError && query.error.isNotFound) return null
   if (!query.data && !query.error) return null
   const entries = query.data?.pages.flatMap((p) => p.entries) ?? []
+  const lines: Line[] = []
+  for (const e of entries) {
+    const act = sessionAct(e)
+    const thing = THING[e.entity]
+    const label = act ? tx(act) : ACTION[e.action] ? tx(ACTION[e.action]!) : thing ? tx(L.actedOn, { thing: tx(thing) }) : tx(L.acted)
+    const last = lines[lines.length - 1]
+    // Only sign-in records fold: every other act is about something and keeps its own line.
+    if (act && last?.session && last.label === label && last.entry.duringSupport === e.duringSupport) last.times += 1
+    else lines.push({ entry: e, label, times: 1, session: act !== null })
+  }
   return (
-    <section className="card sp-card" aria-labelledby="sp-action-log">
-      <h2 id="sp-action-log" className="sp-card__title">{tx(L.title)}</h2>
-      <p className="sp-footnote">{tx(L.hint)}</p>
-      <label className="field">
-        <span className="field__label">{tx(L.period)}</span>
-        <SearchableSelect className="select" aria-label={tx(L.period)} value={days} onValueChange={(v) => setDays(Number(v))}>
-          {PERIODS.map((p) => (
-            <option key={p.days} value={p.days}>{tx(p.label)}</option>
-          ))}
-        </SearchableSelect>
-      </label>
-      <QueryBoundary isLoading={false} error={query.error} onRetry={() => void query.refetch()}>
+    <section className="pp-sec" aria-labelledby="sp-action-log">
+      <div className="pp-sec__head">
+        <h2 id="sp-action-log" className="pp-sec__title">{tx(L.title)}</h2>
+        <label className="sp-period">
+          <span className="sr-only">{tx(L.period)}</span>
+          <SearchableSelect className="select" aria-label={tx(L.period)} value={days} onValueChange={(v) => setDays(Number(v))}>
+            {PERIODS.map((p) => (
+              <option key={p.days} value={p.days}>{tx(p.label)}</option>
+            ))}
+          </SearchableSelect>
+        </label>
+      </div>
+      <p className="pp-rule">{tx(L.hint)}</p>
+      <QueryBoundary isLoading={false} error={query.error} onRetry={() => void query.refetch()} compact>
         {entries.length === 0 ? (
-          <p className="sp-muted">{tx(L.empty)}</p>
+          <p className="pp-empty">{tx(L.empty)}</p>
         ) : (
-          <ol className="sp-timeline">
-            {entries.map((e) => {
-              const label = ACTION[e.action] ? tx(ACTION[e.action]!) : e.action
+          <ol className="pp-tl pp-tl--newest-first">
+            {lines.map(({ entry: e, label, times, session }) => {
               const to = linkFor(e)
               return (
-                <li key={e.id} className="sp-timeline__item">
-                  <div>{to ? <Link to={to}>{label}</Link> : <strong>{label}</strong>}</div>
-                  <div className="sp-muted sp-small">
+                <li key={e.id}>
+                  <div>
+                    {to ? <Link to={to}>{label}</Link> : <strong>{label}</strong>}
+                    {times > 1 && <span className="sp-times ltr">×{times}</span>}
+                  </div>
+                  <div className="pp-tl__when">
                     <time dateTime={e.at}>{dateTime(e.at)}</time>
                     {e.duringSupport && <> · <span>{tx(L.support)}</span></>}
                   </div>
-                  {e.reason && (
-                    <div className="sp-small sp-muted">
+                  {e.reason && !(session && MACHINE_REASONS.has(e.reason)) && (
+                    <div className="pp-tl__when">
                       <span dir="auto">{e.reason}</span>
                     </div>
                   )}

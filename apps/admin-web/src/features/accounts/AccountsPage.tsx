@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { useSession } from '@/core/auth/SessionProvider'
 import { isSuperAdmin } from '@/core/permissions/capabilities'
+import { Avatar } from '@/shared/components/Avatar'
 import { Badge, type Tone } from '@/shared/components/Badge'
 import { Dialog } from '@/shared/components/Dialog'
 import { FilterChips } from '@/shared/components/FilterChips'
@@ -74,11 +75,11 @@ export function AccountsPage({ eyebrow }: { eyebrow?: string }) {
   const noneAdministered = administers !== undefined && administers.length === 0
 
   return (
-    <div className="page">
+    <div className="page pp pp-list acct-page">
       <div className="page__inner">
         <AccountsTabs />
         <PageHeader eyebrow={eyebrow} title={tx(A.title)} subtitle={tx(A.subtitle)} />
-        <div className="toolbar">
+        <div className="pp-tools">
           <SearchField value={q} onChange={setQ} label={tx(A.search)} clearLabel={t('common.cancel')} />
           <FilterChips
             label={tx(A.show)}
@@ -108,15 +109,20 @@ export function AccountsPage({ eyebrow }: { eyebrow?: string }) {
                 {accounts.map((a) => (
                   <tr key={a.accountId}>
                     <td>
-                      <div dir="auto">
-                        <strong>{a.name}</strong> <Badge tone="outline">{tx(KIND[a.kind])}</Badge>
-                      </div>
-                      {a.familyName && (
-                        <div className="field__hint" dir="auto">
-                          {a.familyName}
-                          {a.children.length > 0 && ` · ${tx(A.children, { names: a.children.join('، ') })}`}
-                        </div>
-                      )}
+                      <span className="pp-cell-two">
+                        <Avatar name={a.name} seed={a.accountId} size="sm" />
+                        <span>
+                          <span className="acct-who" dir="auto">
+                            <strong>{a.name}</strong> <span className="acct-kind">{tx(KIND[a.kind])}</span>
+                          </span>
+                          {a.familyName && (
+                            <span className="pp-cell-sub" dir="auto">
+                              {a.familyName}
+                              {a.children.length > 0 && ` · ${tx(A.children, { names: a.children.join('، ') })}`}
+                            </span>
+                          )}
+                        </span>
+                      </span>
                     </td>
                     <td>
                       <Badge tone={STATUS_TONE[a.status]} dot>
@@ -125,21 +131,23 @@ export function AccountsPage({ eyebrow }: { eyebrow?: string }) {
                       {!a.hasLogin && <Badge tone="outline">{tx(A.noLogin)}</Badge>}{' '}
                       {a.lockedUntil && <Badge tone="warn">{tx(A.locked)}</Badge>}
                     </td>
-                    <td>{a.lastLoginAt ? dateTime(a.lastLoginAt) : tx(A.never)}</td>
+                    <td className="cell-nowrap">{a.lastLoginAt ? <time dateTime={a.lastLoginAt}>{dateTime(a.lastLoginAt)}</time> : <span className="acct-kind">{tx(A.never)}</span>}</td>
                     <td>
-                      <AccountActionButtons account={a} onAct={setPending} />
-                      {grantees && a.kind === 'family' && a.familyId && (
-                        <button type="button" className="btn btn--sm" onClick={() => setGranting(a)}>
-                          {tx(F.grantButton)}
-                        </button>
-                      )}
+                      <div className="acct-cell-actions">
+                        <AccountActionButtons account={a} onAct={setPending} />
+                        {grantees && a.kind === 'family' && a.familyId && (
+                          <button type="button" className="btn btn--sm btn--ghost" onClick={() => setGranting(a)}>
+                            {tx(F.grantButton)}
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          {list.data?.truncated && <p className="field__hint">{tx(A.truncated)}</p>}
+          {list.data?.truncated && <p className="pp-rule">{tx(A.truncated)}</p>}
         </QueryBoundary>
         <FamilyAccessRecord />
         <SupportRecord />
@@ -159,27 +167,27 @@ export function AccountActionButtons({ account: a, onAct }: { account: AccountSu
   return (
     <div className="acct-actions">
       {a.allowed.resetPassword && (
-        <button type="button" className="btn btn--sm" onClick={() => onAct({ act: 'reset', account: a })}>
+        <button type="button" className="btn btn--sm btn--ghost" onClick={() => onAct({ act: 'reset', account: a })}>
           {tx(A.resetPassword)}
         </button>
       )}
       {a.allowed.suspend && (
-        <button type="button" className="btn btn--sm btn--danger" onClick={() => onAct({ act: 'suspend', account: a })}>
+        <button type="button" className="btn btn--sm btn--ghost acct-danger" onClick={() => onAct({ act: 'suspend', account: a })}>
           {tx(A.suspend)}
         </button>
       )}
       {a.allowed.impersonate && (
-        <button type="button" className="btn btn--sm" onClick={() => onAct({ act: 'impersonate', account: a })}>
+        <button type="button" className="btn btn--sm btn--ghost" onClick={() => onAct({ act: 'impersonate', account: a })}>
           {tx(S.open, { name: a.name })}
         </button>
       )}
       {a.allowed.signOut === true && (
-        <button type="button" className="btn btn--sm" onClick={() => onAct({ act: 'devices', account: a })}>
+        <button type="button" className="btn btn--sm btn--ghost" onClick={() => onAct({ act: 'devices', account: a })}>
           {tx(D.devicesButton)}
         </button>
       )}
       {a.allowed.reactivate && (
-        <button type="button" className="btn btn--sm" onClick={() => onAct({ act: 'reactivate', account: a })}>
+        <button type="button" className="btn btn--sm btn--ghost" onClick={() => onAct({ act: 'reactivate', account: a })}>
           {tx(A.reactivate)}
         </button>
       )}
@@ -492,34 +500,36 @@ function SupportRecord() {
         {tx(S.recordTitle)}
       </h2>
       {record.data && sessions.length === 0 ? (
-        <p className="field__hint">{tx(S.noRecord)}</p>
+        <p className="pp-empty">{tx(S.noRecord)}</p>
       ) : (
-        <div className="table-wrap">
-          <table className="table">
-            <thead>
-              <tr>
-                <th scope="col">{tx(A.person)}</th>
-                <th scope="col">{tx(S.recordBy)}</th>
-                <th scope="col">{tx(A.reason)}</th>
-                <th scope="col">{tx(S.recordStarted)}</th>
-                <th scope="col">{tx(S.recordEnded)}</th>
-                <th scope="col">{tx(S.recordActions)}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sessions.map((s) => (
-                <tr key={s.id}>
-                  <td dir="auto">{s.target.name}</td>
-                  <td dir="auto">{s.staff.name}</td>
-                  <td dir="auto">{s.reason}</td>
-                  <td>{dateTime(s.startedAt)}</td>
-                  <td>{s.endedAt ? dateTime(s.endedAt) : <Badge tone="danger">{tx(S.recordLive)}</Badge>}</td>
-                  <td>{s.actions}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <ul className="pp-rows acct-sessions">
+          {sessions.map((s) => (
+            <li key={s.id} className="acct-session">
+              <div className="acct-session__who">
+                <strong dir="auto">{s.target.name}</strong>
+                <span className="acct-kind">
+                  {tx(S.recordBy)} <bdi>{s.staff.name}</bdi>
+                </span>
+              </div>
+              <p className="acct-session__why" dir="auto">{s.reason}</p>
+              <div className="acct-session__when">
+                <span>
+                  {tx(S.recordStarted)} <time dateTime={s.startedAt}>{dateTime(s.startedAt)}</time>
+                </span>
+                {s.endedAt ? (
+                  <span>
+                    {tx(S.recordEnded)} <time dateTime={s.endedAt}>{dateTime(s.endedAt)}</time>
+                  </span>
+                ) : (
+                  <Badge tone="danger">{tx(S.recordLive)}</Badge>
+                )}
+                <span>
+                  {tx(S.recordActions)} <span className="ltr">{s.actions}</span>
+                </span>
+              </div>
+            </li>
+          ))}
+        </ul>
       )}
     </section>
   )

@@ -2,10 +2,26 @@ import { useI18n } from '@/core/i18n/I18nProvider'
 import type { StaffWorkload } from './api'
 import { METRICS, T, useCopy, type Pair } from './copy'
 
+type Key = keyof StaffWorkload
+const LABEL = Object.fromEntries(METRICS.map((m) => [m.key, m.label])) as Record<Key, Pair>
+
 /**
- * Section 4: verified counts. Every tile states what it counts (the definition
- * is visible, not a tooltip), and what the system does NOT track is said
- * plainly instead of being shown as a zero.
+ * Each large numeral with the smaller count that belongs under it: a family's
+ * contacts, the students' teachers, the open chats still waiting for us.
+ */
+const CELLS: ReadonlyArray<{ key: Key; under?: Key }> = [
+  { key: 'assignedFamilies', under: 'parentContacts' },
+  { key: 'studentsInAssignedFamilies', under: 'teachersOfAssignedStudents' },
+  { key: 'openConversations', under: 'awaitingReply' },
+  { key: 'pendingApprovals' },
+  { key: 'directReports' },
+]
+
+/**
+ * Section 4: verified counts, as one ruled ledger. What each number counts is
+ * one click away (the definitions, in full), and what the system does NOT track
+ * is said plainly instead of being shown as a zero. A figure the server does
+ * not send (capacity, overdue tasks, reply time) has no cell at all.
  */
 export function WorkloadSection({
   workload,
@@ -20,28 +36,43 @@ export function WorkloadSection({
 }) {
   const tx = useCopy()
   const { number, dateTime } = useI18n()
+  const cells = CELLS.filter((c) => c.key !== 'directReports' || showDirectReports)
   const metrics = METRICS.filter((m) => m.key !== 'directReports' || showDirectReports)
 
   return (
-    <section className="card sp-card" aria-labelledby="sp-workload">
-      <div className="sp-card__head">
-        <h2 id="sp-workload" className="sp-card__title">{tx(title)}</h2>
-        <span className="sp-muted sp-small">{tx(T.asOf, { when: dateTime(asOf) })}</span>
+    <section className="sp-workload" aria-labelledby="sp-workload">
+      <div className="sp-workload__head">
+        <h2 id="sp-workload" className="section-label">{tx(title)}</h2>
+        <span className="sp-workload__asof">{tx(T.asOf, { when: dateTime(asOf) })}</span>
       </div>
-      <p className="sp-footnote">{tx(T.workloadHint)}</p>
-      <div className="sp-metrics">
-        {metrics.map((m) => (
-          <div key={m.key} className="sp-metric">
-            <div className="sp-metric__value">{number(workload[m.key])}</div>
-            <div className="sp-metric__label">{tx(m.label)}</div>
-            <div className="sp-metric__def">{tx(m.definition)}</div>
+      <div className="ledger sp-ledger">
+        {cells.map((c) => (
+          <div key={c.key} className="ledger__cell">
+            {/* The figure comes first in the document and is drawn under its label. */}
+            <span className="ledger__value">{number(workload[c.key])}</span>
+            <span className="ledger__label">{tx(LABEL[c.key])}</span>
+            {c.under && (
+              <span className="ledger__note">
+                <span className="sp-ledger__n">{number(workload[c.under])}</span>
+                <span>{tx(LABEL[c.under])}</span>
+              </span>
+            )}
           </div>
         ))}
       </div>
-      <div className="sp-untracked" role="note">
+      <p className="pp-rule sp-workload__rule">{tx(T.workloadHint)}</p>
+      <p className="pp-rule sp-workload__rule" role="note">
         <strong>{tx(T.notTracked)}</strong>
-        <div>{tx(T.notTrackedBody)}</div>
-      </div>
+        <span>: {tx(T.notTrackedBody)}</span>
+      </p>
+      <details className="sp-defs">
+        <summary>{tx(T.whatCounts)}</summary>
+        <ul>
+          {metrics.map((m) => (
+            <li key={m.key}>{tx(m.definition)}</li>
+          ))}
+        </ul>
+      </details>
     </section>
   )
 }

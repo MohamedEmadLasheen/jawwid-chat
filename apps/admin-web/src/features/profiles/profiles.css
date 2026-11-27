@@ -6,15 +6,7 @@
 
 /* -------------------------------------------------------- the file's head */
 
-.pp-head__actions--stack { flex-direction: column; align-items: flex-end; gap: 4px; max-inline-size: 320px; }
-.pp-head__buttons { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: var(--space-2); }
-.pp-head__hint { font-size: var(--fs-xs); color: var(--ink-muted); text-align: end; }
 .pf-photo__img { inline-size: 64px; block-size: 64px; border-radius: var(--radius-lg); object-fit: cover; }
-@media (max-width: 767px) {
-  .pp-head__actions--stack { align-items: flex-start; max-inline-size: none; }
-  .pp-head__buttons { justify-content: flex-start; }
-  .pp-head__hint { text-align: start; }
-}
 
 .pp-contact { margin: 0; }
 .pp-contact__by { display: flex; flex-wrap: wrap; gap: 2px var(--space-4); margin: 6px 0 0; font-size: var(--fs-xs); color: var(--ink-muted); }
@@ -22,13 +14,13 @@
 
 /* ------------------------------------------------------------- children */
 
-.pp-child { grid-template-columns: auto minmax(0, 1fr) auto; min-block-size: 52px; }
+.pp-row.pp-child { grid-template-columns: auto minmax(0, 1fr) auto; min-block-size: 52px; }
 .pp-child__standing { gap: var(--space-5); }
 .pp-child__lessons { display: grid; gap: 5px; inline-size: 210px; }
 .pp-child__count { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
 .pp-child__standing .badge { min-inline-size: 5.5rem; }
 @media (max-width: 640px) {
-  .pp-child { grid-template-columns: auto minmax(0, 1fr); }
+  .pp-row.pp-child { grid-template-columns: auto minmax(0, 1fr); }
   .pp-child__standing { grid-column: 1 / -1; justify-content: space-between; }
   .pp-child__lessons { inline-size: auto; flex: 1; }
 }
@@ -38,6 +30,8 @@
 .pp-money { margin: 0; border-block-start: 0; }
 .pp-money + .pp-money { border-block-start: 0; }
 .pp-money .ledger__value { font-size: var(--fs-2xl); }
+/* A currency written in Arabic keeps its own direction beside the figure. */
+.pp-money .ledger__unit { display: inline-block; unicode-bidi: plaintext; }
 /* The terms the money is paid on: three facts in one line under the ledger. */
 .pp-terms { display: flex; flex-wrap: wrap; gap: 4px var(--space-6); margin: 12px 0 0; font-size: var(--fs-sm); }
 .pp-terms > div { display: flex; align-items: baseline; gap: 8px; }
@@ -48,7 +42,7 @@
 /* ------------------------------------------------------- the internal note */
 
 /* Gold paper, as in the chat composer: this is never the parent's to read. */
-.pp-note { padding: 2px var(--space-3) 10px; border-inline-start: 2px solid var(--gold-line); background: var(--gold-tint); }
+.pp .pp-sec.pp-note { padding: 2px var(--space-3) 10px; border-inline-start: 2px solid var(--gold-line); background: var(--gold-tint); }
 .pp .pp-note .pp-sec__head { border-block-end-color: var(--gold-line); }
 .pp .pp-note .pp-sec__title { display: inline-flex; align-items: center; gap: 6px; color: var(--gold-text); }
 .pp-note .pp-rule, .pp-note .pp-empty { color: var(--gold-text); }
@@ -73,10 +67,7 @@
   background: var(--paper);
 }
 .pp-activity .pf-people > li:last-child::after { border-color: var(--teal); background: var(--teal); }
-.pp-activity .pf-people .tf-muted { font-size: var(--fs-xs); }
-.pp-activity .pf-people p { margin: 2px 0 0; }
-/* The line under the heading says the order; it is kept, quietly. */
-.pp-activity .tf-section > .field__hint { margin-block-start: 6px; }
+.pp-activity .pf-people .tf-muted { font-size: var(--fs-xs); }.pp-activity .pf-people p { margin: 2px 0 0; }
 
 /* ------------------------------------------------- people in a short list */
 
@@ -128,6 +119,9 @@
   unicode-bidi: isolate;
   order: 9;
 }
+/* The amount reads left to right in both languages, so its own start is the left:
+   in Arabic the free space goes on its other side to carry it to the row's end. */
+[dir='rtl'] .pf-entry__head > .pf-amount { margin-inline: 0 auto; }
 .pf-entry__meta { margin: 0; display: flex; flex-wrap: wrap; gap: 2px var(--space-3); color: var(--ink-muted); font-size: var(--fs-xs); line-height: 1.55; }
 .pf-entry__meta > span + span::before { content: '·'; margin-inline-end: var(--space-3); color: var(--border-strong); }
 .pf-amount { font-variant-numeric: tabular-nums; font-weight: 500; }
@@ -163,7 +157,7 @@
 /* ------------------------------------------------------------- the student */
 
 /* The subscription's standing, drawn as a ledger: a state, a package, three numerals. */
-.pp .sub-standing {
+.pp .tf-kv.sub-standing {
   display: grid;
   grid-template-columns: none;
   grid-template-rows: auto auto;
@@ -174,24 +168,24 @@
   border-block: 1px solid var(--hairline);
   font-size: var(--fs-sm);
 }
-.pp .sub-standing > dt, .pp .sub-standing > dd { border: 0; border-inline-start: 1px solid var(--hairline); padding-inline: var(--space-4); margin: 0; }
-.pp .sub-standing > dt { padding-block: 12px 0; font-size: 12.5px; color: var(--ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.pp .sub-standing > dd { padding-block: 2px 13px; font-weight: 500; }
-.pp .sub-standing > :is(dt, dd):nth-child(-n + 2) { border-inline-start: 0; padding-inline-start: 2px; }
-.pp .sub-standing > dd:nth-of-type(n + 3) {
+.pp .tf-kv.sub-standing > dt, .pp .tf-kv.sub-standing > dd { border: 0; border-inline-start: 1px solid var(--hairline); padding-inline: var(--space-4); margin: 0; }
+.pp .tf-kv.sub-standing > dt { padding-block: 12px 0; font-size: 12.5px; color: var(--ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pp .tf-kv.sub-standing > dd { padding-block: 2px 13px; font-weight: 500; }
+.pp .tf-kv.sub-standing > :is(dt, dd):nth-child(-n + 2) { border-inline-start: 0; padding-inline-start: 2px; }
+.pp .tf-kv.sub-standing > dd:nth-of-type(n + 3) {
   font-family: var(--display);
   font-size: var(--fs-2xl);
   font-weight: 600;
   line-height: 1.2;
   font-variant-numeric: tabular-nums lining-nums;
 }
-.pp .sub-standing > dd:nth-of-type(n + 3) .tf-muted { font-family: var(--font); font-size: var(--fs-xs); font-weight: 400; }
-.pp .sub-standing > dd .field__hint { font-size: var(--fs-xs); margin-block-start: 2px; }
+.pp .tf-kv.sub-standing > dd:nth-of-type(n + 3) .tf-muted { font-family: var(--font); font-size: var(--fs-xs); font-weight: 400; }
+.pp .tf-kv.sub-standing > dd .field__hint { font-size: var(--fs-xs); margin-block-start: 2px; }
 @media (max-width: 900px) {
-  .pp .sub-standing { grid-template-rows: none; grid-auto-flow: row; grid-template-columns: minmax(7rem, max-content) minmax(0, 1fr); }
-  .pp .sub-standing > dt, .pp .sub-standing > dd { border-inline-start: 0; border-block-end: 1px solid var(--hairline-soft); padding: 8px 2px; }
-  .pp .sub-standing > dd:nth-of-type(n + 3) { font-size: var(--fs-xl); }
-  .pp .sub-standing > :is(dt, dd):nth-last-child(-n + 2) { border-block-end: 0; }
+  .pp .tf-kv.sub-standing { grid-template-rows: none; grid-auto-flow: row; grid-template-columns: minmax(7rem, max-content) minmax(0, 1fr); }
+  .pp .tf-kv.sub-standing > dt, .pp .tf-kv.sub-standing > dd { border-inline-start: 0; border-block-end: 1px solid var(--hairline-soft); padding: 8px 2px; }
+  .pp .tf-kv.sub-standing > dd:nth-of-type(n + 3) { font-size: var(--fs-xl); }
+  .pp .tf-kv.sub-standing > :is(dt, dd):nth-last-child(-n + 2) { border-block-end: 0; }
 }
 .pp .sub-ledger { margin: 0; gap: 0; }
 .pp .sub-ledger__row { padding: 9px 2px; border-block-end: 1px solid var(--hairline-soft); font-size: var(--fs-sm); gap: 2px var(--space-3); }

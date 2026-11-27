@@ -1,37 +1,46 @@
-/* PD-40 PR-5: staff accounts and roles. Uses the design system's table, toolbar and badges. */
-.sa-tabs { display: flex; gap: var(--space-1); flex-wrap: wrap; border-block-end: 1px solid var(--border); margin-block-end: var(--space-3); }
-.sa-tab { padding: var(--space-2) var(--space-3); color: var(--text-muted); text-decoration: none; border-block-end: 2px solid transparent; }
-.sa-tab--active { color: var(--text-link); border-block-end-color: var(--accent); font-weight: 600; }
+/* PD-40 PR-5: staff accounts and roles. Hairline tables; the tabs are words with a teal underline. */
+@import '../profiles/people.css';
 
-.sa-name { background: none; border: 0; padding: 0; font: inherit; font-weight: 600; color: var(--text-link); cursor: pointer; text-align: start; }
-.sa-name:hover { text-decoration: underline; }
-.sa-chips { display: flex; flex-wrap: wrap; gap: var(--space-1); }
-.sa-filters { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: flex-end; }
-.sa-step { color: var(--text-muted); margin: 0 0 var(--space-3); }
-.sa-fixed { display: grid; grid-template-columns: max-content 1fr; gap: var(--space-1) var(--space-4); margin: var(--space-2) 0; }
-.sa-fixed dt { color: var(--text-muted); }
-.sa-fixed dd { margin: 0; }
+.sa-tabs { display: flex; gap: var(--space-5); flex-wrap: wrap; border-block-end: 1px solid var(--hairline); margin-block-end: var(--space-5); }
+.sa-tab { display: inline-flex; align-items: center; min-block-size: 40px; padding: 0; margin-block-end: -1px; color: var(--ink-muted); font-size: var(--fs-sm); font-weight: 500; text-decoration: none; border-block-end: 2px solid transparent; }
+.sa-tab:hover { color: var(--ink); }
+.sa-tab--active { color: var(--teal-dark); border-block-end-color: var(--teal); font-weight: 600; }
+
+.sa-name { background: none; border: 0; padding: 0; min-block-size: 32px; font: inherit; font-weight: 600; color: var(--ink); cursor: pointer; text-align: start; }
+.sa-name:hover { color: var(--teal-dark); text-decoration: underline; text-underline-offset: 3px; }
+.sa-chips { display: flex; flex-wrap: wrap; gap: 2px var(--space-3); }
+.sa-filters { align-items: flex-end; }
+.sa-filters .field { margin: 0; min-inline-size: 190px; }
+.sa-filters .chips { align-self: center; }
+.sa-page .table td .field__hint { display: block; font-size: var(--fs-xs); }
+.sa-step { color: var(--ink-muted); margin: 0 0 var(--space-3); font-size: var(--fs-sm); }
+.sa-fixed { display: grid; grid-template-columns: max-content 1fr; gap: 0 var(--space-4); margin: var(--space-2) 0; font-size: var(--fs-sm); }
+.sa-fixed dt, .sa-fixed dd { margin: 0; padding-block: 7px; border-block-end: 1px solid var(--hairline-soft); }
+.sa-fixed dt { color: var(--ink-muted); }
+.sa-fixed dd { font-weight: 500; }
 
 .sa-picker { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
 .sa-check { display: flex; gap: var(--space-2); align-items: flex-start; }
-.sa-preview { margin-block: var(--space-3); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius); }
-.sa-preview__title { font-size: var(--fs-md, 1rem); margin: 0 0 var(--space-2); }
+.sa-check input, .sa-checklist input { accent-color: var(--teal); }
+.sa-preview { margin-block: var(--space-3); padding: 2px var(--space-3) var(--space-2); border: 0; border-inline-start: 2px solid var(--teal); border-radius: 0; }
+.sa-preview__title { font-size: 12.5px; font-weight: 500; color: var(--ink-muted); margin: 0 0 var(--space-2); }
 .sa-preview ul { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
 .sa-preview__keys { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-3); margin-block-start: var(--space-1); }
 
-.sa-section { margin-block: var(--space-4); }
-.sa-section__title { font-size: var(--fs-md, 1rem); margin: 0 0 var(--space-2); }
-.sa-held { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
-.sa-held li { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); }
-.sa-grant { display: flex; gap: var(--space-2); align-items: flex-end; flex-wrap: wrap; margin-block-start: var(--space-2); }
+.sa-section { margin-block: var(--space-5); }
+.sa-section__title { margin: 0 0 var(--space-2); padding-block-end: 6px; border-block-end: 1px solid var(--hairline); font-size: 12.5px; font-weight: 500; color: var(--ink-muted); }
+html[lang='ar'] .sa-section__title { font-size: 13.5px; }
+.sa-held { list-style: none; margin: 0; padding: 0; display: block; }
+.sa-held li { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); padding-block: 7px; border-block-end: 1px solid var(--hairline-soft); font-size: var(--fs-sm); }
+.sa-grant { display: flex; gap: var(--space-2); align-items: flex-end; flex-wrap: wrap; margin-block-start: var(--space-3); }
 
-.sa-checklist { display: grid; gap: var(--space-3); margin-block: var(--space-2); }
-.sa-checklist fieldset { border: 1px solid var(--border); border-radius: var(--radius); padding: var(--space-2) var(--space-3); margin: 0; }
-.sa-checklist legend { font-weight: 600; padding-inline: var(--space-1); }
-.sa-checklist label { display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; padding-block: var(--space-1); }
+.sa-checklist { display: grid; gap: var(--space-4); margin-block: var(--space-2); }
+.sa-checklist fieldset { border: 0; border-block-start: 1px solid var(--hairline); border-radius: 0; padding: var(--space-2) 0 0; margin: 0; }
+.sa-checklist legend { font-weight: 600; font-size: var(--fs-sm); padding-inline: 0 var(--space-2); }
+.sa-checklist label { display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; padding-block: var(--space-1); font-size: var(--fs-sm); }
 
 /* The first sign-in code: the PD-43 code sheet's layout. */
 .sa-code { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 12px 0; }
-.sa-code dt { color: var(--text-muted, inherit); }
+.sa-code dt { color: var(--ink-muted); }
 .sa-code dd { margin: 0; }
-.sa-code__value { font-family: var(--font-mono, ui-monospace, monospace); font-size: 1.5rem; letter-spacing: 0.2em; user-select: all; }
+.sa-code__value { font-family: var(--display); font-size: var(--fs-2xl); font-weight: 600; letter-spacing: 0.2em; font-variant-numeric: tabular-nums lining-nums; user-select: all; }

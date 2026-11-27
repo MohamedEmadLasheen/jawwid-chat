@@ -1,7 +1,7 @@
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { QueryBoundary } from '@/shared/components/States'
 import type { ActivityEntry } from './api'
-import { ACTION_LABEL, FIELD_LABEL, T, labelFor, useCopy } from './copy'
+import { ACTION_LABEL, FIELD_LABEL, T, useCopy } from './copy'
 
 /**
  * Section 5: official audit records (chat.audit_log) about this profile. Read
@@ -11,21 +11,22 @@ export function ActivityList({ entries, showTarget = false }: { entries: Activit
   const tx = useCopy()
   const { dateTime, locale } = useI18n()
   const comma = locale === 'ar' ? '، ' : ', '
-  if (entries.length === 0) return <p className="sp-muted">{tx(T.noActivity)}</p>
+  if (entries.length === 0) return <p className="pp-empty">{tx(T.noActivity)}</p>
   return (
-    <ol className="sp-timeline">
+    <ol className="pp-tl pp-tl--newest-first">
       {entries.map((e) => (
-        <li key={e.id} className="sp-timeline__item">
+        <li key={e.id}>
           <div>
-            <strong>{tx(labelFor(ACTION_LABEL, e.action))}</strong>
+            {/* An act with no wording of its own is still said in words, never as its record key. */}
+            <strong>{tx(ACTION_LABEL[e.action] ?? T.otherChange)}</strong>
             {showTarget && e.target.displayName && <> — {e.target.displayName}</>}
           </div>
-          <div className="sp-muted sp-small">
+          <div className="pp-tl__when">
             <time dateTime={e.at}>{dateTime(e.at)}</time> ·{' '}
             {e.actor ? tx(T.by, { who: e.actor.displayName }) : tx(T.system)}
           </div>
           {e.changedFields.length > 0 && (
-            <div className="sp-small">
+            <div className="pp-tl__when">
               {tx(T.fields)}:{' '}
               {e.changedFields
                 .flatMap((f) => {
@@ -35,7 +36,7 @@ export function ActivityList({ entries, showTarget = false }: { entries: Activit
                 .join(comma)}
             </div>
           )}
-          <div className="sp-small sp-muted">
+          <div className="pp-tl__when">
             {tx(T.reason)}: <span dir="auto">{e.reason}</span>
           </div>
         </li>
@@ -51,10 +52,12 @@ export function ActivitySection({
 }) {
   const tx = useCopy()
   return (
-    <section className="card sp-card" aria-labelledby="sp-activity">
-      <h2 id="sp-activity" className="sp-card__title">{tx(T.activity)}</h2>
-      <p className="sp-footnote">{tx(T.activityHint)}</p>
-      <QueryBoundary isLoading={query.isLoading} error={query.error} onRetry={() => void query.refetch()}>
+    <section className="pp-sec" aria-labelledby="sp-activity">
+      <div className="pp-sec__head">
+        <h2 id="sp-activity" className="pp-sec__title">{tx(T.activity)}</h2>
+      </div>
+      <p className="pp-rule">{tx(T.activityHint)}</p>
+      <QueryBoundary isLoading={query.isLoading} error={query.error} onRetry={() => void query.refetch()} compact>
         <ActivityList entries={query.data?.entries ?? []} />
       </QueryBoundary>
     </section>

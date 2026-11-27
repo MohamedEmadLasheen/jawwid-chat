@@ -82,7 +82,7 @@ export function StaffAccountsPage() {
   const back = (account: StaffAccount) => setPending({ act: 'detail', account })
 
   return (
-    <div className="page">
+    <div className="page pp pp-list sa-page">
       <div className="page__inner">
         <AccountsTabs />
         <PageHeader
@@ -96,7 +96,7 @@ export function StaffAccountsPage() {
             )
           }
         />
-        <div className="toolbar sa-filters">
+        <div className="pp-tools sa-filters">
           <FilterChips
             label={tx(SA.show)}
             value={status}

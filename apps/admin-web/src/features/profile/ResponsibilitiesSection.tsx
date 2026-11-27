@@ -26,61 +26,61 @@ export function ResponsibilitiesSection({ profile, refKey }: { profile: StaffPro
   const canManage = profile.access.canManageResponsibilities
 
   return (
-    <section className="card sp-card" aria-labelledby="sp-resp">
-      <div className="sp-card__head">
-        <h2 id="sp-resp" className="sp-card__title">{tx(T.responsibilities)}</h2>
-        {canManage && (
-          <button type="button" className="btn btn--sm" onClick={() => setAssigning(true)}>
-            {tx(T.assign)}
-          </button>
-        )}
+    <section className="pp-sec" aria-labelledby="sp-resp">
+      <div className="pp-sec__head">
+        <h2 id="sp-resp" className="pp-sec__title">{tx(T.responsibilities)}</h2>
       </div>
-      <p className="sp-footnote">{tx(T.responsibilitiesHint)}</p>
 
-      {profile.derivedResponsibilities.length > 0 && (
-        <>
-          <h3 className="sp-subtitle">{tx(T.fromRecords)}</h3>
-          <ul className="sp-list">
-            {profile.derivedResponsibilities.map((d) => (
-              <li key={d.kind} className="sp-list__item">
-                {tx(T[`derived_${d.kind}`], { n: d.count ?? 0 })}
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
-
-      <h3 className="sp-subtitle">{tx(T.officialLabels)}</h3>
+      {/* Assigned by a manager: each a small tag, with its scope and who gave it. */}
+      <h3 className="sr-only">{tx(T.officialLabels)}</h3>
       {active.length === 0 ? (
-        <p className="sp-muted">{tx(T.noResponsibilities)}</p>
+        <p className="pp-empty">{tx(T.noResponsibilities)}</p>
       ) : (
-        <ul className="sp-list">
+        <ul className="sp-resp-list">
           {active.map((r) => (
-            <li key={r.id} className="sp-list__item sp-resp">
-              <div className="sp-resp__body">
-                <strong>{tx(CATEGORY_LABEL[r.category] ?? { en: r.category, ar: r.category })}</strong>
-                {r.scopeNote && <div dir="auto">{r.scopeNote}</div>}
-                <div className="sp-muted sp-small">
-                  {tx(T.assignedOn, { when: date(r.assignedAt) })}
-                  {r.assignedBy && <> · {tx(T.assignedBy, { who: r.assignedBy.displayName })}</>}
-                </div>
-              </div>
+            <li key={r.id} className="sp-resp">
+              <span className="pp-tag">{tx(CATEGORY_LABEL[r.category] ?? { en: r.category, ar: r.category })}</span>
               {canManage && (
-                <button type="button" className="btn btn--sm btn--ghost" onClick={() => setEnding(r.id)}>
+                <button type="button" className="btn btn--sm btn--ghost sp-resp__end" onClick={() => setEnding(r.id)}>
                   {tx(T.end)}
                 </button>
               )}
+              <span className="sp-resp__body">
+                {r.scopeNote && <span dir="auto">{r.scopeNote}</span>}
+                <span className="sp-muted">
+                  {tx(T.assignedOn, { when: date(r.assignedAt) })}
+                  {r.assignedBy && <> · {tx(T.assignedBy, { who: r.assignedBy.displayName })}</>}
+                </span>
+              </span>
             </li>
           ))}
         </ul>
       )}
 
+      {canManage && (
+        <button type="button" className="btn btn--sm sp-resp-add" onClick={() => setAssigning(true)}>
+          {tx(T.assign)}
+        </button>
+      )}
+
+      {/* What the database already holds: nobody types these. */}
+      {profile.derivedResponsibilities.length > 0 && (
+        <>
+          <h3 className="tf-subtitle">{tx(T.fromRecords)}</h3>
+          <ul className="sp-derived">
+            {profile.derivedResponsibilities.map((d) => (
+              <li key={d.kind}>{tx(T[`derived_${d.kind}`], { n: d.count ?? 0 })}</li>
+            ))}
+          </ul>
+        </>
+      )}
+
       {ended.length > 0 && (
         <details className="sp-details">
           <summary>{tx(T.history)} ({ended.length})</summary>
-          <ul className="sp-list">
+          <ul className="sp-derived">
             {ended.map((r) => (
-              <li key={r.id} className="sp-list__item sp-muted">
+              <li key={r.id} className="sp-muted">
                 {tx(CATEGORY_LABEL[r.category] ?? { en: r.category, ar: r.category })} · {tx(T.ended, { when: date(r.endedAt!) })}
                 {r.endReason && <> — <span dir="auto">{r.endReason}</span></>}
               </li>
@@ -88,6 +88,7 @@ export function ResponsibilitiesSection({ profile, refKey }: { profile: StaffPro
           </ul>
         </details>
       )}
+      <p className="pp-rule">{tx(T.responsibilitiesHint)}</p>
 
       {assigning && (
         <AssignDialog

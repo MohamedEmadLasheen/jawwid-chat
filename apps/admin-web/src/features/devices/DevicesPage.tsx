@@ -9,6 +9,7 @@ import { PageHeader } from '@/shared/components/PageHeader'
 import { QueryBoundary } from '@/shared/components/States'
 import { mySessionsApi, sessionKeys, type SessionDto } from './api'
 import { D, isSessionGone, sessionError, useCopy } from './copy'
+import { T as PROFILE } from '@/features/profile/copy'
 import { SessionList, useDeviceName } from './SessionList'
 import './devices.css'
 
@@ -29,26 +30,26 @@ export function DevicesPage() {
   const [notice, setNotice] = useState<string | null>(null)
 
   return (
-    <div className="page">
+    <div className="page pp pp-list">
       <div className="page__inner dev-page">
+        {/* The second tab of My profile: the first goes back to it. */}
+        <nav className="seg dev-tabs" aria-label={tx(PROFILE.tabs)}>
+          <Link to="/profile" className="seg__item">{tx(PROFILE.tabProfile)}</Link>
+          <span className="seg__item" aria-current="page">{tx(D.open)}</span>
+        </nav>
         <PageHeader
           title={tx(D.title)}
           subtitle={tx(D.subtitle)}
           actions={
-            <Link to="/profile" className="btn btn--sm">
-              {tx(D.back)}
-            </Link>
+            others > 0 && (
+              <button type="button" className="btn btn--sm btn--danger" onClick={() => setPending({ act: 'others' })}>
+                {tx(D.signOutOthers)}
+              </button>
+            )
           }
         />
-        {others > 0 && (
-          <div className="dev-toolbar">
-            <button type="button" className="btn btn--sm btn--danger" onClick={() => setPending({ act: 'others' })}>
-              {tx(D.signOutOthers)}
-            </button>
-          </div>
-        )}
         {notice && (
-          <p className="field__hint" role="status">
+          <p className="notice notice--info" role="status">
             {notice}
           </p>
         )}

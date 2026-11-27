@@ -49,7 +49,7 @@ export function RolesPage() {
   const label = useMemo(() => new Map((catalogue.data?.permissions ?? []).map((p) => [p.key, p.label])), [catalogue.data])
 
   return (
-    <div className="page">
+    <div className="page pp pp-list sa-page">
       <div className="page__inner">
         <AccountsTabs />
         <PageHeader

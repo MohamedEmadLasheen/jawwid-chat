@@ -35,9 +35,11 @@ export function OrganizationPanel() {
   const [tab, setTab] = useState<Tab>('overview')
 
   return (
-    <section className="card sp-card sp-org" aria-labelledby="sp-org">
-      <h2 id="sp-org" className="sp-card__title">{tx(T.organization)}</h2>
-      <p className="sp-footnote">{tx(T.organizationHint)}</p>
+    <section className="pp-sec sp-org" aria-labelledby="sp-org">
+      <div className="pp-sec__head">
+        <h2 id="sp-org" className="pp-sec__title">{tx(T.organization)}</h2>
+      </div>
+      <p className="pp-rule">{tx(T.organizationHint)}</p>
       <div className="sp-tabs" role="tablist" aria-label={tx(T.organization)}>
         {TABS.map((t) => (
           <button
@@ -109,20 +111,20 @@ function Overview({ data, onTab }: { data: OrganizationOverview; onTab: (t: Tab)
   const a = data.accounts
   return (
     <>
-      <div className="sp-totals">
-        <button type="button" className="sp-total sp-total--link" onClick={() => onTab('directory')}>
-          <div className="sp-total__value">{number(a.managers)}</div>
-          <div className="sp-total__label">{tx(T.managers)}</div>
+      <div className="ledger sp-ledger">
+        <button type="button" className="ledger__cell" onClick={() => onTab('directory')}>
+          <div className="ledger__value">{number(a.managers)}</div>
+          <div className="ledger__label">{tx(T.managers)}</div>
         </button>
-        <button type="button" className="sp-total sp-total--link" onClick={() => onTab('directory')}>
-          <div className="sp-total__value">{number(a.adminsAndSupervisors)}</div>
-          <div className="sp-total__label">{tx(T.adminsSupervisors)}</div>
+        <button type="button" className="ledger__cell" onClick={() => onTab('directory')}>
+          <div className="ledger__value">{number(a.adminsAndSupervisors)}</div>
+          <div className="ledger__label">{tx(T.adminsSupervisors)}</div>
         </button>
         <Total label={tx(T.activeAccounts)} value={number(a.active)} />
         <Total label={tx(T.inactiveAccounts)} value={number(a.inactive)} />
-        <button type="button" className="sp-total sp-total--link" onClick={() => onTab('health')}>
-          <div className="sp-total__value">{number(a.withoutLogin)}</div>
-          <div className="sp-total__label">{tx(T.withoutLogin)}</div>
+        <button type="button" className="ledger__cell" onClick={() => onTab('health')}>
+          <div className="ledger__value">{number(a.withoutLogin)}</div>
+          <div className="ledger__label">{tx(T.withoutLogin)}</div>
         </button>
       </div>
 
@@ -209,7 +211,7 @@ function Workload({ data }: { data: OrganizationOverview }) {
   return (
     <>
       <h3 className="sp-subtitle">{tx(T.uniqueTotals)}</h3>
-      <div className="sp-totals">
+      <div className="ledger sp-ledger">
         <Total label={tx(T.colFamilies)} value={number(u.families)} />
         <Total label={tx(T.colStudents)} value={number(u.studentsInFamilies)} />
         <Total label={tx({ en: 'Parent contacts', ar: 'جهات اتصال الأسر' })} value={number(u.activeParentContacts)} />
@@ -220,18 +222,18 @@ function Workload({ data }: { data: OrganizationOverview }) {
         <Total label={tx(T.colApprovals)} value={number(u.pendingApprovals)} />
       </div>
       <h3 className="sp-subtitle">{tx(T.sumOfTeams)}</h3>
-      <div className="sp-totals">
+      <div className="ledger sp-ledger">
         <Total label={tx(T.colFamilies)} value={number(s.assignedFamilies)} />
         <Total label={tx(T.colStudents)} value={number(s.studentsInAssignedFamilies)} />
         <Total label={tx(T.colOpen)} value={number(s.openConversations)} />
         <Total label={tx(T.colApprovals)} value={number(s.pendingApprovals)} />
         <Total label={tx(T.outsideTeams)} value={number(data.workload.familiesOutsideTeams)} />
       </div>
-      <p className="sp-footnote">{tx(T.teamTotalsHint)}</p>
-      <div className="sp-untracked" role="note">
+      <p className="pp-rule sp-workload__rule">{tx(T.teamTotalsHint)}</p>
+      <p className="pp-rule sp-workload__rule" role="note">
         <strong>{tx(T.notTracked)}</strong>
-        <div>{tx(T.notTrackedBody)}</div>
-      </div>
+        <span>: {tx(T.notTrackedBody)}</span>
+      </p>
     </>
   )
 }
@@ -285,19 +287,19 @@ function QuickActions({ onTab }: { onTab: (t: Tab) => void }) {
       <h3 className="sp-subtitle">{tx(T.quickActions)}</h3>
       <ul className="sp-list">
         <li className="sp-list__item">
-          <button type="button" className="btn btn--sm" onClick={() => onTab('directory')}>{tx(T.qaDirectory)}</button>
+          <button type="button" className="btn btn--sm btn--ghost" onClick={() => onTab('directory')}>{tx(T.qaDirectory)}</button>
         </li>
         <li className="sp-list__item">
-          <button type="button" className="btn btn--sm" onClick={() => onTab('health')}>{tx(T.qaHealth)}</button>
+          <button type="button" className="btn btn--sm btn--ghost" onClick={() => onTab('health')}>{tx(T.qaHealth)}</button>
         </li>
         <li className="sp-list__item">
           <Link to={adminSectionPath('users')} className="btn btn--sm">{tx(T.qaUsers)}</Link>
         </li>
         <li className="sp-list__item">
-          <Link to="/accounts/staff" className="btn btn--sm">{tx(T.qaStaffAccounts)}</Link>
+          <Link to="/accounts/staff" className="btn btn--sm btn--ghost">{tx(T.qaStaffAccounts)}</Link>
         </li>
         <li className="sp-list__item">
-          <Link to="/accounts/roles" className="btn btn--sm">{tx(T.qaRoles)}</Link>
+          <Link to="/accounts/roles" className="btn btn--sm btn--ghost">{tx(T.qaRoles)}</Link>
         </li>
         <li className="sp-list__item sp-muted sp-small">{tx(T.qaPermissions)}</li>
       </ul>

@@ -59,7 +59,7 @@ export function OrganizationPage() {
   ]
 
   return (
-    <div className="page">
+    <div className="page pp pp-list org-page">
       <div className="page__inner">
         <PageHeader title={tx(T.title)} subtitle={tx(T.subtitle)} />
         <QueryBoundary isLoading={structure.isLoading} error={structure.error} onRetry={() => void structure.refetch()}>
