@@ -1,69 +1,191 @@
-/* PD-21 support session. The banner stays in view: the administrator must never
-   forget whose account this is. It is the one terracotta band in the product,
-   because acting as someone else is the one state that must not be missed. */
-.support-banner {
-  position: sticky;
-  inset-block-start: 0;
-  z-index: 5;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2) var(--space-4);
-  padding: 10px var(--space-6);
-  background: var(--terracotta-tint);
-  color: var(--ink);
-  border-block-end: 2px solid var(--terracotta);
-  font-size: var(--fs-sm);
-}
-.support-banner strong { font-weight: 600; }
-.support-banner__until { font-variant-numeric: tabular-nums; color: var(--ink-muted); }
-.support-banner__actions { display: flex; gap: var(--space-2); margin-inline-start: auto; }
-.support.page { padding-block-start: 0; padding-inline: 0; }
-.support.page > .page__inner { padding: var(--space-5) var(--space-6) 0; }
-.support-center { text-align: start; }
+/*
+ * PD-21 support session.
+ *
+ * The masthead says whose account this is and stays in view: the page does
+ * not scroll, its workspace does. Under the masthead the person's chats are
+ * written in the chat's own language: a ruled list with square monograms and
+ * a gold edge on the open row, hairline bubbles (the person's own in soft
+ * teal, at their side), one bar to write in.
+ *
+ *   .support              the page: a column that fills the screen
+ *   .support-left         the time the session has left, beside its actions
+ *   .support-work         the list beside the open thread (one at a time on a phone)
+ *   .support-row          a chat in the list
+ *   .support-msg / .support-bubble   a message; "Sent by support" is a gold line inside it
+ *   .support-composer     the bar and the line that says how a message will be labelled
+ *   .support-profile      the parent's own profile, on sheets
+ */
 
-/* The person's chats on the start side, the open one beside it: ruled, like the chat list. */
-.support-chats { display: grid; grid-template-columns: minmax(12rem, 18rem) minmax(0, 1fr); gap: 0 var(--space-6); margin-block-start: var(--space-4); align-items: start; }
-@media (max-width: 720px) {
-  .support-chats { grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
-  .support-banner { padding-inline: var(--space-4); }
-  .support.page > .page__inner { padding-inline: var(--space-4); }
+.support.page { display: flex; flex-direction: column; overflow: hidden; padding-block-end: 0; }
+.support > .page__inner { flex: 1; min-block-size: 0; inline-size: 100%; display: flex; flex-direction: column; }
+.support .page-header.mast { flex: none; }
+.support .mast__row { align-items: center; }
+.support .mast .page-header__title .badge { font-family: var(--font); }
+html[lang='ar'] .support .mast .page-header__title .badge { font-family: var(--font-ar); }
+.support .mast .page-header__actions { align-items: center; flex-wrap: wrap; gap: 8px; }
+.support-center { text-align: start; }
+.support-foot { flex: none; margin: 0; padding-block: 0 var(--space-4); font-size: var(--fs-xs); color: var(--ink-muted); }
+
+/* The time left: a quiet figure until the last minutes, then terracotta. */
+.support-left { display: inline-flex; align-items: center; gap: 8px; margin-inline-end: var(--space-2); font-size: var(--fs-sm); color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+.support-left > span { display: grid; line-height: 1.3; }
+.support-left strong { font-weight: 600; color: var(--ink); }
+.support-left__until { font-size: var(--fs-xs); }
+.support-left--last, .support-left--last strong { color: var(--terracotta); }
+.support-tabs { overflow-x: auto; scrollbar-width: none; }
+.support-tabs::-webkit-scrollbar { display: none; }
+
+.support-panel { flex: 1; min-block-size: 0; display: flex; flex-direction: column; padding-block-end: var(--space-5); }
+
+/* ---------------------------------------------------------- the workspace */
+
+.support-work {
+  flex: 1;
+  min-block-size: 0;
+  display: grid;
+  grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  overflow: hidden;
 }
-.support-list { list-style: none; margin: 0; padding: 0; display: block; border-block-start: 1px solid var(--hairline); }
-.support-list > li.field__hint, .support-list > li.field__error { padding: 10px 2px; font-size: var(--fs-sm); }
-.support-list__item {
+.support-side { display: flex; flex-direction: column; min-inline-size: 0; min-block-size: 0; border-inline-end: 1px solid var(--hairline); }
+.support-side__head { flex: none; display: flex; align-items: baseline; gap: 8px; min-block-size: 52px; padding: 14px var(--space-4) 10px; border-block-end: 1px solid var(--hairline-soft); }
+.support-side__title { margin: 0; font-family: var(--display); font-size: var(--fs-xl); font-weight: 600; line-height: 1.3; }
+.support-side__count { font-size: var(--fs-sm); color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+.support-list { flex: 1; min-block-size: 0; overflow-y: auto; list-style: none; margin: 0; padding: 0; }
+.support-list__note { padding: var(--space-4); font-size: var(--fs-sm); color: var(--ink-muted); }
+.support-list__note--error { color: var(--terracotta); }
+
+/* A chat in the list: a square monogram, the name and when, one line of what was last said. */
+.support-row {
+  position: relative;
   inline-size: 100%;
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  gap: var(--space-2);
-  min-block-size: 44px;
-  padding: 8px var(--space-3);
+  gap: var(--space-3);
+  min-block-size: 60px;
+  padding: 10px var(--space-4);
   border: 0;
   border-block-end: 1px solid var(--hairline-soft);
   border-radius: 0;
   background: none;
   color: inherit;
   font: inherit;
-  font-size: var(--fs-sm);
   text-align: start;
   cursor: pointer;
   transition: background var(--dur-fast) var(--ease-out);
 }
-.support-list__item:hover { background: var(--surface-hover); }
-.support-list__item--open { background: var(--teal-tint); font-weight: 600; box-shadow: inset 3px 0 0 var(--gold); }
-[dir='rtl'] .support-list__item--open { box-shadow: inset -3px 0 0 var(--gold); }
-.support-list__item:focus-visible { outline-offset: -2px; }
-.support-thread { min-inline-size: 0; }
-.support-messages { list-style: none; margin: 0 0 var(--space-4); padding: 0; display: block; max-block-size: 55vh; overflow-y: auto; border-block-start: 1px solid var(--hairline); }
-.support-message { padding: 10px 2px; border: 0; border-block-end: 1px solid var(--hairline-soft); border-radius: 0; }
-.support-message__meta { display: flex; flex-wrap: wrap; gap: 2px var(--space-3); align-items: center; font-size: var(--fs-xs); color: var(--ink-muted); }
-.support-message__body { white-space: pre-wrap; overflow-wrap: anywhere; margin-block-start: 3px; font-size: var(--fs-sm); line-height: 1.6; }
-.support-composer { display: grid; gap: var(--space-2); justify-items: start; }
-.support-composer .field { inline-size: 100%; margin: 0; }
-.support-profile { display: grid; gap: var(--space-3); justify-items: start; max-inline-size: 36rem; margin-block-start: var(--space-4); }
-.support-profile .field { inline-size: 100%; margin: 0; }
-.support-profile__heading { margin: var(--space-4) 0 0; padding-block-end: 6px; inline-size: 100%; border-block-end: 1px solid var(--hairline); font-family: var(--display); font-size: var(--fs-xl); font-weight: 600; }
+.support-row > .avatar { flex: none; inline-size: 40px; block-size: 40px; }
+.support-row:hover { background: var(--surface-hover); }
+.support-row:focus-visible { outline: 2px solid var(--teal); outline-offset: -2px; }
+/* Where you are: pale teal, and the gold marker on the row's leading edge. */
+.support-row[aria-current='true'] { background: var(--teal-tint); }
+.support-row[aria-current='true']::before { content: ''; position: absolute; inset-block: 8px; inset-inline-start: 0; inline-size: 3px; border-start-end-radius: 2px; border-end-end-radius: 2px; background: var(--gold); }
+.support-row__body { flex: 1; min-inline-size: 0; display: grid; gap: 2px; }
+.support-row__top, .support-row__bottom { display: flex; align-items: baseline; gap: var(--space-2); min-inline-size: 0; }
+/* A name or a preview may run the other way (a Latin name in the Arabic list). The row decides
+   where the line starts; the text sits in its own isolated box and is cut at its own end. */
+.support-row__name, .support-row__sub { display: flex; }
+.support-row__name > bdi, .support-row__sub > bdi { flex: 0 1 auto; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.support-row__name { flex: 1; min-inline-size: 0; font-size: var(--fs-md); font-weight: 500; line-height: 1.4; color: var(--ink); }
+/* Unread is weight, not colour alone; the count is the teal figure. */
+.support-row__name--unread { font-weight: 700; }
+.support-row__time { flex: none; font-size: 12px; color: var(--ink-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.support-row__sub { flex: 1; min-inline-size: 0; font-size: var(--fs-sm); line-height: 1.5; color: var(--ink-muted); }
+.support-row__bottom > .count { flex: none; align-self: center; border-radius: var(--radius); }
+
+/* ------------------------------------------------------------- the thread */
+
+.support-thread { display: flex; flex-direction: column; min-inline-size: 0; min-block-size: 0; }
+.support-thread__none { margin: auto; display: grid; justify-items: center; gap: 8px; padding: var(--space-6); font-size: var(--fs-sm); color: var(--ink-muted); text-align: center; }
+.support-thread__none .icon { color: var(--border-control); }
+.support-thread__head { flex: none; display: flex; align-items: center; gap: var(--space-2); min-block-size: 52px; padding: 8px var(--space-4); border-block-end: 1px solid var(--hairline); }
+.support-thread__back { display: none; }
+.support-thread__title { margin: 0; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--display); font-size: var(--fs-lg); font-weight: 600; line-height: 1.4; }
+.support-thread__body { flex: 1; min-block-size: 0; overflow-y: auto; padding: var(--space-3) var(--space-4) var(--space-4); background: var(--chat-bg, var(--paper)); }
+/* What reading here does and does not do: one quiet line at the head of the thread. */
+.support-thread__note { margin: 0 auto var(--space-3); max-inline-size: 64ch; font-size: var(--fs-xs); line-height: 1.5; color: var(--ink-muted); text-align: center; }
+
+.support-msgs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.support-msgs__none { align-self: center; padding: var(--space-4); font-size: var(--fs-sm); color: var(--ink-muted); }
+.support-msg { display: flex; flex-direction: column; align-items: flex-start; align-self: flex-start; max-inline-size: min(580px, 78%); }
+.support-msg--mine { align-self: flex-end; align-items: flex-end; }
+.support-msg__author { margin: 10px 2px 3px; font-size: var(--fs-xs); font-weight: 600; color: var(--ink); }
+/* Bubbles: 10px, a hairline, no shadow. Received is the surface; the person's own is a soft teal. */
+.support-bubble {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-inline-size: 88px;
+  padding: 7px 11px 5px;
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  border-start-start-radius: 3px;
+  background: var(--bubble-in, var(--surface));
+}
+.support-msg--mine .support-bubble { border-start-start-radius: 10px; border-start-end-radius: 3px; background: var(--bubble-out, var(--teal-tint)); border-color: var(--cw-out-line, var(--hairline)); }
+.support-bubble__text { white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--fs-md); line-height: 1.5; }
+.support-bubble__gone { color: var(--ink-muted); }
+.support-bubble__files { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-muted); font-size: var(--fs-sm); }
+.support-bubble__meta { align-self: flex-end; font-size: 11px; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+/* A message the support desk wrote in the person's name says so, in gold, to everyone who reads it. */
+.support-bubble--support { border-color: var(--gold-line); }
+.support-bubble__flag { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; color: var(--gold-text); }
+
+/* ------------------------------------------------------------ the composer */
+
+.support-composer { flex: none; display: grid; gap: 6px; padding: 8px var(--space-4) 12px; border-block-start: 1px solid var(--hairline); background: var(--paper); }
+.support-composer > .field__error { margin: 0; }
+.support-composer__flag { margin: 0; display: flex; align-items: center; gap: 6px; font-size: var(--fs-xs); font-weight: 500; line-height: 1.5; color: var(--gold-text); }
+.support-composer__flag .icon { flex: none; }
+.support-composer__bar { display: flex; align-items: flex-end; gap: 4px; padding: 3px; border: 1px solid var(--border-strong); border-radius: var(--radius-lg); background: var(--surface); transition: border-color var(--dur-fast) var(--ease-out); }
+.support-composer__bar:focus-within { border-color: var(--teal); outline: 2px solid var(--teal); outline-offset: -1px; }
+.support-composer__input { flex: 1; min-inline-size: 0; min-block-size: 36px; max-block-size: 160px; padding: 7px 8px; border: 0; background: transparent; color: var(--ink); font: inherit; font-size: var(--fs-md); line-height: 1.45; resize: none; field-sizing: content; }
+.support-composer__input:focus { outline: none; }
+.support-composer__input::placeholder { color: var(--ink-muted); }
+.support-send { display: grid; place-items: center; flex: none; inline-size: 36px; block-size: 36px; border: 0; border-radius: var(--radius); background: var(--teal); color: var(--text-inverse); cursor: pointer; transition: background var(--dur-fast) var(--ease-out); }
+.support-send:hover:not(:disabled) { background: var(--teal-dark); }
+.support-send:disabled { background: none; color: var(--border-control); cursor: default; }
+
+/* ------------------------------------------------------------- the profile */
+
+.support-profile { flex: 1; min-block-size: 0; overflow-y: auto; display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 360px); gap: var(--space-5); align-items: start; align-content: start; }
+.support-profile__fields { display: grid; gap: var(--space-3); max-inline-size: 40rem; }
+.support-profile__fields .field { inline-size: 100%; margin: 0; }
+.support-profile__save { display: flex; align-items: center; gap: var(--space-3); }
+.support-profile__saved { font-size: var(--fs-sm); color: var(--ink-muted); }
+.support-children { list-style: none; margin: 0; padding: 0; }
+.support-children > li { display: flex; align-items: center; gap: 10px; min-block-size: 48px; padding: 8px var(--space-4); border-block-end: 1px solid var(--hairline-soft); }
+.support-children > li:last-child { border-block-end: 0; }
+.support-children__name { flex: 1; min-inline-size: 0; font-weight: 600; overflow-wrap: anywhere; }
+.support-children__level { font-size: var(--fs-sm); color: var(--ink-muted); }
+
+@media (max-width: 1099px) {
+  .support-profile { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 767px) {
+  /* The masthead keeps to what must be seen: whose account, how long, the way out. */
+  .support .mast__lead { display: none; }
+  .support .mast .page-header__title { font-size: 22px; }
+  .support .mast .page-header__actions { inline-size: 100%; }
+  .support .mast .page-header__actions > .btn { min-block-size: 44px; }
+  .support .mast .page-header__actions > .btn--primary { flex: 1; }
+  .support-left { flex: 1 1 100%; margin-inline-end: 0; }
+  .support-left > span { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 8px; }
+  .support-tabs .seg__item { min-block-size: 44px; }
+  .support-panel { padding-block-end: var(--space-3); }
+  /* One pane at a time: the list, then the open thread with a way back. */
+  .support-work { grid-template-columns: minmax(0, 1fr); }
+  .support-work--open > .support-side { display: none; }
+  .support-work:not(.support-work--open) > .support-thread { display: none; }
+  .support-side { border-inline-end: 0; }
+  .support-thread__back { display: inline-flex; inline-size: 44px; min-block-size: 44px; margin-inline-start: -10px; }
+  .support-thread__head { padding-inline: var(--space-3); }
+  .support-msg { max-inline-size: 88%; }
+  .support-send { inline-size: 44px; block-size: 44px; }
+  .support-composer__input { min-block-size: 44px; padding-block: 11px; }
+}
 @media (prefers-reduced-motion: reduce) {
-  .support-list__item { transition: none; }
+  .support-row, .support-composer__bar, .support-send { transition: none; }
 }

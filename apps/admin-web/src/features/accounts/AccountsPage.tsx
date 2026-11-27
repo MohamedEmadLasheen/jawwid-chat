@@ -491,11 +491,14 @@ function RevokeSessionDialog({
 function StartSupportDialog({ account, onClose }: { account: AccountSummary; onClose: () => void }) {
   const tx = useCopy()
   const navigate = useNavigate()
+  const client = useQueryClient()
   const start = useMutation({
     mutationFn: (reason: string) => supportAdminApi.start(account.accountId, reason),
     onSuccess: (token) => {
       // In memory only: the token never reaches a URL, history state or storage.
       supportTokens.set(token)
+      // The record has a new session: whoever comes back to Accounts without ending it reads it live.
+      void client.invalidateQueries({ queryKey: supportKeys.record() })
       navigate(`/support/${encodeURIComponent(token.session.id)}`)
     },
   })

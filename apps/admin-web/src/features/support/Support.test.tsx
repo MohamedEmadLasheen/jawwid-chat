@@ -110,8 +110,10 @@ describe('PD-21: support sessions in Admin Web', () => {
     await userEvent.type(within(dialog).getByRole('textbox'), 'cannot find the card')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Open the account' }))
 
-    // The banner says whose account this is.
-    expect(await screen.findByText('Support session: acting as Parent Alpha (parent)')).toBeInTheDocument()
+    // The masthead says whose account this is: the person's name under a "Support session" tag.
+    expect(await screen.findByRole('heading', { level: 1, name: /^Parent Alpha/ })).toBeInTheDocument()
+    expect(screen.getByText('Support session')).toBeInTheDocument()
+    expect(screen.getByText(/^You are acting as Parent Alpha \(parent\)\./)).toBeInTheDocument()
     await userEvent.click(await screen.findByRole('button', { name: /Supervisor One/ }))
     expect(await screen.findByText('Earlier support note')).toBeInTheDocument()
     expect(screen.getAllByText('Sent by support')).toHaveLength(1)
@@ -136,7 +138,9 @@ describe('PD-21: support sessions in Admin Web', () => {
   it('a reload asks for a fresh token with the administrator\'s own session; an ended one says so', async () => {
     on('POST', /\/admin\/impersonations\/imp-2\/token$/, () => json(token({ id: 'imp-2' }, 'support-token-2')))
     const first = renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/support/imp-2' })
-    expect(await screen.findByText('Support session: acting as Parent Alpha (parent)')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { level: 1, name: /^Parent Alpha/ })).toBeInTheDocument()
+    expect(screen.getByText('Support session')).toBeInTheDocument()
+    expect(screen.getByText(/^You are acting as Parent Alpha \(parent\)\./)).toBeInTheDocument()
     expect(authOf(callsTo('POST', /imp-2\/token$/)[0])).toBe('Bearer staff-access')
     first.unmount()
 

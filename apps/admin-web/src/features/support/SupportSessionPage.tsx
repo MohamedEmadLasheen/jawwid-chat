@@ -1,18 +1,23 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { newIdempotencyKey } from '@/core/api/client'
 import { useI18n } from '@/core/i18n/I18nProvider'
+import { Avatar } from '@/shared/components/Avatar'
 import { Badge } from '@/shared/components/Badge'
 import { Icon } from '@/shared/components/Icon'
-import { FilterChips } from '@/shared/components/FilterChips'
+import { PageHeader } from '@/shared/components/PageHeader'
 import { EmptyState, LoadingState } from '@/shared/components/States'
+import { countWords } from '@/features/instalments/copy'
 import { bySeq, type ChatConversation } from '@/features/chat/chatApi'
 import { supportAdminApi, supportClient, supportKeys, supportTokens, type SupportSession } from './api'
-import { KIND_LABEL, S, describeError, isEnded, useCopy } from './copy'
+import { KIND_LABEL, MINUTES, S, describeError, isEnded, useCopy } from './copy'
 import './support.css'
 
 type Tab = 'chats' | 'profile'
+
+/** The session's last minutes are said in terracotta, so the end is not a surprise. */
+const LAST_MINUTES = 5
 
 /**
  * PD-21: a support session -- the administrator sees and acts as a parent or
@@ -26,6 +31,11 @@ type Tab = 'chats' | 'profile'
  * What may be done here is decided by the server: reads freely (no receipts
  * are sent), sending a message (labelled "Sent by support"), the person's own
  * profile. The rest is refused there whatever this page offers.
+ *
+ * The masthead says whose account this is and never leaves the screen: a gold
+ * tag, the person's name, the time left, "Keep working" and the way out. Under
+ * it the person's chats are a workspace in the chat's own language (the list,
+ * the open thread, a composer), one pane at a time on a phone.
  */
 export function SupportSessionPage() {
   const { impersonationId = '' } = useParams()
@@ -71,6 +81,7 @@ export function SupportSessionPage() {
     supportTokens.forget(impersonationId)
     setEnded(true)
   }, [impersonationId])
+  const minutes = useMinutesLeft(session?.expiresAt)
 
   if (ended) {
     return (
@@ -99,48 +110,92 @@ export function SupportSessionPage() {
   }
 
   const kind = tx(KIND_LABEL[session.target.kind])
+  const family = session.target.kind === 'family'
   return (
     <div className="page support">
-      <div className="support-banner" role="status">
-        <strong dir="auto">{tx(S.banner, { name: session.target.name, kind })}</strong>
-        <span className="support-banner__until">{tx(S.until, { time: time(session.expiresAt) })}</span>
-        <span className="support-banner__actions">
-          <button type="button" className="btn btn--sm" disabled={refresh.isPending} onClick={() => refresh.mutate()}>
-            {tx(S.extend)}
-          </button>
-          <button type="button" className="btn btn--sm btn--danger" disabled={exit.isPending} onClick={() => exit.mutate()}>
-            {tx(S.exit)}
-          </button>
-        </span>
-      </div>
       <div className="page__inner">
-        {session.target.kind === 'family' && (
-          <FilterChips
-            label={tx(S.tabChats)}
-            value={tab}
-            onChange={setTab}
-            options={[
-              { value: 'chats', label: tx(S.tabChats) },
-              { value: 'profile', label: tx(S.tabProfile) },
-            ]}
-          />
-        )}
-        {tab === 'chats' ? (
-          <Chats id={impersonationId} client={client} session={session} onEnded={onEnded} />
-        ) : (
-          <ParentProfile id={impersonationId} client={client} onEnded={onEnded} />
-        )}
-        {session.target.kind === 'teacher' && <p className="field__hint">{tx(S.teacherProfileHint)}</p>}
+        <PageHeader
+          lead={<Avatar name={session.target.name} seed={session.target.accountId} size="lg" />}
+          title={session.target.name}
+          status={<Badge tone="gold">{tx(S.tag)}</Badge>}
+          subtitle={tx(S.acting, { name: session.target.name, kind })}
+          actions={
+            <>
+              <span className={minutes !== null && minutes <= LAST_MINUTES ? 'support-left support-left--last' : 'support-left'} role="timer">
+                <Icon name="timer" size={16} />
+                <span>
+                  {minutes !== null && <strong>{tx(S.left, { time: countWords(minutes, MINUTES, locale) })}</strong>}
+                  <span className="support-left__until">{tx(S.until, { time: time(session.expiresAt) })}</span>
+                </span>
+              </span>
+              <button type="button" className="btn" disabled={refresh.isPending} onClick={() => refresh.mutate()}>
+                {tx(S.extend)}
+              </button>
+              <button type="button" className="btn btn--primary" disabled={exit.isPending} onClick={() => exit.mutate()}>
+                <Icon name="signOut" size={16} />
+                {tx(S.exit)}
+              </button>
+            </>
+          }
+          tabs={
+            family && (
+              <div className="seg support-tabs" role="tablist" aria-label={tx(S.tabsLabel, { name: session.target.name })}>
+                {(['chats', 'profile'] as const).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    role="tab"
+                    id={`support-tab-${t}`}
+                    className="seg__item"
+                    aria-selected={tab === t}
+                    aria-controls={`support-panel-${t}`}
+                    onClick={() => setTab(t)}
+                  >
+                    {tx(t === 'chats' ? S.tabChats : S.tabProfile)}
+                  </button>
+                ))}
+              </div>
+            )
+          }
+        />
+        <div
+          className="support-panel"
+          role={family ? 'tabpanel' : undefined}
+          id={family ? `support-panel-${tab}` : undefined}
+          aria-labelledby={family ? `support-tab-${tab}` : undefined}
+        >
+          {tab === 'chats' ? (
+            <Chats id={impersonationId} client={client} session={session} onEnded={onEnded} />
+          ) : (
+            <ParentProfile id={impersonationId} client={client} onEnded={onEnded} />
+          )}
+        </div>
+        {session.target.kind === 'teacher' && <p className="support-foot">{tx(S.teacherProfileHint)}</p>}
       </div>
     </div>
   )
 }
 
+/** Whole minutes until `iso`, counted down while the page is open; null without a time. */
+function useMinutesLeft(iso: string | undefined): number | null {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    if (!iso) return
+    setNow(Date.now())
+    const timer = window.setInterval(() => setNow(Date.now()), 20_000)
+    return () => window.clearInterval(timer)
+  }, [iso])
+  if (!iso) return null
+  const end = Date.parse(iso)
+  return Number.isNaN(end) ? null : Math.max(0, Math.ceil((end - now) / 60_000))
+}
+
 type Client = ReturnType<typeof supportClient>
 
+/** The person's chats: the list, and the open one beside it (after it on a phone). */
 function Chats({ id, client, session, onEnded }: { id: string; client: Client; session: SupportSession; onEnded: () => void }) {
   const tx = useCopy()
-  const { locale } = useI18n()
+  const { locale, time, date, number } = useI18n()
   const [open, setOpen] = useState<string | null>(null)
   const list = useQuery({ queryKey: supportKeys.conversations(id), queryFn: client.conversations, refetchInterval: 15_000 })
   useEffect(() => {
@@ -148,32 +203,68 @@ function Chats({ id, client, session, onEnded }: { id: string; client: Client; s
   }, [list.error, onEnded])
 
   const conversations = list.data ?? []
+  const current = conversations.find((c) => c.id === open) ?? null
+  // Today's activity is a time; anything older is its day.
+  const today = date(new Date().toISOString())
+  const when = (iso: string) => (date(iso) === today ? time(iso) : date(iso))
   return (
-    <div className="support-chats">
-      <ul className="support-list" aria-label={tx(S.tabChats)}>
-        {list.error && !isEnded(list.error) && <li className="field__error">{describeError(list.error, locale)}</li>}
-        {list.data && conversations.length === 0 && <li className="field__hint">{tx(S.noChats)}</li>}
-        {conversations.map((c) => (
-          <li key={c.id}>
-            <button
-              type="button"
-              className={c.id === open ? 'support-list__item support-list__item--open' : 'support-list__item'}
-              aria-current={c.id === open ? 'true' : undefined}
-              onClick={() => setOpen(c.id)}
-            >
-              <span dir="auto">{titleOf(c, tx(S.untitled))}</span>
-              {c.unreadCount ? <Badge tone="info">{c.unreadCount}</Badge> : null}
-            </button>
-          </li>
-        ))}
-      </ul>
-      <div className="support-thread">
+    <div className={open ? 'support-work support-work--open' : 'support-work'}>
+      <section className="support-side" aria-label={tx(S.tabChats)}>
+        <header className="support-side__head">
+          <h2 className="support-side__title">{tx(S.tabChats)}</h2>
+          {list.data && conversations.length > 0 && <span className="support-side__count">{number(conversations.length)}</span>}
+        </header>
+        <ul className="support-list" aria-label={tx(S.tabChats)}>
+          {list.error && !isEnded(list.error) && <li className="support-list__note support-list__note--error">{describeError(list.error, locale)}</li>}
+          {list.data && conversations.length === 0 && <li className="support-list__note">{tx(S.noChats)}</li>}
+          {conversations.map((c) => {
+            const title = titleOf(c, tx(S.untitled))
+            const last = c.lastMessage && !c.lastMessage.deleted && !c.lastMessage.systemKind ? c.lastMessage.text : null
+            return (
+              <li key={c.id}>
+                <button type="button" className="support-row" aria-current={c.id === open ? 'true' : undefined} onClick={() => setOpen(c.id)}>
+                  <Avatar name={title} seed={c.id} src={c.avatarUrl} />
+                  <span className="support-row__body">
+                    <span className="support-row__top">
+                      <span className={c.unreadCount ? 'support-row__name support-row__name--unread' : 'support-row__name'}>
+                        <bdi>{title}</bdi>
+                      </span>
+                      <time className="support-row__time" dateTime={c.lastActivityAt}>
+                        {when(c.lastActivityAt)}
+                      </time>
+                    </span>
+                    {(last || c.unreadCount) && (
+                      <span className="support-row__bottom">
+                        <span className="support-row__sub">{last && <bdi>{last}</bdi>}</span>
+                        {c.unreadCount ? <span className="count">{number(c.unreadCount)}</span> : null}
+                      </span>
+                    )}
+                  </span>
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+      </section>
+      <section className="support-thread" aria-label={current ? titleOf(current, tx(S.untitled)) : tx(S.pickChat)}>
         {open ? (
-          <Thread id={id} client={client} conversationId={open} personName={session.target.name} onEnded={onEnded} />
+          <Thread
+            key={open}
+            id={id}
+            client={client}
+            conversationId={open}
+            title={current ? titleOf(current, tx(S.untitled)) : tx(S.untitled)}
+            person={session.target}
+            onBack={() => setOpen(null)}
+            onEnded={onEnded}
+          />
         ) : (
-          <p className="field__hint">{tx(S.pickChat)}</p>
+          <p className="support-thread__none">
+            <Icon name="conversations" size={22} />
+            {tx(S.pickChat)}
+          </p>
         )}
-      </div>
+      </section>
     </div>
   )
 }
@@ -182,23 +273,28 @@ function Thread({
   id,
   client,
   conversationId,
-  personName,
+  title,
+  person,
+  onBack,
   onEnded,
 }: {
   id: string
   client: Client
   conversationId: string
-  personName: string
+  title: string
+  person: SupportSession['target']
+  onBack: () => void
   onEnded: () => void
 }) {
   const tx = useCopy()
-  const { locale, dateTime } = useI18n()
+  const { locale, dateTime, number } = useI18n()
   const queryClient = useQueryClient()
   const [draft, setDraft] = useState('')
+  const body = useRef<HTMLDivElement>(null)
   const key = supportKeys.messages(id, conversationId)
   const page = useQuery({ queryKey: key, queryFn: () => client.messages(conversationId), refetchInterval: 10_000 })
   const send = useMutation({
-    mutationFn: (body: string) => client.send(conversationId, body, newIdempotencyKey()),
+    mutationFn: (text: string) => client.send(conversationId, text, newIdempotencyKey()),
     onSuccess: () => {
       setDraft('')
       void queryClient.invalidateQueries({ queryKey: key })
@@ -209,47 +305,92 @@ function Thread({
   }, [page.error, send.error, onEnded])
 
   const messages = [...(page.data?.messages ?? [])].sort(bySeq)
+  // The newest message is the one to see: the thread opens, and stays, at its end.
+  const count = messages.length
+  useEffect(() => {
+    const el = body.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [count])
   const onSubmit = (e: FormEvent) => {
     e.preventDefault()
-    const body = draft.trim()
-    if (body && !send.isPending) send.mutate(body)
+    const text = draft.trim()
+    if (text && !send.isPending) send.mutate(text)
   }
 
   return (
     <>
-      <p className="field__hint">{tx(S.readOnlyHint, { name: personName })}</p>
-      <ol className="support-messages">
-        {page.data && messages.length === 0 && <li className="field__hint">{tx(S.noMessages)}</li>}
-        {messages.map((m) => (
-          <li key={m.id} className="support-message">
-            <div className="support-message__meta">
-              <strong dir="auto">{m.authorDisplayName ?? ''}</strong> <span>{dateTime(m.createdAt)}</span>{' '}
-              {m.sentBySupport && <Badge tone="internal">{tx(S.sentBySupport)}</Badge>}
-            </div>
-            <div dir="auto" className="support-message__body">
-              {m.deletedForAll ? '—' : m.body ?? (m.attachments.length ? (
-                <>
-                  <Icon name="paperclip" size={15} /> <span className="ltr">{m.attachments.length}</span>
-                </>
-              ) : '')}
-            </div>
-          </li>
-        ))}
-      </ol>
+      <header className="support-thread__head">
+        <button type="button" className="btn btn--ghost btn--icon support-thread__back" onClick={onBack} aria-label={tx(S.backToChats)}>
+          <Icon name="arrowBack" size={18} />
+        </button>
+        <h2 className="support-thread__title">
+          <bdi>{title}</bdi>
+        </h2>
+      </header>
+      <div ref={body} className="support-thread__body">
+        <p className="support-thread__note">{tx(S.readOnlyHint, { name: person.name })}</p>
+        <ol className="support-msgs">
+          {page.data && messages.length === 0 && <li className="support-msgs__none">{tx(S.noMessages)}</li>}
+          {messages.map((m, i) => {
+            // As the person sees it: what they wrote sits on their side.
+            const mine = m.authorId !== null && m.authorId === person.actorId
+            const sameAuthor = i > 0 && messages[i - 1]!.authorId === m.authorId
+            return (
+              <li key={m.id} className={mine ? 'support-msg support-msg--mine' : 'support-msg'}>
+                {!mine && !sameAuthor && m.authorDisplayName && (
+                  <span className="support-msg__author">
+                    <bdi>{m.authorDisplayName}</bdi>
+                  </span>
+                )}
+                <div className={m.sentBySupport ? 'support-bubble support-bubble--support' : 'support-bubble'}>
+                  {m.sentBySupport && (
+                    <span className="support-bubble__flag">
+                      <Icon name="headset" size={14} />
+                      {tx(S.sentBySupport)}
+                    </span>
+                  )}
+                  {m.deletedForAll ? (
+                    <span className="support-bubble__gone">—</span>
+                  ) : m.body ? (
+                    <div className="support-bubble__text" dir="auto">{m.body}</div>
+                  ) : m.attachments.length ? (
+                    <span className="support-bubble__files">
+                      <Icon name="paperclip" size={15} /> <span className="ltr">{number(m.attachments.length)}</span>
+                    </span>
+                  ) : null}
+                  <time className="support-bubble__meta" dateTime={m.createdAt}>
+                    {dateTime(m.createdAt)}
+                  </time>
+                </div>
+              </li>
+            )
+          })}
+        </ol>
+      </div>
       <form className="support-composer" onSubmit={onSubmit}>
-        <label className="field">
-          <span className="field__label">{tx(S.write)}</span>
-          <textarea className="textarea" rows={2} value={draft} onChange={(e) => setDraft(e.target.value)} dir="auto" />
-          <span className="field__hint">{tx(S.labelNote, { name: personName })}</span>
-        </label>
+        <p className="support-composer__flag">
+          <Icon name="headset" size={14} />
+          {tx(S.labelNote, { name: person.name })}
+        </p>
         {send.error && !isEnded(send.error) && (
           <div className="field__error" role="alert">
             {describeError(send.error, locale)}
           </div>
         )}
-        <button type="submit" className="btn btn--primary" disabled={!draft.trim() || send.isPending}>
-          {tx(S.send)}
-        </button>
+        <div className="support-composer__bar">
+          <textarea
+            className="support-composer__input"
+            rows={1}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            dir="auto"
+            aria-label={tx(S.write)}
+            placeholder={tx(S.write)}
+          />
+          <button type="submit" className="support-send" disabled={!draft.trim() || send.isPending} aria-label={tx(S.send)} title={tx(S.send)}>
+            <Icon name="send" size={18} />
+          </button>
+        </div>
       </form>
     </>
   )
@@ -257,7 +398,7 @@ function Thread({
 
 function ParentProfile({ id, client, onEnded }: { id: string; client: Client; onEnded: () => void }) {
   const tx = useCopy()
-  const { locale } = useI18n()
+  const { locale, number } = useI18n()
   const queryClient = useQueryClient()
   const profile = useQuery({ queryKey: supportKeys.profile(id), queryFn: client.parentProfile })
   const [name, setName] = useState<string | null>(null)
@@ -281,40 +422,61 @@ function ParentProfile({ id, client, onEnded }: { id: string; client: Client; on
   if (!profile.data) return profile.error ? <p className="field__error">{describeError(profile.error, locale)}</p> : <LoadingState />
   const p = profile.data
   return (
-    <form
-      className="support-profile"
-      onSubmit={(e) => {
-        e.preventDefault()
-        if (name !== null || about !== null) save.mutate()
-      }}
-    >
-      <label className="field">
-        <span className="field__label">{tx(S.name)}</span>
-        <input className="input" value={name ?? p.displayName} onChange={(e) => setName(e.target.value)} dir="auto" />
-      </label>
-      <label className="field">
-        <span className="field__label">{tx(S.about)}</span>
-        <textarea className="textarea" rows={3} value={about ?? p.about ?? ''} onChange={(e) => setAbout(e.target.value)} dir="auto" />
-      </label>
-      {save.error && (
-        <div className="field__error" role="alert">
-          {describeError(save.error, locale)}
+    <div className="support-profile">
+      <form
+        className="sheet support-profile__form"
+        onSubmit={(e) => {
+          e.preventDefault()
+          if (name !== null || about !== null) save.mutate()
+        }}
+      >
+        <div className="sheet__head">
+          <h2 className="sheet__title">{tx(S.tabProfile)}</h2>
         </div>
-      )}
-      {save.isSuccess && name === null && about === null && <p className="field__hint" role="status">{tx(S.saved)}</p>}
-      <button type="submit" className="btn btn--primary" disabled={(name === null && about === null) || save.isPending}>
-        {tx(S.save)}
-      </button>
-      <h2 className="support-profile__heading">{tx(S.children)}</h2>
-      <ul>
-        {p.children.map((c) => (
-          <li key={c.id} dir="auto">
-            {c.displayName}
-            {c.level ? ` · ${c.level}` : ''}
-          </li>
-        ))}
-      </ul>
-    </form>
+        <div className="sheet__body support-profile__fields">
+          <label className="field">
+            <span className="field__label">{tx(S.name)}</span>
+            <input className="input" value={name ?? p.displayName} onChange={(e) => setName(e.target.value)} dir="auto" />
+          </label>
+          <label className="field">
+            <span className="field__label">{tx(S.about)}</span>
+            <textarea className="textarea" rows={3} value={about ?? p.about ?? ''} onChange={(e) => setAbout(e.target.value)} dir="auto" />
+          </label>
+          {save.error && (
+            <div className="field__error" role="alert">
+              {describeError(save.error, locale)}
+            </div>
+          )}
+          <div className="support-profile__save">
+            <button type="submit" className="btn" disabled={(name === null && about === null) || save.isPending}>
+              {tx(S.save)}
+            </button>
+            {save.isSuccess && name === null && about === null && <span className="support-profile__saved" role="status">{tx(S.saved)}</span>}
+          </div>
+        </div>
+      </form>
+      <section className="sheet support-profile__children" aria-labelledby="support-children">
+        <div className="sheet__head">
+          <h2 id="support-children" className="sheet__title">{tx(S.children)}</h2>
+          <span className="sheet__count">{number(p.children.length)}</span>
+        </div>
+        <ul className="support-children">
+          {p.children.map((c) => (
+            <li key={c.id}>
+              <Avatar name={c.displayName} seed={c.id} size="sm" />
+              <span className="support-children__name">
+                <bdi>{c.displayName}</bdi>
+              </span>
+              {c.level && (
+                <span className="support-children__level">
+                  <bdi>{c.level}</bdi>
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+      </section>
+    </div>
   )
 }
 
