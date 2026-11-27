@@ -972,7 +972,7 @@ a.ledger__cell:hover, button.ledger__cell:hover { background: var(--surface-hove
   color: var(--ink);
   font: inherit;
 }
-.page button:not([class]) { min-block-size: var(--control-h-sm); padding: 0 12px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--surface); color: var(--ink); font: inherit; font-size: var(--fs-sm); font-weight: 600; cursor: pointer; }
+.page button:not([class]):not(.switch > *) { min-block-size: var(--control-h-sm); padding: 0 12px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--surface); color: var(--ink); font: inherit; font-size: var(--fs-sm); font-weight: 600; cursor: pointer; }
 .page button[type='submit']:not([class]) { background: var(--teal); border-color: var(--teal); color: #fff; }
 
 /* ================================================================== auth */
