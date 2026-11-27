@@ -34,6 +34,8 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
   ChevronUp,
   ChevronsUpDown,
   Circle,
@@ -123,8 +125,6 @@ import {
   Notebook,
   NotebookPen,
   OctagonAlert,
-  PanelLeftClose,
-  PanelLeftOpen,
   PanelRight,
   Paperclip,
   Pause,
@@ -329,9 +329,10 @@ const ICONS = {
   operations: SlidersHorizontal,
   organization: Network,
   panel: PanelRight,
-  // The sidebar's fold: drawn for a left-hand rail and mirrored for Arabic, where the rail is on the right.
-  railCollapse: PanelLeftClose,
-  railExpand: PanelLeftOpen,
+  // The sidebar's fold (not a panel icon: pages use that for their own side panels); drawn for a
+  // left-hand rail and mirrored for Arabic, where the rail is on the right.
+  railCollapse: ChevronsLeft,
+  railExpand: ChevronsRight,
   paperclip: Paperclip,
   parents: Users,
   password: RectangleEllipsis,

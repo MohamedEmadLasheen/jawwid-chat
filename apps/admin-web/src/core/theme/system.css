@@ -1128,7 +1128,7 @@ button.side__item.is-current::before { content: none; }
   .sidebar[data-rail='collapsed'] .side__brand { gap: 0; padding: 16px 0 10px; }
   .sidebar[data-rail='collapsed'] .side__product { display: none; }
   /* The lockup has no separate mark: the folded rail shows its middle, the W under the open book. */
-  .sidebar[data-rail='collapsed'] .side__brand .brand-logo { inline-size: 32px; block-size: 34px; object-fit: cover; object-position: 50% 30%; }
+  .sidebar[data-rail='collapsed'] .side__brand .brand-logo { inline-size: 36px; block-size: 40px; object-fit: cover; object-position: 50% 0%; }
   .sidebar[data-rail='collapsed'] .side__searchrow { flex-direction: column; gap: 2px; margin: 2px 10px 8px; }
   .sidebar[data-rail='collapsed'] .side__search { flex: none; justify-content: center; inline-size: 40px; block-size: 40px; padding: 0; border-color: transparent; background: none; color: var(--ink-2); }
   .sidebar[data-rail='collapsed'] .side__search:hover { background: var(--sidebar-hover); }
@@ -1170,4 +1170,33 @@ button.side__item.is-current::before { content: none; }
 }
 @media (min-width: 1024px) and (prefers-reduced-motion: reduce) {
   .shell { transition: none; }
+}
+/* A strip of figures sized by its own room (the sidebar may be folded or open): when four
+   large amounts would collide, the numbers step down and a unit may wrap under its figure. */
+.figures { container: figures / inline-size; }
+@container figures (max-width: 760px) {
+  .figure { padding-inline: 12px; }
+  .figure__value { flex-wrap: wrap; column-gap: 4px; }
+  .figure__n { font-size: 24px; }
+}
+@media (min-width: 1024px) {
+  /* The gold mark's rounding faces the page in both directions. */
+  .side__item[aria-current]::before, .side__item.is-current::before { border-radius: 0; border-start-end-radius: 3px; border-end-end-radius: 3px; }
+  /* The folded list shows it scrolls: a thin bar, and a fade at its end while more lies below. */
+  .sidebar[data-rail='collapsed'] .side__nav { scrollbar-width: thin; }
+  .side__nav[data-more='end'] { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent); }
+}
+/* A short window (768px tall laptops): the rail's rows and gaps tighten so every place stays in view. */
+@media (min-width: 1024px) and (max-height: 820px) {
+  .sidebar .side__brand { padding-block: 12px 6px; }
+  .sidebar .side__searchrow { margin-block: 2px 4px; }
+  .sidebar .side__item { min-block-size: 34px; }
+  .sidebar[data-rail='collapsed'] .side__item, .sidebar[data-rail='collapsed'] :is(.side__search, .nc-bell) { min-block-size: 34px; block-size: 34px; }
+  .sidebar .side__entry--rule { margin-block-start: 5px; padding-block-start: 5px; }
+  .sidebar .side__entry--end { margin-block-start: 5px; }
+  .sidebar .side__today { margin-block-end: 2px; }
+  .sidebar .side__foot { padding-block: 6px; gap: 2px; }
+  .sidebar .side__sub-link { padding-block: 4px; }
+  /* Under its place only your page is listed; the others are in the place's menu and the page's tabs. */
+  .sidebar .side__sub > li:not(:has([aria-current])) { display: none; }
 }

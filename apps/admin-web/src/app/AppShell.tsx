@@ -366,6 +366,7 @@ function RailItem({
 }) {
   const tx = useText()
   const entryLabel = useEntryLabel()
+  const hereEntry = useContext(CurrentEntry)
   const sole = soleEntry(d)
   const unread = useUnreadChats()
   const badge = d.key === 'conversations' ? unread : 0
@@ -399,6 +400,10 @@ function RailItem({
   }
 
   const menuId = `rail-menu-${d.key}`
+  // Under the place you are in, only the pages beside yours (its group): a place of ten
+  // pages listed whole pushes the places after it out of sight. The rest are in its menu.
+  const groupHere = d.groups.find((g) => g.entries.some((e) => e.key === hereEntry))
+  const pagesHere = groupHere && d.groups.length > 1 ? groupHere.entries : entriesOf(d)
   return (
     <li
       className={itemClass}
@@ -437,7 +442,7 @@ function RailItem({
       {current && (
         // Where you are: the current place's pages, one click apart, under its name.
         <ul className="ruled side__sub" aria-label={tx(d.label)}>
-          {entriesOf(d).map((e) => (
+          {pagesHere.map((e) => (
             <li key={e.key}>
               <EntryLink entry={e} className="side__sub-link" tabIndex={-1}>
                 {entryLabel(e)}
@@ -506,6 +511,25 @@ function RailNav() {
     navRef.current?.querySelector<HTMLElement>(`#rail-menu-${enterKey} a`)?.focus()
     setEnterKey(null)
   }, [enterKey, openKey])
+
+  // A list taller than the window says so: a fade at its end while more lies below.
+  useEffect(() => {
+    const el = navRef.current
+    if (!el) return
+    const update = () => {
+      el.dataset.more = el.scrollHeight - el.scrollTop - el.clientHeight > 2 ? 'end' : ''
+    }
+    update()
+    el.addEventListener('scroll', update, { passive: true })
+    window.addEventListener('resize', update)
+    const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(update) : null
+    if (ro) [el, ...el.children].forEach((c) => ro.observe(c))
+    return () => {
+      el.removeEventListener('scroll', update)
+      window.removeEventListener('resize', update)
+      ro?.disconnect()
+    }
+  }, [])
 
   const openAndEnter = (key: DestinationKey) => {
     setOpenKey(key)
