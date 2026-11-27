@@ -36,6 +36,8 @@
   transform: rotate(45deg);
 }
 [dir='rtl'] :is(.tj-pick, .tj-option)::after { transform: rotate(-45deg); }
+/* The dialog's own rule closes the list. */
+.tj-options > .tj-option:last-child, .tj-picklist > li:last-child > .tj-pick { border-block-end: 0; }
 .tj-pick:hover:not(:disabled),
 .tj-option:hover:not(:disabled) { background: var(--surface-hover); }
 .tj-pick:focus-visible,
