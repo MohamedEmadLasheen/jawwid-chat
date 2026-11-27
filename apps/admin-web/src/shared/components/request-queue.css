@@ -126,7 +126,9 @@
   text-align: start;
   cursor: pointer;
 }
+a.rq-open { text-decoration: none; }
 .rq-open:hover, .rq-table tbody tr:hover .rq-open { color: var(--teal-dark); }
+.rq-more { margin-block-start: var(--space-3); }
 .rq-open:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; border-radius: var(--radius-sm); }
 .rq-sub { display: block; margin-block-start: 1px; font-size: var(--fs-xs); color: var(--ink-muted); font-weight: 400; }
 .rq-table .rq-c-who { min-inline-size: 9.5em; }
@@ -168,11 +170,13 @@
   }
   .rq-table.table tbody tr > :is(th, td) { display: block; padding: 0; border: 0; min-inline-size: 0; }
   /* What only adds detail stays in the detail. */
-  .rq-table.table tbody tr > .rq-c--extra, .rq-table .rq-c-when > .rq-muted:only-child { display: none; }
+  .rq-table.table tbody tr > .rq-c--extra, .rq-table :is(.rq-c-when, .rq-c-meta) > .rq-muted:only-child { display: none; }
   .rq-table .row-actions { opacity: 1; }
   .rq-table .rq-c-who { grid-column: 1; grid-row: 1; }
   .rq-table .rq-c-status { grid-column: 2; grid-row: 1; justify-self: end; text-align: end; }
   .rq-table .rq-c-status .rq-sub { text-align: end; }
+  .rq-table .rq-c-kind { grid-column: 1; grid-row: 2; font-size: var(--fs-xs); }
+  .rq-table .rq-c-kind .rq-type { color: var(--ink-muted); }
   .rq-table .rq-c-meta { grid-column: 1; font-size: var(--fs-xs); color: var(--ink-muted); }
   .rq-table .rq-c-meta .rq-sub { display: inline; }
   .rq-table .rq-c-meta .rq-sub::before { content: ' · '; }
