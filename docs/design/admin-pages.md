@@ -226,3 +226,38 @@ The **in-development** admin sections (no backend) are notifications, whatsapp, 
 | Report SLA | `dueAt`, `overdueAt`, warn at ≤6 h | `/moderation/reports` | Moderation |
 | Support session expiring | `expiresAt` (≤5 min) | `/admin/impersonations/:id/token` | Support session |
 | Terms not accepted | `legal.state`, 403 `COMM.TERMS_NOT_ACCEPTED` | `/me`, `/me/legal` | Terms gate |
+
+---
+
+## Status after the third pass (2026-11-27)
+
+Every page below is on the design system (`core/theme/system.css`), built on real endpoints, and was reviewed by fresh-context critics at 1440x900 in Arabic and English (also 1280, 1920 and 390). Rounds = critic rounds run; screenshots are the final round's.
+
+| Page | Rounds | Final screenshot |
+|---|---|---|
+| Teacher statistics | 4 | `admin-screens/teacher-stats-round4.png` |
+| Schedule (day, week, month, phone) | 4 | `admin-screens/schedule-round4.png` |
+| Conversations / All conversations | 3 | `admin-screens/conversations-round3.png` |
+| Today | 3 | `admin-screens/today-round3.png` |
+| Shell, sign-in, search | 3 | `admin-screens/shell-menu-round3.png`, `sign-in-round3.png`, `search-round3.png` |
+| Payments (receipts, transactions, attempts, events, renewals, settings) | 6 | `admin-screens/finance-receipts-round6.png` |
+| Instalments | 6 | `admin-screens/finance-instalments-round6.png` |
+| Requests hub | 5 | `admin-screens/requests-round5.png` |
+| Trial lessons, New students | 5 | `admin-screens/trials-round5.png`, `new-students-round5.png` |
+| Certificates | 5 | `admin-screens/certificates-round5.png` |
+| Sales pipeline | 5 | `admin-screens/sales-pipeline-round5.png` |
+| Tasks, Escalations | 4 | `admin-screens/tasks-round4.png`, `escalations-round4.png` |
+| Dashboard | 3 | `admin-screens/dashboard-round3.png` |
+| Notifications and settings | 3 | `admin-screens/notifications-round3.png` |
+| Parent file, Staff profile, My profile | 4 | `admin-screens/parent-file-round4.png`, `staff-profile-round4.png` |
+| Student file | 3 | `admin-screens/student-file-round3.png` |
+| Teacher file | 3 | `admin-screens/teacher-file-round3.png` |
+| Accounts, staff accounts, roles, organization, devices, support session | 4 | `admin-screens/accounts-round4.png`, `organization-round4.png` |
+| Parents, Students, Team, Users (admin) | 3 | `admin-screens/parents-round3.png`, `students-round3.png`, `team-round3.png`, `admin-users-round3.png` |
+| Teacher roster, Needs action, Teachers' schedules | 3 | `admin-screens/teacher-roster-round3.png`, `needs-action-round3.png`, `teacher-schedules-round3.png` |
+| Attendance & complaints, Grants & testimonials, Credentials review | 3 | `admin-screens/teacher-attendance-round3.png`, `teacher-grants-round3.png`, `teacher-profiles-round3.png` |
+| Moderation, Materials, Lesson audio | 3 | `admin-screens/moderation-round3.png`, `materials-round3.png`, `lesson-audio-round3.png` |
+| Calls, call window, Stories | 3 | `admin-screens/calls-round3.png`, `call-window-round3.png`, `stories-round3.png` |
+| Admin dashboard, unbuilt sections, All conversations | 3 | `admin-screens/admin-dashboard-round3.png`, `admin-placeholder-round3.png`, `admin-conversations-round3.png` |
+
+Below the three-round bar: the Student schedules desk (`/schedule/students`), the teacher's Students page and Teacher boards had two critic rounds in the teachers pass (screenshots `admin-screens/*-round2.png`); listed as an open item.

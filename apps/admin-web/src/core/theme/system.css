@@ -1104,3 +1104,10 @@ button.side__item.is-current::before { content: none; }
    and never runs under the account block. */
 .sidebar .side__menu { position: fixed; inset-inline-start: calc(var(--sidebar-w) + 8px); inset-block-end: auto; }
 .side__nav { overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+/* A row without "⋯" keeps its slot, so row actions line up down a list. */
+.row-actions2:not(:has(.menu)) { padding-inline-end: 34px; }
+/* A strip of tabs that scrolls says so with a fade at its end. */
+@media (max-width: 767px) {
+  .ts-tabs, .page-tabs { -webkit-mask-image: linear-gradient(to var(--fade-to, left), transparent 0, #000 28px); mask-image: linear-gradient(to var(--fade-to, left), transparent 0, #000 28px); }
+  [dir='ltr'] .ts-tabs, [dir='ltr'] .page-tabs { --fade-to: right; }
+}
