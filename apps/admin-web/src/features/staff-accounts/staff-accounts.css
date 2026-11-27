@@ -8,13 +8,27 @@
 
 .sa-name { background: none; border: 0; padding: 0; min-block-size: 32px; font: inherit; font-weight: 600; color: var(--text-link); cursor: pointer; text-align: start; }
 .sa-name:hover { color: var(--teal-dark); text-decoration: underline; text-underline-offset: 3px; }
+/* In the list a name is ink beside its monogram, like every list of people here. */
+.sa-page .table .sa-name { color: var(--ink); }
+.sa-page .table tr:hover .sa-name { color: var(--teal-dark); }
+/* A role's key as the server names it: a small code tag for whoever administers roles. */
+.sa-role { line-height: 1.7; }
+.sa-key { display: inline-block; padding: 0 5px; border: 1px solid var(--hairline); border-radius: var(--radius-sm); font-family: var(--font-mono, ui-monospace, monospace); font-size: 11.5px; line-height: 1.6; color: var(--ink-muted); vertical-align: middle; }
+/* What a role is for, in whichever language it was written: it keeps the page's side. */
+[dir='rtl'] .sa-page .table td .field__hint[dir] { text-align: right; }
+[dir='ltr'] .sa-page .table td .field__hint[dir] { text-align: left; }
+@media (max-width: 767px) {
+  /* On a phone the short facts share a line; the roles, which may be many, follow on their own. */
+  .sa-page .pp-stack td[data-wide] { order: 2; }
+}
+.sa-row-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.sa-row-actions .btn--ghost { color: var(--ink-muted); }
+.sa-row-actions .btn--ghost:hover:not(:disabled) { color: var(--ink); }
 .sa-chips { display: flex; flex-wrap: wrap; gap: 2px var(--space-3); }
 .sa-filters { align-items: flex-end; }
 .sa-filters .field { margin: 0; min-inline-size: 190px; }
 .sa-filters .chips { align-self: center; }
 .sa-page .table td .field__hint { display: block; font-size: var(--fs-xs); }
-/* A role's key is Latin; in Arabic it still sits under the role's name, on its side. */
-[dir='rtl'] .sa-page .table td .field__hint[dir='ltr'] { text-align: right; }
 .sa-step { color: var(--ink-muted); margin: 0 0 var(--space-3); font-size: var(--fs-sm); }
 .sa-fixed { display: grid; grid-template-columns: max-content 1fr; gap: 0 var(--space-4); margin: var(--space-2) 0; font-size: var(--fs-sm); }
 .sa-fixed dt, .sa-fixed dd { margin: 0; padding-block: 7px; border-block-end: 1px solid var(--hairline-soft); }

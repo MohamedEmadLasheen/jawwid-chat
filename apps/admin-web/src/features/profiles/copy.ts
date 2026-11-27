@@ -72,11 +72,12 @@ export const P = {
   inactive: { en: 'Inactive', ar: 'غير نشط' },
 
   // Photo
-  photoChoose: { en: 'Upload photo', ar: 'رفع صورة' },
-  photoReplace: { en: 'Change photo', ar: 'تغيير الصورة' },
+  // The same words as a staff member's own photo control.
+  photoChoose: { en: 'Choose a photo', ar: 'اختر صورة' },
+  photoReplace: { en: 'Replace photo', ar: 'استبدال الصورة' },
   photoUse: { en: 'Use this photo', ar: 'استخدام هذه الصورة' },
   photoUploading: { en: 'Uploading…', ar: 'جارٍ الرفع…' },
-  photoRemove: { en: 'Remove', ar: 'إزالة' },
+  photoRemove: { en: 'Remove photo', ar: 'إزالة الصورة' },
   photoPreview: { en: 'New photo preview', ar: 'معاينة الصورة الجديدة' },
   photoHint: { en: 'JPEG, PNG or WebP. It replaces the photo in every chat.', ar: 'JPEG أو PNG أو WebP. تحل محل الصورة في كل المحادثات.' },
   photoSaved: { en: 'Photo saved.', ar: 'تم حفظ الصورة.' },
@@ -170,7 +171,6 @@ export const P = {
   schedule: { en: 'Class schedule', ar: 'جدول الحصص' },
   noSchedule: { en: 'No regular lesson times yet', ar: 'لا توجد مواعيد ثابتة للحصص بعد' },
   minutes: { en: '{n} min', ar: '{n} دقيقة' },
-  timezone: { en: 'Times in {zone}', ar: 'المواعيد بتوقيت {zone}' },
   familyLocal: { en: "family's time: {time}", ar: 'بتوقيت الأسرة: {time}' },
   familyLocalEstimate: { en: "family's time ≈ {time} (from location)", ar: 'بتوقيت الأسرة ≈ {time} (حسب الموقع)' },
   notSet: { en: 'Not set', ar: 'غير محدد' },
@@ -194,7 +194,10 @@ export const P = {
   overdueShort: { en: 'Overdue', ar: 'متأخر' },
   photo: { en: 'Photo', ar: 'الصورة' },
   activity: { en: 'Activity', ar: 'النشاط' },
-  lessonsUsed: { en: '{used} of {total} lessons', ar: '{used} من {total} حصة' },
+  // {lessons} is the counted noun, worded by the subscriptions copy (حصتان، 3 حصص، 24 حصة).
+  lessonsUsed: { en: '{used} of {lessons}', ar: '{used} من {lessons}' },
+  // A subscription with nothing holding it back: the word the Students list uses.
+  subscriptionOpen: { en: 'Active', ar: 'نشط' },
   lessonsLeft: { en: '{n} left', ar: 'المتبقي {n}' },
   subscriptionState: { en: 'Subscription', ar: 'الاشتراك' },
   details: { en: 'Details', ar: 'البيانات' },

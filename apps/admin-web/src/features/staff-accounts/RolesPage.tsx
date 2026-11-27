@@ -71,7 +71,7 @@ export function RolesPage() {
           onRetry={() => void roles.refetch()}
         >
           <div className="table-wrap">
-            <table className="table">
+            <table className="table pp-stack">
               <thead>
                 <tr>
                   <th scope="col">{tx(SA.role)}</th>
@@ -85,14 +85,13 @@ export function RolesPage() {
                 {list.map((r) => (
                   <tr key={r.id}>
                     <td>
-                      <div dir="auto">
+                      <div className="sa-role">
                         <strong>{locale === 'ar' ? r.nameAr : r.nameEn}</strong>{' '}
+                        {/* The role's key, as the server names it: a small code tag for whoever administers roles. */}
+                        <code className="sa-key" dir="ltr">{r.key}</code>{' '}
                         {r.template && <Badge tone="info">{tx(SA.template)}</Badge>}{' '}
                         {r.archived && <Badge tone="neutral">{tx(SA.archived)}</Badge>}{' '}
                         {!canDefine && r.grantable && <Badge tone="ok">{tx(SA.youCanGrant)}</Badge>}
-                      </div>
-                      <div className="field__hint" dir="ltr">
-                        {r.key}
                       </div>
                       {r.template && <div className="field__hint">{tx(SA.templateHint)}</div>}
                       {r.description && (
@@ -101,8 +100,8 @@ export function RolesPage() {
                         </div>
                       )}
                     </td>
-                    <td>{tx(TIER[r.maxTier] ?? { ar: r.maxTier, en: r.maxTier })}</td>
-                    <td>
+                    <td data-label={tx(SA.maxTier)}>{tx(TIER[r.maxTier] ?? { ar: r.maxTier, en: r.maxTier })}</td>
+                    <td data-label={tx(SA.permissions)} data-wide="">
                       <span className="sa-chips">
                         {r.permissions.map((k) => {
                           const l = label.get(k)
@@ -114,15 +113,16 @@ export function RolesPage() {
                         })}
                       </span>
                     </td>
-                    {members && <td>{members.get(r.id) ?? 0}</td>}
+                    {members && <td data-label={tx(SA.members)}>{members.get(r.id) ?? 0}</td>}
                     {canDefine && (
-                      <td>
+                      <td data-wide="">
                         {!r.archived && (
-                          <div className="acct-actions">
+                          <div className="sa-row-actions">
                             <button type="button" className="btn btn--sm" onClick={() => setPending({ act: 'edit', role: r })}>
                               {tx(SA.edit)}
                             </button>
-                            <button type="button" className="btn btn--sm btn--danger" onClick={() => setPending({ act: 'archive', role: r })}>
+                            {/* Archiving is housekeeping, not a problem: a quiet word, not a red box. */}
+                            <button type="button" className="btn btn--sm btn--ghost" onClick={() => setPending({ act: 'archive', role: r })}>
                               {tx(SA.archive)}
                             </button>
                           </div>

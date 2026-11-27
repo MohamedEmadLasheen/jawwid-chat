@@ -52,7 +52,7 @@
 .sp-workload__asof { font-size: var(--fs-xs); color: var(--ink-muted); }
 .sp-ledger { margin-block-end: 0; }
 /* The figure is first in the document (it is what is read out first) and drawn under its label. */
-.sp-ledger .ledger__label { order: -1; }
+.sp-ledger .ledger__label { order: -1; white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.35; }
 .sp-ledger .ledger__note { display: flex; align-items: baseline; gap: 5px; margin-block-start: 2px; }
 .sp-ledger__n { font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; direction: ltr; unicode-bidi: isolate; }
 .sp-ledger button.ledger__cell { cursor: pointer; }
@@ -123,44 +123,51 @@ html[lang='ar'] .pp-side > .sp-card > .sp-card__title { font-size: 13.5px; }
 
 .sp-team, .sp-org { margin-block-start: var(--space-6); }
 .sp-team .sp-ledger, .sp-org .sp-ledger { margin-block-start: 12px; }
-.sp-filters { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-block: var(--space-4) var(--space-2); }
-.sp-filter { display: block; min-inline-size: 150px; }
-.sp-filter--grow { flex: 1 1 220px; max-inline-size: 380px; }
+/* Search, then the pickers. On a phone the pickers wait behind one "Filters" control. */
+.sp-filters { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-block: var(--space-4) var(--space-2); }
+.sp-filters .search { flex: 1 1 240px; max-inline-size: 380px; }
+.sp-filters__toggle { display: none; }
+.sp-filters__count { margin-inline-start: 6px; font-variant-numeric: tabular-nums; color: var(--teal); font-weight: 600; }
+.sp-filters__more { display: contents; }
+.sp-filter { display: block; flex: 0 1 200px; min-inline-size: 150px; }
 .sp-filter .input, .sp-filter .ss { inline-size: 100%; }
 
-/* One person a line: who, what they hold, what they carry, the state of their file. */
-.sp-rows { list-style: none; margin: 0; padding: 0; border-block-start: 1px solid var(--hairline); }
-.sp-row {
+/* A directory: one line a person, the column names said once above. The line opens the profile. */
+.sp-rows { list-style: none; margin: 0; padding: 0; }
+.sp-rows__head, .sp-table .sp-row {
   display: grid;
-  grid-template-columns: minmax(200px, 1.5fr) minmax(160px, 1.6fr) minmax(280px, 2fr) minmax(170px, 1.2fr);
-  gap: var(--space-2) var(--space-4);
+  grid-template-columns: minmax(210px, 1.5fr) minmax(120px, 1.2fr) repeat(5, minmax(52px, 78px)) 104px 108px;
+  gap: 0 var(--space-3);
   align-items: center;
-  padding: 10px 2px;
-  border-block-end: 1px solid var(--hairline-soft);
-  transition: background var(--dur-fast) var(--ease-out);
 }
+.sp-rows__head { padding: 9px 2px; border-block: 1px solid var(--hairline); font-size: 12.5px; font-weight: 500; color: var(--ink-muted); }
+.sp-rows__head > span { min-inline-size: 0; line-height: 1.3; }
+.sp-row { padding: 9px 2px; border-block-end: 1px solid var(--hairline-soft); transition: background var(--dur-fast) var(--ease-out); }
+.sp-table .sp-row { cursor: pointer; }
 .sp-row:hover { background: var(--surface-hover); }
-.sp-row--compact { grid-template-columns: minmax(200px, 1fr) minmax(220px, 2fr); }
 .sp-row__who { display: flex; gap: 10px; align-items: center; min-inline-size: 0; }
 .sp-row__names { min-inline-size: 0; overflow-wrap: anywhere; }
-/* A name that opens a profile is a link, and reads as one: --text-link, never --accent. */
+/* A name that opens a profile: --text-link by the theme's rule, never --accent. */
 .sp-row__link { font-weight: 600; color: var(--text-link); text-decoration: none; }
-.sp-row__link:hover { color: var(--teal-dark); text-decoration: underline; text-underline-offset: 3px; }
-.sp-row__sub { display: flex; flex-wrap: wrap; align-items: center; gap: 2px var(--space-2); font-size: var(--fs-xs); color: var(--ink-muted); }
+/* In a list of people a name is ink, like every other list here; the line itself is the way in. */
+.sp-rows .sp-row__link { color: var(--ink); }
+.sp-rows .sp-row:hover .sp-row__link, .sp-rows .sp-row__link:hover { color: var(--teal-dark); text-decoration: underline; text-underline-offset: 3px; }
+.sp-row__sub { display: flex; flex-wrap: wrap; align-items: center; gap: 0 var(--space-3); font-size: var(--fs-xs); color: var(--ink-muted); }
 .sp-row__sub .badge { font-size: var(--fs-xs); }
 .sp-row__resp { display: flex; flex-wrap: wrap; gap: 4px; align-content: center; min-inline-size: 0; }
-.sp-row__manager { flex-basis: 100%; }
-.sp-row__nums { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--space-2); margin: 0; }
-.sp-row__nums > div { display: flex; flex-direction: column-reverse; min-inline-size: 0; }
-.sp-row__nums dt { font-size: 11.5px; color: var(--ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-html[lang='ar'] .sp-row__nums dt { font-size: 12.5px; }
+.sp-table .sp-row__nums { display: contents; }
+.sp-table .sp-row__nums dt { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .sp-row__nums dd { margin: 0; font-family: var(--display); font-size: var(--fs-lg); font-weight: 600; line-height: 1.2; font-variant-numeric: tabular-nums lining-nums; }
-.sp-row__meta { display: flex; flex-direction: column; gap: 1px; min-inline-size: 0; }
-/* What a profile still lacks stays on one line; the row keeps its height. */
-.sp-row__file { display: flex; gap: 4px; min-inline-size: 0; white-space: nowrap; }
-.sp-row__missing { min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; }
-.sp-row__facts { display: flex; flex-wrap: wrap; gap: 0 var(--space-3); }
-.sp-row__facts > span + span::before { content: '·'; margin-inline-end: var(--space-3); color: var(--border-strong); }
+.sp-row__file { display: flex; flex-direction: column; gap: 1px; font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
+.sp-row__right { font-size: var(--fs-xs); color: var(--ink-muted); }
+.sp-row__seen { font-size: var(--fs-xs); color: var(--ink-muted); }
+
+/* The organization overview's teams: a manager and their team's sums. */
+.sp-row--compact { display: grid; grid-template-columns: minmax(200px, 1fr) minmax(220px, 2fr); gap: var(--space-2) var(--space-4); align-items: center; }
+.sp-row--compact .sp-row__nums { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--space-2); margin: 0; }
+.sp-row--compact .sp-row__nums > div { display: flex; flex-direction: column-reverse; min-inline-size: 0; }
+.sp-row--compact .sp-row__nums dt { font-size: 11.5px; color: var(--ink-muted); }
+html[lang='ar'] .sp-row--compact .sp-row__nums dt { font-size: 12.5px; }
 
 /* The organization overview's tabs and lists. */
 .sp-tabs { display: flex; gap: var(--space-5); flex-wrap: wrap; border-block-end: 1px solid var(--hairline); margin-block-start: var(--space-3); }
@@ -188,12 +195,36 @@ html[lang='ar'] .sp-subtitle { font-size: 13.5px; }
 /* While the profile loads: flat shapes where the head, the ledger and the columns will be. */
 .sp-skeleton { background: var(--surface-sunken); margin-block-end: var(--space-4); }
 
-@media (max-width: 1100px) {
-  .sp-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+@media (max-width: 1199px) {
+  /* Less room: what they hold and when they were last seen are on the profile. */
+  .sp-rows__head, .sp-table .sp-row { grid-template-columns: minmax(200px, 1.5fr) repeat(5, minmax(48px, 78px)) 96px; }
+  .sp-rows__head > :nth-child(2), .sp-rows__head > :nth-child(9), .sp-table .sp-row__resp, .sp-table .sp-row__seen { display: none; }
 }
-@media (max-width: 600px) {
-  .sp-row, .sp-row--compact { grid-template-columns: minmax(0, 1fr); }
-  .sp-filter { min-inline-size: 0; flex: 1 1 100%; max-inline-size: none; }
+@media (max-width: 767px) {
+  /* A phone: the person, and two facts under the name. Everything else is one tap away. */
+  .sp-rows__head { display: none; }
+  .sp-rows { border-block-start: 1px solid var(--hairline); }
+  .sp-table .sp-row { grid-template-columns: minmax(0, 1fr); gap: 2px; padding: 10px 2px; }
+  .sp-table .sp-row__file { display: none; }
+  .sp-table .sp-row__nums { display: flex; flex-wrap: wrap; gap: 0 var(--space-4); margin: 0; padding-inline-start: 46px; }
+  .sp-table .sp-row__nums > div { display: none; }
+  .sp-table .sp-row__nums > .sp-row__fact { display: flex; align-items: baseline; gap: 5px; }
+  .sp-table .sp-row__nums dt { position: static; inline-size: auto; block-size: auto; clip-path: none; overflow: visible; font-size: var(--fs-xs); color: var(--ink-muted); }
+  .sp-table .sp-row__nums dd { font-family: var(--font); font-size: var(--fs-sm); }
+  .sp-filters .search { flex: 1 1 0; max-inline-size: none; }
+  .sp-filters__toggle { display: inline-flex; }
+  .sp-filters__more { display: none; flex-basis: 100%; }
+  .sp-filters__more--open { display: grid; gap: var(--space-2); }
+  .sp-filter { min-inline-size: 0; }
+  /* The team's sums: four to a line, small, so the list begins on the first screen. */
+  .sp-team .sp-ledger.ledger, .sp-teampage .sp-ledger.ledger { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  :is(.sp-team, .sp-teampage) .sp-ledger .ledger__cell { padding: 8px 6px 9px; border-inline-start: 1px solid var(--hairline-soft); }
+  :is(.sp-team, .sp-teampage) .sp-ledger .ledger__cell:nth-child(4n + 1) { border-inline-start: 0; padding-inline-start: 2px; }
+  :is(.sp-team, .sp-teampage) .sp-ledger .ledger__cell:nth-child(n + 5) { border-block-start: 1px solid var(--hairline-soft); }
+  :is(.sp-team, .sp-teampage) .sp-ledger .ledger__cell:nth-child(-n + 4) { border-block-start: 0; }
+  :is(.sp-team, .sp-teampage) .sp-ledger .ledger__value { font-size: 20px; }
+  :is(.sp-team, .sp-teampage) .sp-ledger .ledger__label { font-size: 11.5px; line-height: 1.3; }
+  .sp-row--compact { grid-template-columns: minmax(0, 1fr); }
   .sp-facts { grid-template-columns: minmax(0, 1fr); }
   .sp-facts dt { border-block-end: 0; padding-block-end: 0; }
   .sp-tabs { gap: var(--space-4); }

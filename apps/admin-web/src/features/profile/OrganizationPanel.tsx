@@ -7,7 +7,7 @@ import type { OrganizationOverview, ProfilePerson } from './api'
 import { CATEGORY_LABEL, MISSING_LABEL, ROLE_LABEL, T, labelFor, useCopy, type Pair } from './copy'
 import { ActivityList } from './ActivitySection'
 import { useOrganization } from './hooks'
-import { StaffAvatar } from './StaffAvatar'
+import { Avatar } from '@/shared/components/Avatar'
 import { StaffTable } from './StaffTable'
 import { Total } from './TeamSection'
 import { RESPONSIBILITY_CATEGORIES } from './api'
@@ -148,7 +148,7 @@ function Overview({ data, onTab }: { data: OrganizationOverview; onTab: (t: Tab)
           {data.teams.map((t) => (
             <li key={t.manager.staffId} className="sp-row sp-row--compact">
               <div className="sp-row__who">
-                <StaffAvatar name={t.manager.displayName} url={t.manager.avatarUrl} size={36} />
+                <Avatar name={t.manager.displayName} seed={t.manager.staffId} src={t.manager.avatarUrl} />
                 <div className="sp-row__names">
                   <Link to={`/profile/${t.manager.staffId}`} className="sp-row__link">{t.manager.displayName}</Link>
                   <div className="sp-muted sp-small">{tx(T.members, { n: number(t.memberCount) })}</div>
@@ -245,7 +245,7 @@ function PeopleList({ people, extra }: { people: ProfilePerson[]; extra?: (p: Pr
     <ul className="sp-list">
       {people.map((p) => (
         <li key={p.staffId} className="sp-list__item sp-person">
-          <StaffAvatar name={p.displayName} url={p.avatarUrl} size={28} />
+          <Avatar name={p.displayName} seed={p.staffId} src={p.avatarUrl} size="sm" />
           <Link to={`/profile/${p.staffId}`}>{p.displayName}</Link>
           <span className="sp-muted sp-small">{tx(ROLE_LABEL[p.role] ?? { en: p.role, ar: p.role })}</span>
           {extra?.(p) && <span className="sp-small">{extra(p)}</span>}

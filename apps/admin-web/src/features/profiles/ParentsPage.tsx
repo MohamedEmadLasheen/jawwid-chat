@@ -1,5 +1,5 @@
 import { useDeferredValue, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Avatar } from '@/shared/components/Avatar'
 import { Icon } from '@/shared/components/Icon'
@@ -55,6 +55,7 @@ export function ParentsPage({ eyebrow }: { eyebrow?: string }) {
   // PD-42: offered when the server says this viewer enters families.
   const intake = useIntakeOptions()
   const [adding, setAdding] = useState(false)
+  const navigate = useNavigate()
   // The list carries no totals per filter: only the open tab can say how many it holds.
   const shown = list.data ? (list.data.truncated && items.length >= LIST_LIMIT ? `${number(items.length)}+` : number(items.length)) : undefined
   const count = (tab: ParentAccessFilter) => (tab === access ? shown : undefined)
@@ -140,7 +141,14 @@ export function ParentsPage({ eyebrow }: { eyebrow?: string }) {
                 </thead>
                 <tbody>
                   {items.map((p) => (
-                    <tr key={p.id}>
+                    <tr
+                      key={p.id}
+                      className="pp-rowlink"
+                      onClick={(e) => {
+                        // The whole row opens the file; the name is the link the keyboard uses.
+                        if (!(e.target as HTMLElement).closest('a, button, input')) navigate(parentPath(p.id))
+                      }}
+                    >
                       <td>
                         <Link to={parentPath(p.id)} className="pp-cell-who">
                           <Avatar name={p.name} seed={p.id} src={p.avatarUrl} size="sm" />

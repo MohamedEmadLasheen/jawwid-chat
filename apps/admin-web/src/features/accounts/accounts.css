@@ -6,23 +6,34 @@
 .acct-kind { font-size: var(--fs-xs); color: var(--ink-muted); font-weight: 400; margin-inline-start: 4px; }
 .acct-page .table td .badge + .badge { margin-inline-start: var(--space-2); }
 
-/* What can be done to an account, as words in a row: no row carries five boxes. */
-.acct-cell-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0 2px; }
+/* What can be done to an account: quiet teal words on one line, graded by weight.
+   Resetting a password is the everyday act (semibold); devices and temporary access are
+   plain; setting an account inactive is terracotta; acting as the person is the one boxed
+   action, because it is the one that must never be pressed by mistake. */
+.acct-cell-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 2px; }
 .acct-actions { display: contents; }
-.acct-cell-actions .btn { padding-inline: 8px; }
-.acct-cell-actions .btn:first-child { margin-inline-start: -8px; }
-/* At rest the words are quiet; the row under the pointer (or the keyboard) wakes its own. */
-.acct-cell-actions .btn--ghost { color: var(--ink-muted); }
-.acct-page tr:hover .acct-cell-actions .btn--ghost,
-.acct-page tr:focus-within .acct-cell-actions .btn--ghost { color: var(--teal); }
-.acct-page tr:hover .acct-cell-actions .acct-danger,
-.acct-page tr:focus-within .acct-cell-actions .acct-danger,
-.acct-cell-actions .acct-danger:hover:not(:disabled) { color: var(--terracotta); }
-.acct-cell-actions .acct-danger:hover:not(:disabled) { background: var(--terracotta-tint); }
-@media (hover: none) {
-  .acct-cell-actions .btn--ghost { color: var(--teal); }
-  .acct-cell-actions .acct-danger { color: var(--terracotta); }
+.acct-act.btn { white-space: nowrap; }
+.acct-act.btn--ghost { padding-inline: 8px; color: var(--teal); font-weight: 500; }
+.acct-act.btn--ghost:hover:not(:disabled) { color: var(--teal-dark); }
+.acct-cell-actions > .acct-act.btn--ghost:first-child { margin-inline-start: -8px; }
+.acct-act--main.btn--ghost { font-weight: 600; }
+.acct-danger.btn--ghost { color: var(--terracotta); }
+.acct-danger.btn--ghost:hover:not(:disabled) { color: var(--terracotta); background: var(--terracotta-tint); }
+.acct-as.btn { margin-inline: 6px; border-color: var(--gold-line); color: var(--gold-text); background: transparent; }
+.acct-as.btn:hover:not(:disabled) { background: var(--gold-tint); border-color: var(--gold-line); }
+@media (min-width: 768px) {
+  /* The account keeps to its column so the actions have theirs. */
+  .acct-page .table th:first-child { inline-size: 28%; }
+  .acct-page .table th:nth-child(4) { inline-size: 52%; }
 }
+@media (max-width: 767px) {
+  /* On a phone the words keep one line and the boxed action takes the next, the same on every row. */
+  .acct-cell-actions .acct-as { order: 5; margin-inline: 0; }
+  .acct-cell-actions .acct-act.btn--ghost { padding-inline: 6px; }
+  .acct-cell-actions > .acct-act.btn--ghost:first-child, .acct-actions > .acct-act.btn--ghost:first-child { margin-inline-start: -6px; }
+}
+/* A family's children are a short list: lines of even length, never one name alone. */
+.acct-page .pp-cell-sub { text-wrap: balance; }
 .acct-never { color: var(--ink-muted); }
 
 .acct-check { display: flex; gap: var(--space-2); align-items: flex-start; margin-block: var(--space-3); font-size: var(--fs-sm); }
