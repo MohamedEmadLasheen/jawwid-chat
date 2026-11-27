@@ -135,7 +135,12 @@ function TeacherDetailView({
           key: 'held',
           label: tx(TS.colLessons),
           value: <bdi dir="ltr" className="ltr">{`${fmt.number(lessonsOf('held'))} / ${fmt.number(d.totals.counted.lessons)}`}</bdi>,
-          note: tx(TS.colLessonsKey),
+          note:
+            flags && flags.noShow > 0 ? (
+              <span className="tsx-sub is-breach">{tx(TS.missedByTeacher, { n: fmt.number(flags.noShow) })}</span>
+            ) : (
+              tx(TS.colLessonsKey)
+            ),
         },
         { key: 'reliability', label: tx(T.reliability), value: <Pct value={d.rates.teacherReliability} />, note: tx(T.reliabilityHint) },
       ]

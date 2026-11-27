@@ -210,7 +210,7 @@
 .tsx-bar { display: grid; grid-template-columns: minmax(7.5rem, 10rem) minmax(0, 1fr) 2.75rem; align-items: center; gap: 12px; font-size: var(--fs-sm); }
 .tsx-bar__label { color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tsx-bar__track { display: block; block-size: 8px; border-radius: 4px; background: var(--line-2); overflow: hidden; }
-.tsx-bar__fill { display: block; block-size: 100%; border-radius: 4px; background: var(--ink-muted); }
+.tsx-bar__fill { display: block; min-inline-size: 8px; block-size: 100%; border-radius: 4px; background: var(--ink-muted); }
 .tsx-bar--alarm .tsx-bar__fill { background: var(--urgent); }
 .tsx-bar__n { text-align: end; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums lining-nums; }
 .tsx-bar--alarm .tsx-bar__n { color: var(--urgent); }

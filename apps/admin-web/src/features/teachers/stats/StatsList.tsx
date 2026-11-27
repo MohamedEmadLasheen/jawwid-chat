@@ -255,7 +255,7 @@ export function StatsList({
                     const items = visible.filter((r) => r.level === level)
                     if (items.length === 0) return null
                     const folded = level === 'ok' && collapsing && items.length > OK_SHOWN + 1
-                    const askReports = level === 'urgent' ? items.filter((r) => r.flags.late).reduce((n, r) => n + r.row.unreported.lessons, 0) : 0
+                    const askReports = level === 'urgent' && items.some((r) => r.flags.late) ? items.reduce((n, r) => n + r.row.unreported.lessons, 0) : 0
                     return (
                       <tbody key={level} className={`tsx-group tsx-group--${level}`}>
                         <tr className="tsx-ghead">
