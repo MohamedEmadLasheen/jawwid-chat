@@ -64,7 +64,7 @@
 html[lang='ar'] .org-sub--facts > :not(:last-child)::after { content: '،'; }
 /* A row's stated action is a quiet word until the row is under the pointer or holds focus. */
 @media (min-width: 768px) {
-  .org-table .dir-row:not(:hover):not(:focus-within) .row-actions2 > .btn { border-color: transparent; background: none; }
+  .org-table .dir-row:not(:hover):not(:focus-within) .row-actions2 > .btn { border-color: transparent; background: none; color: var(--ink-muted); font-weight: 500; }
 }
 .org-person { font-weight: 600; color: var(--ink); text-decoration: none; }
 .org-person:hover { color: var(--teal); text-decoration: underline; text-underline-offset: 3px; }

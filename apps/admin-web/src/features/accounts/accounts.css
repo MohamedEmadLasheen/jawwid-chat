@@ -35,7 +35,7 @@ html[lang='ar'] .acct-sub > :not(:last-child)::after { content: '،'; }
    rows do not read as thirty buttons; under the pointer it is the row's control, framed. */
 .acct-table .dir-row .row-actions2 > .btn { white-space: nowrap; }
 @media (min-width: 768px) {
-  .acct-table .dir-row:not(:hover):not(:focus-within) .row-actions2 > .btn { border-color: transparent; background: none; }
+  .acct-table .dir-row:not(:hover):not(:focus-within) .row-actions2 > .btn { border-color: transparent; background: none; color: var(--ink-muted); font-weight: 500; }
 }
 
 /* A support session: whose account, why it was opened, then by whom and when. */
