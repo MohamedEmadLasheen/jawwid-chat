@@ -111,9 +111,6 @@ html[lang='ar'] .sc-unit { font-family: var(--font-ar, var(--font)); }
 .sc-rail__toggle > .icon { flex: none; color: var(--teal); }
 .sc-rail__toggle .sc-filter__label { flex: 1; text-align: start; }
 .sc-rail__caret { display: inline-flex; color: var(--ink-muted); }
-[dir='rtl'] .sc-rail__caret { transform: scaleX(-1); }
-.sc-work--folded .sc-rail__caret { transform: scaleX(-1); }
-[dir='rtl'] .sc-work--folded .sc-rail__caret { transform: none; }
 
 .sc-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .sc-filters--rail { display: grid; gap: 2px; }
@@ -201,7 +198,7 @@ html[lang='ar'] .sc-unit { font-family: var(--font-ar, var(--font)); }
 .sc-facts__also { font-weight: 400; color: var(--ink-muted); }
 .sc-num { font-variant-numeric: tabular-nums; white-space: nowrap; text-align: end; }
 .sc-byteacher { max-block-size: 40vh; overflow: auto; border-block-end: 1px solid var(--hairline); }
-.sc-byteacher .table th.num { text-align: end; }
+.sc-byteacher .table :is(th.num, td.sc-num) { text-align: end; }
 .sc-byteacher__cat { display: block; font-size: var(--fs-xs); font-weight: 400; color: var(--ink-muted); }
 
 /* Legend: small swatches in one quiet line. ---------------------------------- */
@@ -436,7 +433,8 @@ html[lang='ar'] .sc-unit { font-family: var(--font-ar, var(--font)); }
 .sc-filters-button { min-block-size: 44px; display: inline-flex; align-items: center; gap: var(--space-2); margin-block: var(--space-3) 0; }
 .sc-filters--sheet { flex-direction: column; align-items: stretch; flex-wrap: nowrap; }
 .sc-filters--sheet .sc-filter { inline-size: 100%; }
-.sc-filters--sheet .sc-filter__trigger { inline-size: 100%; min-block-size: 44px; justify-content: space-between; }
+.sc-filters--sheet .sc-filter__trigger { inline-size: 100%; min-block-size: 44px; gap: 10px; justify-content: flex-start; }
+.sc-filters--sheet .sc-filter__trigger .sc-filter__label { flex: 1; text-align: start; }
 .sc-filters--sheet .sc-filter__panel { position: static; inline-size: 100%; max-inline-size: none; box-shadow: none; border: 0; padding-inline: var(--space-2); animation: none; }
 .sc-filters--sheet .sc-check { min-block-size: 44px; }
 .sc-filters--sheet .sc-check--inline { margin-inline-start: 0; }
@@ -452,7 +450,13 @@ html[lang='ar'] .sc-unit { font-family: var(--font-ar, var(--font)); }
 .sc-page--narrow .sc-legend__sup { min-block-size: 44px; }
 .sc-page--narrow .sc-sheet { overflow: visible; }
 .sc-page--narrow .sc-sheet__bar { padding-inline: var(--space-3); }
-.sc-page--narrow .sc-facts { font-size: var(--fs-xs); gap: 0 var(--space-3); }
+.sc-page--narrow .sc-facts { order: 3; flex-basis: 100%; font-size: var(--fs-xs); gap: 0 var(--space-3); }
+/* A phone gets to its day sooner: the four figures in one row that scrolls sideways, without their notes. */
+.sc-page--narrow .sc-stats-wrap .figures { display: flex; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-block-start: var(--space-3); }
+.sc-page--narrow .sc-stats-wrap .figure { flex: none; padding-block: 8px; padding-inline: 0 var(--space-4); margin-inline-end: var(--space-4); border-inline-end: 1px solid var(--hairline-soft); }
+.sc-page--narrow .sc-stats-wrap .figure:last-child { border-inline-end: 0; margin-inline-end: 0; }
+.sc-page--narrow .sc-stats-wrap .figure__note { display: none; }
+.sc-page--narrow .mast__tabs { margin-block-start: var(--space-2); }
 /* A phone's day: the week as a strip of days, the open one solid. */
 .sc-strip { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; padding: 8px var(--space-3); border-block-end: 1px solid var(--hairline-soft); }
 .sc-strip__day {
@@ -533,6 +537,8 @@ html[lang='ar'] .sc-agenda__date { font-weight: 700; }
   font-size: var(--fs-sm);
 }
 .sc-agenda__leave { min-block-size: 44px; display: flex; align-items: center; padding-inline: var(--space-3); border-radius: var(--radius); background: var(--gold-tint); border: 1px solid var(--gold-line); font-size: var(--fs-sm); }
+/* The month on a phone: its days as a list set in from the sheet's edge. */
+.sc-agenda.sc-agenda__list { padding: var(--space-3); }
 .sc-agenda__month { grid-template-columns: 1fr auto; grid-template-rows: auto; }
 .sc-agenda__month .sc-agenda__status { grid-row: auto; }
 .sc-agenda__month--empty { border-inline-start: 3px dashed var(--border-control); }

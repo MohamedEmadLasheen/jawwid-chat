@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Badge, type Tone } from '@/shared/components/Badge'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
 import { Icon } from '@/shared/components/Icon'
-import { PageHeader } from '@/shared/components/PageHeader'
+import { Menu } from '@/shared/components/Menu'
+import { MastFigures, PageHeader, type MastFigure } from '@/shared/components/PageHeader'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
 import { fill, useText } from '@/features/admin/copy'
 import { useDocumentTitle } from '@/features/admin/common'
@@ -32,10 +33,7 @@ export function StoryInsights({ basePath }: { basePath: string }) {
   return (
     <div className="page stories-studio">
       <div className="page__inner">
-        <Link to={basePath} className="back-link">
-          <Icon name="arrowBack" size={16} />
-          {tx(S.back)}
-        </Link>
+        {!story.data && <PageHeader back={{ to: basePath, label: tx(S.back) }} title={tx(S.insights)} />}
         <QueryBoundary isLoading={story.isLoading} error={story.error} onRetry={() => void story.refetch()}>
           {story.data && <InsightsBody story={story.data} analytics={analytics.data} analyticsError={analytics.error as Error | null} basePath={basePath} />}
         </QueryBoundary>
@@ -65,9 +63,25 @@ function InsightsBody({
   const state = effectiveState(s)
   const pct = (r: number | null | undefined) => (r == null ? '—' : fill(tx(S.pct), { n: number(Math.round(r * 100)) }))
 
+  // The masthead's figures: how far it went, how many opened it, how many acted.
+  const figures: MastFigure[] = a
+    ? [
+        { key: 'reach', label: tx(S.reached), value: number(a.reach.total), tone: 'key' },
+        { key: 'views', label: tx(S.viewed), value: number(a.views.total), note: fill(tx(S.ofReach), { pct: pct(a.rates.view) }) },
+        {
+          key: 'tapped',
+          label: tx(S.tapped),
+          value: a.cta.kind ? number(a.cta.tappers) : '—',
+          note: a.cta.kind ? fill(tx(S.ofViews), { pct: pct(a.rates.tapOfViews) }) : tx(S.noButton),
+        },
+        { key: 'taps', label: tx(S.totalTapsLabel), value: a.cta.kind ? number(a.cta.taps) : '—' },
+      ]
+    : []
+
   return (
     <>
       <PageHeader
+        back={{ to: basePath, label: tx(S.back) }}
         title={storyName(s, tx(S.untitled))}
         status={<Badge tone={STATE_TONE[state] ?? 'neutral'} dot>{tx(STATE_LABEL[state])}</Badge>}
         subtitle={summary(s)}
@@ -80,18 +94,26 @@ function InsightsBody({
               </button>
             )}
             {s.state !== 'deleted' && (
-              <button type="button" className="btn btn--ghost" onClick={() => setDeleting(true)}>
-                <Icon name="trash" size={16} />
-                {tx(S.delete)}
-              </button>
+              <Menu
+                label={fill(tx(S.moreActions), { name: storyName(s, tx(S.untitled)) })}
+                triggerClassName="btn btn--icon"
+                items={[{ key: 'delete', label: tx(S.delete), icon: 'trash', danger: true, onSelect: () => setDeleting(true) }]}
+              />
             )}
           </>
+        }
+        tabs={
+          s.state !== 'draft' && a ? (
+            <section className="si-figures" aria-label={tx(S.insights)}>
+              <MastFigures figures={figures} />
+            </section>
+          ) : undefined
         }
       />
       {publish.error && <p className="field__error" role="alert">{(publish.error as Error).message}</p>}
 
       <div className="insights">
-        <aside className="insights__aside">
+        <aside className="insights__aside sheet">
           <StoryPreview
             story={{
               kind: s.kind,
@@ -137,7 +159,7 @@ function InsightsBody({
 
         <div className="insights__main">
           {s.state === 'draft' ? (
-            <div className="card">
+            <div className="sheet">
               <EmptyState compact icon="chart" title={tx(S.notPublished)} />
             </div>
           ) : analyticsError ? (
@@ -146,19 +168,10 @@ function InsightsBody({
             <div className="kpi-strip kpi-strip--loading" aria-busy="true" />
           ) : (
             <>
-              <section className="kpi-strip" aria-label={tx(S.insights)}>
-                <Kpi label={tx(S.reached)} value={number(a.reach.total)} />
-                <Kpi label={tx(S.viewed)} value={number(a.views.total)} sub={fill(tx(S.ofReach), { pct: pct(a.rates.view) })} />
-                <Kpi
-                  label={tx(S.tapped)}
-                  value={a.cta.kind ? number(a.cta.tappers) : '—'}
-                  sub={a.cta.kind ? fill(tx(S.ofViews), { pct: pct(a.rates.tapOfViews) }) : tx(S.noButton)}
-                />
-                <Kpi label={tx(S.totalTapsLabel)} value={a.cta.kind ? number(a.cta.taps) : '—'} />
-              </section>
-
-              <section className="card insight-card">
-                <h2 className="card__title card__title--sm">{tx(S.funnel)}</h2>
+              {/* How it did: the fall from reach to action, then the same by day. */}
+              <div className="sheet insight-sheet">
+              <section className="insight-card">
+                <h2 className="insight-card__title">{tx(S.funnel)}</h2>
                 <Funnel
                   steps={[
                     { label: tx(S.reached), value: a.reach.total },
@@ -168,8 +181,8 @@ function InsightsBody({
                 />
               </section>
 
-              <section className="card insight-card">
-                <h2 className="card__title card__title--sm">{tx(S.overTime)}</h2>
+              <section className="insight-card">
+                <h2 className="insight-card__title">{tx(S.overTime)}</h2>
                 <DailyChart daily={a.daily} showTaps={Boolean(a.cta.kind)} />
                 {(a.firstViewAt || a.lastViewAt) && (
                   <p className="insight-card__foot">
@@ -178,10 +191,13 @@ function InsightsBody({
                   </p>
                 )}
               </section>
+              </div>
 
+              {/* Who it was: by audience and by country, then the people themselves on request. */}
+              <div className="sheet insight-sheet">
               <div className="insight-grid">
-                <section className="card insight-card">
-                  <h2 className="card__title card__title--sm">{tx(S.byAudience)}</h2>
+                <section className="insight-card">
+                  <h2 className="insight-card__title">{tx(S.byAudience)}</h2>
                   <Breakdown
                     rows={[
                       ...(a.reach.contacts > 0 ? [{ key: 'p', label: tx(S.parents), reach: a.reach.contacts, views: a.views.contacts }] : []),
@@ -190,16 +206,16 @@ function InsightsBody({
                   />
                 </section>
                 {a.byCountry.length > 0 && (
-                  <section className="card insight-card">
-                    <h2 className="card__title card__title--sm">{tx(S.byCountry)}</h2>
+                  <section className="insight-card">
+                    <h2 className="insight-card__title">{tx(S.byCountry)}</h2>
                     <CountryBreakdown rows={a.byCountry} />
                   </section>
                 )}
               </div>
 
-              <section className="card insight-card">
-                <div className="card__header card__header--tight">
-                  <h2 className="card__title card__title--sm">{tx(S.people)}</h2>
+              <section className="insight-card">
+                <div className="insight-card__head">
+                  <h2 className="insight-card__title">{tx(S.people)}</h2>
                   {!showPeople && (
                     <button type="button" className="btn btn--sm" onClick={() => setShowPeople(true)}>
                       <Icon name="eye" size={16} />
@@ -209,6 +225,7 @@ function InsightsBody({
                 </div>
                 {showPeople && <PeopleList storyId={s.id} hasCta={Boolean(s.cta)} />}
               </section>
+              </div>
             </>
           )}
         </div>
@@ -222,16 +239,6 @@ function InsightsBody({
         />
       )}
     </>
-  )
-}
-
-function Kpi({ label, value, sub }: { label: string; value: string; sub?: string }) {
-  return (
-    <div className="kpi">
-      <span className="kpi__label">{label}</span>
-      <span className="kpi__value">{value}</span>
-      {sub && <span className="kpi__sub">{sub}</span>}
-    </div>
   )
 }
 
@@ -409,7 +416,7 @@ function PeopleList({ storyId, hasCta }: { storyId: string; hasCta: boolean }) {
 }
 
 /** Deleting needs a reason: the server requires one and keeps it in the audit log. */
-function DeleteDialog({ storyId, onClose, onDeleted }: { storyId: string; onClose: () => void; onDeleted: () => void }) {
+export function DeleteDialog({ storyId, onClose, onDeleted }: { storyId: string; onClose: () => void; onDeleted: () => void }) {
   const tx = useText()
   const remove = useDeleteStory()
   const [reason, setReason] = useState('')
