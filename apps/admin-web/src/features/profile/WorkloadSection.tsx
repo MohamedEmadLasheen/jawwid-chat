@@ -1,4 +1,6 @@
 import { useI18n } from '@/core/i18n/I18nProvider'
+import type { MastFigure } from '@/shared/components/PageHeader'
+import { Fact } from '@/features/profiles/RecordParts'
 import type { StaffWorkload } from './api'
 import { METRICS, T, useCopy, type Pair } from './copy'
 
@@ -6,24 +8,51 @@ type Key = keyof StaffWorkload
 const LABEL = Object.fromEntries(METRICS.map((m) => [m.key, m.label])) as Record<Key, Pair>
 
 /**
- * Each large numeral with the smaller count that belongs under it: a family's
- * contacts, the students' teachers, the open chats still waiting for us.
+ * The verified counts the server sends, set in two places and never twice:
+ * the four that matter most are the masthead's figures, the rest are facts in
+ * the Overview's margin. Someone others report to leads with their direct
+ * reports; anyone else with their families and students. The conversations
+ * still waiting for us are the note under the open ones, and make that figure
+ * the key one. A figure the server does not send (capacity, overdue tasks,
+ * reply time) has no place at all.
  */
-const CELLS: ReadonlyArray<{ key: Key; under?: Key }> = [
-  { key: 'assignedFamilies', under: 'parentContacts' },
-  { key: 'studentsInAssignedFamilies', under: 'teachersOfAssignedStudents' },
-  { key: 'openConversations', under: 'awaitingReply' },
-  { key: 'pendingApprovals' },
-  { key: 'directReports' },
-]
+const AWAITING: Key = 'awaitingReply'
+function split(showDirectReports: boolean): { mast: Key[]; rest: Key[] } {
+  return showDirectReports
+    ? {
+        mast: ['directReports', 'assignedFamilies', 'openConversations', 'pendingApprovals'],
+        rest: ['studentsInAssignedFamilies', 'parentContacts', 'teachersOfAssignedStudents'],
+      }
+    : {
+        mast: ['assignedFamilies', 'studentsInAssignedFamilies', 'openConversations', 'pendingApprovals'],
+        rest: ['parentContacts', 'teachersOfAssignedStudents'],
+      }
+}
+
+/** The masthead's four figures. A nought is drawn quietly; it is a count, not a call. */
+export function useWorkloadFigures(workload: StaffWorkload, showDirectReports: boolean): MastFigure[] {
+  const tx = useCopy()
+  const { number } = useI18n()
+  return split(showDirectReports).mast.map((key) => {
+    const value = workload[key]
+    const awaiting = key === 'openConversations' ? workload[AWAITING] : 0
+    return {
+      key,
+      label: tx(LABEL[key]),
+      value: number(value),
+      // With nothing open and nothing waiting, the note would only repeat the nought.
+      note: key === 'openConversations' && (value > 0 || awaiting > 0) ? tx(T.awaitingNote, { n: number(awaiting) }) : undefined,
+      tone: awaiting > 0 ? 'key' : value === 0 ? 'quiet' : undefined,
+    }
+  })
+}
 
 /**
- * Section 4: verified counts, as one ruled ledger. What each number counts is
- * one click away (the definitions, in full), and what the system does NOT track
- * is said plainly instead of being shown as a zero. A figure the server does
- * not send (capacity, overdue tasks, reply time) has no cell at all.
+ * On the canvas beside the work: the counts the masthead does not carry, when
+ * they were counted and from what, what the system does NOT track (said
+ * plainly instead of shown as a zero), and what each number counts, in full.
  */
-export function WorkloadSection({
+export function NumbersGroup({
   workload,
   asOf,
   title,
@@ -36,32 +65,24 @@ export function WorkloadSection({
 }) {
   const tx = useCopy()
   const { number, dateTime } = useI18n()
-  const cells = CELLS.filter((c) => c.key !== 'directReports' || showDirectReports)
   const metrics = METRICS.filter((m) => m.key !== 'directReports' || showDirectReports)
 
   return (
-    <section className="sp-workload" aria-labelledby="sp-workload">
-      <div className="sp-workload__head">
-        <h2 id="sp-workload" className="section-label">{tx(title)}</h2>
-        <span className="sp-workload__asof">{tx(T.asOf, { when: dateTime(asOf) })}</span>
+    <section className="aside-group rec-group" aria-labelledby="sp-workload" data-section="numbers">
+      <div className="rec-group__head">
+        <h2 id="sp-workload" className="aside-group__title">{tx(title)}</h2>
       </div>
-      <div className="ledger sp-ledger">
-        {cells.map((c) => (
-          <div key={c.key} className="ledger__cell">
-            {/* The figure comes first in the document and is drawn under its label. */}
-            <span className="ledger__value">{number(workload[c.key])}</span>
-            <span className="ledger__label">{tx(LABEL[c.key])}</span>
-            {c.under && (
-              <span className="ledger__note">
-                <span className="sp-ledger__n">{number(workload[c.under])}</span>
-                <span>{tx(LABEL[c.under])}</span>
-              </span>
-            )}
-          </div>
+      <dl className="rec-facts sp-numbers">
+        {split(showDirectReports).rest.map((key) => (
+          <Fact key={key} label={tx(LABEL[key])}>
+            <span className="sp-numbers__n">{number(workload[key])}</span>
+          </Fact>
         ))}
-      </div>
-      <p className="pp-rule sp-workload__rule">{tx(T.workloadHint)}</p>
-      <p className="pp-rule sp-workload__rule" role="note">
+      </dl>
+      <p className="rec-rule">
+        {tx(T.asOf, { when: dateTime(asOf) })}. {tx(T.workloadHint)}
+      </p>
+      <p className="rec-rule" role="note">
         <strong>{tx(T.notTracked)}</strong>
         <span>: {tx(T.notTrackedBody)}</span>
       </p>
@@ -69,7 +90,10 @@ export function WorkloadSection({
         <summary>{tx(T.whatCounts)}</summary>
         <ul>
           {metrics.map((m) => (
-            <li key={m.key}>{tx(m.definition)}</li>
+            <li key={m.key}>
+              <strong>{tx(m.label)}</strong>
+              <span>: {tx(m.definition)}</span>
+            </li>
           ))}
         </ul>
       </details>

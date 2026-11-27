@@ -264,6 +264,23 @@ export const T = {
   tabProfile: { en: 'Profile', ar: 'الملف' },
   otherChange: { en: 'Profile changed', ar: 'تغيير في الملف' },
 
+  // The record: its masthead and tabs
+  recOverview: { en: 'Overview', ar: 'نظرة عامة' },
+  recActivity: { en: 'Activity', ar: 'النشاط' },
+  recOrganization: { en: 'Organization', ar: 'المؤسسة' },
+  recPrivacy: { en: 'Privacy', ar: 'الخصوصية' },
+  more: { en: 'More actions: {name}', ar: 'إجراءات أخرى: {name}' },
+  awaitingNote: { en: '{n} awaiting our reply', ar: '{n} بانتظار ردّنا' },
+  numbersRest: { en: 'Also counted', ar: 'يُحسب كذلك' },
+  nothingToRead: { en: 'Nothing recorded here is yours to read.', ar: 'لا يوجد هنا سجل يحق لك الاطلاع عليه.' },
+  openProfile: { en: 'Open profile', ar: 'فتح الملف' },
+  teachersNote: { en: 'Teachers: {n}', ar: 'المعلمون: {n}' },
+  inactiveNote: { en: 'Inactive: {n}', ar: 'غير نشط: {n}' },
+  staffAccounts: { en: 'Staff accounts', ar: 'حسابات الموظفين' },
+  loadColumn: { en: 'Load', ar: 'العبء' },
+  loadColumnHint: { en: 'Assigned families against the heaviest load in the team. No capacity is recorded.', ar: 'الأسر المسندة مقارنةً بأعلى عبء في الفريق. لا تُسجَّل طاقة استيعابية.' },
+  sections: { en: 'Sections', ar: 'الأقسام' },
+
   // The Team page
   teamTitle: { en: 'Team', ar: 'الفريق' },
   directoryHint: { en: 'Every staff account and who it reports to.', ar: 'كل حسابات الموظفين، ومن يتبع كلٌّ منها.' },

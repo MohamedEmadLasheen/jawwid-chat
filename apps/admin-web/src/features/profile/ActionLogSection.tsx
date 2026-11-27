@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useInfiniteQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { api } from '@/core/api/client'
@@ -9,6 +9,7 @@ import { useCopy, type Pair } from '@/features/organization/copy'
 import { ACTION_LOG } from '@/features/intake/historyCopy'
 import { parentPath } from '@/features/profiles/api'
 import { SearchableSelect } from '@/shared/components/SearchableSelect'
+import { Sheet } from '@/features/profiles/RecordParts'
 
 /** One line of GET /staff/:id/action-log (apps/api ActionLogService). */
 export interface ActionLogEntry {
@@ -152,7 +153,14 @@ interface Page {
   nextCursor: string | null
 }
 
-export function ActionLogSection({ staffId }: { staffId: string }) {
+export function ActionLogSection({
+  staffId,
+  onReadable,
+}: {
+  staffId: string
+  /** Told once the server has answered: whether this viewer may read the log at all. */
+  onReadable?: (readable: boolean) => void
+}) {
   const tx = useCopy()
   const { dateTime } = useI18n()
   const [days, setDays] = useState(30)
@@ -173,8 +181,13 @@ export function ActionLogSection({ staffId }: { staffId: string }) {
     retry: false,
     staleTime: 30_000,
   })
-  if (query.error instanceof ApiError && query.error.isNotFound) return null
-  if (!query.data && !query.error) return null
+  const refused = query.error instanceof ApiError && query.error.isNotFound
+  const answered = Boolean(query.data) || Boolean(query.error)
+  useEffect(() => {
+    if (answered) onReadable?.(!refused)
+  }, [answered, refused, onReadable])
+  if (refused) return null
+  if (!answered) return null
   const entries = query.data?.pages.flatMap((p) => p.entries) ?? []
   const lines: Line[] = []
   for (const e of entries) {
@@ -187,9 +200,12 @@ export function ActionLogSection({ staffId }: { staffId: string }) {
     else lines.push({ entry: e, label, times: 1, session: act !== null })
   }
   return (
-    <section className="pp-sec" aria-labelledby="sp-action-log">
-      <div className="pp-sec__head">
-        <h2 id="sp-action-log" className="pp-sec__title">{tx(L.title)}</h2>
+    <Sheet
+      id="sp-action-log"
+      section="action-log"
+      title={tx(L.title)}
+      rule={tx(L.hint)}
+      action={
         <label className="sp-period">
           <span className="sr-only">{tx(L.period)}</span>
           <SearchableSelect className="select" aria-label={tx(L.period)} value={days} onValueChange={(v) => setDays(Number(v))}>
@@ -198,18 +214,18 @@ export function ActionLogSection({ staffId }: { staffId: string }) {
             ))}
           </SearchableSelect>
         </label>
-      </div>
-      <p className="pp-rule">{tx(L.hint)}</p>
+      }
+    >
       <QueryBoundary isLoading={false} error={query.error} onRetry={() => void query.refetch()} compact>
         {entries.length === 0 ? (
-          <p className="pp-empty">{tx(L.empty)}</p>
+          <p className="rec-empty">{tx(L.empty)}</p>
         ) : (
-          <ol className="pp-tl pp-tl--newest-first">
+          <ol className="pp-tl pp-tl--newest-first sp-log">
             {(expanded ? lines : lines.slice(0, GLANCE)).map(({ entry: e, label, times, session }) => {
               const to = linkFor(e)
               return (
-                <li key={e.id}>
-                  <div>
+                <li key={e.id} className={session ? 'sp-log__line sp-log__line--session' : 'sp-log__line'}>
+                  <div className="sp-log__what">
                     {to ? <Link to={to}>{label}</Link> : <strong>{label}</strong>}
                     {times > 1 && <span className="sp-repeat ltr">×{times}</span>}
                   </div>
@@ -228,21 +244,23 @@ export function ActionLogSection({ staffId }: { staffId: string }) {
           </ol>
         )}
         {(query.hasNextPage || (!expanded && lines.length > GLANCE)) && (
-          <button
-            type="button"
-            className="btn btn--sm"
-            disabled={query.isFetchingNextPage}
-            onClick={() => {
-              // First the lines already here; once they are all shown, the next page.
-              const hidden = !expanded && lines.length > GLANCE
-              setExpanded(true)
-              if (!hidden) void query.fetchNextPage()
-            }}
-          >
-            {tx(L.more)}
-          </button>
+          <p className="sp-sheet__more">
+            <button
+              type="button"
+              className="btn btn--sm"
+              disabled={query.isFetchingNextPage}
+              onClick={() => {
+                // First the lines already here; once they are all shown, the next page.
+                const hidden = !expanded && lines.length > GLANCE
+                setExpanded(true)
+                if (!hidden) void query.fetchNextPage()
+              }}
+            >
+              {tx(L.more)}
+            </button>
+          </p>
         )}
       </QueryBoundary>
-    </section>
+    </Sheet>
   )
 }
