@@ -7,38 +7,38 @@
 
 /* ---- the record's head */
 .tf-head, .page-header.tf-head { display: block; margin-block-end: var(--space-5); }
-.tf-head__row { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: var(--space-3) var(--space-5); }
+.tf-head__row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3) var(--space-5); }
 .tf-head__lead { min-inline-size: 0; flex: 1 1 420px; }
-.tf-head__lead .mast__back { margin-block-end: var(--space-3); }
+.tf-head > .mast__back { margin-block-end: var(--space-3); }
 .tf-head__who { display: flex; align-items: center; gap: var(--space-4); min-inline-size: 0; }
 .tf-head__text { min-inline-size: 0; }
 .tf-head__name { margin: 0; font-family: var(--font-head); font-size: var(--fs-title); font-weight: 700; line-height: 1.2; color: var(--ink); overflow-wrap: anywhere; }
 html[dir='rtl'] .tf-head__name[dir='auto'] { text-align: right; }
 .tf-head__line { display: flex; align-items: baseline; gap: 8px; margin: 6px 0 0; font-size: var(--fs-md); color: var(--ink-2); }
 .tf-head__person { font-weight: 600; color: var(--ink); white-space: nowrap; }
-.tf-head__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-block-end: 4px; }
+.tf-head__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .tf-head__actions .field__error { flex-basis: 100%; }
 .tf-dot { flex: none; inline-size: 8px; block-size: 8px; border-radius: 50%; background: var(--done); transform: translateY(-1px); }
 .tf-dot--away { background: var(--waiting); }
 .tf-dot--left { background: var(--line-strong); }
 .tf-highlights .figures { margin-block-start: var(--space-5); }
-.tf-highlights .figure { flex-basis: 150px; }
+.tf-highlights .figure { flex-basis: 150px; padding: 10px 16px 12px; }
+.tf-highlights .figure__n { font-size: 28px; }
 .tf-highlights .figure__unit { font-size: var(--fs-sm); }
 .tf-highlights .figure--urgent .figure__note { color: var(--ink-muted); }
 .tf-fig-wait { display: inline-block; inline-size: 44px; block-size: 30px; vertical-align: middle; }
 .tf-head .mast__tabs { margin-block-start: var(--space-5); }
 
 /* ---- one callout, one action: what needs a person about this teacher now */
-.tf-callout { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 4px var(--space-3); margin-block-start: var(--space-3); padding: 14px var(--space-4); border: 1px solid transparent; border-radius: var(--radius-lg); background: var(--waiting-tint); }
+.tf-callout { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 4px var(--space-3); margin-block-start: var(--space-3); padding: 14px var(--space-4); border: 1px solid transparent; border-radius: var(--radius-lg); background: var(--surface); }
 .tf-callout__icon { display: grid; place-items: center; align-self: start; margin-block-start: 2px; color: var(--waiting); }
 .tf-callout__text { min-inline-size: 0; }
 .tf-callout__title { margin: 0; font-family: var(--font-head); font-size: var(--fs-md); font-weight: 600; line-height: 1.45; color: var(--ink); }
 .tf-callout__body { margin: 2px 0 0; font-size: var(--fs-sm); color: var(--ink-2); max-inline-size: 80ch; }
 .tf-callout { border-color: var(--line); }
-.tf-callout--waiting { border-color: #f1dfb8; }
 .tf-callout--urgent { background: var(--surface); }
 .tf-callout--urgent .tf-callout__icon { color: var(--urgent); }
-.tf-callout--neutral { background: var(--surface-2); }
+.tf-callout--neutral .tf-callout__icon { color: var(--ink-muted); }
 .tf-callout--neutral .tf-callout__icon { color: var(--ink-muted); }
 @media (max-width: 767px) {
   .tf-callout { grid-template-columns: auto minmax(0, 1fr); }
@@ -51,11 +51,12 @@ html[dir='rtl'] .tf-head__name[dir='auto'] { text-align: right; }
 
 /* On a phone the highlights are a compact three-across grid: the figure and its word, no notes. */
 @media (max-width: 767px) {
-  .tf-highlights .figures { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 2px; }
+  .tf-highlights .figures { grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 2px; }
   .tf-highlights .figure { align-content: space-between; }
+  .tf-highlights .figure__label { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-block-size: 2.7em; }
   .tf-highlights .figure { padding: 10px 10px 12px; }
   .tf-highlights .figure__label { font-size: var(--fs-xs); line-height: 1.35; }
-  .tf-highlights .figure__n { font-size: 22px; }
+  .tf-highlights .figure__n { font-size: 20px; }
   .tf-highlights .figure__note, .tf-highlights .figure__unit { display: none; }
   .tf-head__actions > .btn:first-child { flex: 0 1 auto; }
 }
@@ -75,6 +76,10 @@ html[dir='rtl'] .tf-head__name[dir='auto'] { text-align: right; }
 .tf-report a:hover { color: var(--teal-dark); text-decoration: underline; text-underline-offset: 3px; }
 .tf-report a.tf-report__open { color: var(--teal); font-weight: 500; }
 .tf-section .tf-entry .row-actions2 { margin-block-start: 4px; }
+
+/* The month picker inside a sheet's head is a quiet control, lighter than the sheet's name. */
+.tf-record .tf-section__head .monthpick__text { font-size: var(--fs-sm); font-weight: 600; }
+.tf-record .tf-section__head .monthpick__step { min-block-size: 32px; }
 
 /* A quiet note under a section (a mismatch, a warning): a tinted line, never a banner. */
 .tf-note { margin: var(--space-3) 0 0; padding: 8px var(--space-3); border-radius: 8px; background: var(--surface-2); color: var(--ink-2); font-size: var(--fs-sm); }

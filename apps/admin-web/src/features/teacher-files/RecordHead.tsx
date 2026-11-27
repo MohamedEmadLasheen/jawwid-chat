@@ -38,12 +38,13 @@ export function RecordIdentity({
   const t = file.teacher
   const tone = !t.isActive ? 'left' : t.away || (file.setup?.missing ?? 0) > 0 ? 'away' : 'active'
   return (
+    <>
+    <Link to={back.to} className="mast__back">
+      <Icon name="arrowBack" size={15} />
+      {back.label}
+    </Link>
     <div className="tf-head__row">
       <div className="tf-head__lead">
-        <Link to={back.to} className="mast__back">
-          <Icon name="arrowBack" size={15} />
-          {back.label}
-        </Link>
         <div className="tf-head__who">
           <Avatar name={t.name} seed={t.id} size="lg" />
           <div className="tf-head__text">
@@ -70,6 +71,7 @@ export function RecordIdentity({
       </div>
       {actions && <div className="tf-head__actions">{actions}</div>}
     </div>
+    </>
   )
 }
 
@@ -130,6 +132,7 @@ export function RecordHighlights({ file, onTab }: { file: TeacherFile; onTab: (t
   const pct = (r: number | null) =>
     r === null ? null : new Intl.NumberFormat(LOCALE_TAG[locale], { style: 'percent', maximumFractionDigits: 0 }).format(r)
   const pending = <span className="skeleton tf-fig-wait" aria-hidden="true" />
+  const active = file.teacher.isActive
 
   const figures: MastFigure[] = [
     {
@@ -139,7 +142,7 @@ export function RecordHighlights({ file, onTab }: { file: TeacherFile; onTab: (t
       onClick: () => onTab('students'),
     },
   ]
-  if (detail.isLoading || d) {
+  if (active && (detail.isLoading || d)) {
     const held = d?.categories.find((c) => c.key === 'held')?.lessons ?? 0
     figures.push({
       key: 'lessons',
@@ -148,23 +151,23 @@ export function RecordHighlights({ file, onTab }: { file: TeacherFile; onTab: (t
       note: d?.summary ? tx(T.hlLessonsOf, { n: number(d.summary.totalScheduled) }) : undefined,
     })
   }
-  if (reports.isLoading || counts) {
+  if (active && (reports.isLoading || counts)) {
     // Red only while the teacher works here: a missed report of someone who left asks nothing of anyone.
     figures.push({
       key: 'missing',
       label: tx(T.hlMissing),
       value: counts ? number(counts.missing) : pending,
-      tone: counts && counts.missing > 0 && file.teacher.isActive ? 'urgent' : counts && counts.missing === 0 ? 'quiet' : undefined,
+      tone: counts && counts.missing > 0 ? 'urgent' : counts && counts.missing === 0 ? 'quiet' : undefined,
       note: counts && counts.late > 0 ? tx(T.hlLateWritten, { n: number(counts.late) }) : undefined,
       onClick: () => onTab('records'),
     })
   }
-  if (detail.isLoading || d) {
+  if (active && (detail.isLoading || d)) {
     const att = d ? pct(d.rates.attendance) : null
     const rel = d ? pct(d.rates.teacherReliability) : null
     // A rate with no lessons behind it is left out, not shown as a dash.
-    if (!d || att !== null) figures.push({ key: 'attendance', label: tx(T.hlAttendance), value: !d ? pending : (att as string) })
-    if (!d || rel !== null) figures.push({ key: 'reliability', label: tx(T.hlReliability), value: !d ? pending : (rel as string) })
+    if (!d || att !== null) figures.push({ key: 'attendance', label: tx(T.kpiAttendance), value: !d ? pending : (att as string) })
+    if (!d || rel !== null) figures.push({ key: 'reliability', label: tx(T.kpiReliability), value: !d ? pending : (rel as string) })
   }
   const setup = file.setup
   if (setup && file.teacher.isActive && setup.missing > 0) {
@@ -176,6 +179,7 @@ export function RecordHighlights({ file, onTab }: { file: TeacherFile; onTab: (t
       onClick: () => onTab('overview'),
     })
   }
+  if (!active) return null
   return (
     <section className="tf-highlights" aria-label={tx(T.highlights)}>
       <MastFigures figures={figures.slice(0, 6)} />
@@ -224,7 +228,7 @@ export function useRecordCallout(
     const shown = todo.slice(0, 3).join(sep)
     return {
       tone: 'waiting',
-      icon: 'checkSquare',
+      icon: 'tasks',
       title: tx(T.calloutSetupTitle),
       body: tx(T.calloutSetupBody, { steps: todo.length > 3 ? tx(T.calloutSetupMore, { steps: shown, n: number(todo.length - 3) }) : shown }),
       action: { label: tx(T.finishSetup), onClick: go.setup },

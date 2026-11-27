@@ -303,11 +303,12 @@ function SetupChecklist({ file }: { file: TeacherFile }) {
       id="tf-setup"
       title={tx(T.setupTitle)}
       action={
-        <span className="tf-section__meta">{setup.missing === 1 ? tx(T.oneStepLeft) : tx(T.stepsLeft, { steps: countLabel(setup.missing, number(setup.missing), STEPS, locale) })}</span>
+        <span className="sr-only">{setup.missing === 1 ? tx(T.oneStepLeft) : tx(T.stepsLeft, { steps: countLabel(setup.missing, number(setup.missing), STEPS, locale) })}</span>
       }
     >
       <ul className="tf-setup">
-        {SETUP_STEPS.map(([key, label]) => (
+        {/* What is left first; what is done after it, quieter. */}
+        {[...SETUP_STEPS].sort((a, b) => Number(setup[a[0]]) - Number(setup[b[0]])).map(([key, label]) => (
           <li key={key} className={setup[key] ? 'is-done' : undefined}>
             <Icon name={setup[key] ? 'checkCircle' : 'circle'} size={18} />
             <span className="tf-setup__label">{tx(label)}</span>

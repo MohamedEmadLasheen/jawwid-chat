@@ -149,6 +149,8 @@ function LessonTable({ lessons }: { lessons: LessonDto[] }) {
  * as 0%.
  */
 export function MonthlyKpis({ teacherId, month, links }: { teacherId: string; month: string; links?: TeacherWorkLinks }) {
+  // This month's lessons, attendance and reliability are the record's highlights; the card does not say them twice.
+  const glance = month === currentMonth()
   const tx = useCopy()
   const { number, locale } = useI18n()
   const q = useTeacherDetail(teacherId, month)
@@ -163,9 +165,13 @@ export function MonthlyKpis({ teacherId, month, links }: { teacherId: string; mo
       {d && (
         <>
           <dl className="tf-kpis" aria-label={tx(T.kpis)}>
-            <Kpi label={tx(T.kpiHeld)} value={number(d.categories.find((c) => c.key === 'held')?.lessons ?? 0)} hint={hours(d.categories.find((c) => c.key === 'held')?.minutes ?? 0)} />
-            <Kpi label={tx(T.kpiAttendance)} value={percent(d.rates.attendance)} />
-            <Kpi label={tx(T.kpiReliability)} value={percent(d.rates.teacherReliability)} />
+            {!glance && (
+              <>
+                <Kpi label={tx(T.kpiHeld)} value={number(d.categories.find((c) => c.key === 'held')?.lessons ?? 0)} hint={hours(d.categories.find((c) => c.key === 'held')?.minutes ?? 0)} />
+                <Kpi label={tx(T.kpiAttendance)} value={percent(d.rates.attendance)} />
+                <Kpi label={tx(T.kpiReliability)} value={percent(d.rates.teacherReliability)} />
+              </>
+            )}
             <Kpi label={tx(T.kpiReportsOnTime)} value={percent(d.reports.onTimeRate)} hint={`${number(d.reports.onTime)}/${number(d.reports.reports)}`} />
             <Kpi label={tx(T.kpiReplies)} value={percent(d.replies.rate)} hint={tx(T.kpiRepliesHint, { n: number(d.replies.familyMessages) })} />
             <Kpi
