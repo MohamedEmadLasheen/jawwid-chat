@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Avatar } from '@/shared/components/Avatar'
 import { Icon } from '@/shared/components/Icon'
@@ -67,12 +67,13 @@ export function RenewalRequestsPanel() {
 function Group({ title, rows, waiting = false }: { title: string; rows: RenewalRequest[]; waiting?: boolean }) {
   const tx = useCopy()
   const { locale, dateTime, number } = useI18n()
+  const navigate = useNavigate()
   if (rows.length === 0) return null
   return (
     <div className={waiting ? 'rn-group rn-group--waiting' : 'rn-group'}>
       <h3 className="rn-group__head">
         <span>{title}</span>
-        <span className={waiting ? 'count' : 'count count--quiet'}>{number(rows.length)}</span>
+        <span className="count">{number(rows.length)}</span>
       </h3>
       <ul className="rn-list">
         {rows.map((r) => (
@@ -91,13 +92,17 @@ function Group({ title, rows, waiting = false }: { title: string; rows: RenewalR
             <time className="rn-row__when" dateTime={r.requestedAt} title={dateTime(r.requestedAt)}>
               {tx(S.askedWhen, { when: relativeTime(r.requestedAt, locale) })}
             </time>
+            {/* A renewed row is done: its way to the student waits behind "⋯". */}
             <RowActions
               primary={
-                <Link className="btn btn--sm" to={studentPath(r.child.id)} aria-label={tx(S.openStudentNamed, { name: r.child.name })}>
-                  {tx(S.openStudent)}
-                </Link>
+                waiting ? (
+                  <Link className="btn btn--sm" to={studentPath(r.child.id)} aria-label={tx(S.openStudentNamed, { name: r.child.name })}>
+                    {tx(S.openStudent)}
+                  </Link>
+                ) : undefined
               }
-              label={tx(S.openStudentNamed, { name: r.child.name })}
+              more={waiting ? [] : [{ key: 'open', label: tx(S.openStudent), icon: 'students', onSelect: () => navigate(studentPath(r.child.id)) }]}
+              label={tx(S.moreFor, { name: r.child.name })}
             />
           </li>
         ))}

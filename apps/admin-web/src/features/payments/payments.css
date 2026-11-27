@@ -36,7 +36,8 @@
 /* The queue at the start, the receipt being read beside it on its own white
    sheet, wide enough to read an image in. */
 .rv-desk { --rq-panel: clamp(420px, 40vw, 560px); }
-.rv-desk .rq__panel { padding-inline-start: 0; border-inline-start: 0; }
+/* The panel is only the track; the receipt's own sheet is the one surface (no box in a box). */
+.rv-desk .rq__panel, .rv-desk .rq__panel.sheet { padding-inline-start: 0; border: 0; background: none; }
 .rv-desk .rq__panel > .rq-detail {
   inline-size: auto;
   padding: var(--space-4) var(--space-5) 0;
@@ -109,7 +110,8 @@
   border-radius: 8px;
   background: var(--surface-2);
 }
-.rv__image img { display: block; max-inline-size: 100%; block-size: auto; }
+/* The whole receipt in view, fitted to the room there is; the file opens full size for zoom. */
+.rv__image img { display: block; max-inline-size: 100%; max-block-size: min(52vh, 600px); inline-size: auto; block-size: auto; object-fit: contain; }
 .rv__image--file { align-content: center; gap: var(--space-3); min-block-size: 180px; color: var(--ink-muted); }
 .rv__failed { margin: 0; padding: var(--space-5); max-inline-size: 32ch; text-align: center; font-size: var(--fs-sm); color: var(--ink-muted); }
 .rv__amount { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 2px var(--space-4); padding-block: 4px var(--space-4); border-block-end: 1px solid var(--line-2); }
@@ -119,7 +121,9 @@
 .rv__facts { margin-block-start: calc(-1 * var(--space-2)); }
 .rv__facts .rq-field { border-block-end-color: var(--line-2); }
 /* What the parent wrote, set off as their words. */
-.rv__note { padding-inline-start: 10px; border-inline-start: 2px solid var(--line-strong); font-weight: 400; color: var(--ink); }
+.rv__said { display: grid; gap: 4px; margin: 0; }
+.rv__said-who { font-size: var(--fs-xs); color: var(--ink-muted); }
+.rv__note { margin: 0; font-size: var(--fs-md); line-height: 1.6;  padding-inline-start: 10px; border-inline-start: 2px solid var(--line-strong); font-weight: 400; color: var(--ink); }
 .rv__file { display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; color: var(--teal); font-size: var(--fs-sm); font-weight: 500; text-decoration: none; }
 .rv__file:hover { text-decoration: underline; }
 .rv > .rq-actions { margin-block-start: auto; }
@@ -164,9 +168,9 @@
 /* The column heads stay in view down the page (the page scrolls inside its own padding). */
 .table.tx-table thead th { inset-block-start: -28px; }
 /* A day's heading runs the width of the ledger: the day at the start, what it came to at the end. */
-.table.tx-table .tx-day th { padding: 8px var(--space-4); background: var(--surface-2); border-block: 1px solid var(--line-2); font-family: var(--font-head); font-size: var(--fs-sm); font-weight: 600; color: var(--ink); text-align: start; }
-.table.tx-table tbody:first-of-type .tx-day th { border-block-start: 0; }
-.tx-day__in { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-4); }
+.table.tx-table .tx-day > * { padding-block: 8px; background: var(--surface-2); border-block: 1px solid var(--line-2); vertical-align: middle; }
+.table.tx-table .tx-day th { padding-inline: var(--space-4); font-family: var(--font-head); font-size: var(--fs-sm); font-weight: 600; color: var(--ink); text-align: start; }
+.table.tx-table tbody:first-of-type .tx-day > * { border-block-start: 0; }
 .tx-day__net { display: inline-flex; flex-wrap: wrap; align-items: baseline; justify-content: flex-end; gap: 2px var(--space-3); font-family: var(--font); font-weight: 400; }
 .tx-day__k { font-size: var(--fs-xs); color: var(--ink-muted); }
 .table.tx-table .tx-day:hover { background: none; }
@@ -184,6 +188,8 @@
 .tx-declines { display: flex; flex-wrap: wrap; gap: 0 var(--space-3); margin-block-start: 2px; }
 .tx-paid { display: flex; align-items: center; gap: 6px; margin-block-start: 4px; }
 .tx-c-time { white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--ink-muted); }
+/* Live is the rule and stays quiet; test mode, the exception, is the tag. */
+.tx-c-mode { color: var(--ink-muted); font-size: var(--fs-sm); }
 
 /* What the sheet is, in one quiet line at its foot. */
 .tx-foot { margin: 0; padding: 10px var(--space-4); border-block-start: 1px solid var(--line-2); font-size: var(--fs-xs); color: var(--ink-muted); }
@@ -240,7 +246,7 @@
 /* ------------------------------------------------------------------ settings */
 
 /* The groups as a list at the start; one group's sheet beside it; one Save. */
-.set { display: grid; grid-template-columns: 240px minmax(0, 720px); align-items: start; gap: var(--space-5) var(--space-6); }
+.set { display: grid; grid-template-columns: 240px minmax(0, 1fr); align-items: start; gap: var(--space-5) var(--space-6); }
 .set__list { position: sticky; inset-block-start: 0; display: grid; gap: 2px; }
 .set__item {
   display: flex;
@@ -262,11 +268,11 @@
 .set__item .icon { flex: none; color: var(--ink-muted); }
 .set__item:hover { background: var(--surface-hover); color: var(--ink); }
 /* The open group: lifted onto white, its icon in teal. */
-.set__item[aria-current='true'] { background: var(--surface); border-color: var(--line); color: var(--ink); font-weight: 600; box-shadow: var(--shadow-lift); }
+.set__item[aria-current='true'] { background: var(--teal-tint); color: var(--ink); font-weight: 600; }
 .set__item[aria-current='true'] .icon { color: var(--teal); }
 .set__item-name { flex: 1; min-inline-size: 0; }
 /* Edited and not saved: waiting. */
-.set__edited-dot { display: block; inline-size: 8px; block-size: 8px; border-radius: 50%; background: var(--waiting); }
+.set__edited-dot { display: block; inline-size: 8px; block-size: 8px; border-radius: 50%; background: var(--teal); }
 
 .set__sheet fieldset { min-inline-size: 0; margin: 0; padding: 0; border: 0; }
 .set__lock { padding: 10px var(--space-4); border-block-end: 1px solid var(--line-2); }
@@ -274,7 +280,7 @@
 .set__title { font-family: var(--font-head); font-size: var(--fs-xl); font-weight: 700; line-height: 1.3; }
 .set__hint { margin: 4px 0 0; max-inline-size: 60ch; font-size: var(--fs-sm); color: var(--ink-muted); }
 .set__body { min-block-size: 132px; padding: var(--space-5); }
-.set-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 var(--space-4); }
+.set-grid { max-inline-size: 760px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 var(--space-4); }
 .set-grid > .field--wide { grid-column: 1 / -1; }
 .set-grid > .field:last-child { margin-block-end: 0; }
 .set-grid .input { inline-size: 100%; }
@@ -349,8 +355,9 @@ fieldset:disabled .set-reminder label { cursor: default; }
   .tx-table thead { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip: rect(0 0 0 0); }
   .table.tx-table tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 6px var(--space-3); padding: 14px var(--space-4); border-block-end: 1px solid var(--line-2); }
   .table.tx-table tbody tr td, .table.tx-table tbody tr th { display: block; padding: 0; border: 0; inline-size: auto; max-inline-size: none; }
-  .table.tx-table tr.tx-day { display: block; padding: 8px var(--space-4); background: var(--surface-2); }
-  .table.tx-table .tx-day th { background: none; border: 0; padding: 0; }
+  .table.tx-table tr.tx-day { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); padding: 8px var(--space-4); background: var(--surface-2); }
+  .table.tx-table tr.tx-day > * { display: block; background: none; border: 0; padding: 0; }
+  .table.tx-table .tx-day__pad { display: none; }
   /* Payments on a phone: who and how much; what for and how, one line each; the invoice waits in the payment's sheet. */
   .table.tx-table--payments .tx-c-for { grid-column: 1; grid-row: 2; padding-inline-start: 38px !important; }
   .tx-table--payments .tx-c-for > .pay-sub, .tx-table--payments .tx-method__card, .tx-table--payments .tx-c-ref { display: none !important; }

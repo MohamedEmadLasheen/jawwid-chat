@@ -98,7 +98,8 @@ export function useFinanceFigures(): FinanceFigures {
     const sums = collected.data.totals
       .map((t) => ({ currency: t.currency, count: t.count, amountMinor: t.netMinor }))
       .sort((a, b) => b.count - a.count || b.amountMinor - a.amountMinor)
-    const count = sums.reduce((n, s) => n + s.count, 0)
+    // The count is of the payments the figure sums (its currency); the other currencies are named in the note.
+    const count = sums[0]?.count ?? 0
     const monthName = new Intl.DateTimeFormat(LOCALE_TAG[locale], { month: 'long', timeZone: 'UTC' }).format(new Date(`${month.from}T12:00:00Z`))
     collectedFigure = figure('collected', tx(FIN.collected, { month: monthName }), sums, 0, countWords(count, PAYMENTS, locale))
   }

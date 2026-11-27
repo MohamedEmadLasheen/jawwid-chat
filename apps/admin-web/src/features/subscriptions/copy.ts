@@ -83,6 +83,7 @@ export const S = {
   renewed: { en: 'Renewed', ar: 'تم التجديد' },
   askedBy: { en: '{name} asked to renew', ar: 'طلب {name} التجديد' },
   askedWhen: { en: 'Asked {when}', ar: 'طُلب {when}' },
+  moreFor: { en: 'More actions: {name}', ar: 'إجراءات أخرى: {name}' },
   waiting: { en: 'Waiting for a renewal link', ar: 'بانتظار رابط التجديد' },
   // The chat banner (staff view)
   lockedBanner: {

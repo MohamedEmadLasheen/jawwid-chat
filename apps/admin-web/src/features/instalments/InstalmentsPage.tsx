@@ -9,7 +9,7 @@ import { PageHeader, type MastFigure } from '@/shared/components/PageHeader'
 import { RowActions } from '@/shared/components/RowActions'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
 import type { Instalment, InstalmentStatus, Responsible } from './api'
-import { GROUP_LABEL, I, OPEN_ONES, countWords, describeError, formatDay, formatMoney, inDaysWords, lateWords, useCopy } from './copy'
+import { GROUP_LABEL, I, OPEN_ONES, countWords, describeError, formatDay, inDaysWords, moneyParts, lateWords, useCopy } from './copy'
 import { useInstalments } from './hooks'
 import { BillingSupervisorDialog } from './BillingSupervisorDialog'
 import { parentPath } from '@/features/profiles/api'
@@ -309,7 +309,8 @@ function PlanStrip({ row, plan, view }: { row: Instalment; plan: Instalment[]; v
         <span className="plan__left">
           {left.map((s) => (
             <span key={s.currency} className="plan__left-sum">
-              {tx(I.leftOnPlan, { amount: formatMoney(s.amountMinor, s.currency, locale) })}
+              {/* The currency after the number, as on every amount on the page. */}
+              {tx(I.leftOnPlan, { amount: `\u2068${moneyParts(s.amountMinor, s.currency, locale).number} ${moneyParts(s.amountMinor, s.currency, locale).unit}\u2069` })}
             </span>
           ))}
         </span>

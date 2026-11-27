@@ -256,6 +256,15 @@ function ReceiptInspector({ receipt: r, onApprove, onReject }: { receipt: Receip
         <Money amountMinor={r.amountMinor} currency={r.currency} size="lg" />
         <span className="rv__sub">{tx(PAY.transferredLine, { date: formatDay(r.transferredOn, locale) })}</span>
       </div>
+      {/* What the parent wrote is read before the proof: it often explains a difference (another name, another account). */}
+      {r.note && (
+        <figure className="rv__said">
+          <figcaption className="rv__said-who">{r.uploadedBy ? tx(PAY.noteBy, { name: r.uploadedBy.name }) : tx(PAY.note)}</figcaption>
+          <blockquote className="rv__note" dir="auto">
+            {r.note}
+          </blockquote>
+        </figure>
+      )}
       <ReceiptImage receipt={r} />
       <dl className="rq-fields rv__facts">
         <div className="rq-field">
@@ -276,14 +285,6 @@ function ReceiptInspector({ receipt: r, onApprove, onReject }: { receipt: Receip
             )}
           </dd>
         </div>
-        {r.note && (
-          <div className="rq-field">
-            <dt>{tx(PAY.note)}</dt>
-            <dd className="rv__note">
-              <bdi>{r.note}</bdi>
-            </dd>
-          </div>
-        )}
         {r.status !== 'pending' && r.reviewedBy && r.reviewedAt && (
           <div className="rq-field">
             <dt>{tx(PAY.status)}</dt>

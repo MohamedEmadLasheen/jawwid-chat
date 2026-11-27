@@ -144,7 +144,7 @@ export function countWords(n: number, forms: CountForms, locale: 'ar' | 'en'): s
 }
 
 export const DAYS: CountForms = { en: ['{n} day', '{n} days'], ar: ['يوم واحد', 'يومين', '{n} أيام', '{n} يومًا'] }
-export const OPEN_ONES: CountForms = { en: ['{n} open', '{n} open'], ar: ['واحد مفتوح', 'اثنان مفتوحان', '{n} مفتوحة', '{n} مفتوحًا'] }
+export const OPEN_ONES: CountForms = { en: ['{n} open', '{n} open'], ar: ['1 مفتوح', '2 مفتوحان', '{n} مفتوحة', '{n} مفتوحًا'] }
 export const INSTALMENTS: CountForms = {
   en: ['{n} instalment', '{n} instalments'],
   ar: ['قسط واحد', 'قسطان', '{n} أقساط', '{n} قسطًا'],

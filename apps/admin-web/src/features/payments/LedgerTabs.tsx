@@ -133,17 +133,29 @@ function byDay<T>(rows: readonly T[], dayOf: (row: T) => string): Array<{ day: s
   return days
 }
 
-/** A day's heading across a ledger: the day in words, and what the day came to where that is known. */
+/**
+ * A day's heading across a ledger: the day in words; what the day came to, where
+ * that is known, sits in the amount column (the one before the actions) so the
+ * day's sum lines up with the amounts under it.
+ */
 function DayRow({ day, span, children }: { day: string; span: number; children?: ReactNode }) {
   const { locale } = useI18n()
+  if (!children) {
+    return (
+      <tr className="tx-day">
+        <th scope="rowgroup" colSpan={span}>
+          <span className="tx-day__name">{dayHeading(day, locale)}</span>
+        </th>
+      </tr>
+    )
+  }
   return (
     <tr className="tx-day">
-      <th scope="rowgroup" colSpan={span}>
-        <span className="tx-day__in">
-          <span className="tx-day__name">{dayHeading(day, locale)}</span>
-          {children}
-        </span>
+      <th scope="rowgroup" colSpan={span - 2}>
+        <span className="tx-day__name">{dayHeading(day, locale)}</span>
       </th>
+      <td className="tx-day__sum tx-end">{children}</td>
+      <td className="tx-day__pad" />
     </tr>
   )
 }
@@ -1081,7 +1093,10 @@ function AttemptRow({ a, onOpenPayment }: { a: CardAttemptRow; onOpenPayment: (p
             )}
             <span className="entity__sub">
               <bdi>{a.request.label}</bdi>
-              <span className="pay-purpose">{tx(PURPOSE_LABEL[a.request.purpose] ?? raw(a.request.purpose))}</span>
+              {/* The purpose, unless the label already says it ("Renewal, 1 month"). */}
+              {!a.request.label.toLocaleLowerCase().includes(tx(PURPOSE_LABEL[a.request.purpose] ?? raw(a.request.purpose)).toLocaleLowerCase()) && (
+                <span className="pay-purpose">{tx(PURPOSE_LABEL[a.request.purpose] ?? raw(a.request.purpose))}</span>
+              )}
             </span>
           </div>
         </div>

@@ -47,6 +47,7 @@ export const PAY = {
   transferredLine: { en: 'Transferred {date}', ar: 'حُوِّل {date}' },
   keysMove: { en: 'move', ar: 'تنقّل' },
   hasNote: { en: 'with a note', ar: 'مع ملاحظة' },
+  noteBy: { en: '{name} wrote', ar: 'كتب {name}' },
   imageFailed: { en: 'The image did not load. Open the file instead.', ar: 'تعذّر تحميل الصورة. افتح الملف بدلًا منها.' },
   // The ledger's rules, one line each.
   rules: { en: 'Ledger rules', ar: 'قواعد السجل' },
