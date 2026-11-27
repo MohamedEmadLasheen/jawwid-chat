@@ -315,8 +315,8 @@ fieldset:disabled .set-reminder label { cursor: default; }
   .set__list { position: static; display: flex; gap: var(--space-2); overflow-x: auto; scrollbar-width: none; padding-block: 2px; }
   .set__list::-webkit-scrollbar { display: none; }
   .set__item { flex: none; min-block-size: 44px; background: var(--surface); box-shadow: 0 0 0 1px var(--hairline); margin: 1px; }
-  .set__item[aria-current='true'], [dir='rtl'] .set__item[aria-current='true'] { background: var(--teal); color: #fff; box-shadow: none; }
-  .set__item[aria-current='true'] .icon { color: #fff; }
+  .set__item[aria-current='true'], [dir='rtl'] .set__item[aria-current='true'] { background: var(--teal); color: var(--text-inverse); box-shadow: none; }
+  .set__item[aria-current='true'] .icon { color: var(--text-inverse); }
 }
 
 @media (max-width: 767px) {
