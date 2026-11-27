@@ -519,9 +519,10 @@ html[lang='ar'] .compose-step__title { font-weight: 700; }
 .audience-data { display: grid; gap: var(--space-4); }
 .audience-data__intro {
   display: flex; gap: var(--space-3); align-items: flex-start;
-  padding-inline-start: var(--space-3);
-  border-inline-start: 2px solid var(--teal);
-  color: var(--ink-muted);
+  padding: 10px var(--space-3);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--ink-2);
 }
 .audience-data__intro p { margin: 0; font-size: var(--fs-sm); max-inline-size: 78ch; }
 .audience-data__intro .icon { flex: none; color: var(--teal); margin-block-start: 2px; }
@@ -586,7 +587,6 @@ html[lang='ar'] .compose-step__title { font-weight: 700; }
 .audience-data .kpi + .kpi { border-inline-start: 1px solid var(--line-2); }
 .audience-data .kpi__label { font-size: var(--fs-sm); color: var(--ink-muted); }
 .audience-data .kpi__value { font-family: var(--font-head); font-size: var(--fs-xl); font-weight: 700; font-variant-numeric: tabular-nums; color: var(--ink); }
-.audience-data .kpi + .kpi .kpi__value { color: var(--waiting); }
-@media (max-width: 1100px) {
-  .insights__aside { order: 0; }
-}
+
+.daily__empty { margin: 0; padding: var(--space-4) 0; font-size: var(--fs-sm); color: var(--ink-muted); }
+.funnel__value small { font-size: var(--fs-xs); }

@@ -311,3 +311,11 @@ html[lang='ar'] .cp-landing__title { font-weight: 700; line-height: 1.45; }
 @media (max-width: 480px) {
   .cp-form__row { grid-template-columns: 1fr; }
 }
+
+.cp-recent__sep { margin-inline-start: calc(-1 * var(--space-3) + 1px); }
+/* One column: what is coming up, then who called, then the pinned chats. */
+@media (max-width: 1099px) {
+  .cp-cols { display: flex; flex-direction: column; }
+  .cp-cols__start { display: contents; }
+  .cp-section--fav { order: 3; }
+}

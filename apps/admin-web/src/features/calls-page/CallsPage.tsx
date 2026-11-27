@@ -122,17 +122,20 @@ function RecentRow({
   name,
   conversation,
   selfId,
+  returned = false,
 }: {
   row: AccountCallRow
   name: string
   conversation: ChatConversation | undefined
   selfId: string | undefined
+  /** A missed call that a later answered call has already returned: no longer red. */
+  returned?: boolean
 }) {
   const copy = useCallsCopy()
   const { dateTime, locale } = useI18n()
   const actions = useCallActions()
   const direction = callDirection(row, selfId)
-  const missed = row.outcome === 'missed'
+  const missed = row.outcome === 'missed' && !returned
   const status =
     row.outcome === 'answered' ? copy.answered
     : row.outcome === 'missed' ? copy.missed
@@ -159,7 +162,12 @@ function RecentRow({
           ) : (
             <span className="cp-recent__outcome">{status}</span>
           )}
-          {row.endReason === 'connection_lost' ? <span className="cp-recent__lost">{copy.connectionLost}</span> : null}
+          {row.endReason === 'connection_lost' ? (
+            <>
+              <span aria-hidden="true" className="cp-recent__sep">{locale === 'ar' ? '،' : ','}</span>
+              <span className="cp-recent__lost">{copy.connectionLost}</span>
+            </>
+          ) : null}
         </span>
       </span>
       <span className="cp-recent__len">
@@ -271,6 +279,11 @@ export function CallsPage() {
           const conversation = conversations.byId.get(row.conversationId)
           return { row, conversation, name: historyName(row, selfId, conversation, chat) }
         })
+        // A missed call stops asking once a later call in the same conversation was answered (the list is newest first).
+        .map((r, i, all) => ({
+          ...r,
+          returned: r.row.outcome === 'missed' && all.slice(0, i).some((x) => x.row.conversationId === r.row.conversationId && x.row.outcome === 'answered'),
+        }))
         .filter((r) => nameMatches(r.name, query)),
     [chat, conversations.byId, history.data, query, selfId],
   )
@@ -330,7 +343,7 @@ export function CallsPage() {
   )
 
   const favoritesSection = (
-    <section className="sheet cp-section" aria-labelledby="cp-favorites">
+    <section className="sheet cp-section cp-section--fav" aria-labelledby="cp-favorites">
       <div className="sheet__head">
         <h2 className="sheet__title" id="cp-favorites">
           {copy.favorites}
@@ -408,7 +421,7 @@ export function CallsPage() {
       ) : (
         <ul className="cp-list" onKeyDown={onListKeyDown}>
           {recentRows.map((r) => (
-            <RecentRow key={r.row.id} row={r.row} name={r.name} conversation={r.conversation} selfId={selfId} />
+            <RecentRow key={r.row.id} row={r.row} name={r.name} conversation={r.conversation} selfId={selfId} returned={r.returned} />
           ))}
         </ul>
       )}

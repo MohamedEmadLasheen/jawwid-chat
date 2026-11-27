@@ -188,8 +188,8 @@ export function TasksPage({ eyebrow }: { eyebrow?: string }) {
           title={tx(C.title)}
           actions={
             canCreate ? (
-              // One primary per screen: with a task open, its own action is the primary one.
-              <button type="button" className={openId ? 'btn' : 'btn btn--primary'} onClick={() => setCreating(true)}>
+              // Not the page's primary: the next thing to do is in the queue (and, with a task open, its own action).
+              <button type="button" className="btn" onClick={() => setCreating(true)}>
                 <Icon name="plus" size={16} />
                 {tx(C.newTask)}
               </button>

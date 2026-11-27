@@ -8,8 +8,8 @@ export const N = {
   title: { en: 'Notifications', ar: 'الإشعارات' },
   asks: { en: 'Requires action', ar: 'تتطلب إجراءً' },
   saving: { en: 'Saving…', ar: 'جارٍ الحفظ…' },
-  dueBy: { en: 'due {when}', ar: 'موعده {when}' },
-  wasDue: { en: 'was due {when}', ar: 'تجاوز موعده {when}' },
+  dueBy: { en: 'Due {when}', ar: 'موعده {when}' },
+  wasDue: { en: 'Was due {when}', ar: 'تجاوز موعده {when}' },
   bell: { en: 'Notifications, {n} unread', ar: 'الإشعارات، {n} غير مقروءة' },
   empty: { en: 'No notifications yet', ar: 'لا إشعارات بعد' },
   emptyHint: {

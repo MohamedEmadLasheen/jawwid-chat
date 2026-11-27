@@ -56,7 +56,7 @@ export const GROUP_LABEL = {
   past: { en: 'Overdue', ar: 'متأخرة' },
   today: { en: 'Due today', ar: 'تستحق اليوم' },
   tomorrow: { en: 'Due tomorrow', ar: 'تستحق غدًا' },
-  week: { en: 'This week', ar: 'خلال الأسبوع' },
+  week: { en: 'Next 7 days', ar: 'خلال 7 أيام' },
   later: { en: 'Later', ar: 'لاحقًا' },
   none: { en: 'No due date', ar: 'بلا موعد' },
   closed: { en: 'Closed', ar: 'مغلقة' },

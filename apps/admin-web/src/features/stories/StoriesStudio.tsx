@@ -135,7 +135,8 @@ export function StoriesStudio({ basePath, eyebrow }: { basePath: string; eyebrow
   const reachWeek = counted
     .filter((st) => st.publishedAt && now - new Date(st.publishedAt).getTime() < WEEK_MS)
     .reduce((n, st) => n + st.recipientCount, 0)
-  const figures: MastFigure[] | undefined = query.isLoading || query.error
+  // The audience data tab is about families, not reach: no figures over it.
+  const figures: MastFigure[] | undefined = query.isLoading || query.error || (params.get('tab') === 'audience' && canManageData)
     ? undefined
     : [
         // How far the stories went; how many are live or drafts is said by the tabs below.

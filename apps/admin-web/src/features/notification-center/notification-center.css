@@ -95,7 +95,7 @@
 .nc-more { display: flex; justify-content: center; padding: var(--space-3); border-block-start: 1px solid var(--line-2); }
 
 /* Settings: the two groups stacked. */
-.nc-settings { display: grid; gap: var(--space-5); max-inline-size: 640px; }
+.nc-settings { display: grid; gap: var(--space-5); }
 .nc-settings__state { font-size: var(--fs-sm); color: var(--ink-muted); }
 .nc-settings__nav { display: grid; gap: 2px; }
 .nc-settings__link {
@@ -164,3 +164,7 @@
   /* Every button here is a full touch target on a phone. */
   .nc-page :is(.btn, .btn--sm) { min-block-size: 44px; }
 }
+
+/* In the sheet of what asks for action, one title weight: the dot alone says unread. */
+.nc-asks .nc-item__title { font-weight: 600; color: var(--ink); }
+.nc-asks .nc-item__time.nc-item__due { margin: 0; padding-block-start: 8px; }

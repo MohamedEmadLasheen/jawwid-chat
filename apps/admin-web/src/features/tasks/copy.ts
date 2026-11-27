@@ -41,7 +41,7 @@ export const C = {
   due: { en: 'Due {when}', ar: 'الموعد {when}' },
   noDue: { en: 'No due date', ar: 'بلا موعد' },
   age: { en: 'Opened {ago}', ar: 'فُتحت {ago}' },
-  dueAgo: { en: 'due {ago}', ar: 'استحقت {ago}' },
+  dueAgo: { en: 'Due {ago}', ar: 'استحقت {ago}' },
   closedOn: { en: 'Closed {when}', ar: 'أُغلقت {when}' },
   // The panel
   close: { en: 'Close', ar: 'إغلاق' },
@@ -106,7 +106,7 @@ export const GROUP_LABEL = {
   overdue: { en: 'Overdue', ar: 'متأخرة' },
   today: { en: 'Due today', ar: 'تستحق اليوم' },
   tomorrow: { en: 'Due tomorrow', ar: 'تستحق غدًا' },
-  week: { en: 'This week', ar: 'خلال الأسبوع' },
+  week: { en: 'Next 7 days', ar: 'خلال 7 أيام' },
   later: { en: 'Later', ar: 'لاحقًا' },
   none: { en: 'No due date', ar: 'بلا موعد' },
 } satisfies Record<string, Pair>

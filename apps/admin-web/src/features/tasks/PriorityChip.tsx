@@ -5,7 +5,7 @@ import { FINANCE, LEVEL_LABEL, useCopy } from './copy'
 import { reasonOf } from './format'
 
 /** A level is an order, not an alarm: a neutral mark and a word. Urgency is the due time's to say. */
-const LEVEL_ICON: Record<Level, IconName> = { high: 'arrowUp', medium: 'minus', low: 'arrowDown' }
+const LEVEL_ICON: Record<Level, IconName | null> = { high: 'arrowUp', medium: null, low: 'arrowDown' }
 
 /**
  * PD-47 priority amendment §4: never colour alone. An icon, the level's name
@@ -18,7 +18,7 @@ export function PriorityChip({ task }: { task: Pick<TaskSummary, 'effectivePrior
   const reason = reasonOf(task, tx)
   return (
     <span className={`task-level task-level--${task.effectivePriority}`} data-testid="task-level">
-      <Icon name={LEVEL_ICON[task.effectivePriority]} size={14} />
+      {LEVEL_ICON[task.effectivePriority] && <Icon name={LEVEL_ICON[task.effectivePriority]!} size={14} />}
       <span>
         {tx(LEVEL_LABEL[task.effectivePriority])}
         {reason && <span className="task-level__reason">{locale === 'ar' ? '، ' : ', '}{reason}</span>}

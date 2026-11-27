@@ -97,8 +97,14 @@ export function DashboardSections({ shown }: { shown: Shown }) {
     .filter((r) => r.waiting.length > 0 || r.failed)
     .sort((x, y) => Number(y.late) - Number(x.late) || x.since - y.since || y.most - x.most)
   const calm = ranked.filter((r) => r.waiting.length === 0 && !r.failed)
-  // The late items themselves, not the rows: "11 late" is what a manager acts on.
-  const lateItems = needs.reduce((n, r) => n + r.waiting.filter(isLate).reduce((m, t) => m + t.count, 0), 0)
+  // The late items themselves, not the rows. Overdue tasks are counted as mine and as my team's,
+  // which can overlap, so a section's overdue task figures count once, at the larger of them.
+  const lateItems = needs.reduce((n, r) => {
+    const late = r.waiting.filter(isLate)
+    const tasks = late.filter((t) => t.key.startsWith('tasks.'))
+    const rest = late.filter((t) => !t.key.startsWith('tasks.'))
+    return n + rest.reduce((m, t) => m + t.count, 0) + Math.max(0, ...tasks.map((t) => t.count))
+  }, 0)
   const settled = shown.every(({ query }) => !query.isLoading)
 
   return (
@@ -137,7 +143,8 @@ function Section({ spec, query, variant }: { spec: SectionSpec; query: SectionQu
   const present = new Set(tiles.map((x) => x.key))
   // What wants doing is a row to open, ranked by need; the section's other figures are plain lines.
   const waiting = tiles.filter(isWaiting).sort(byNeed)
-  const rest = tiles.filter((tile) => !isWaiting(tile))
+  // The other figures: anything above zero first, the zeros after.
+  const rest = tiles.filter((tile) => !isWaiting(tile)).sort((x, y) => Number(y.count > 0) - Number(x.count > 0))
 
   return (
     <section className={variant === 'needs' ? 'dash-group dash-group--needs' : 'dash-group dash-group--calm'} aria-labelledby={titleId}>

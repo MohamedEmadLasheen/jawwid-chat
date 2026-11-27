@@ -168,6 +168,7 @@ export const S = {
   countryNotSet: { en: 'No country recorded', ar: 'بلا دولة مسجلة' },
   planNotSet: { en: 'No plan recorded', ar: 'بلا باقة مسجلة' },
   none: { en: 'None yet', ar: 'لا يوجد بعد' },
+  noViewsYet: { en: 'No views yet. Each day it is seen appears here.', ar: 'لا مشاهدات بعد. يظهر هنا كل يوم شوهدت فيه.' },
   people: { en: 'People', ar: 'الأشخاص' },
   viewedAt: { en: 'Viewed', ar: 'وقت المشاهدة' },
   noViewersYet: { en: 'Nobody has viewed it yet.', ar: 'لم يشاهدها أحد بعد.' },

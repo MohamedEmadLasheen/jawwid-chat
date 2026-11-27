@@ -171,16 +171,19 @@ function InsightsBody({
             <>
               {/* How it did: the fall from reach to action, then the same by day. */}
               <div className="sheet insight-sheet">
-              <section className="insight-card">
-                <h2 className="insight-card__title">{tx(S.funnel)}</h2>
-                <Funnel
-                  steps={[
-                    { label: tx(S.reached), value: a.reach.total },
-                    { label: tx(S.viewed), value: a.views.total },
-                    ...(a.cta.kind ? [{ label: tx(S.tapped), value: a.cta.tappers }] : []),
-                  ]}
-                />
-              </section>
+              {/* Without a button the funnel is reach and views, the figures above: it is drawn only with three steps. */}
+              {a.cta.kind && (
+                <section className="insight-card">
+                  <h2 className="insight-card__title">{tx(S.funnel)}</h2>
+                  <Funnel
+                    steps={[
+                      { label: tx(S.reached), value: a.reach.total },
+                      { label: tx(S.viewed), value: a.views.total },
+                      { label: tx(S.tapped), value: a.cta.tappers },
+                    ]}
+                  />
+                </section>
+              )}
 
               <section className="insight-card">
                 <h2 className="insight-card__title">{tx(S.overTime)}</h2>
@@ -282,6 +285,8 @@ function DailyChart({ daily, showTaps }: { daily: StoryAnalytics['daily']; showT
     new Intl.DateTimeFormat(locale === 'ar' ? 'ar-EG-u-nu-latn' : 'en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' }).format(
       new Date(`${iso}T00:00:00Z`),
     )
+  // Nothing to draw yet: one line, not an empty plot.
+  if (days.every((d) => d.views === 0 && d.taps === 0)) return <p className="daily__empty">{tx(S.noViewsYet)}</p>
   return (
     <div className="daily">
       <div className="daily__legend" aria-hidden="true">

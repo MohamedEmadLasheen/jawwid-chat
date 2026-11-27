@@ -181,7 +181,7 @@ function Agenda({ tab, onShowAll }: { tab: InboxTab; onShowAll: () => void }) {
               <bdi>{entry.body}</bdi>
             </p>
           )}
-          {waiting && (
+          {waiting && !(inAsks && entry.dueAt) && (
             <p className={`nc-item__due${breach ? ` nc-item__due--${breach}` : ''}`}>
               {/* Inside the group that already says it, only the time to breach. */}
               {!inAsks && <span className="nc-item__ask">{tx(TABS.action)}</span>}
@@ -195,11 +195,18 @@ function Agenda({ tab, onShowAll }: { tab: InboxTab; onShowAll: () => void }) {
             </p>
           )}
         </div>
-        <time className="nc-item__time" dateTime={entry.at}>
-          {/* Out of the day agenda a time needs its day. */}
-          {inAsks && dayKey(new Date(entry.at)) !== today ? `${dayLabel(dayKey(new Date(entry.at)))} ` : ''}
-          {clock.format(new Date(entry.at))}
-        </time>
+        {/* In the sheet of what asks for action, the time slot holds the time to breach, its measure. */}
+        {inAsks && entry.dueAt ? (
+          <time className={`nc-item__time nc-item__due nc-item__due--${breach}`} dateTime={entry.dueAt}>
+            {fill(tx(breach === 'late' ? N.wasDue : N.dueBy), { when: relativeTime(entry.dueAt, locale, now) })}
+          </time>
+        ) : (
+          <time className="nc-item__time" dateTime={entry.at}>
+            {/* Out of the day agenda a time needs its day. */}
+            {inAsks && dayKey(new Date(entry.at)) !== today ? `${dayLabel(dayKey(new Date(entry.at)))} ` : ''}
+            {clock.format(new Date(entry.at))}
+          </time>
+        )}
         <div className="nc-item__actions">
           {to && (
             <button
