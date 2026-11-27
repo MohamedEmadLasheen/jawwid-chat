@@ -98,6 +98,18 @@ This replaces the earlier "labelled navigation" instruction.
   - The 1280px content cap. A folded rail at 1440 centres the content, so the side margin reads 50px instead of 36px. The content flows; it does not jump.
   - "Dashboard" under Dashboard. That place has two pages, Dashboard and Tasks.
 
+### Rail critic round 3 (2026-11-27)
+- **Verified.** All six round-2 fixes hold: places stay in view at 900px; Instalments and the ledger hold with the rail folded at 1024; all seven days show; queue names are cut at their end; long page names end in an ellipsis.
+- **Fixed in this round:**
+  - Row lists let a tag wrap inside its cell. Teacher files' status ran under "Open file" beside an open rail at 1024.
+  - In a narrow board, the week board ends the teacher's line in an ellipsis and steps day names down a size.
+  - The stacked ledger keeps one money edge.
+  - A leave reason in the other language lines up with its column.
+- **Kept as they are:**
+  - The chat tab row fades at its end and scrolls; that is its scroll cue.
+  - The closed day's narrow, quieter column. When today is the academy's closed day it stays quiet; the gold mark says "today".
+- **Logged for later:** the middle-dot plan labels on Instalments and receipts ("… · 2/4"). They come from the server's label; Today already re-renders them as words, and the other pages should share that helper.
+
 ## Lead decisions while integrating
 - Shared fixes the builders reported went into `system.css` (outline tags without dashes, table row headers, neutral dots visible on white, stacked-sheet spacing, Arabic count size, switch buttons, one-letter Arabic avatars, a neutral note under an urgent figure); the teachers stylesheet's global `.sheet + .sheet` rule moved into the system.
 - "Teacher profiles" in Arabic reads "مؤهلات المعلمين" (credentials review): it shared its name with Teacher files.

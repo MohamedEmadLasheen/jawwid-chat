@@ -273,4 +273,4 @@ Every page has now had at least three critic rounds.
   - The pages that broke at 1024 with the rail open, when a page gets about 764px: Instalments, Teacher statistics, the payments ledger, the chat reply queue, and Attendance.
   - The All conversations order picker on phones.
 - **What it still flags:** a supervisor's 404 on a student profile they may not open (a permission, in both states), and the payments row action that the stacked ledger hides on purpose (the row opens the payment).
-- **Critic rounds on the rail:** 2. Pairs per page type are `admin-screens/rail-<page>-folded.png` and `rail-<page>-open.png`, plus `rail-tooltip`, `rail-menu`, `rail-account`, `rail-keyboard-focus` and `rail-short-1366x768-open`. The gallery's `rail.html` pairs every page.
+- **Critic rounds on the rail:** 3. Pairs per page type are `admin-screens/rail-<page>-folded.png` and `rail-<page>-open.png`, plus `rail-tooltip`, `rail-menu`, `rail-account`, `rail-keyboard-focus` and `rail-short-1366x768-open`. The gallery's `rail.html` pairs every page.
