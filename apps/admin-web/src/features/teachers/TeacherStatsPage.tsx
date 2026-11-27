@@ -1,36 +1,38 @@
-import { useCallback, useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useCallback } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { ApiError } from '@/core/api/errors'
-import { LOCALE_TAG, useI18n } from '@/core/i18n/I18nProvider'
-import { HOURS, LESSONS, countLabel, durationLabel } from '@/core/i18n/counts'
 import { Avatar } from '@/shared/components/Avatar'
 import { PageHeader, type MastFigure } from '@/shared/components/PageHeader'
-import { SearchField } from '@/shared/components/SearchField'
-import { EmptyState, QueryBoundary } from '@/shared/components/States'
-import type { Bucket, CategoryStats, TeacherDetail, TeacherRow } from './api'
-import { CATEGORY_LABEL, CATEGORY_TONE, T, type Pair } from './copy'
-import { useTeacherDetail, useTeacherStats } from './hooks'
+import { QueryBoundary } from '@/shared/components/States'
+import { adminSectionPath } from '@/features/admin/sections'
+import type { CategoryStats, StatCategory, TeacherDetail } from './api'
+import { CATEGORY_LABEL, T, TS } from './copy'
+import { useTeacherDetail } from './hooks'
 import { TeachersAreaTabs } from './area'
 import { MonthPicker } from './MonthPicker'
-import { Icon } from '@/shared/components/Icon'
-import { MonthSummaryPanel, S } from '@/features/journey/MonthSummary'
-import { useJourneyCopy } from '@/features/journey/copy'
+import { Denied, StatsList } from './stats/StatsList'
+import { MessageTeacher } from './stats/MessageTeacher'
+import { OutcomeBars } from './stats/OutcomeBars'
+import { isFilter } from './stats/priority'
+import { Pct, useCopy, useCopyNodes, useFormat } from './stats/format'
+import { TEACHER_ATTENTION_THRESHOLDS as TH } from './stats/thresholds'
 import './teachers.css'
-import './stack-table.css'
+import './stats/stats.css'
 
 /**
  * PD-11 T5: teacher statistics, for the Teachers department and the super
- * admin. The list is a ledger to compare teachers down the page: six columns,
- * each a figure with what qualifies it under it. `?teacher=<id>` is one
- * teacher's month as a record: the key figures in the masthead, every outcome
- * as a sheet with one tick a lesson, and what only Chat can know beside them.
- * Every number comes from the server; this page counts nothing itself.
+ * admin. The list (`stats/StatsList`) answers "who needs my intervention this
+ * month?", ordered by need; a row opens the teacher's month in a side sheet.
+ * `?teacher=<id>` is one teacher's month at page width: the same figures, the
+ * month by outcome, every outcome broken down by lesson length, and what only
+ * Chat can know beside them. Every number comes from the server.
  */
 export function TeacherStatsPage({ inTeachersArea = false }: { inTeachersArea?: boolean } = {}) {
   const tx = useCopy()
   const [params, setParams] = useSearchParams()
   const month = params.get('month') ?? currentMonth()
   const teacherId = params.get('teacher')
+  const show = params.get('show')
 
   const set = useCallback(
     (patch: Record<string, string | null>) => {
@@ -45,18 +47,32 @@ export function TeacherStatsPage({ inTeachersArea = false }: { inTeachersArea?: 
   )
 
   const monthPicker = <MonthPicker value={month} onChange={(next) => set({ month: next })} label={tx(T.month)} showLabel={false} />
+  // The operators' Teachers area keeps the file under its own tab; the super admin's is in the Admin portal.
+  const fileHref = (id: string) => (inTeachersArea ? `/teachers/files/${encodeURIComponent(id)}` : `${adminSectionPath('teachers')}/${encodeURIComponent(id)}`)
+  const fullHref = (id: string) => {
+    const next = new URLSearchParams(params)
+    next.delete('show')
+    next.set('month', month)
+    next.set('teacher', id)
+    return `?${next.toString()}`
+  }
 
   return (
     <div className="page">
       <div className="page__inner">
         {teacherId ? (
-          <TeacherDetailView id={teacherId} month={month} monthPicker={monthPicker} />
+          <TeacherDetailView id={teacherId} month={month} monthPicker={monthPicker} fileHref={fileHref(teacherId)} />
         ) : (
-          <>
-            {/* The operators' Teachers area shows its tabs; the super admin's Reports section is one page. */}
-            <PageHeader title={tx(T.title)} subtitle={tx(T.subtitle)} actions={monthPicker} tabs={inTeachersArea ? <TeachersAreaTabs /> : undefined} />
-            <TeacherList month={month} onOpen={(id) => set({ teacher: id })} />
-          </>
+          <StatsList
+            month={month}
+            monthPicker={monthPicker}
+            tabs={inTeachersArea ? <TeachersAreaTabs /> : undefined}
+            filter={isFilter(show) ? show : null}
+            onFilter={(next) => set({ show: next })}
+            fileHref={fileHref}
+            fullHref={fullHref}
+            needsActionHref="/teachers/needs-action"
+          />
         )}
       </div>
     </div>
@@ -65,149 +81,23 @@ export function TeacherStatsPage({ inTeachersArea = false }: { inTeachersArea?: 
 
 const isForbidden = (error: unknown) => error instanceof ApiError && error.isForbidden
 
-/** The server said no: one calm line and a lock. It offers no retry, as a refusal is an answer. */
-function Denied() {
-  const { t } = useI18n()
-  return (
-    <p className="ts-denied" role="alert">
-      <Icon name="lock" size={18} />
-      <span>{t('common.forbidden')}</span>
-    </p>
-  )
-}
-
 // ---------------------------------------------------------------------------
-// The list
-// ---------------------------------------------------------------------------
-
-function TeacherList({ month, onOpen }: { month: string; onOpen: (id: string) => void }) {
-  const { tx: jx } = useJourneyCopy()
-  const tx = useCopy()
-  const fmt = useFormat()
-  const q = useTeacherStats(month)
-  const [query, setQuery] = useState('')
-  const rows = useMemo(() => {
-    const all = q.data?.teachers ?? []
-    const needle = query.trim().toLowerCase()
-    return needle ? all.filter((r) => r.teacher.name.toLowerCase().includes(needle)) : all
-  }, [q.data, query])
-
-  if (isForbidden(q.error)) return <Denied />
-  return (
-    <QueryBoundary isLoading={q.isLoading} error={q.error} onRetry={() => void q.refetch()}>
-      <section className="sheet" aria-label={tx(T.title)}>
-        <div className="sheet-bar">
-          <SearchField value={query} onChange={setQuery} label={tx(T.search)} clearLabel={tx(T.search)} />
-        </div>
-        {(q.data?.teachers.length ?? 0) === 0 ? (
-          <EmptyState title={tx(T.noTeachers)} />
-        ) : (
-          <div className="table-wrap ts-table-wrap">
-            <table className="table ts-table stack-table">
-              <thead>
-                <tr>
-                  <th scope="col">{tx(T.colTeacher)}</th>
-                  <th scope="col">
-                    {tx(T.colHeld)}
-                    <span className="ts-th-key">{tx(T.keyHeld)}</span>
-                  </th>
-                  <th scope="col">{tx(T.colAttendance)}</th>
-                  <th scope="col">
-                    {tx(T.colOnTime)}
-                    <span className="ts-th-key">{tx(T.colUnreported)}</span>
-                  </th>
-                  <th scope="col">
-                    {tx(T.colExcuses)}
-                    <span className="ts-th-key">{tx(T.keyExcuses)}</span>
-                  </th>
-                  <th scope="col">
-                    {tx(T.colTrials)}
-                    <span className="ts-th-key">{tx(T.keyTrials)}</span>
-                  </th>
-                  <th scope="col" className="cell-actions">
-                    <span className="sr-only">{tx(T.open)}</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r: TeacherRow) => (
-                  <tr key={r.teacher.id}>
-                    <th scope="row">
-                      <button type="button" className="ts-link" onClick={() => onOpen(r.teacher.id)}>
-                        {r.teacher.name}
-                      </button>
-                      {!r.teacher.isActive && <span className="ts-muted"> · {tx(T.inactive)}</span>}
-                    </th>
-                    <td className={quiet(r.held.lessons)} data-label={tx(T.colHeld)}>
-                      <span className="ts-fig">{fmt.lessonsHours(r.held)}</span>
-                      <span className="ts-sub">
-                        {tx(T.colScheduled)}: {fmt.number(r.scheduled.lessons)} · {tx(T.colNotHeld)}: {fmt.number(r.notHeld.lessons)}
-                      </span>
-                    </td>
-                    <td className={quiet(r.attendanceRate)} data-label={tx(T.colAttendance)}>
-                      <span className="ts-fig">{fmt.percent(r.attendanceRate)}</span>
-                    </td>
-                    <td className={quiet(r.reportsOnTimeRate)} data-label={tx(T.colOnTime)}>
-                      <span className="ts-fig">{fmt.percent(r.reportsOnTimeRate)}</span>
-                      <span className={r.unreported.lessons > 0 ? 'ts-sub ts-attention' : 'ts-sub'}>
-                        {tx(T.colUnreported)}: {fmt.number(r.unreported.lessons)}
-                      </span>
-                    </td>
-                    <td className={quiet(r.summary ? r.summary.studentExcuses.total + r.summary.teacherExcuses : undefined)} data-label={tx(T.colExcuses)}>
-                      {r.summary ? (
-                        <>
-                          <span className="ts-fig">
-                            <span className="ltr">{`${fmt.number(r.summary.studentExcuses.beforeStart)} + ${fmt.number(r.summary.studentExcuses.afterStart)}`}</span>
-                            <span className="ts-fig__and"> · {jx(S.teacherExcuses)}: {fmt.number(r.summary.teacherExcuses)}</span>
-                          </span>
-                          <span className="ts-sub">
-                            {jx(S.makeups)}: <span className="ltr">{`${fmt.number(r.summary.makeups.completed)} / ${fmt.number(r.summary.makeups.total)}`}</span>
-                          </span>
-                        </>
-                      ) : (
-                        <span className="ts-fig">—</span>
-                      )}
-                    </td>
-                    <td className={quiet(r.trials?.total ?? 0)} data-label={tx(T.colTrials)}>
-                      <span className="ts-fig">
-                        <span className="ltr">{`${fmt.number(r.trials?.subscribed ?? 0)} / ${fmt.number(r.trials?.total ?? 0)}`}</span>
-                      </span>
-                      {r.movesByTeacher !== undefined && (
-                        <span className="ts-sub" title={tx(T.movesHint)}>
-                          {tx(T.colMoves)}: {fmt.number(r.movesByTeacher)}
-                        </span>
-                      )}
-                    </td>
-                    <td className="cell-actions stack-actions">
-                      <button type="button" className="btn btn--sm" onClick={() => onOpen(r.teacher.id)} aria-label={`${tx(T.open)}: ${r.teacher.name}`}>
-                        {tx(T.open)}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-    </QueryBoundary>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// One teacher
+// One teacher, at page width
 // ---------------------------------------------------------------------------
 
 function TeacherDetailView({
   id,
   month,
   monthPicker,
+  fileHref,
 }: {
   id: string
   month: string
   monthPicker: React.ReactNode
+  fileHref: string
 }) {
   const tx = useCopy()
+  const nodes = useCopyNodes()
   const fmt = useFormat()
   const [params] = useSearchParams()
   const q = useTeacherDetail(id, month)
@@ -215,25 +105,54 @@ function TeacherDetailView({
   // The way back keeps the month: the list this record belongs to.
   const back = new URLSearchParams(params)
   back.delete('teacher')
-  const held = d?.categories.find((c) => c.key === 'held')
+  const lessonsOf = (key: StatCategory) => d?.categories.find((c) => c.key === key)?.lessons ?? 0
+  const late = lessonsOf('unreported')
   const figures: MastFigure[] = d
     ? [
-        { key: 'counted', label: tx(T.totalCounted), value: fmt.number(d.totals.counted.lessons), note: held ? tx(T.heldOf, { n: fmt.number(held.lessons) }) : undefined },
-        { key: 'attendance', label: tx(T.attendance), value: fmt.percent(d.rates.attendance), note: tx(T.attendanceHint), tone: 'key' },
-        { key: 'completion', label: tx(T.completion), value: fmt.percent(d.rates.completion), note: tx(T.completionHint) },
-        { key: 'reliability', label: tx(T.reliability), value: fmt.percent(d.rates.teacherReliability), note: tx(T.reliabilityHint) },
+        {
+          key: 'late',
+          label: tx(TS.colLate),
+          value: fmt.number(late),
+          note: d.reports.onTimeRate !== null ? nodes(TS.onTimeOf, { p: <Pct value={d.reports.onTimeRate} /> }) : undefined,
+          tone: late >= TH.lateReportsUrgent ? 'urgent' : late === 0 ? 'quiet' : undefined,
+        },
+        {
+          key: 'attendance',
+          label: tx(TS.colAttendance),
+          value: <Pct value={d.rates.attendance} />,
+          note: tx(T.attendanceHint),
+        },
+        {
+          key: 'held',
+          label: tx(TS.colLessons),
+          value: <bdi dir="ltr" className="ltr">{`${fmt.number(lessonsOf('held'))} / ${fmt.number(d.totals.counted.lessons)}`}</bdi>,
+          note: tx(TS.colLessonsKey),
+        },
+        { key: 'reliability', label: tx(T.reliability), value: <Pct value={d.rates.teacherReliability} />, note: tx(T.reliabilityHint) },
       ]
     : []
 
   return (
-    <>
+    <div className="tsx-full">
       <PageHeader
         back={{ to: `?${back.toString()}`, label: tx(T.back) }}
         lead={d ? <Avatar name={d.teacher.name} seed={d.teacher.id} size="lg" /> : undefined}
         title={d?.teacher.name ?? tx(T.title)}
         subtitle={tx(T.detailSubtitle, { month: fmt.month(month) })}
         figures={figures}
-        actions={monthPicker}
+        actions={
+          <>
+            {d && (
+              <>
+                <Link className="btn btn--sm" to={fileHref}>
+                  {tx(TS.openFile)}
+                </Link>
+                <MessageTeacher teacherId={d.teacher.id} teacherName={d.teacher.name} className="btn btn--sm btn--primary" />
+              </>
+            )}
+            {monthPicker}
+          </>
+        }
       />
       {isForbidden(q.error) ? (
         <Denied />
@@ -242,7 +161,7 @@ function TeacherDetailView({
           {d && <DetailBody detail={d} />}
         </QueryBoundary>
       )}
-    </>
+    </div>
   )
 }
 
@@ -256,11 +175,13 @@ function DetailBody({ detail: d }: { detail: TeacherDetail }) {
   return (
     <div className="split split--wide-aside">
       <div className="ts-detail">
-        {d.summary && (
-          <section className="sheet ts-glance">
-            <MonthSummaryPanel summary={d.summary} />
-          </section>
-        )}
+        <section className="sheet tsx-full__outcomes" aria-labelledby="tsx-full-outcomes">
+          <h2 id="tsx-full-outcomes" className="tsx-sheet__title">
+            {tx(TS.outcomes)}
+          </h2>
+          <OutcomeBars categories={d.categories} />
+        </section>
+        <h2 className="tsx-full__head">{tx(T.byOutcome)}</h2>
         <section className="ts-cats" aria-label={tx(T.title)}>
           {cards.map((c) => (
             <CategoryCard key={c.key} category={c} />
@@ -273,11 +194,11 @@ function DetailBody({ detail: d }: { detail: TeacherDetail }) {
 
       <aside className="ts-facts">
         <Fact title={tx(T.reports)}>
-          <Metric label={tx(T.onTime)} value={`${fmt.percent(d.reports.onTimeRate)} · ${fmt.number(d.reports.onTime)}/${fmt.number(d.reports.reports)}`} />
+          <Metric label={tx(T.onTime)} value={<Pct value={d.reports.onTimeRate} />} hint={tx(TS.ofN, { a: fmt.number(d.reports.onTime), b: fmt.number(d.reports.reports) })} />
           <Metric label={tx(T.medianDelay)} value={fmt.duration(d.reports.medianDelayMinutes)} />
         </Fact>
         <Fact title={tx(T.replies)}>
-          <Metric label={tx(T.answered)} value={fmt.percent(d.replies.rate)} hint={tx(T.familyMessages, { n: fmt.number(d.replies.familyMessages) })} />
+          <Metric label={tx(T.answered)} value={<Pct value={d.replies.rate} />} hint={tx(T.familyMessages, { n: fmt.number(d.replies.familyMessages) })} />
           <Metric label={tx(T.medianReply)} value={fmt.duration(d.replies.medianReplyMinutes)} />
         </Fact>
         <Fact title={tx(T.workload)}>
@@ -291,6 +212,17 @@ function DetailBody({ detail: d }: { detail: TeacherDetail }) {
           )}
           <Metric label={tx(T.scheduled)} value={fmt.hours(d.workload.scheduledMinutes)} />
         </Fact>
+        {d.summary && (
+          <Fact title={tx(TS.more)}>
+            <Metric
+              label={tx(TS.studentExcuses)}
+              value={fmt.number(d.summary.studentExcuses.total)}
+              hint={tx(TS.studentExcusesSplit, { b: fmt.number(d.summary.studentExcuses.beforeStart), a: fmt.number(d.summary.studentExcuses.afterStart) })}
+            />
+            <Metric label={tx(TS.teacherExcuses)} value={fmt.number(d.summary.teacherExcuses)} />
+            <Metric label={tx(TS.makeupsDone)} value={tx(TS.ofN, { a: fmt.number(d.summary.makeups.completed), b: fmt.number(d.summary.makeups.total) })} />
+          </Fact>
+        )}
         {d.movements && (
           <Fact title={tx(T.movements)}>
             <Metric label={tx(T.transfersIn)} value={fmt.number(d.movements.transfersIn)} />
@@ -318,7 +250,7 @@ function DetailBody({ detail: d }: { detail: TeacherDetail }) {
           <Metric label={tx(T.trialsNotSubscribed)} value={fmt.number(d.trials.notSubscribed)} />
           <Metric label={tx(T.trialsNoShow)} value={fmt.number(d.trials.noShow)} />
           <Metric label={tx(T.trialsAwaiting)} value={fmt.number(d.trials.awaiting)} />
-          <Metric label={tx(T.trialsConversion)} value={fmt.percent(d.trials.conversionRate)} hint={tx(T.trialsConversionHint)} />
+          <Metric label={tx(T.trialsConversion)} value={<Pct value={d.trials.conversionRate} />} hint={tx(T.trialsConversionHint)} />
           {(d.trials.upcoming > 0 || d.trials.cancelled > 0) && (
             <p className="ts-muted ts-card__note">{tx(T.trialsOutside, { u: fmt.number(d.trials.upcoming), c: fmt.number(d.trials.cancelled) })}</p>
           )}
@@ -330,13 +262,16 @@ function DetailBody({ detail: d }: { detail: TeacherDetail }) {
 
 /** One tick per lesson, grouped by lesson length. Past this many, a group is drawn at this length. */
 const TICK_LIMIT = 160
+/** Red only where a lesson was lost through the teacher or still has no report; the rest is neutral ink. */
+const ALARM: ReadonlySet<StatCategory> = new Set(['teacher_no_show', 'unreported'])
 
 function CategoryCard({ category: c }: { category: CategoryStats }) {
   const tx = useCopy()
   const fmt = useFormat()
   const label = tx(CATEGORY_LABEL[c.key])
+  const tone = ALARM.has(c.key) && c.lessons > 0 ? 'danger' : 'neutral'
   return (
-    <article className={`sheet ts-cat ts-cat--${CATEGORY_TONE[c.key]}${c.lessons === 0 ? ' ts-cat--none' : ''}`} aria-label={label}>
+    <article className={`sheet ts-cat ts-cat--${tone}${c.lessons === 0 ? ' ts-cat--none' : ''}`} aria-label={label}>
       <header className="ts-cat__head">
         <h3 className="ts-cat__title">{label}</h3>
         <span className="ts-cat__count">{fmt.number(c.lessons)}</span>
@@ -355,7 +290,7 @@ function CategoryCard({ category: c }: { category: CategoryStats }) {
               <li key={b.durationMinutes} className="ts-cat__row">
                 <span>{tx(T.minutesLong, { m: fmt.number(b.durationMinutes) })}</span>
                 <strong>{fmt.lessons(b.lessons)}</strong>
-                <span className="ts-muted">{tx(T.total)}: {fmt.hours(b.minutes)}</span>
+                <span className="ts-muted">{fmt.hours(b.minutes)}</span>
               </li>
             ))}
           </ul>
@@ -379,7 +314,7 @@ function Fact({ title, children }: { title: string; children: React.ReactNode })
   )
 }
 
-function Metric({ label, value, hint }: { label: string; value: string; hint?: string }) {
+function Metric({ label, value, hint }: { label: string; value: React.ReactNode; hint?: string }) {
   return (
     <div className="ts-metric">
       <dt>{label}</dt>
@@ -389,56 +324,6 @@ function Metric({ label, value, hint }: { label: string; value: string; hint?: s
       </dd>
     </div>
   )
-}
-
-// ---------------------------------------------------------------------------
-// Formatting
-// ---------------------------------------------------------------------------
-
-function useCopy() {
-  const { locale } = useI18n()
-  return useCallback(
-    (pair: Pair, params?: Record<string, string | number>) => {
-      const template = locale === 'ar' ? pair.ar : pair.en
-      if (!params) return template
-      return template.replace(/\{(\w+)\}/g, (m, k: string) => (k in params ? String(params[k]) : m))
-    },
-    [locale],
-  )
-}
-
-function useFormat() {
-  const { number, locale } = useI18n()
-  const tx = useCopy()
-  return useMemo(() => {
-    const hoursNumber = (minutes: number) => number(Math.round((minutes / 60) * 10) / 10)
-    // RQA-F2: the noun agrees with the number in Arabic ("٣ حصص", "ساعتان"), not a fixed singular.
-    const hoursOf = (minutes: number) => {
-      const h = Math.round((minutes / 60) * 10) / 10
-      return countLabel(h, number(h), HOURS, locale)
-    }
-    const lessonsOf = (n: number) => countLabel(n, number(n), LESSONS, locale)
-    const monthFmt = new Intl.DateTimeFormat(LOCALE_TAG[locale], { month: 'long', year: 'numeric', timeZone: 'UTC' })
-    return {
-      number,
-      hoursNumber,
-      hours: (minutes: number | null) => (minutes === null ? tx(T.none) : hoursOf(minutes)),
-      minutes: (m: number | null) => (m === null ? tx(T.none) : tx(T.minutesLong, { m: number(m) })),
-      /** RQA-F8: "3 days 19 h", not "5,506 minutes". */
-      duration: (m: number | null) => (m === null ? tx(T.none) : durationLabel(m, number, locale)),
-      /** RQA-F8: "October 2026" / "أكتوبر ٢٠٢٦", never the raw "2026-10". */
-      month: (ym: string) => (/^\d{4}-\d{2}$/.test(ym) ? monthFmt.format(new Date(`${ym}-01T00:00:00Z`)) : ym),
-      percent: (r: number | null) =>
-        r === null ? tx(T.none) : new Intl.NumberFormat(locale === 'ar' ? 'ar-EG-u-nu-latn' : 'en', { style: 'percent', maximumFractionDigits: 0 }).format(r),
-      lessons: lessonsOf,
-      lessonsHours: (b: Bucket) => `${lessonsOf(b.lessons)} · ${hoursOf(b.minutes)}`,
-    }
-  }, [number, locale, tx])
-}
-
-/** A zero or a missing figure is set quietly, so the eye lands on what is there. */
-function quiet(value: number | null | undefined): string {
-  return value ? 'num' : 'num ts-zero'
 }
 
 function currentMonth(): string {

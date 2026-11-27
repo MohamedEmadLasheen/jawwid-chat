@@ -54,11 +54,11 @@ export const T = {
   reliabilityHint: { en: 'Lessons not lost through the teacher', ar: 'الحصص التي لم تضع بسبب المعلم' },
 
   reports: { en: 'Lesson reports', ar: 'تقارير الحصص' },
-  onTime: { en: 'On time (within 24 h)', ar: 'في موعدها (خلال ٢٤ ساعة)' },
+  onTime: { en: 'On time (within 24 h)', ar: 'في موعدها (خلال 24 ساعة)' },
   medianDelay: { en: 'Median delay', ar: 'متوسط التأخير' },
 
   replies: { en: 'Replies to families', ar: 'الرد على الأسر' },
-  answered: { en: 'Answered within 24 h', ar: 'تم الرد خلال ٢٤ ساعة' },
+  answered: { en: 'Answered within 24 h', ar: 'تم الرد خلال 24 ساعة' },
   medianReply: { en: 'Median reply time', ar: 'متوسط زمن الرد' },
   familyMessages: { en: '{n} family messages', ar: '{n} رسالة من الأسر' },
 
@@ -94,6 +94,87 @@ export const T = {
   moves: { en: 'Lessons moved by teacher', ar: 'حصص نقلها المعلم' },
   movesHint: { en: 'Information only: moving a lesson is not a violation.', ar: 'للاطلاع فقط: نقل الحصة ليس مخالفة.' },
   none: { en: '—', ar: '—' },
+} satisfies Record<string, Pair>
+
+/**
+ * The ranked statistics list and its side sheet (features/teachers/stats).
+ * `{name}` slots are filled with numbers already formatted, or with nodes.
+ */
+export const TS = {
+  // Figures that filter the list.
+  figUrgent: { en: 'Needs intervention', ar: 'بحاجة إلى تدخّل' },
+  figUrgentNote: { en: 'of {teachers}', ar: 'من أصل {teachers}' },
+  figLate: { en: 'Late reports', ar: 'تقارير متأخرة' },
+  figLateNote: { en: 'across {teachers}', ar: 'عند {teachers}' },
+  figLateNone: { en: 'every lesson reported', ar: 'كل الحصص بتقاريرها' },
+  figAttendance: { en: 'Low student attendance', ar: 'حضور طلاب منخفض' },
+  figAttendanceNote: { en: 'teachers below {p}', ar: 'معلمون دون {p}' },
+  figNoShow: { en: 'Teacher no-shows', ar: 'غياب المعلمين' },
+  figNoShowNote: { en: 'lessons, across {teachers}', ar: 'حصص، عند {teachers}' },
+  figNoShowNone: { en: 'none this month', ar: 'لا غياب هذا الشهر' },
+
+  // The list.
+  colTeacher: { en: 'Teacher, by priority', ar: 'المعلم، حسب الأولوية' },
+  colLate: { en: 'Late reports', ar: 'تقارير متأخرة' },
+  colAttendance: { en: 'Student attendance', ar: 'حضور الطلاب' },
+  colLessons: { en: 'Lessons held', ar: 'الحصص المنعقدة' },
+  colLessonsKey: { en: 'of counted', ar: 'من المحتسبة' },
+  onTime: { en: 'on time', ar: 'في موعدها' },
+  onTimeOf: { en: '{p} on time', ar: '{p} في موعدها' },
+  shortLate: { en: 'Late reports', ar: 'متأخرة' },
+  shortAttendance: { en: 'Attendance', ar: 'الحضور' },
+  shortLessons: { en: 'Held', ar: 'المنعقدة' },
+  urgent: { en: 'Urgent', ar: 'عاجل' },
+  watch: { en: 'Watch', ar: 'للمتابعة' },
+  ok: { en: 'On track', ar: 'منتظم' },
+  showMore: { en: 'Show {more}', ar: 'عرض {more}' },
+  showFewer: { en: 'Show fewer', ar: 'عرض أقل' },
+  showAll: { en: 'Show every teacher', ar: 'عرض كل المعلمين' },
+  noMatch: { en: 'No teacher in this view this month.', ar: 'لا يوجد معلم ضمن هذا العرض هذا الشهر.' },
+  noName: { en: 'No teacher by that name.', ar: 'لا يوجد معلم بهذا الاسم.' },
+  askReports: { en: 'Ask for the reports in Needs action', ar: 'اطلب التقارير من «بحاجة إلى إجراء»' },
+  thresholdsUrgent: { en: 'Urgent: {late} or more without a report, or any teacher no-show.', ar: 'عاجل: {late} أو أكثر دون تقرير، أو أي غياب للمعلم دون إشعار.' },
+  thresholdsWatch: { en: 'Watch: student attendance below {att}, or fewer than {ot} of reports on time.', ar: 'للمتابعة: حضور الطلاب دون {att}، أو أقل من {ot} من التقارير في موعدها.' },
+
+  // Each row's reason, as a sentence.
+  rNoShow: { en: 'missed {lessons} without notice', ar: 'غياب عن {lessons} دون إشعار' },
+  rLateRecent: { en: 'usually reports on time, so this backlog is recent', ar: 'التقارير في موعدها عادةً، فهذا التأخر حديث' },
+  rLateNone: { en: 'no report written yet this month', ar: 'لم يُكتب أي تقرير هذا الشهر' },
+  rAbsences: { en: 'students missed {absent} and excused {excused}', ar: 'غاب الطلاب عن {absent} واعتذروا عن {excused}' },
+  rAbsencesOnly: { en: 'students missed {absent}', ar: 'غاب الطلاب عن {absent}' },
+  rAbsencesUnknown: { en: 'students often miss their lessons', ar: 'الطلاب يتغيّبون كثيرًا' },
+  rReportsLate: { en: 'reports often come in after a day', ar: 'كثيرًا ما يُكتب التقرير بعد مرور يوم' },
+  rTeacherExcuses: { en: 'excused from {lessons}', ar: 'اعتذار عن {lessons}' },
+  rTrials: { en: '{s} of {t} trial students subscribed', ar: 'اشترك {s} من أصل {t} بعد الحصة التجريبية' },
+  rNoLessons: { en: 'no lessons this month', ar: 'لا حصص هذا الشهر' },
+
+  // Actions.
+  messageTeacher: { en: 'Message teacher', ar: 'مراسلة المعلم' },
+  opening: { en: 'Opening…', ar: 'جارٍ الفتح…' },
+  openFile: { en: 'Open teacher file', ar: 'فتح ملف المعلم' },
+  fullStats: { en: 'Full month statistics', ar: 'إحصائيات الشهر كاملة' },
+  exportList: { en: 'Export', ar: 'تصدير' },
+  exportCsv: { en: 'Download as CSV', ar: 'تنزيل ملف CSV' },
+  print: { en: 'Print the list', ar: 'طباعة القائمة' },
+  csvPriority: { en: 'Priority', ar: 'الأولوية' },
+  csvReason: { en: 'Reason', ar: 'السبب' },
+
+  // The side sheet.
+  rateRows: { en: 'Reliability and replies', ar: 'الالتزام والردود' },
+  medianDelay: { en: 'Median report delay', ar: 'متوسط تأخر التقرير' },
+  replies: { en: 'Family messages answered within 24 h', ar: 'رسائل الأسر المُجاب عنها خلال 24 ساعة' },
+  medianReply: { en: 'median reply {d}', ar: 'متوسط الرد {d}' },
+  outcomes: { en: 'Lessons by outcome', ar: 'الحصص حسب النتيجة' },
+  outcomesNone: { en: 'No lessons have an outcome yet this month.', ar: 'لا نتائج للحصص بعد هذا الشهر.' },
+  more: { en: 'Trials, excuses and moves', ar: 'التجريبية والأعذار والنقل' },
+  trialsSubscribed: { en: 'Trial students who subscribed', ar: 'اشتركوا بعد الحصة التجريبية' },
+  ofN: { en: '{a} of {b}', ar: '{a} من {b}' },
+  studentExcuses: { en: 'Student excuses', ar: 'أعذار الطلاب' },
+  studentExcusesSplit: { en: '{b} before the start, {a} after', ar: '{b} قبل البداية، {a} بعدها' },
+  teacherExcuses: { en: 'Teacher excuses', ar: 'أعذار المعلم' },
+  makeupsDone: { en: 'Make-ups completed', ar: 'الحصص التعويضية المنفّذة' },
+  movesInfo: { en: 'information only', ar: 'للاطلاع فقط' },
+  lessonsHeldOf: { en: 'Lessons held of counted', ar: 'المنعقدة من المحتسبة' },
 } satisfies Record<string, Pair>
 
 export const CATEGORY_LABEL: Record<StatCategory, Pair> = {
