@@ -50,6 +50,8 @@ export function TeacherProfilesPage() {
           }
         />
 
+        {/* With nothing to review, the page still stands on a sheet. */}
+        <div className={query.profiles.length === 0 ? 'sheet' : undefined}>
         <QueryBoundary
           isLoading={query.isLoading}
           error={query.error}
@@ -63,6 +65,7 @@ export function TeacherProfilesPage() {
             ))}
           </ul>
         </QueryBoundary>
+        </div>
       </div>
     </div>
   )
