@@ -130,7 +130,7 @@ export function StaffAccountsPage() {
                     value={status}
                     onChange={setStatus}
                     formatCount={number}
-                    options={(['all', 'active', 'provisioned', 'suspended'] as const).map((s) => ({
+                    options={(['all', 'active', 'provisioned', 'suspended'] as const).filter((s) => s === 'all' || s === status || accounts.some((a) => a.status === s)).map((s) => ({
                       value: s,
                       label: s === 'all' ? tx(SA.all) : tx(STATUS[s]!),
                       // How many each would show: a "Not set up" that is not empty is seen before it is chosen.
@@ -347,7 +347,7 @@ function StaffAccountPane({
           <h2 id={`${id}-name`} className="md-pane__title">
             <bdi>{account.name}</bdi>
           </h2>
-          <StaffState account={account} />
+          <StaffState account={account} inList />
         </div>
         <div className="md-pane__actions">
           <OneActionAndMore label={tx(A.more, { name: account.name })} actions={actions} />
@@ -503,6 +503,12 @@ function AccessPanel({ staffId, accountName, previewRoleId, canManage }: { staff
     const base = tx(SA.srcRole, { role })
     return s.grantedBy && s.grantedAt ? `${base}${comma}${tx(SA.srcGranted, { by: s.grantedBy.name ?? '—', at: date(s.grantedAt) })}` : base
   }
+  const sourcesOf = (k: HeldKey) => k.sources.map(sourceText)
+  const everyKey = view.data?.pages.flatMap((p) => p.keys) ?? []
+  const allSame =
+    everyKey.length > 1 && everyKey.every((k) => sourcesOf(k).join('\n') === sourcesOf(everyKey[0]!).join('\n'))
+      ? tx(SA.allFrom, { source: sourcesOf(everyKey[0]!).join(comma) })
+      : null
   return (
     <>
       <Part id={`${id}-access`} title={tx(SA.accessTitle)} hint={tx(SA.accessHint)}>
@@ -519,15 +525,16 @@ function AccessPanel({ staffId, accountName, previewRoleId, canManage }: { staff
                   .join(semicolon)}
           </div>
         )}
+        {allSame && <p className="md-part__source">{allSame}</p>}
         {view.isLoading ? null : view.error || !view.data ? null : view.data.pages.length === 0 ? (
           <p className="md-part__none">{tx(SA.accessNone)}</p>
         ) : (
           <ul className="md-groups" aria-label={tx(SA.accessTitle)}>
             {view.data.pages.map((p) => {
-              // Where the page's permissions came from is said once under its name when they all came the same way.
-              const sourcesOf = (k: HeldKey) => k.sources.map(sourceText)
+              // Where the permissions came from is said once: for the whole account when every one came the same
+              // way (above the list), else under a page's name when its own all did, else on each permission.
               const first = p.keys[0] ? sourcesOf(p.keys[0]).join('\n') : ''
-              const shared = p.keys.length > 1 && p.keys.every((k) => sourcesOf(k).join('\n') === first) ? sourcesOf(p.keys[0]!) : null
+              const shared = allSame ? [] : p.keys.length > 0 && p.keys.every((k) => sourcesOf(k).join('\n') === first) ? sourcesOf(p.keys[0]!) : null
               return (
               <li key={p.page} className="md-group">
                 <span className="md-group__head">

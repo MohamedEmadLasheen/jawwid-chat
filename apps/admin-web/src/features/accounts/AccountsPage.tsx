@@ -1,4 +1,4 @@
-import { useDeferredValue, useState } from 'react'
+import { Fragment, useDeferredValue, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useI18n } from '@/core/i18n/I18nProvider'
@@ -8,6 +8,7 @@ import { Avatar } from '@/shared/components/Avatar'
 import { Badge } from '@/shared/components/Badge'
 import { Dialog } from '@/shared/components/Dialog'
 import { FilterChips } from '@/shared/components/FilterChips'
+import { Icon } from '@/shared/components/Icon'
 import type { MenuItem } from '@/shared/components/Menu'
 import { PageHeader } from '@/shared/components/PageHeader'
 import { RowActions } from '@/shared/components/RowActions'
@@ -18,10 +19,10 @@ import { ApiError } from '@/core/api/errors'
 import { countWords } from '@/features/instalments/copy'
 import { Sheet } from '@/features/profiles/RecordParts'
 import type { AccountSummary, IssuedReset } from './api'
-import { A, ACCOUNTS_COUNT, KIND, STATUS, describeError, useCopy } from './copy'
+import { A, ACCOUNTS_COUNT, KIND, NEED_HAND, STATUS, describeError, useCopy } from './copy'
 import { useAccounts, useIssueReset, useReactivate, useSuspend } from './hooks'
 import { supportAdminApi, supportKeys, supportTokens, type SupportSession } from '@/features/support/api'
-import { ACTIONS_RECORDED, MINUTES, S, SESSIONS_COUNT, describeError as describeSupportError } from '@/features/support/copy'
+import { ACTIONS_RECORDED, MINUTES, S, describeError as describeSupportError } from '@/features/support/copy'
 import { fill } from '@/features/profiles/RecordHead'
 import { accountSessionsApi, sessionKeys, type SessionDto } from '@/features/devices/api'
 import { D, isSessionGone } from '@/features/devices/copy'
@@ -81,12 +82,22 @@ export function AccountsPage({ eyebrow }: { eyebrow?: string }) {
   const fallback: Kind[] = staff && isSuperAdmin(staff.role) ? ['family', 'teacher', 'staff'] : ['family', 'teacher']
   const kinds: Kind[] = ['all', ...(administers ?? fallback)]
   const noneAdministered = administers !== undefined && administers.length === 0
+  // One kind in the list (an Operations desk sees parents only): the kind is not said on every row.
+  const oneKind = kinds.length <= 2 || kind !== 'all'
+  const needing = accounts.filter(needsHand).length
 
   return (
     <div className="page dir acct-page">
       <div className="page__inner">
         <PageHeader eyebrow={eyebrow} title={tx(A.title)} tabs={tabs ?? undefined} />
+        <LiveSupportStrip />
         <section className="sheet dir-sheet acct-sheet" aria-label={tx(A.title)}>
+          {/* The answer first: how many sign-ins need a hand in this list, or that none does. */}
+          {list.data && accounts.length > 0 && (
+            <p className={needing > 0 ? 'acct-answer acct-answer--need' : 'acct-answer'}>
+              {needing > 0 ? countWords(needing, NEED_HAND, locale) : tx(A.noneNeedHand)}
+            </p>
+          )}
           <div className="sheet-bar">
             <SearchField value={q} onChange={setQ} label={tx(A.search)} clearLabel={t('common.cancel')} />
             <FilterChips
@@ -132,17 +143,14 @@ export function AccountsPage({ eyebrow }: { eyebrow?: string }) {
                           </span>
                           {/* One line: who the account is, then the children by name (a search may have found the family by one). */}
                           <span className="acct-sub" title={a.children.length > 0 ? a.children.join(locale === 'ar' ? '، ' : ', ') : undefined}>
-                            <span>{tx(KIND[a.kind])}</span>
+                            {/* The kind is said only where the list holds more than one kind. */}
+                            {!oneKind && <span>{tx(KIND[a.kind])}</span>}
                             {a.familyName && (
                               <span>
                                 <bdi>{a.familyName}</bdi>
                               </span>
                             )}
-                            {a.children.length > 0 && (
-                              <span>
-                                {tx(A.childrenLabel)} <bdi>{a.children.join(locale === 'ar' ? '، ' : ', ')}</bdi>
-                              </span>
-                            )}
+                            {a.children.length > 0 && <ChildNames names={a.children} />}
                           </span>
                         </span>
                       </span>
@@ -174,6 +182,36 @@ export function AccountsPage({ eyebrow }: { eyebrow?: string }) {
     </div>
   )
 }
+
+/** How many children a row names before it says how many more. */
+const CHILDREN_NAMED = 3
+
+/**
+ * A family's children by name: each name isolated in its own direction, parted
+ * by the reader's comma, so an Arabic reader meets them in order; past the
+ * first few, how many more (the whole list is the row's title).
+ */
+function ChildNames({ names }: { names: string[] }) {
+  const tx = useCopy()
+  const { locale } = useI18n()
+  const comma = locale === 'ar' ? '، ' : ', '
+  const shown = names.slice(0, CHILDREN_NAMED)
+  return (
+    <span className="acct-children">
+      {tx(A.childrenLabel)}{' '}
+      {shown.map((n, i) => (
+        <Fragment key={i}>
+          {i > 0 && comma}
+          <bdi className="acct-child">{n}</bdi>
+        </Fragment>
+      ))}
+      {names.length > shown.length && <>{comma}{tx(A.moreChildren, { n: names.length - shown.length })}</>}
+    </span>
+  )
+}
+
+/** Whether any account in the list needs a hand: locked out, no password yet, or set inactive. */
+const needsHand = (a: AccountSummary) => !!a.lockedUntil || !a.hasLogin || a.status !== 'active'
 
 /**
  * The accounts whose sign-in needs a hand come first, in the server's order
@@ -555,7 +593,7 @@ function SupportRecord() {
   const ordered = [...sessions].sort((a, b) => Number(live(b)) - Number(live(a)))
   const shown = all ? ordered : ordered.slice(0, RECORD_FIRST)
   return (
-    <Sheet id="acct-record-title" title={tx(S.recordTitle)} count={sessions.length > 0 ? countWords(sessions.length, SESSIONS_COUNT, locale) : undefined}>
+    <Sheet id="acct-record-title" title={tx(S.recordTitle)} count={sessions.length > 0 ? number(sessions.length) : undefined}>
       {record.data && sessions.length === 0 ? (
         <p className="rec-empty">{tx(S.noRecord)}</p>
       ) : (
@@ -613,6 +651,29 @@ function SupportRecord() {
 
 /** How many support sessions the record shows before it asks to show the rest. */
 const RECORD_FIRST = 5
+
+/**
+ * A support session this administrator opened and has not ended is the most
+ * "right now" thing in this area: said at the top, with the way back in, not
+ * only in the record at the foot of the page.
+ */
+function LiveSupportStrip() {
+  const tx = useCopy()
+  const { staff } = useSession()
+  const record = useQuery({ queryKey: supportKeys.record(), queryFn: () => supportAdminApi.list() })
+  const now = Date.now()
+  const mine = (record.data ?? []).find((s) => !s.endedAt && Date.parse(s.expiresAt) > now && s.staff.id === staff?.id)
+  if (!mine) return null
+  return (
+    <p className="notice notice--info acct-live">
+      <Icon name="headset" size={18} />
+      <span>{fill(tx(A.liveSession), { name: <bdi>{mine.target.name}</bdi> })}</span>
+      <Link to={`/support/${encodeURIComponent(mine.id)}`} className="btn btn--sm">
+        {tx(S.openSession)}
+      </Link>
+    </p>
+  )
+}
 
 /** ReasonDialog shows an ApiError in the reader's language; this one carries PD-21's own wording. */
 function localized(error: unknown): ApiError | undefined {

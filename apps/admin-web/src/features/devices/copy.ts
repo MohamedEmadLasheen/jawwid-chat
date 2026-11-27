@@ -1,5 +1,6 @@
 import { ApiError } from '@/core/api/errors'
 import type { Pair } from '@/features/organization/copy'
+import type { CountForms } from '@/features/instalments/copy'
 import type { SessionDto } from './api'
 
 export { useCopy, type Pair } from '@/features/organization/copy'
@@ -23,8 +24,9 @@ export const D = {
   notActiveYet: { en: 'Not active yet', ar: 'لم ينشط بعد' },
   signedInOn: { en: 'Signed in {when}', ar: 'سُجّل الدخول {when}' },
   empty: { en: 'No device is signed in.', ar: 'لا يوجد جهاز مسجَّل الدخول.' },
-  devicesFilter: { en: 'Show the sessions of one device', ar: 'عرض جلسات جهاز واحد' },
-  allDevices: { en: 'All devices', ar: 'كل الأجهزة' },
+  activeWhen: { en: 'Active {when}', ar: 'آخر نشاط {when}' },
+  thisBrowserIsOne: { en: 'This browser is one', ar: 'منها هذا المتصفح' },
+  summary: { en: '{sessions} on {devices}', ar: '{sessions} على {devices}' },
   showing: { en: 'Showing {shown} of {total} sessions.', ar: 'تُعرض {shown} من {total} جلسة.' },
   showAll: { en: 'Show all {n}', ar: 'عرض الكل ({n})' },
   signOut: { en: 'Sign out', ar: 'تسجيل الخروج' },
@@ -62,6 +64,9 @@ export const D = {
   reason: { en: 'Reason', ar: 'السبب' },
   revokedAll: { en: 'Signed out of {n} session(s).', ar: 'تم تسجيل الخروج من {n} جلسة.' },
 } satisfies Record<string, Pair>
+
+export const SESSIONS: CountForms = { en: ['{n} session', '{n} sessions'], ar: ['جلسة واحدة', 'جلستان', '{n} جلسات', '{n} جلسة'] }
+export const DEVICES: CountForms = { en: ['{n} device', '{n} devices'], ar: ['جهاز واحد', 'جهازين', '{n} أجهزة', '{n} جهازًا'] }
 
 export const PLATFORM: Record<NonNullable<SessionDto['platform']> | 'unknown', Pair> = {
   ios: { en: 'iPhone / iPad app', ar: 'تطبيق iPhone / iPad' },

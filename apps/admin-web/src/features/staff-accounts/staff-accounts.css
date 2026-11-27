@@ -109,6 +109,7 @@ html[lang='ar'] .md-pane__title { line-height: 1.45; }
 .md-part__action { margin-inline-start: auto; }
 .md-part__hint, .md-part__none { margin: 2px 0 0; max-inline-size: 76ch; font-size: var(--fs-xs); line-height: 1.5; color: var(--ink-muted); }
 .md-part__none { margin-block-start: 8px; font-size: var(--fs-sm); }
+.md-part__source { margin: 8px 0 0; font-size: var(--fs-sm); color: var(--ink-muted); }
 .md-preview { margin-block: var(--space-3) 0; }
 
 /* Groups of checked lines: the page they belong to on the start side, its lines beside it. */

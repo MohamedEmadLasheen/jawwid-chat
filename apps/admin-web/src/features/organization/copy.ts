@@ -114,7 +114,8 @@ export const T = {
   covers: { en: '{backup} covers {primary}', ar: '{backup} ينوب عن {primary}' },
   /** On a team member's row: who backs them up, and whom they back up. */
   backupIs: { en: 'Backup: {name}', ar: 'البديل: {name}' },
-  backupFor: { en: 'Backup for {names}', ar: 'بديل عن {names}' },
+  noChildrenYet: { en: 'no children yet', ar: 'لا أطفال بعد' },
+  coveringUntil: { en: '{name} covering until {date}', ar: '{name} ينوب حتى {date}' },
   allChildrenAssigned: { en: 'Every child has a supervisor.', ar: 'لكل طفل مشرف.' },
   until: { en: 'until {date}', ar: 'حتى {date}' },
   addBackup: { en: 'Add backup link', ar: 'إضافة رابط بديل' },

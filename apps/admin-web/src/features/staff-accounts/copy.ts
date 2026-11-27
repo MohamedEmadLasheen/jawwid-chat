@@ -124,6 +124,7 @@ export const SA = {
   accessNone: { ar: 'لا صفحات متاحة لهذا الحساب.', en: 'This account can open no pages.' },
   srcSuperAdmin: { ar: 'صلاحية المدير الأعلى', en: 'Super admin' },
   srcTierDefault: { ar: 'الافتراضي لمستوى الحساب وقسمه', en: 'Default for its tier and department' },
+  allFrom: { ar: 'كلها من مصدر واحد: {source}.', en: 'All of it comes one way: {source}.' },
   srcRole: { ar: 'دور: {role}', en: 'Role: {role}' },
   srcGranted: { ar: 'منحه {by} في {at}', en: 'granted by {by} on {at}' },
   grantPreviewTitle: { ar: 'ماذا سيتغير', en: 'What this would change' },

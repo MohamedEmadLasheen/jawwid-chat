@@ -9,7 +9,7 @@ import { PageHeader } from '@/shared/components/PageHeader'
 import { EmptyState, LoadingState } from '@/shared/components/States'
 import { countWords } from '@/features/instalments/copy'
 import { bySeq, type ChatConversation } from '@/features/chat/chatApi'
-import { useWhen } from '@/features/devices/when'
+import { useClock, useDay, useWhen } from '@/features/devices/when'
 import { plainLabel } from '@/features/profiles/RecordParts'
 import { supportAdminApi, supportClient, supportKeys, supportTokens, type SupportSession } from './api'
 import { KIND_LABEL, MINUTES, S, describeError, isEnded, useCopy } from './copy'
@@ -201,7 +201,7 @@ type Client = ReturnType<typeof supportClient>
 /** The person's chats: the list, and the open one beside it (after it on a phone). */
 function Chats({ id, client, session, onEnded }: { id: string; client: Client; session: SupportSession; onEnded: () => void }) {
   const tx = useCopy()
-  const { locale, time, date, number } = useI18n()
+  const { locale, date, number } = useI18n()
   const [open, setOpen] = useState<string | null>(null)
   const list = useQuery({ queryKey: supportKeys.conversations(id), queryFn: client.conversations, refetchInterval: 15_000 })
   useEffect(() => {
@@ -210,9 +210,10 @@ function Chats({ id, client, session, onEnded }: { id: string; client: Client; s
 
   const conversations = list.data ?? []
   const current = conversations.find((c) => c.id === open) ?? null
-  // Today's activity is a time; anything older is its day.
-  const today = date(new Date().toISOString())
-  const when = (iso: string) => (date(iso) === today ? time(iso) : date(iso))
+  // Today's activity is its clock time, anything older its day in words: the same clock as the thread's.
+  const clock = useClock()
+  const day = useDay()
+  const when = (iso: string) => (date(iso) === date(new Date().toISOString()) ? clock(iso) : day(iso))
   return (
     <div className={open ? 'support-work support-work--open' : 'support-work'}>
       <section className="support-side" aria-label={tx(S.tabChats)}>
@@ -229,7 +230,7 @@ function Chats({ id, client, session, onEnded }: { id: string; client: Client; s
             return (
               <li key={c.id}>
                 <button type="button" className="support-row" aria-current={c.id === open ? 'true' : undefined} onClick={() => setOpen(c.id)}>
-                  <Avatar name={title} seed={c.id} src={c.avatarUrl} />
+                  <Avatar name={counterpart(title, session.target.name)} seed={c.id} src={c.avatarUrl} />
                   <span className="support-row__body">
                     <span className="support-row__top">
                       <span className={c.unreadCount ? 'support-row__name support-row__name--unread' : 'support-row__name'}>
@@ -485,6 +486,16 @@ function ParentProfile({ id, client, onEnded }: { id: string; client: Client; on
       </section>
     </div>
   )
+}
+
+/**
+ * Whom a chat is with, for its monogram: the title without the person being
+ * acted as (whose name leads many of them), so the list does not show their
+ * initials on every row.
+ */
+function counterpart(title: string, person: string): string {
+  const rest = title.replace(person, '').replace(/^[\s,،—–-]+|[\s,،—–-]+$/g, '')
+  return rest || title
 }
 
 function titleOf(c: ChatConversation, fallback: string, locale: 'ar' | 'en'): string {

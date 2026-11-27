@@ -8,7 +8,8 @@ import { Icon } from '@/shared/components/Icon'
 import { PageHeader } from '@/shared/components/PageHeader'
 import { QueryBoundary } from '@/shared/components/States'
 import { mySessionsApi, sessionKeys, type SessionDto } from './api'
-import { D, isSessionGone, sessionError, useCopy } from './copy'
+import { D, DEVICES, SESSIONS, isSessionGone, sessionError, useCopy } from './copy'
+import { countWords } from '@/features/instalments/copy'
 import { T as PROFILE } from '@/features/profile/copy'
 import { SessionList, useDeviceName } from './SessionList'
 import './devices.css'
@@ -40,7 +41,8 @@ export function DevicesPage() {
  */
 export function MyDevices() {
   const tx = useCopy()
-  const { number } = useI18n()
+  const { locale } = useI18n()
+  const deviceName = useDeviceName()
   const titleId = useId()
   const list = useQuery({ queryKey: sessionKeys.mine, queryFn: mySessionsApi.list })
   const sessions = list.data ?? []
@@ -61,7 +63,14 @@ export function MyDevices() {
             <h2 id={titleId} className="sheet__title">
               {tx(D.signedInDevices)}
             </h2>
-            {sessions.length > 0 && <span className="sheet__count">{number(sessions.length)}</span>}
+            {sessions.length > 0 && (
+              <span className="sheet__count">
+                {tx(D.summary, {
+                  sessions: countWords(sessions.length, SESSIONS, locale),
+                  devices: countWords(new Set(sessions.map(deviceName)).size, DEVICES, locale),
+                })}
+              </span>
+            )}
           </div>
           {others > 0 && (
             <button type="button" className="btn btn--sm dev-signout-others" onClick={() => setPending({ act: 'others' })}>

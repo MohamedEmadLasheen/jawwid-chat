@@ -134,15 +134,14 @@ export function OrganizationPage() {
 }
 
 /** The head of a group of rows: who the group belongs to (or the words "no supervisor", with the amber dot of a group nobody holds), how many, and what applies to them. */
-function GroupHead({ columns, who, count, children }: { columns: number; who: ReactNode; count: number; children?: ReactNode }) {
-  const { number } = useI18n()
+function GroupHead({ columns, who, count, children }: { columns: number; who: ReactNode; count: string; children?: ReactNode }) {
   return (
     <tr className="dir-group__head">
       <th colSpan={columns} scope="rowgroup">
         <span className="org-group">
           <span className="dir-group__title">
             {who}
-            <span className="count count--quiet">{number(count)}</span>
+            <span className="dir-group__label org-group__count">{count}</span>
           </span>
           {children}
         </span>
@@ -224,7 +223,7 @@ function TeachersTab() {
                 <tbody key={g.key} className={g.kind === 'unassigned' ? 'dir-group dir-group--unplaced' : 'dir-group'}>
                   <GroupHead
                     columns={2}
-                    count={g.rows.length}
+                    count={plural(PLURAL.teachers, g.rows.length)}
                     who={
                       g.supervisor ? (
                         <>
@@ -324,6 +323,7 @@ function ChildrenTab({ operations }: { operations: Department }) {
   const supervisors = useMemo(() => operations.members.filter((m) => m.position === 'supervisor'), [operations.members])
 
   const unplaced = (learners.data?.learners ?? []).filter((l) => !l.supervisor).length
+  const day = useDay()
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase()
     return (learners.data?.learners ?? []).filter((l) => {
@@ -365,11 +365,6 @@ function ChildrenTab({ operations }: { operations: Department }) {
       <section className="sheet dir-sheet org-sheet" aria-label={tx(T.tabChildren)}>
         <div className="sheet-bar org-bar">
           {/* The answer first: how many children nobody supervises, or that every child has someone. */}
-          {learners.data && (
-            <p className={unplaced > 0 ? 'org-rule org-rule--waiting org-rule--line' : 'org-rule org-rule--line'} role="status">
-              <strong>{unplaced > 0 ? `${countWords(unplaced, CHILDREN_WAITING, locale)}.` : tx(T.allChildrenAssigned)}</strong>
-            </p>
-          )}
           <SearchField value={query} onChange={setQuery} label={tx(T.search)} clearLabel={t('common.cancel')} />
           <div className="org-filter">
             <label className="field__label" htmlFor="org-filter">{tx(T.filter)}</label>
@@ -381,7 +376,14 @@ function ChildrenTab({ operations }: { operations: Department }) {
               ))}
             </SearchableSelect>
           </div>
-          <span className="dir-count">{countWords(rows.length, CHILDREN_COUNT, locale)}</span>
+          {/* The answer, at the bar's end with the count: how many children nobody supervises, or that every child has someone.
+              Asked for those with none and there are none, the empty sheet says it instead. */}
+          {learners.data && !(filter === 'unassigned' && rows.length === 0) && (
+            <p className={unplaced > 0 ? 'org-rule org-rule--end org-rule--waiting' : 'org-rule org-rule--end'}>
+              <strong>{unplaced > 0 ? `${countWords(unplaced, CHILDREN_WAITING, locale)}.` : tx(T.allChildrenAssigned)}</strong>{' '}
+              {rows.length > 0 && <span className="org-rule__count">{countWords(rows.length, CHILDREN_COUNT, locale)}</span>}
+            </p>
+          )}
         </div>
         {rows.length === 0 ? (
           // Asked for the children with no supervisor and there are none: that is the answer, said as one.
@@ -401,7 +403,7 @@ function ChildrenTab({ operations }: { operations: Department }) {
               <tbody key={g.key} className={g.supervisor ? 'dir-group' : 'dir-group dir-group--unplaced'}>
                 <GroupHead
                   columns={3}
-                  count={g.rows.length}
+                  count={g.rows.length > 0 ? countWords(g.rows.length, CHILDREN_COUNT, locale) : tx(T.noChildrenYet)}
                   who={
                     g.supervisor ? (
                       <>
@@ -417,6 +419,14 @@ function ChildrenTab({ operations }: { operations: Department }) {
                 >
                   {g.member && (
                     <span className="org-group__cover">
+                      {/* Who covers this supervisor through a backup link in force now, said where their children are. */}
+                      {operations.backups
+                        .filter((b) => b.status === 'active' && b.primary?.id === g.member!.id && b.backup)
+                        .map((b) => (
+                          <Badge key={b.id} tone="coverage">
+                            {b.activeUntil ? tx(T.coveringUntil, { name: b.backup!.name, date: day(b.activeUntil) }) : tx(T.coveredBy, { backup: b.backup!.name })}
+                          </Badge>
+                        ))}
                       <CoverTags member={g.member} covers={covers} />
                       <CoverControl member={g.member} covers={covers} canManage={canManage} onHandOver={() => setHandingOver(g.member)} menuOnly />
                     </span>
@@ -546,9 +556,8 @@ function DepartmentSheet({ department }: { department: Department }) {
           </thead>
           <tbody>
             {team.map((m: DepartmentMember) => {
-              // Who covers whom, said on the people it concerns: a supervisor's backup, a backup's supervisors.
+              // Who covers whom, said once, on the supervisor it concerns: their backup and where the link stands.
               const backedBy = inForce.filter((l) => l.primary?.id === m.id && l.backup)
-              const backs = inForce.filter((l) => l.backup?.id === m.id && l.primary)
               return (
               <tr key={m.id} className="dir-row">
                 <td className="dir-cell-who">
@@ -558,23 +567,26 @@ function DepartmentSheet({ department }: { department: Department }) {
                       <Link to={profilePath(m.id)} className="dir-name">
                         <bdi>{m.name}</bdi>
                       </Link>
-                      <span className="org-sub org-sub--facts">
-                        <span>{tx(POSITION_LABEL[m.position])}</span>
-                        {backedBy.map((l) => (
-                          <span key={l.id}>
-                            {fill(tx(T.backupIs), { name: <bdi>{l.backup!.name}</bdi> })} ({tx(STATUS_LABEL[l.status])}
-                            {l.status === 'active' && l.activeUntil ? ` ${tx(T.until, { date: date(l.activeUntil) })}` : ''})
-                          </span>
-                        ))}
-                        {backs.length > 0 && (
-                          <span>{fill(tx(T.backupFor), { names: <bdi>{backs.map((l) => l.primary!.name).join(tx(T.listComma))}</bdi> })}</span>
-                        )}
-                      </span>
+                      <span className="org-sub">{tx(POSITION_LABEL[m.position])}</span>
+                      {backedBy.map((l) => (
+                        <span key={l.id} className="org-backup-line">
+                          <span>{fill(tx(T.backupIs), { name: <bdi>{l.backup!.name}</bdi> })}</span>
+                          <Badge tone={STATUS_TONE[l.status]}>
+                            {tx(STATUS_LABEL[l.status])}
+                            {l.status === 'active' && l.activeUntil ? ` ${tx(T.until, { date: date(l.activeUntil) })}` : ''}
+                          </Badge>
+                        </span>
+                      ))}
                     </span>
                   </span>
                 </td>
                 <td className="org-cell-num" data-label={tx(T.childrenCount)}>
-                  <span className={m.learnerCount > 0 ? 'org-num' : 'org-num org-num--none'}>{number(m.learnerCount)}</span>
+                  {/* A backup holds no children of their own: nothing is said, not a zero. */}
+                  {m.position === 'supervisor' || m.learnerCount > 0 ? (
+                    <span className={m.learnerCount > 0 ? 'org-num' : 'org-num org-num--none'}>{number(m.learnerCount)}</span>
+                  ) : (
+                    <span className="org-num org-num--none">—</span>
+                  )}
                 </td>
                 {operations && (
                   <td className="org-cell-cover">

@@ -27,6 +27,13 @@ export function useWhen(): (iso: string, opts?: { start?: boolean }) => string {
   }
 }
 
+/** A clock time on the academy's clock, the way `useWhen` writes it ("9:47", "9:47 ص"). */
+export function useClock(): (iso: string) => string {
+  const { locale } = useI18n()
+  const clock = new Intl.DateTimeFormat(locale === 'ar' ? 'ar-EG-u-nu-latn' : 'en-GB', { timeZone: ACADEMY_ZONE, hour: 'numeric', minute: '2-digit' })
+  return (iso) => clock.format(new Date(iso))
+}
+
 /** A day in words on the academy's clock ("4 December", "4 December 2025"): the year only when it is not this one. */
 export function useDay(): (iso: string) => string {
   const { locale } = useI18n()

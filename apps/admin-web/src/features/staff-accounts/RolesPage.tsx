@@ -61,6 +61,8 @@ export function RolesPage() {
   // Stable: the Dialog re-focuses whenever onClose changes.
   const closeAll = useCallback(() => setPending(null), [])
   const list = roles.data?.roles ?? []
+  // "Template" tells roles apart only where some are not: when every role is one, it is not said on each.
+  const allTemplates = list.length > 0 && list.every((r) => r.template)
   const members = useMemo(() => countMembers(staffList.data?.accounts), [staffList.data])
   const [openId, open] = useOpenItem('role')
   const shown = useShown(list, (r) => r.id, openId)
@@ -115,7 +117,7 @@ export function RolesPage() {
                                   <button type="button" className="sa-name md__open" aria-current={current ? 'true' : undefined} onClick={() => open(r.id)}>
                                     <strong>{roleName(r)}</strong>
                                   </button>
-                                  {r.template && <Badge tone="outline">{tx(SA.template)}</Badge>}
+                                  {r.template && !allTemplates && <Badge tone="outline">{tx(SA.template)}</Badge>}
                                   {r.archived && <Badge tone="neutral">{tx(SA.archived)}</Badge>}
                                   {!canDefine && r.grantable && <Badge tone="ok" dot>{tx(SA.youCanGrant)}</Badge>}
                                 </span>
@@ -208,9 +210,12 @@ function RolePane({
             {name}
           </h2>
           <span className="acct-state">
-            <code className="sa-key" dir="ltr">
-              {r.key}
-            </code>
+            {/* The role's key is for whoever defines roles; a manager who grants them reads its name. */}
+            {canDefine && (
+              <code className="sa-key" dir="ltr">
+                {r.key}
+              </code>
+            )}
             {r.template && <Badge tone="outline">{tx(SA.template)}</Badge>}
             {r.archived && <Badge tone="neutral">{tx(SA.archived)}</Badge>}
             {!canDefine && r.grantable && <Badge tone="ok" dot>{tx(SA.youCanGrant)}</Badge>}
