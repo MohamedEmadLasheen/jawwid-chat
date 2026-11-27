@@ -14,7 +14,7 @@ import { Splitter, useResizableWidth } from '@/shared/components/Splitter'
 import { EmptyState, LoadingState, QueryBoundary } from '@/shared/components/States'
 import { useMediaQuery } from '@/shared/hooks/useMediaQuery'
 import { chatCopyFor, systemText } from '@/features/chat/copy'
-import { conversationTone } from '@/features/chat/chatView'
+import { BlankMonogram, conversationTone } from '@/features/chat/chatView'
 import { useWorkspaceKeys } from '@/features/chat/useWorkspaceKeys'
 import '@/features/chat/chat.css'
 import { ConversationStateBadge, conversationName, matches } from './common'
@@ -385,7 +385,8 @@ function TypedAvatar({ c, name, size }: { c: AdminConversation; name: string; si
   const glyph = TYPE_GLYPH[c.type]
   return (
     <span className={`typed-avatar cw-who cw-who--${conversationTone(c)}`}>
-      <Avatar name={name} seed={c.id} size={size} />
+      {/* No title and no family: there is no name to take initials from, so none are invented. */}
+      {c.title ?? c.familyName ? <Avatar name={name} seed={c.id} size={size} /> : <BlankMonogram size={size} />}
       {glyph && (
         <span className="typed-avatar__glyph" aria-hidden="true">
           <Icon name={glyph} size={11} />
@@ -419,7 +420,9 @@ function ConversationRow({
         <TypedAvatar c={c} name={name} />
         <span className="conv-row__body">
           <span className="conv-row__top">
-            <span className="conv-row__name" dir="auto">{name}</span>
+            <span className="conv-row__name">
+              <bdi className="cw-line">{name}</bdi>
+            </span>
             {isTrialGroup(c) && <TrialBadge />}
             <time className="conv-row__time" dateTime={c.lastActivityAt} title={dateTime(c.lastActivityAt)}>
               {listTime(c.lastActivityAt, locale)}

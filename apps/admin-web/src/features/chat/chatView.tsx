@@ -7,21 +7,39 @@ import type { ChatCopy } from './copy'
 
 export const isGroup = (c: Pick<ChatConversation, 'type'>) => c.type !== 'direct'
 
-/** A row's name: the group's own title, else the child, else the other members, else its kind. */
+/**
+ * A row's name: the group's own title, else the child, else the other members,
+ * else its kind. A title the server gave is shown as given; a name composed
+ * here joins the people with the UI language's own separator.
+ */
 export function conversationName(c: ChatConversation, selfId: string | undefined, copy: ChatCopy): string {
   if (c.title) return c.title
   if (c.learner?.name) return c.learner.name
   const others = (c.members ?? []).filter((m) => m.actorId !== selfId && m.displayName)
-  if (others.length > 0) return others.map((m) => m.displayName).join('، ')
+  if (others.length > 0) return others.map((m) => m.displayName).join(copy.listSeparator)
   return copy.kind[c.type] ?? c.type
 }
+
+/** False when the row's name is only its kind in words: there is nobody to take initials from. */
+export function hasOwnName(c: ChatConversation, selfId: string | undefined): boolean {
+  return !!c.title || !!c.learner?.name || (c.members ?? []).some((m) => m.actorId !== selfId && m.displayName)
+}
+
+/**
+ * The app writes Western digits everywhere (DD-09). Words the server rendered
+ * ahead of time may carry Arabic-Indic or Extended Arabic-Indic digits: they
+ * are folded to 0-9 when a card Jawwid posted is drawn. Never applied to what
+ * a person typed.
+ */
+export const westernDigits = (text: string) =>
+  text.replace(/[\u0660-\u0669\u06F0-\u06F9]/g, (d) => String(d.charCodeAt(0) - (d.charCodeAt(0) >= 0x06f0 ? 0x06f0 : 0x0660)))
 
 const CARD_FAMILIES = ['call', 'case', 'leave', 'trial', 'lesson'] as const
 
 /**
  * The one-line preview under a row's name, worded by the client (never raw
- * JSON): what was said, and "You" when the viewer said it. Kept apart so the
- * line can take the direction of what was said, not of the word "You".
+ * JSON): what was said, and "You" when the viewer said it. Kept apart so "You"
+ * leads the line in the pane's direction and what was said follows it, isolated.
  */
 export function previewParts(
   m: ChatLastMessage | null | undefined,
@@ -43,12 +61,6 @@ export function previewText(m: ChatLastMessage | null | undefined, selfId: strin
   return who ? `${who}: ${text}` : text
 }
 
-/** The direction a line of text reads in, by its first letter; 'auto' when it has none. */
-export function textDir(text: string): 'rtl' | 'ltr' | 'auto' {
-  const first = /[A-Za-z\u00C0-\u024F\u0590-\u08FF\uFB1D-\uFEFC]/.exec(text)?.[0]
-  if (!first) return 'auto'
-  return /[\u0590-\u08FF\uFB1D-\uFEFC]/.test(first) ? 'rtl' : 'ltr'
-}
 
 /** A small glyph on the avatar says what kind of conversation it is. */
 const TYPE_GLYPH: Record<string, IconName | undefined> = {
@@ -115,14 +127,24 @@ export function ConversationAvatar({
   selfId?: string
 }) {
   const glyph = TYPE_GLYPH[c.type]
+  const photo = conversationPhoto(c, selfId)
   return (
     <span className={`typed-avatar cw-who cw-who--${conversationTone(c, selfId)}`}>
-      <Avatar name={name} seed={c.id} size={size} src={conversationPhoto(c, selfId)} />
+      {photo || hasOwnName(c, selfId) ? <Avatar name={name} seed={c.id} size={size} src={photo} /> : <BlankMonogram size={size} />}
       {glyph && (
         <span className="typed-avatar__glyph" aria-hidden="true">
           <Icon name={glyph} size={11} />
         </span>
       )}
+    </span>
+  )
+}
+
+/** A conversation with no name of its own: the conversations glyph, never initials of a placeholder. */
+export function BlankMonogram({ size }: { size?: 'sm' | 'md' | 'lg' }) {
+  return (
+    <span className={`avatar avatar--blank${size && size !== 'md' ? ` avatar--${size}` : ''}`} aria-hidden="true">
+      <Icon name="conversations" size={size === 'lg' ? 22 : 18} />
     </span>
   )
 }

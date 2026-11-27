@@ -3,7 +3,8 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { Route, Routes, useLocation } from 'react-router-dom'
 import { renderWithProviders, makeStaff } from '@/test/utils'
 import type { ChatConversation, ChatMessage } from './chatApi'
-import { cardFallbackText, conversationTone, toneOfKind } from './chatView'
+import { cardFallbackText, conversationName, conversationTone, hasOwnName, toneOfKind, westernDigits } from './chatView'
+import { chatCopy, type ChatCopy } from './copy'
 import { waitingFirst } from './ThreadStart'
 
 /**
@@ -23,6 +24,7 @@ vi.mock('@/core/realtime/RealtimeProvider', () => ({
 }))
 
 const { ChatPage } = await import('./ChatPage')
+const { callWhen } = await import('./ChatThread')
 
 const ADMIN = makeStaff({ id: 'staff_a', role: 'admin' })
 
@@ -66,6 +68,9 @@ const WITH_PARENT = conv('c1', {
     { actorId: 'parent-1', actorKind: 'contact', memberRole: 'parent', isSilent: false, displayName: 'Parent One' },
   ],
 })
+
+/** A 1:1 with the parent: the family block lists the children itself (a lesson group lists its own under it). */
+const DIRECT_WITH_PARENT = conv('c1', { type: 'direct', title: null, members: WITH_PARENT.members })
 
 const PARENT = {
   id: 'parent-1',
@@ -156,7 +161,7 @@ function Where() {
   return <output data-testid="where">{pathname}</output>
 }
 
-function renderChat(route = '/chat') {
+function renderChat(route = '/chat', locale: 'en' | 'ar' = 'en') {
   return renderWithProviders(
     <>
       <Routes>
@@ -165,7 +170,7 @@ function renderChat(route = '/chat') {
       </Routes>
       <Where />
     </>,
-    { route, staff: ADMIN },
+    { route, staff: ADMIN, locale },
   )
 }
 
@@ -273,16 +278,16 @@ describe('the family beside the conversation', () => {
     '/families/fam-1/billing': BILLING,
     '/learners/k1/profile': { id: 'k1', name: 'Kid One', avatarUrl: null, age: null, course: null, teacher: { id: 't9', name: 'Teacher Nine' }, schedule: [], viewer: 'staff' },
   }
-  const openInfo = async () => {
+  const openInfo = async (title = 'Group info') => {
     await screen.findByLabelText('Message')
     fireEvent.click(screen.getByRole('button', { name: 'Conversation info' }))
-    return screen.findByRole('dialog', { name: 'Group info' })
+    return screen.findByRole('dialog', { name: title })
   }
 
   it('shows the parent, the children with their teacher, the package, the last payment, what is due and the open request', async () => {
-    stubApi([WITH_PARENT], FAMILY_ROUTES)
+    stubApi([DIRECT_WITH_PARENT], FAMILY_ROUTES)
     renderChat('/chat/c1')
-    const sheet = await openInfo()
+    const sheet = await openInfo('Contact info')
     const family = await within(sheet).findByRole('region', { name: 'Family' })
 
     expect(within(family).getByRole('link', { name: 'Parent One' })).toHaveAttribute('href', '/parents/parent-1')
@@ -291,6 +296,8 @@ describe('the family beside the conversation', () => {
     const figure = within(family).getByText('18,000.00')
     expect(figure).toHaveClass('numeral')
     expect(figure.closest('.cw-fam__sum')).toHaveClass('cw-fam__sum--late')
+    // The currency sits where the payments formatter puts it, the same side as every other amount here.
+    expect(figure.closest('.cw-fam__figure')).toHaveTextContent(/^EGP\s?18,000\.00$/)
     expect(within(family).getByText(/9,600\.00 overdue · 32 days late/)).toBeInTheDocument()
     // Children link to their profiles; a teacher shows where the server answered, and is simply absent where it did not.
     expect(within(family).getByRole('link', { name: 'Kid One' })).toHaveAttribute('href', '/students/k1')
@@ -302,6 +309,27 @@ describe('the family beside the conversation', () => {
     expect(within(family).queryByText(/1,000\.00/)).not.toBeInTheDocument()
     expect(within(family).getByText('Package 2/3')).toBeInTheDocument()
     expect(within(family).getByRole('link', { name: 'Parent profile' })).toHaveAttribute('href', '/parents/parent-1')
+  })
+
+  it('in a lesson group the children are listed once, under the family, with one "Children" heading', async () => {
+    const calls = stubApi([WITH_PARENT], {
+      ...FAMILY_ROUTES,
+      '/conversations/c1/learners': {
+        learners: [{ id: 'k1', name: 'Kid One', age: 9, course: null, packageLessons: 24, teacher: { id: 't9', name: 'Teacher Nine' }, schedule: [], canEdit: false }],
+      },
+    })
+    renderChat('/chat/c1')
+    const sheet = await openInfo()
+    const family = await within(sheet).findByRole('region', { name: 'Family' })
+    expect(await within(sheet).findByText('Teacher Nine')).toBeInTheDocument()
+    expect(within(sheet).getAllByText('Children')).toHaveLength(1)
+    // The family block leaves the children to the group's own list, and reads no child's profile for it.
+    expect(within(family).queryByText('Kid One')).not.toBeInTheDocument()
+    expect(calls.some((path) => path.startsWith('/learners/'))).toBe(false)
+    // The group's children come right after the family, before the conversation's own details.
+    const order = family.compareDocumentPosition(within(sheet).getByText('Children'))
+    expect(order & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(within(sheet).getByText('Children').compareDocumentPosition(within(sheet).getByText('Notifications')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
   it('opens the Parent Profile dialogs for recording and requesting a payment', async () => {
@@ -410,6 +438,141 @@ describe('reference cards in the thread', () => {
     expect(row).toHaveClass('cw-msg--card')
     expect(within(row).getByText('When: Saturday 13:00')).toBeInTheDocument()
     expect(within(row).getByText('Length: 30 minutes')).toBeInTheDocument()
+  })
+})
+
+describe("lines read in the pane's direction, words in their own", () => {
+  it('"You:" leads a preview and what was said follows it, isolated; a name sits in its own isolated box', async () => {
+    stubApi([
+      conv('c1', {
+        title: 'Latin Name',
+        lastMessage: { seq: '1', type: 'text', text: 'Of course, I will send it.', systemKind: null, authorKind: 'staff', authorId: ADMIN.id, deleted: false, createdAt: '2026-10-14T08:00:00.000Z' },
+      }),
+    ])
+    renderChat()
+    const name = await screen.findByText('Latin Name')
+    expect(name.tagName).toBe('BDI')
+    expect(name.parentElement).toHaveClass('conv-row__name')
+    const sub = name.closest('.conv-row')!.querySelector('.conv-row__sub') as HTMLElement
+    // The line itself has no direction of its own: it follows the pane.
+    expect(sub).not.toHaveAttribute('dir')
+    expect(sub.firstElementChild).toHaveClass('cw-row__who')
+    expect(sub.firstElementChild).toHaveTextContent('You:')
+    expect(within(sub).getByText('Of course, I will send it.').tagName).toBe('BDI')
+  })
+
+  it("joins the names it composes with the UI language's separator, and leaves a given title alone", () => {
+    const people = conv('c1', {
+      type: 'direct',
+      title: null,
+      members: [
+        { actorId: 'a', actorKind: 'contact', memberRole: 'parent', isSilent: false, displayName: 'Ghada E' },
+        { actorId: 'b', actorKind: 'teacher', memberRole: 'teacher', isSilent: false, displayName: 'Heba R' },
+      ],
+    })
+    expect(conversationName(people, 'me', chatCopy.en as ChatCopy)).toBe('Ghada E, Heba R')
+    expect(conversationName(people, 'me', chatCopy.ar as unknown as ChatCopy)).toBe('Ghada E، Heba R')
+    expect(conversationName({ ...people, title: 'A · B — C' }, 'me', chatCopy.en as ChatCopy)).toBe('A · B — C')
+  })
+
+  it('a conversation with no name of its own shows the conversations glyph, not initials of its kind', async () => {
+    stubApi([conv('c1', { type: 'direct', title: null, members: [] }), conv('c2', { title: 'Named Group' })])
+    renderChat()
+    const named = (await screen.findByText('Named Group')).closest('.conv-row') as HTMLElement
+    expect(named.querySelector('.avatar')).toHaveTextContent('NG')
+    const blank = screen.getByText('Direct conversation', { selector: '.conv-row__name bdi' }).closest('.conv-row') as HTMLElement
+    expect(blank.querySelector('.avatar')).toHaveClass('avatar--blank')
+    expect(blank.querySelector('.avatar')).toHaveTextContent('')
+    expect(hasOwnName(conv('x', { title: null }), 'me')).toBe(false)
+  })
+})
+
+describe('the message box', () => {
+  it("reads in the UI's direction while empty, and in the text's own once there is text", async () => {
+    stubApi([conv('c1')])
+    renderChat('/chat/c1', 'ar')
+    const box = await screen.findByLabelText(chatCopy.ar.customer)
+    expect(box).toHaveAttribute('dir', 'rtl')
+    fireEvent.change(box, { target: { value: 'Hello' } })
+    expect(box).toHaveAttribute('dir', 'auto')
+    fireEvent.change(box, { target: { value: '' } })
+    expect(box).toHaveAttribute('dir', 'rtl')
+  })
+
+  it('in English an empty box is left-to-right, and Send says its key', async () => {
+    stubApi([conv('c1')])
+    renderChat('/chat/c1')
+    expect(await screen.findByLabelText('Message')).toHaveAttribute('dir', 'ltr')
+    expect(screen.getByRole('button', { name: 'Send' })).toHaveAttribute('title', 'Send (Enter)')
+  })
+})
+
+describe('"I\'m away" is a quiet action in the list header', () => {
+  it('is offered once, in the header, when the server says this supervisor may hand over', async () => {
+    stubApi([conv('c1')], { '/me/cover': { canHandOver: true, away: null, covering: [] } })
+    renderChat()
+    const away = await screen.findByRole('button', { name: "I'm away" })
+    expect(screen.getAllByRole('button', { name: "I'm away" })).toHaveLength(1)
+    expect(away.closest('.workspace__title-row')).not.toBeNull()
+    expect(away).toHaveAttribute('title', "I'm away")
+  })
+
+  it('is absent when the server does not offer it', async () => {
+    stubApi([conv('c1')], { '/me/cover': { canHandOver: false, away: null, covering: [] } })
+    renderChat()
+    await screen.findByText('Group c1')
+    expect(screen.queryByRole('button', { name: "I'm away" })).not.toBeInTheDocument()
+  })
+})
+
+describe('Western digits in what Jawwid wrote', () => {
+  it('folds Arabic-Indic and Extended Arabic-Indic digits, and nothing else', () => {
+    expect(westernDigits('٢٩ نوفمبر ٠٥:٠٠')).toBe('29 نوفمبر 05:00')
+    expect(westernDigits('۱۲۳۴۵۶۷۸۹۰')).toBe('1234567890')
+    expect(westernDigits('Room 12, الأحد')).toBe('Room 12, الأحد')
+  })
+
+  it('a scheduled call says when in the UI language, on the academy clock, with Western digits', () => {
+    // 15:00 UTC is 17:00 in Cairo.
+    expect(callWhen('2026-11-29T15:00:00.000Z', 'en')).toBe('Sun 29 Nov, 5:00 PM (Cairo time)')
+    const ar = callWhen('2026-11-29T15:00:00.000Z', 'ar')
+    expect(ar).toMatch(/29/)
+    expect(ar).toMatch(/5:00/)
+    expect(ar).not.toMatch(/[٠-٩۰-۹]/)
+    expect(callWhen('not a date', 'en')).toBe('')
+  })
+
+  it('a booked trial is set from its instant in the UI language, not from the sentence the server wrote', async () => {
+    const group = conv('c1', { type: 'trial_group', title: 'Teacher One' })
+    const card = {
+      ...MESSAGE,
+      id: 'k1',
+      authorKind: 'system',
+      authorId: null,
+      authorDisplayName: null,
+      type: 'card',
+      body: '\u{1F5D3} حصة تجريبية\nالموعد: ٢٨ نوفمبر',
+      card: { kind: 'trial_booked', lessonId: null, payload: { startsAt: '2026-11-28T14:30:00.000Z', prospectName: 'Kid One, Kid Two', durationMinutes: 30, level: 'beginner', when: '٢٨ نوفمبر' } },
+    }
+    stubApi([group], { '/conversations/c1/messages': { messages: [card], nextBefore: null } })
+    renderChat('/chat/c1')
+    expect(await screen.findByText('Trial lesson: Kid One, Kid Two')).toHaveClass('cw-card__title')
+    // 14:30 UTC is 16:30 in Cairo.
+    expect(screen.getByText('When: Sat 28 Nov, 4:30 PM (Cairo time)')).toBeInTheDocument()
+    expect(screen.getByText('Length: 30 min')).toBeInTheDocument()
+    expect(screen.getByText('Level: beginner')).toBeInTheDocument()
+    expect(screen.queryByText(/[٠-٩]/)).not.toBeInTheDocument()
+  })
+
+  it("a card Jawwid posted is drawn with Western digits; a person's own words in a card are left as typed", async () => {
+    const group = conv('c1', { type: 'trial_group', title: 'Teacher One' })
+    const base = { ...MESSAGE, type: 'card', card: { kind: 'trial_booked', lessonId: null, payload: {} } }
+    const fromSystem = { ...base, id: 'k1', seq: '1', authorKind: 'system', authorId: null, authorDisplayName: null, body: 'Trial lesson\nLength: ٣٠ minutes' }
+    const fromPerson = { ...base, id: 'k2', seq: '2', authorKind: 'teacher', authorId: 't1', authorDisplayName: 'Teacher One', body: 'Lesson note\nMemorised ٣ verses' }
+    stubApi([group], { '/conversations/c1/messages': { messages: [fromPerson, fromSystem], nextBefore: null } })
+    renderChat('/chat/c1')
+    expect(await screen.findByText('Length: 30 minutes')).toBeInTheDocument()
+    expect(screen.getByText('Memorised ٣ verses')).toBeInTheDocument()
   })
 })
 

@@ -2,8 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQueries } from '@tanstack/react-query'
 import { useI18n } from '@/core/i18n/I18nProvider'
-import { formatDay, formatMoney } from '@/features/instalments/copy'
-import { METHOD } from '@/features/payments/copy'
+import { METHOD, formatDay, formatMoney } from '@/features/payments/copy'
 import { parentPath, profileKeys, profilesApi, studentPath, type FamilyBilling } from '@/features/profiles/api'
 import { planLabel } from '@/features/profiles/copy'
 import { useFamilyBilling, useMayOpenParentProfiles, useParent } from '@/features/profiles/hooks'
@@ -16,17 +15,15 @@ import '@/features/payments/payments.css'
 
 const CHILDREN_SHOWN = 6
 
-/** "18,000.00" and "EGP" apart, so the figure can be set large and its unit small. */
-function moneyParts(amountMinor: number, currency: string, locale: 'ar' | 'en'): { figure: string; unit: string } {
-  try {
-    const fmt = new Intl.NumberFormat(locale === 'ar' ? 'ar-EG-u-nu-latn' : 'en-GB', { style: 'currency', currency })
-    const digits = fmt.resolvedOptions().maximumFractionDigits ?? 2
-    const parts = fmt.formatToParts(amountMinor / 10 ** digits)
-    const figure = parts.filter((p) => p.type !== 'currency' && p.type !== 'literal').map((p) => p.value).join('')
-    return { figure, unit: parts.find((p) => p.type === 'currency')?.value ?? currency }
-  } catch {
-    return { figure: (amountMinor / 100).toFixed(2), unit: currency }
-  }
+/**
+ * The payments formatter's own string, taken apart only so its figure can be
+ * set large: the currency stays on the side the formatter puts it, the same
+ * side as every other amount in the panel.
+ */
+export function moneySplit(amountMinor: number, currency: string, locale: 'ar' | 'en'): { before: string; figure: string; after: string } {
+  const text = formatMoney(amountMinor, currency, locale).replace(/[\u200e\u200f\u061c]/g, '')
+  const m = /^(\D*)(\d(?:.*\d)?)(\D*)$/.exec(text)
+  return m ? { before: m[1]!.trim(), figure: m[2]!, after: m[3]!.trim() } : { before: '', figure: text, after: '' }
 }
 
 /**
@@ -39,7 +36,7 @@ function moneyParts(amountMinor: number, currency: string, locale: 'ar' | 'en'):
  * shown: no zero, no placeholder, no message. Money is the server's answer or
  * it is absent.
  */
-export function FamilyContext({ c }: { c: ChatConversation }) {
+export function FamilyContext({ c, showChildren = true }: { c: ChatConversation; /** False where the panel lists the conversation's children itself, right under this block. */ showChildren?: boolean }) {
   const { locale } = useI18n()
   const copy = chatCopyFor(locale)
   const mayOpen = useMayOpenParentProfiles()
@@ -52,7 +49,7 @@ export function FamilyContext({ c }: { c: ChatConversation }) {
   // Only the family this conversation belongs to.
   const p = parent.data && parent.data.family.id === c.familyId ? parent.data : null
   const b = billing.data ?? null
-  const children = (p?.children ?? []).slice(0, CHILDREN_SHOWN)
+  const children = showChildren ? (p?.children ?? []).slice(0, CHILDREN_SHOWN) : []
   const students = useQueries({
     queries: children.map((child) => ({
       queryKey: profileKeys.student(child.id),
@@ -66,7 +63,7 @@ export function FamilyContext({ c }: { c: ChatConversation }) {
   if (!p && !b) return null
 
   const phone = p?.contact.phone ?? null
-  const hiddenChildren = (p?.children.length ?? 0) - children.length
+  const hiddenChildren = showChildren ? (p?.children.length ?? 0) - children.length : 0
 
   return (
     <section className="cw-fam" aria-label={copy.famTitle}>
@@ -166,14 +163,15 @@ function AmountDue({ billing }: { billing: FamilyBilling }) {
       ) : (
         owing.map((t) => {
           const late = t.overdueMinor > 0
-          const { figure, unit } = moneyParts(t.outstandingMinor, t.currency, locale)
+          const { before, figure, after } = moneySplit(t.outstandingMinor, t.currency, locale)
           return (
             <div key={t.currency} className={late ? 'cw-fam__sum cw-fam__sum--late' : 'cw-fam__sum'}>
               <span className="cw-fam__figure">
+                {before && <span className="cw-fam__unit">{before}</span>}
                 <bdi dir="ltr" className="numeral">
                   {figure}
                 </bdi>
-                <span className="cw-fam__unit">{unit}</span>
+                {after && <span className="cw-fam__unit">{after}</span>}
               </span>
               <span className="cw-fam__note">
                 {late ? (

@@ -38,6 +38,8 @@ export interface ReplyTarget {
 }
 
 const MAX_LINES_PX = 160
+/** Below this the bar holds the short placeholder only. */
+const HINT_MIN_WIDTH = 460
 
 /**
  * The message box: one bar -- attach, the text, send -- like every messaging
@@ -91,6 +93,19 @@ export function ChatComposer({
     if (isInternal) stopTyping()
   }, [isInternal, stopTyping])
   const input = useRef<HTMLTextAreaElement>(null)
+  // The placeholder says how to send only where the bar has room for the sentence;
+  // on a phone or beside an open panel it would be cut under the buttons.
+  const bar = useRef<HTMLDivElement>(null)
+  const [roomy, setRoomy] = useState(true)
+  useEffect(() => {
+    const el = bar.current
+    if (!el || typeof ResizeObserver !== 'function') return
+    const measure = () => setRoomy(el.clientWidth === 0 || el.clientWidth >= HINT_MIN_WIDTH)
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
   const media = useRef<HTMLInputElement>(null)
   const doc = useRef<HTMLInputElement>(null)
   const [quickOpen, setQuickOpen] = useState(false)
@@ -373,7 +388,7 @@ export function ChatComposer({
         </ul>
       )}
 
-      <div className="cw-composer__bar">
+      <div className="cw-composer__bar" ref={bar}>
         {!editing && (
           <Menu
             label={copy.attach}
@@ -426,7 +441,8 @@ export function ChatComposer({
           rows={1}
           className="cw-composer__input"
           value={body}
-          dir="auto"
+          // Empty, the box reads in the UI's direction (so does its placeholder); with text, in the text's own.
+          dir={body === '' ? (locale === 'ar' ? 'rtl' : 'ltr') : 'auto'}
           onChange={(e) => {
             setBody(e.target.value)
             if (!editing && !isInternal) typing.typed(e.target.value)
@@ -435,7 +451,11 @@ export function ChatComposer({
             setActive(0)
           }}
           onSelect={(e) => setCaret(e.currentTarget.selectionStart ?? 0)}
-          placeholder={isInternal ? copy.internalPlaceholder : copy.placeholder}
+          placeholder={
+            isInternal
+              ? roomy ? copy.internalPlaceholder : copy.internalPlaceholderShort
+              : roomy ? copy.placeholder : copy.placeholderShort
+          }
           aria-label={editing ? copy.editing : isInternal ? copy.internal : copy.customer}
           role="combobox"
           aria-autocomplete="list"
@@ -530,7 +550,7 @@ export function ChatComposer({
           disabled={!canSend}
           onClick={submit}
           aria-label={editing ? copy.saveEdit : copy.send}
-          title={editing ? copy.saveEdit : copy.send}
+          title={editing ? copy.saveEdit : copy.sendHint}
         >
           <Icon name={editing ? 'check' : 'send'} size={18} />
         </button>

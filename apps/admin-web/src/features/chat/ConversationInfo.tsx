@@ -43,11 +43,14 @@ export function ConversationInfo({ c }: { c: ChatConversation }) {
   const group = isGroup(c)
   const muted = isMuted(c)
   const members = c.members ?? []
+  const lessonGroup = c.type === 'student_group' || c.type === 'family_group'
 
   return (
     <div className="cw-info">
       {/* The family first: who they are and where their payments stand (hidden when the server refuses). */}
-      {c.familyId && <FamilyContext c={c} />}
+      {c.familyId && <FamilyContext c={c} showChildren={!lessonGroup} />}
+      {/* A lesson group lists its own children, with their teachers, once: here, under the family. */}
+      {lessonGroup && <GroupChildren conversationId={c.id} />}
 
       <div className="dp-hero">
         <ConversationAvatar c={c} name={name} size="lg" selfId={staff?.id} />
@@ -79,9 +82,8 @@ export function ConversationInfo({ c }: { c: ChatConversation }) {
         </div>
       </section>
 
-      {(c.type === 'student_group' || c.type === 'family_group') && <GroupChildren conversationId={c.id} />}
-      {(c.type === 'student_group' || c.type === 'family_group') && <GroupSupervisor c={c} name={name} />}
-      {(c.type === 'student_group' || c.type === 'family_group') && <GroupTeacher c={c} name={name} />}
+      {lessonGroup && <GroupSupervisor c={c} name={name} />}
+      {lessonGroup && <GroupTeacher c={c} name={name} />}
 
       <section className="dp-section">
         <div className="cw-info__members-head">
