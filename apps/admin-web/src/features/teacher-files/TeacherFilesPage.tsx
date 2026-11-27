@@ -59,6 +59,10 @@ export function TeacherFilesPage({ basePath, eyebrow }: { basePath: string; eyeb
       .filter((x) => !q || x.name.toLowerCase().includes(q))
       .filter((x) => view !== 'setup' || setupIncomplete(x))
       .filter((x) => view !== 'unsupervised' || x.unsupervised)
+      // Who needs something first: no supervisor, then an open complaint, then set-up; those who left last.
+      .map((x, i) => ({ x, i, need: !x.isActive ? 9 : x.unsupervised ? 0 : x.openComplaints > 0 ? 1 : setupIncomplete(x) ? 2 : 3 }))
+      .sort((a, b) => a.need - b.need || a.i - b.i)
+      .map(({ x }) => x)
   }, [all, query, view])
 
   // Who supervises each teacher, where the viewer may read the organization; otherwise the row says less.

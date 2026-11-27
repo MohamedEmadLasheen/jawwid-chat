@@ -223,3 +223,6 @@ html[dir='rtl'] .tf-head__name[dir='auto'] { text-align: right; }
 .tf-section .banner--warn { border-inline-start-color: var(--waiting); color: var(--ink); }
 .tf-section .table a, .th-body .table a, .tf-timeline a { color: var(--ink); font-weight: 600; text-decoration: none; }
 .tf-section .table a:hover, .th-body .table a:hover, .tf-timeline a:hover { color: var(--teal-dark); text-decoration: underline; text-underline-offset: 3px; }
+
+/* The roster: the student count is a fact beside the name, not the row's loudest thing. */
+.tf-roster .rw-fact__n { font-size: var(--fs-lg); }
