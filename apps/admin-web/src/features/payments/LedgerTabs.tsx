@@ -1,8 +1,10 @@
 import { Fragment, useEffect, useId, useState, type ReactNode } from 'react'
 import { useI18n } from '@/core/i18n/I18nProvider'
+import { Avatar } from '@/shared/components/Avatar'
 import { Badge, type Tone } from '@/shared/components/Badge'
 import { Dialog } from '@/shared/components/Dialog'
 import { FilterChips } from '@/shared/components/FilterChips'
+import { Icon } from '@/shared/components/Icon'
 import { SearchField } from '@/shared/components/SearchField'
 import { SearchableSelect, type SelectOption } from '@/shared/components/SearchableSelect'
 import { EmptyState, LoadingState, QueryBoundary } from '@/shared/components/States'
@@ -25,6 +27,7 @@ import type {
   TransactionDetail,
   TransactionFilters,
   TransactionStatus,
+  TransactionTotal,
 } from './api'
 import {
   ATTEMPT_FILTER,
@@ -43,9 +46,11 @@ import {
   describeError,
   formatDay,
   formatMoney,
+  moneyParts,
   paymentCreditsLessons,
   useCopy,
 } from './copy'
+import { Money } from './Money'
 import {
   useCardAttempts,
   useReconcileNow,
@@ -203,9 +208,9 @@ function Picker({ label, value, onChange, any, options }: { label: string; value
 
 // ---- Transactions ---------------------------------------------------------
 
-export function TransactionsTab() {
+export function TransactionsTab({ onSeeReceipts }: { onSeeReceipts?: () => void } = {}) {
   const tx = useCopy()
-  const { locale, number } = useI18n()
+  const { locale } = useI18n()
   const [status, setStatus] = useState<TransactionStatus | ''>('')
   const [method, setMethod] = useState<PaymentMethod | ''>('')
   const [purpose, setPurpose] = useState<RequestPurpose | ''>('')
@@ -235,6 +240,14 @@ export function TransactionsTab() {
   return (
     <>
       <section className="pay-filters" aria-label={tx(LED.filters)}>
+        <div className="pay-filters__search">
+          <SearchField value={search} onChange={(v) => setSearch(v.slice(0, MAX_SEARCH))} label={tx(LED.search)} clearLabel={tx(LED.clearSearch)} />
+          {filtered && (
+            <button type="button" className="btn btn--sm btn--ghost" onClick={clear}>
+              {tx(LED.clearFilters)}
+            </button>
+          )}
+        </div>
         <div className="pay-filters__row">
           <Picker
             label={tx(PAY.status)}
@@ -273,59 +286,49 @@ export function TransactionsTab() {
             )}
           </Field>
         </div>
-        <div className="pay-filters__row">
-          <div className="pay-filters__search">
-            <SearchField value={search} onChange={(v) => setSearch(v.slice(0, MAX_SEARCH))} label={tx(LED.search)} clearLabel={tx(LED.clearSearch)} />
-          </div>
-          {filtered && (
-            <button type="button" className="btn btn--sm btn--ghost" onClick={clear}>
-              {tx(LED.clearFilters)}
-            </button>
-          )}
-        </div>
       </section>
 
       {list.error && rows.length === 0 ? (
         <EmptyState icon="alert" title={describeError(list.error, locale)} />
       ) : (
         <QueryBoundary isLoading={list.isLoading} error={null} onRetry={() => void list.refetch()}>
-          {totals.length > 0 && (
-            <section className="pay-totals-wrap" aria-label={tx(LED.totals)}>
-              <ul className="pay-totals">
-                {totals.map((t) => (
-                  <li key={t.currency} className="card panel pay-total" aria-label={t.currency}>
-                    <strong className="pay-total__currency">{t.currency}</strong>
-                    <dl className="tf-kv">
-                      <dt>{tx(LED.count)}</dt>
-                      <dd className="pf-amount">{number(t.count)}</dd>
-                      <dt>{tx(LED.totalAmount)}</dt>
-                      <dd className="pf-amount">{formatMoney(t.amountMinor, t.currency, locale)}</dd>
-                      <dt>{tx(LED.totalRefunded)}</dt>
-                      <dd className="pf-amount">{formatMoney(t.refundedMinor, t.currency, locale)}</dd>
-                      <dt>{tx(LED.net)}</dt>
-                      <dd className="pf-amount">{formatMoney(t.netMinor, t.currency, locale)}</dd>
-                    </dl>
-                  </li>
-                ))}
-              </ul>
-              <p className="field__hint">{tx(LED.totalsHint)}</p>
-            </section>
-          )}
+          {totals.length > 0 && <Totals totals={totals} />}
           {rows.length === 0 ? (
-            !rangeError && <EmptyState title={tx(LED.noTransactions)} />
+            !rangeError &&
+            (filtered ? (
+              <EmptyState
+                title={tx(LED.noTransactions)}
+                hint={tx(LED.noTransactionsFiltered)}
+                action={
+                  <button type="button" className="btn btn--sm" onClick={clear}>
+                    {tx(LED.clearFilters)}
+                  </button>
+                }
+              />
+            ) : (
+              <EmptyState
+                title={tx(LED.noTransactions)}
+                hint={tx(LED.noTransactionsHint)}
+                action={
+                  onSeeReceipts && (
+                    <button type="button" className="btn btn--sm" onClick={onSeeReceipts}>
+                      {tx(LED.seeReceipts)}
+                    </button>
+                  )
+                }
+              />
+            ))
           ) : (
-            <div className="table-wrap">
-              <table className="table table--interactive pay-table" aria-label={tx(LED.transactions)}>
+            <div className="table-wrap pay-table-wrap">
+              <table className="table table--interactive pay-table pay-table--tx" aria-label={tx(LED.transactions)}>
                 <thead>
                   <tr>
                     <th scope="col">{tx(LED.colFamily)}</th>
-                    <th scope="col">{tx(LED.colChild)}</th>
                     <th scope="col">{tx(LED.colFor)}</th>
                     <th scope="col">{tx(LED.colMethod)}</th>
-                    <th scope="col" className="pay-num">{tx(LED.colAmount)}</th>
-                    <th scope="col" className="pay-num">{tx(LED.colRefunded)}</th>
-                    <th scope="col">{tx(LED.colStatus)}</th>
                     <th scope="col">{tx(LED.colPaidOn)}</th>
+                    <th scope="col" className="pay-num">{tx(LED.colAmount)}</th>
+                    <th scope="col">{tx(LED.colStatus)}</th>
                     <th scope="col">{tx(LED.colInvoice)}</th>
                     <th scope="col">
                       <span className="sr-only">{tx(LED.details)}</span>
@@ -356,57 +359,146 @@ function forWhat(request: Transaction['request'], locale: 'ar' | 'en', tx: Retur
   return parts.join(' · ')
 }
 
+/**
+ * What matches the filters, one line per currency, written as the sum it is:
+ * received, less what was refunded, leaves the net. The currency names the
+ * line, so the figures on it carry no symbol of their own.
+ */
+function Totals({ totals }: { totals: TransactionTotal[] }) {
+  const tx = useCopy()
+  const { locale, number } = useI18n()
+  return (
+    <section className="pay-sum" aria-label={tx(LED.totals)}>
+      <ul className="pay-sum__lines">
+        {totals.map((t) => {
+          const figure = (n: number) => moneyParts(n, t.currency, locale).number
+          return (
+            <li key={t.currency} className="pay-sum__line" aria-label={t.currency}>
+              <span className="pay-sum__currency" dir="ltr">
+                {t.currency}
+              </span>
+              <span className="pay-sum__term pay-sum__term--count">
+                <span className="pay-sum__k">{tx(LED.count)}</span>
+                <span className="pay-sum__v" dir="ltr">
+                  {number(t.count)}
+                </span>
+              </span>
+              <span className="pay-sum__term">
+                <span className="pay-sum__k">{tx(LED.totalAmount)}</span>
+                <span className="pay-sum__v" dir="ltr">
+                  {figure(t.amountMinor)}
+                </span>
+              </span>
+              <span className="pay-sum__op" aria-hidden="true">
+                −
+              </span>
+              <span className="pay-sum__term">
+                <span className="pay-sum__k">{tx(LED.totalRefunded)}</span>
+                <span className="pay-sum__v" dir="ltr">
+                  {figure(t.refundedMinor)}
+                </span>
+              </span>
+              <span className="pay-sum__op" aria-hidden="true">
+                =
+              </span>
+              <span className="pay-sum__term pay-sum__term--net">
+                <span className="pay-sum__k">{tx(LED.net)}</span>
+                <span className="pay-sum__v" dir="ltr">
+                  {figure(t.netMinor)}
+                </span>
+              </span>
+            </li>
+          )
+        })}
+      </ul>
+      <p className="pay-sum__hint">{tx(LED.totalsHint)}</p>
+    </section>
+  )
+}
+
+/** Who a row is about: a monogram and the family, with the child beneath when the row names one. */
+function FamilyCell({ family, child, seed }: { family: { id: string; name: string } | null; child?: { name: string } | null; seed: string }) {
+  const tx = useCopy()
+  return (
+    <div className="entity">
+      <Avatar name={family?.name ?? ''} seed={family?.id ?? seed} size="sm" />
+      <div className="entity__text">
+        {family ? (
+          <span className="entity__name">
+            <bdi>{family.name}</bdi>
+          </span>
+        ) : (
+          <span className="pay-quiet">{tx(LED.beforeAssign)}</span>
+        )}
+        {child && (
+          <span className="entity__sub">
+            <bdi>{child.name}</bdi>
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function TransactionRow({ t, onOpen }: { t: Transaction; onOpen: () => void }) {
   const tx = useCopy()
   const { locale } = useI18n()
   const money = (n: number) => formatMoney(n, t.currency, locale)
   const card = cardLabel(t.card)
   return (
-    <tr className="pay-row" onClick={onOpen}>
-      <td dir="auto">{t.family ? t.family.name : <span className="tf-muted">{tx(LED.beforeAssign)}</span>}</td>
-      <td dir="auto">{t.child?.name ?? '—'}</td>
-      <td>
+    <tr className={t.status === 'voided' ? 'pay-row pay-row--voided' : 'pay-row'} onClick={onOpen}>
+      <td className="pay-a-who">
+        <FamilyCell family={t.family} child={t.child} seed={t.id} />
+      </td>
+      <td className="pay-a-for">
         {t.request ? (
           <>
-            <span dir="auto">{t.request.label}</span>
+            <bdi>{t.request.label}</bdi>
             <span className="pay-sub">{forWhat(t.request, locale, tx)}</span>
           </>
         ) : (
-          '—'
+          <span className="pay-quiet">—</span>
         )}
       </td>
-      <td>
+      <td className="pay-a-method">
         {tx(METHOD[t.method] ?? raw(t.method))}
         {card && (
-          <bdi className="pay-sub" dir="ltr">
-            {card}
-          </bdi>
+          <span className="pay-sub">
+            <bdi dir="ltr">{card}</bdi>
+          </span>
         )}
       </td>
-      <td className="pay-num pf-amount">{money(t.amountMinor)}</td>
-      <td className="pay-num">{t.refundedMinor > 0 ? money(t.refundedMinor) : '—'}</td>
-      <td>
+      <td className="pay-date pay-a-date">{formatDay(t.paidOn, locale)}</td>
+      <td className="pay-num pay-a-amount">
+        <Money amountMinor={t.amountMinor} currency={t.currency} />
+        {t.refundedMinor > 0 && (
+          <span className="pay-sub pay-refunded">
+            <span>{tx(LED.refundedInline)}</span>
+            <Money amountMinor={t.refundedMinor} currency={t.currency} size="sm" />
+          </span>
+        )}
+      </td>
+      <td className="pay-a-status">
         <TransactionStatusBadge status={t.status} />
         {t.overpaid && (
-          <>
-            {' '}
+          <span className="pay-flag">
             <OverpaidBadge overpaid={t.overpaid} />
-          </>
+          </span>
         )}
       </td>
-      <td>{formatDay(t.paidOn, locale)}</td>
-      <td>{t.invoice ? <bdi dir="ltr">{t.invoice.number}</bdi> : '—'}</td>
-      <td>
+      <td className="pay-a-invoice">{t.invoice ? <bdi className="pay-invoice" dir="ltr">{t.invoice.number}</bdi> : <span className="pay-quiet">—</span>}</td>
+      <td className="pay-open pay-a-open">
         <button
           type="button"
-          className="btn btn--sm btn--ghost"
+          className="btn btn--sm btn--ghost btn--icon"
           aria-label={tx(LED.detailsNamed, { amount: money(t.amountMinor), date: formatDay(t.paidOn, locale) })}
+          title={tx(LED.details)}
           onClick={(e) => {
             e.stopPropagation()
             onOpen()
           }}
         >
-          {tx(LED.details)}
+          <Icon name="chevronForward" size={18} />
         </button>
       </td>
     </tr>
@@ -769,17 +861,29 @@ export function AttemptsTab() {
   const rows = list.data?.pages.flatMap((p) => p.items) ?? []
   return (
     <>
-      <FilterChips<AttemptFilter> label={tx(PAY.status)} value={status} onChange={setStatus} options={ATTEMPT_FILTERS.map((s) => ({ value: s, label: tx(ATTEMPT_FILTER[s]) }))} />
-      <p className="field__hint">{tx(LED.attemptsHint)}</p>
+      <div className="pay-bar">
+        <FilterChips<AttemptFilter> label={tx(PAY.status)} value={status} onChange={setStatus} options={ATTEMPT_FILTERS.map((s) => ({ value: s, label: tx(ATTEMPT_FILTER[s]) }))} />
+        <p className="pay-bar__hint">{tx(LED.attemptsHint)}</p>
+      </div>
       {list.error && rows.length === 0 ? (
         <EmptyState icon="alert" title={describeError(list.error, locale)} />
       ) : (
         <QueryBoundary isLoading={list.isLoading} error={null} onRetry={() => void list.refetch()}>
           {rows.length === 0 ? (
-            <EmptyState title={tx(LED.noCardAttempts)} />
+            <EmptyState
+              title={tx(LED.noCardAttempts)}
+              hint={tx(status === 'failed' ? LED.noFailedAttemptsHint : LED.noAttemptsHint)}
+              action={
+                status !== 'all' && (
+                  <button type="button" className="btn btn--sm" onClick={() => setStatus('all')}>
+                    {tx(LED.showAllAttempts)}
+                  </button>
+                )
+              }
+            />
           ) : (
-            <div className="table-wrap">
-              <table className="table pay-table" aria-label={tx(LED.attempts)}>
+            <div className="table-wrap pay-table-wrap">
+              <table className="table pay-table pay-table--attempts" aria-label={tx(LED.attempts)}>
                 <thead>
                   <tr>
                     <th scope="col">{tx(LED.colFamily)}</th>
@@ -810,24 +914,32 @@ export function AttemptsTab() {
 
 function AttemptRow({ a }: { a: CardAttemptRow }) {
   const tx = useCopy()
-  const { locale, dateTime, number } = useI18n()
+  const { dateTime, number } = useI18n()
   return (
     <tr>
-      <td dir="auto">{a.family ? a.family.name : <span className="tf-muted">{tx(LED.beforeAssign)}</span>}</td>
-      <td>
-        <span dir="auto">{a.request.label}</span>
+      <td className="pay-a-who">
+        <FamilyCell family={a.family} seed={a.sessionId} />
+      </td>
+      <td className="pay-a-for">
+        <bdi>{a.request.label}</bdi>
         <span className="pay-sub">{tx(PURPOSE_LABEL[a.request.purpose] ?? raw(a.request.purpose))}</span>
       </td>
-      <td className="pay-num pf-amount">{formatMoney(a.amountMinor, a.currency, locale)}</td>
-      <td className="pay-num">{number(a.failureCount)}</td>
-      <td>
+      <td className="pay-num pay-a-amount">
+        <Money amountMinor={a.amountMinor} currency={a.currency} />
+      </td>
+      <td className="pay-num pay-count pay-a-tries" data-label={tx(LED.colTries)}>
+        {number(a.failureCount)}
+      </td>
+      <td className="pay-why-cell pay-a-why">
         <FailureWords a={a} />
       </td>
-      <td>{a.lastFailedAt ? dateTime(a.lastFailedAt) : '—'}</td>
-      <td>
+      <td className="pay-date pay-a-last" data-label={tx(LED.lastFailed)}>
+        {a.lastFailedAt ? dateTime(a.lastFailedAt) : <span className="pay-quiet">—</span>}
+      </td>
+      <td className="pay-a-status">
         <AttemptStatusBadge status={a.status} />
       </td>
-      <td>
+      <td className="pay-a-paid" data-label={tx(LED.colPaid)}>
         <Badge tone={a.paymentId ? 'ok' : 'outline'}>{tx(a.paymentId ? LED.yes : LED.no)}</Badge>
       </td>
     </tr>
@@ -846,24 +958,16 @@ export function StripeEventsTab() {
   const rows = list.data?.pages.flatMap((p) => p.items) ?? []
   return (
     <>
-      <section className="card panel tf-section" aria-labelledby="pay-reconcile-now">
-        <div className="tf-section__head">
-          <h2 id="pay-reconcile-now" className="tf-section__title">
-            {tx(LED.reconcileNow)}
-          </h2>
-        </div>
-        <p className="field__hint">{tx(LED.reconcileNowHint)}</p>
+      <section className="pay-sweep" aria-label={tx(LED.reconcileNow)}>
+        <p className="pay-sweep__hint">{tx(LED.reconcileNowHint)}</p>
+        <button type="button" className="btn btn--sm" disabled={sweep.isPending} onClick={() => sweep.mutate()}>
+          {sweep.isPending ? tx(LED.reconciling) : tx(LED.reconcileNow)}
+        </button>
         <ServerError error={sweep.error} />
-        <div className="tf-actions">
-          <button type="button" className="btn btn--sm btn--primary" disabled={sweep.isPending} onClick={() => sweep.mutate()}>
-            {sweep.isPending ? tx(LED.reconciling) : tx(LED.reconcileNow)}
-          </button>
-        </div>
         {sweep.data && <SweepResult r={sweep.data} />}
       </section>
 
-      <p className="field__hint">{tx(LED.eventsHint)}</p>
-      <section className="pay-filters" aria-label={tx(LED.filters)}>
+      <section className="pay-filters pay-filters--events" aria-label={tx(LED.filters)}>
         <div className="pay-filters__row">
           <Picker
             label={tx(LED.outcome)}
@@ -879,6 +983,7 @@ export function StripeEventsTab() {
             any={tx(LED.anyType)}
             options={EVENT_TYPES.map((t) => ({ value: t, label: t.endsWith('.') ? `${t}*` : t }))}
           />
+          <p className="pay-bar__hint">{tx(LED.eventsHint)}</p>
         </div>
       </section>
 
@@ -887,10 +992,27 @@ export function StripeEventsTab() {
       ) : (
         <QueryBoundary isLoading={list.isLoading} error={null} onRetry={() => void list.refetch()}>
           {rows.length === 0 ? (
-            <EmptyState title={tx(LED.noStripeEvents)} />
+            <EmptyState
+              title={tx(LED.noStripeEvents)}
+              hint={tx(outcome || type ? LED.noStripeEventsFiltered : LED.noStripeEventsHint)}
+              action={
+                (outcome || type) && (
+                  <button
+                    type="button"
+                    className="btn btn--sm"
+                    onClick={() => {
+                      setOutcome('')
+                      setType('')
+                    }}
+                  >
+                    {tx(LED.clearFilters)}
+                  </button>
+                )
+              }
+            />
           ) : (
-            <div className="table-wrap">
-              <table className="table pay-table" aria-label={tx(LED.eventsTab)}>
+            <div className="table-wrap pay-table-wrap">
+              <table className="table pay-table pay-table--events" aria-label={tx(LED.eventsTab)}>
                 <thead>
                   <tr>
                     <th scope="col">{tx(LED.colReceived)}</th>
@@ -921,15 +1043,15 @@ function EventRow({ e }: { e: StripeEvent }) {
   const { dateTime } = useI18n()
   return (
     <tr>
-      <td>{dateTime(e.receivedAt)}</td>
-      <td>
+      <td className="pay-date pay-a-date">{dateTime(e.receivedAt)}</td>
+      <td className="pay-a-who">
         <Code>{e.type}</Code>
       </td>
-      <td>
+      <td className="pay-a-why">
         <OutcomeBadge outcome={e.outcome} />
       </td>
-      <td>{e.objectId ? <Code>{e.objectId}</Code> : '—'}</td>
-      <td>{e.livemode ? tx(LED.live) : <Badge tone="warn">{tx(LED.testMode)}</Badge>}</td>
+      <td className="pay-a-for">{e.objectId ? <Code>{e.objectId}</Code> : <span className="pay-quiet">—</span>}</td>
+      <td className="pay-a-status">{e.livemode ? tx(LED.live) : <Badge tone="warn">{tx(LED.testMode)}</Badge>}</td>
     </tr>
   )
 }

@@ -1,40 +1,72 @@
 import { Link } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
+import { Avatar } from '@/shared/components/Avatar'
 import { Badge } from '@/shared/components/Badge'
+import { Icon } from '@/shared/components/Icon'
+import { EmptyState, LoadingState } from '@/shared/components/States'
+import { relativeTime } from '@/features/admin/copy'
 import { studentPath } from '@/features/profiles/api'
-import { S, isRefusal, useCopy } from './copy'
+import { S, describeError, isRefusal, useCopy } from './copy'
 import { useRenewalRequests } from './hooks'
+import './subscriptions.css'
 
 /** PD-30 (A): parents of locked children with nothing to pay yet asked to renew -- the staff queue. */
 export function RenewalRequestsPanel() {
   const tx = useCopy()
-  const { locale } = useI18n()
+  const { locale, dateTime } = useI18n()
   const q = useRenewalRequests()
-  if (q.error && isRefusal(q.error)) return null
+  // A reader the server refuses sees no queue: one calm line where the list would be.
+  if (q.error && isRefusal(q.error)) {
+    return (
+      <p className="rn__denied">
+        <Icon name="lockNote" size={16} />
+        <span>{tx(S.renewalsDenied)}</span>
+      </p>
+    )
+  }
   const rows = q.data?.requests ?? []
   return (
-    <section className="card panel tf-section" aria-labelledby="pay-renewals">
-      <div className="tf-section__head">
-        <h2 id="pay-renewals" className="tf-section__title">
-          {tx(S.renewalsTitle)}
-        </h2>
-      </div>
-      <p className="field__hint">{tx(S.renewalsHint)}</p>
-      {rows.length === 0 ? (
-        <p className="tf-muted">{tx(S.noRenewals)}</p>
+    <section className="rn" aria-labelledby="pay-renewals">
+      <h2 id="pay-renewals" className="sr-only">
+        {tx(S.renewalsTitle)}
+      </h2>
+      <p className="rn__hint">{tx(S.renewalsHint)}</p>
+      {q.isLoading ? (
+        <LoadingState compact />
+      ) : q.error ? (
+        // A failed read is said, never shown as "no requests".
+        <EmptyState icon="alert" title={describeError(q.error, locale)} />
+      ) : rows.length === 0 ? (
+        <EmptyState
+          title={tx(S.noRenewals)}
+          hint={tx(S.noRenewalsHint)}
+          action={
+            <Link className="btn btn--sm" to="/parents">
+              {tx(S.openParents)}
+            </Link>
+          }
+        />
       ) : (
-        <ul className="sub-ledger">
+        <ul className="rn-list">
           {rows.map((r) => (
-            <li key={r.id} className="sub-ledger__row">
+            <li key={r.id} className="rn-row">
+              <div className="entity">
+                <Avatar name={r.child.name} seed={r.child.id} size="sm" />
+                <div className="entity__text">
+                  <Link className="entity__name rn-row__name" to={studentPath(r.child.id)}>
+                    <bdi>{r.child.name}</bdi>
+                  </Link>
+                  <span className="entity__sub">
+                    <bdi>{r.parentName}</bdi>
+                  </span>
+                </div>
+              </div>
+              <time className="rn-row__when" dateTime={r.requestedAt} title={dateTime(r.requestedAt)}>
+                {relativeTime(r.requestedAt, locale)}
+              </time>
               <Badge tone={r.renewed ? 'ok' : 'warn'} dot>
                 {tx(r.renewed ? S.renewed : S.waiting)}
               </Badge>
-              <Link to={studentPath(r.child.id)} dir="auto">
-                {r.child.name}
-              </Link>
-              <span className="tf-muted" dir="auto">
-                {r.parentName} · {new Date(r.requestedAt).toLocaleString(locale === 'ar' ? 'ar-EG-u-nu-latn' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short' })}
-              </span>
             </li>
           ))}
         </ul>

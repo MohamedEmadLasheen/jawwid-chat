@@ -1,11 +1,110 @@
-/* PD-12 S3 instalments. Layout reuses .page / .table / .toolbar from the design system. */
-.in-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
-.in-check { display: inline-flex; align-items: center; gap: var(--space-2); }
-.in-summary { color: var(--text-muted); font-size: var(--fs-sm); margin: 0 0 var(--space-3); }
+/* PD-12 S3 instalments: a ledger, one line of filters, and a tight hairline table. */
+
+.in-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-5); margin-block-end: var(--space-3); }
+.in-check { display: inline-flex; align-items: center; gap: var(--space-2); min-block-size: 32px; font-size: var(--fs-sm); color: var(--ink); cursor: pointer; }
+.in-check input { inline-size: 16px; block-size: 16px; margin: 0; accent-color: var(--teal); }
+.in-toolbar__note { margin-inline-start: auto; font-size: var(--fs-sm); color: var(--ink-muted); }
+.in-hint { margin: 0 0 var(--space-3); }
+
 .in-table-wrap { overflow-x: auto; }
-.in-cell { display: grid; gap: var(--space-1); justify-items: start; min-inline-size: 8rem; }
-.in-muted { color: var(--text-muted); font-size: var(--fs-sm); }
-.in-amount { font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* Wide enough to need no sideways scroll: the column heads stay in view down the page. */
+@media (min-width: 1100px) {
+  .in-table-wrap { overflow: visible; }
+  /* The page scrolls inside its own padding: the heads go up through it to the edge. */
+  .table.in-table th { inset-block-start: calc(-1 * var(--space-6)); }
+}
+.table.in-table td { vertical-align: top; padding-block: 10px; }
+/* Late, due today, upcoming: where one ends and the next begins, the rule is firmer. */
+.table.in-table .in-row--opens td { border-block-start: 2px solid var(--hairline); }
+.in-table .entity { align-items: flex-start; gap: 10px; }
+.in-table .entity__text { display: grid; gap: 1px; }
+.in-payer { color: var(--ink); text-decoration: none; }
+.in-payer:hover { color: var(--teal-dark); text-decoration: underline; text-decoration-color: var(--brand-200); text-underline-offset: 3px; }
+.in-sub { display: block; font-size: var(--fs-xs); color: var(--ink-muted); }
+.in-unset { color: var(--ink-muted); }
+.in-td-for { max-inline-size: 16rem; }
+
+/* The due date, said the way a person would say it. */
+.in-when { display: block; font-weight: 500; white-space: nowrap; }
+.in-row--overdue .in-when { color: var(--terracotta); }
+.in-row--paid .in-when { font-weight: 400; color: var(--ink-muted); }
+.in-td-due .in-sub { white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+/* Amounts line up on the decimal point in both directions. */
+.table.in-table .in-td-amount, .table.in-table .in-th-amount { text-align: end; white-space: nowrap; }
+[dir='rtl'] .table.in-table .in-td-amount, [dir='rtl'] .table.in-table .in-th-amount { text-align: start; }
+.in-row--paid .money__n { color: var(--ink-muted); font-weight: 500; }
+
+.in-td-status .badge { white-space: nowrap; }
+.in-td-status .in-sub { padding-inline-start: 14px; }
+.in-basis { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 8px; }
+.in-set {
+  margin: -7px -6px;
+  padding: 7px 6px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--teal);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: var(--brand-200);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.in-set:hover { color: var(--teal-dark); text-decoration-color: currentColor; }
+
+.table.in-table .in-td-act { text-align: end; inline-size: 1%; padding-block: 6px; }
+.in-chat { color: var(--teal); }
+.in-chat--none { display: inline-grid; place-items: center; inline-size: var(--control-h-sm); block-size: var(--control-h-sm); color: var(--border-strong); }
+
+/* The plan: one tick per instalment this list holds. Teal is paid, terracotta
+   late, gold due today; the row's own tick stands taller. */
+.plan { display: inline-flex; align-items: center; gap: 8px; min-block-size: 22px; }
+.plan__ticks { display: flex; align-items: flex-end; gap: 3px; block-size: 16px; max-inline-size: 96px; }
+/* Still to come is an outline; what has happened is filled, so the strip reads without its colours. */
+.plan__tick { flex: 0 1 7px; min-inline-size: 4px; block-size: 9px; border-radius: 1px; box-shadow: inset 0 0 0 1px var(--border-control); }
+.plan__tick--paid { background: var(--teal); box-shadow: none; }
+.plan__tick--overdue { background: var(--terracotta); box-shadow: none; }
+.plan__tick--due { background: var(--gold); box-shadow: inset 0 0 0 1px var(--gold-line); }
+.plan__tick--here { block-size: 16px; }
+.plan__at { font-size: var(--fs-xs); color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+
+/* The billing supervisor dialog. */
 .in-options { display: grid; gap: var(--space-2); margin: var(--space-2) 0 0; padding: 0; border: none; }
 .in-option { display: flex; align-items: baseline; gap: var(--space-2); }
+.in-option input { accent-color: var(--teal); }
+.in-muted { color: var(--ink-muted); font-size: var(--fs-sm); }
 .in-textarea { min-block-size: 4rem; resize: vertical; }
+
+/* Phone width: each instalment is a short block, not a row to scroll sideways. */
+@media (max-width: 767px) {
+  .in-toolbar { gap: var(--space-1) var(--space-4); }
+  .in-toolbar__note { margin-inline-start: 0; flex-basis: 100%; }
+  .in-check { min-block-size: 44px; }
+  .in-set { margin: -12px -8px; padding: 12px 8px; }
+  .in-table-wrap { overflow: visible; }
+  .in-table, .in-table tbody { display: block; }
+  .in-table thead { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .table.in-table tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: 'payer amount' 'for due' 'plan status' 'sup act';
+    gap: 6px var(--space-3);
+    align-items: start;
+    padding: 12px 0;
+    border-block-end: 1px solid var(--hairline-soft);
+  }
+  .table.in-table td, .table.in-table tbody tr:last-child td, .table.in-table .in-row--opens td { display: block; padding: 0; border: 0; inline-size: auto; max-inline-size: none; }
+  .table.in-table .in-row--opens { border-block-start: 2px solid var(--hairline); margin-block-start: -1px; }
+  .in-td-payer { grid-area: payer; }
+  .in-td-amount { grid-area: amount; }
+  .in-td-for { grid-area: for; padding-inline-start: 38px !important; }
+  .in-td-due { grid-area: due; text-align: end; }
+  .in-td-plan { grid-area: plan; padding-inline-start: 38px !important; }
+  .in-td-status { grid-area: status; justify-self: end; }
+  .in-td-status .in-sub { text-align: end; padding-inline-start: 0; }
+  .in-td-sup { grid-area: sup; padding-inline-start: 38px !important; font-size: var(--fs-sm); }
+  .in-td-act { grid-area: act; align-self: center; }
+  .table.in-table .in-td-amount, [dir='rtl'] .table.in-table .in-td-amount { text-align: end; }
+}
