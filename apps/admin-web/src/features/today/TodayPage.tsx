@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { Fragment, useMemo, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { LOCALE_TAG, useI18n } from '@/core/i18n/I18nProvider'
@@ -79,6 +79,13 @@ function wholeMoney(text: string): string {
   return text.replace(/[.,]00(?!\d)/, '')
 }
 
+/**
+ * An instalment is late from its first day, but the row turns red only once it is this
+ * many days late; before that its age is the waiting colour. A client constant: the API
+ * carries no collection target of its own.
+ */
+export const INSTALMENT_LATE_RED_DAYS = 7
+
 function fillN(template: string, n: number | string): string {
   return template.replace('{n}', String(n))
 }
@@ -157,17 +164,29 @@ export function TodayPage() {
   const overdueTasks = tasks.data?.items ?? []
   const pending = receipts.data?.items ?? []
 
+  /** Data values (names, plan names, a family's words) each keep their own direction inside a line set in the page's. */
+  const joined = (parts: Array<string | null | undefined>): ReactNode => {
+    const kept = parts.filter((p): p is string => !!p)
+    if (kept.length === 0) return undefined
+    return kept.map((p, n) => (
+      <Fragment key={n}>
+        {n > 0 && (locale === 'ar' ? '، ' : ', ')}
+        <bdi>{p}</bdi>
+      </Fragment>
+    ))
+  }
+
   /** One thing to do: what it is, the one fact that makes it urgent, and where it is done. */
-  interface Todo { key: string; icon: IconName; title: string; line?: string; fact?: string; age?: string; urgent?: boolean; to: string; action: string }
+  interface Todo { key: string; icon: IconName; title: string; line?: ReactNode; fact?: string; age?: string; tone?: 'late' | 'soon'; to: string; action: string }
   const groups: Array<{ key: string; label: string; urgent: boolean; total: number; all: string; items: Todo[] }> = []
   if (chatPath === '/chat' && needsReply.length > 0) {
     groups.push({
       key: 'replies', label: tx(T.replies), urgent: needsReply.some((c) => c.needsReply), total: needsReply.length, all: '/chat',
       items: needsReply.slice(0, 4).map((c) => ({
-        key: c.id, icon: 'conversations' as const, title: conversationName(c, staff?.id, copy), line: c.lastMessage?.text ?? undefined,
+        key: c.id, icon: 'conversations' as const, title: conversationName(c, staff?.id, copy), line: joined([c.lastMessage?.text]),
         // The same wait, in the same words and against the same reply target, as the Conversations page.
         age: c.lastActivityAt ? waitedFor(c.lastActivityAt, locale) : undefined,
-        urgent: c.needsReply && !!c.lastActivityAt && waitTone(c.lastActivityAt) === 'late',
+        tone: c.needsReply && c.lastActivityAt ? (waitTone(c.lastActivityAt) === 'late' ? 'late' : waitTone(c.lastActivityAt) === 'soon' ? 'soon' : undefined) : undefined,
         to: `/chat/${encodeURIComponent(c.id)}`, action: tx(T.open),
       })),
     })
@@ -176,8 +195,8 @@ export function TodayPage() {
     groups.push({
       key: 'late', label: tx(T.lateGroup), urgent: true, total: late.length, all: instalmentsPath,
       items: late.slice(0, 4).map((i) => ({
-        key: i.id, icon: 'instalments' as const, title: i.account.name || i.family.name, line: [i.child?.name, instalmentLabel(i.label)].filter(Boolean).join(locale === 'ar' ? '، ' : ', ') || i.family.name,
-        fact: wholeMoney(formatMoney(i.amountMinor, i.currency, locale)), age: i.days === 1 ? tx(T.dayLate) : fillN(tx(T.daysLate), num.format(i.days)), urgent: true,
+        key: i.id, icon: 'instalments' as const, title: i.account.name || i.family.name, line: joined([i.child?.name, ...instalmentLabel(i.label)]) ?? joined([i.family.name]),
+        fact: wholeMoney(formatMoney(i.amountMinor, i.currency, locale)), age: i.days === 1 ? tx(T.dayLate) : fillN(tx(T.daysLate), num.format(i.days)), tone: i.days >= INSTALMENT_LATE_RED_DAYS ? 'late' : 'soon',
         to: i.account.id ? `${parentPath(i.account.id)}#money` : instalmentsPath, action: tx(T.file),
       })),
     })
@@ -186,8 +205,8 @@ export function TodayPage() {
     groups.push({
       key: 'tasks', label: tx(T.taskGroup), urgent: true, total: overdueTasks.length, all: tasksPath,
       items: overdueTasks.slice(0, 4).map((t) => ({
-        key: t.id, icon: 'tasks' as const, title: t.title, line: t.createdBy?.name ?? undefined,
-        age: t.dueAt ? relativeTime(t.dueAt, locale) : undefined, urgent: true, to: tasksPath, action: tx(T.open),
+        key: t.id, icon: 'tasks' as const, title: t.title, line: joined([t.createdBy?.name]),
+        age: t.dueAt ? relativeTime(t.dueAt, locale) : undefined, tone: 'late', to: tasksPath, action: tx(T.open),
       })),
     })
   }
@@ -195,18 +214,18 @@ export function TodayPage() {
     groups.push({
       key: 'receipts', label: tx(T.receiptGroup), urgent: false, total: receipts.data?.counts.pending ?? pending.length, all: paymentsPath,
       items: pending.slice(0, 3).map((r) => ({
-        key: r.id, icon: 'payments' as const, title: r.family?.name ?? r.label, line: r.label,
+        key: r.id, icon: 'payments' as const, title: r.family?.name ?? r.label, line: joined(instalmentLabel(r.label)),
         fact: wholeMoney(formatMoney(r.amountMinor, r.currency, locale)), to: paymentsPath, action: tx(T.review),
       })),
     })
   }
-  /** "Term subscription · 2/4" reads "Term subscription, instalment 2 of 4". */
-  function instalmentLabel(label: string | null): string | null {
-    if (!label) return null
+  /** "Term subscription · 2/4" reads "Term subscription, instalment 2 of 4": the plan's name, then which instalment. */
+  function instalmentLabel(label: string | null): string[] {
+    if (!label) return []
     const m = /^(.*?)\s*[·•]\s*(\d+)\s*\/\s*(\d+)\s*$/.exec(label)
-    if (!m) return label
+    if (!m) return [label]
     const which = tx(T.instalment).replace('{n}', m[2]!).replace('{m}', m[3]!)
-    return m[1] ? `${m[1]}${locale === 'ar' ? '، ' : ', '}${locale === 'ar' ? which : which.toLowerCase()}` : which
+    return m[1] ? [m[1], locale === 'ar' ? which : which.toLowerCase()] : [which]
   }
   const loadingQueue = (chatPath === '/chat' && chats.isLoading) || (instalmentsPath !== null && instalments.isLoading) || (tasksPath !== null && tasks.isLoading)
 
@@ -263,15 +282,15 @@ export function TodayPage() {
                 </header>
                 <ul className="todo">
                   {g.items.map((it, n) => (
-                    <li key={it.key} className={it.urgent ? 'todo__row todo__row--urgent' : 'todo__row'}>
+                    <li key={it.key} className="todo__row">
                       <Avatar name={it.title} />
                       <span className="todo__main">
                         <bdi className="todo__title">{it.title}</bdi>
-                        {it.line && <span className="todo__line" dir="auto">{it.line}</span>}
+                        {it.line && <span className="todo__line">{it.line}</span>}
                       </span>
                       <span className="todo__facts">
                         {it.fact && <bdi className="todo__fact">{it.fact}</bdi>}
-                        {it.age && <span className={it.urgent ? 'todo__age todo__age--late' : 'todo__age'}>{it.age}</span>}
+                        {it.age && <span className={it.tone ? `todo__age todo__age--${it.tone}` : 'todo__age'}>{it.age}</span>}
                       </span>
                       {/* The page's one primary action: the first thing to do. */}
                       <Link to={it.to} className={g === groups[0] && n === 0 ? 'btn btn--sm btn--primary' : 'btn btn--sm'}>

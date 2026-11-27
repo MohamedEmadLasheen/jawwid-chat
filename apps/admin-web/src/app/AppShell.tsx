@@ -305,7 +305,7 @@ function RailItem({
         </p>
         {d.groups.map((g) => (
           <div className="side__menu-group" key={g.key} role={g.label ? 'group' : undefined} aria-label={g.label ? tx(g.label) : undefined}>
-            {g.label && (
+            {g.label && g.entries.length > 1 && (
               <p className="side__menu-heading" aria-hidden="true">
                 {tx(g.label)}
               </p>
@@ -645,7 +645,7 @@ function Topbar({
 }
 
 /** A tab's word under its icon: the first word of a long name. */
-const TAB_WORD: Record<string, string> = { 'لوحة المتابعة': 'المتابعة' }
+const TAB_WORD: Record<string, string> = { 'لوحة المتابعة': 'المتابعة', Conversations: 'Chats' }
 const shortLabel = (label: string) => TAB_WORD[label] ?? label.split(/\s+/)[0] ?? label
 
 /** Narrow screens: the first destinations along the bottom edge, and the rest behind More (the drawer). */
@@ -676,7 +676,14 @@ function Tabbar({ destinations, onMore }: { destinations: Destination[]; onMore:
           </Link>
         )
       })}
-      <button type="button" className="tabbar__item" onClick={onMore} aria-label={t('shell.openMenu')}>
+      <button
+        type="button"
+        className="tabbar__item"
+        onClick={onMore}
+        aria-label={t('shell.openMenu')}
+        // A page that has no tab of its own lives behind More: More is where you are.
+        data-current={pathname !== TODAY_PATH && !picked.some((d) => d.key === current) ? 'true' : undefined}
+      >
         <Icon name="menu" size={22} />
         <span aria-hidden="true">{tx({ en: 'More', ar: 'المزيد' })}</span>
       </button>

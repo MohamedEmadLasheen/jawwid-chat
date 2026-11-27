@@ -54,6 +54,8 @@ export function DayRuler({ rtl, ar }: { rtl: boolean; ar: boolean }) {
   const H = top + LANES * laneH + 10
   // Minutes to x, with the day flowing in the reading direction.
   const PAD = 14
+  // The day's first and last hours are anchored inward so their labels never run off the drawing.
+  const labelAnchor = (h: number) => (h === START ? (rtl ? 'end' : 'start') : h === END ? (rtl ? 'start' : 'end') : 'middle')
   const x = (m: number) => {
     const f = (m - START) / (END - START)
     return rtl ? W - PAD - f * (W - 2 * PAD) : PAD + f * (W - 2 * PAD)
@@ -66,7 +68,7 @@ export function DayRuler({ rtl, ar }: { rtl: boolean; ar: boolean }) {
       {hours.map((h) => (
         <g key={h}>
           <line x1={x(h)} x2={x(h)} y1={top - 6} y2={H - 6} stroke="#e9f1f1" strokeOpacity={0.09} />
-          <text x={x(h)} y={top - 14} fill="#d4e6e8" fontSize={13} textAnchor="middle" fontFamily="Readex Pro, sans-serif">
+          <text x={x(h)} y={top - 14} fill="#d4e6e8" fontSize={13} textAnchor={labelAnchor(h)} fontFamily="Readex Pro, sans-serif">
             {/* The academy's clock: "1 PM" / "1 م". */}
             {`${((h / 60 - 1) % 12) + 1} ${ar ? 'م' : 'PM'}`}
           </text>

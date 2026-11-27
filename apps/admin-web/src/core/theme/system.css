@@ -1093,3 +1093,8 @@ button.side__item.is-current::before { content: none; }
 .auth__help .auth__link { margin: 0; padding: 0; }
 /* On a phone the form is all there is. */
 @media (max-width: 899px) { .auth__brand { display: none; } }
+@media (max-width: 767px) {
+  .tabbar__item[data-current] { color: var(--teal); font-weight: 600; }
+  .tabbar__item[data-current]::before { content: ''; position: absolute; inset-block-start: -1px; inset-inline: 30%; block-size: 2px; background: var(--gold); }
+}
+.kbd { font-size: 12.5px; }

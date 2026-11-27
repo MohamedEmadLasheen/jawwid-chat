@@ -448,8 +448,8 @@ const PAGE_OF: Readonly<Record<string, string>> = { '/cases': '/tasks' }
 export function destinationForPath(destinations: Destination[], pathname: string): DestinationKey | null {
   const host = Object.entries(PAGE_OF).find(([p]) => pathname === p || pathname.startsWith(`${p}/`))
   if (host) pathname = host[1]
-  for (const d of destinations) {
-    if (entriesOf(d).some((e) => pathname === e.path || pathname.startsWith(`${e.path}/`))) return d.key
-  }
-  return null
+  const match = (path: string) => destinations.find((d) => entriesOf(d).some((e) => path === e.path || path.startsWith(`${e.path}/`)))?.key ?? null
+  // The super admin reaches the operator pages (/tasks, /payments) under the names its own
+  // places link to (/admin/tasks, /admin/payments): the place is the same.
+  return match(pathname) ?? (pathname.startsWith('/admin/') ? null : match(`/admin${pathname}`))
 }
