@@ -600,7 +600,7 @@ html[lang='ar'] .field__label { font-size: 13.5px; }
 .chip__count { font-variant-numeric: tabular-nums; }
 
 /* Tabs are words with a count and a teal underline. */
-.seg { gap: var(--space-5); border-block-end: 1px solid var(--hairline); }
+.seg { gap: var(--space-5); padding-inline: 0; border-block-end: 1px solid var(--hairline); }
 .seg__item {
   padding: 8px 0 9px;
   border-radius: 0;
@@ -953,7 +953,21 @@ html[lang='ar'] .dialog__title { font-weight: 700; }
 .menu__popover { box-shadow: var(--shadow-pop); border-color: var(--hairline); border-radius: var(--radius-lg); animation: fade var(--dur-fast) var(--ease-out); }
 .menu__item { font-size: var(--fs-sm); border-radius: var(--radius); }
 .menu__item .icon { color: var(--teal); }
-.nc-bell__count { background: var(--terracotta) !important; color: #fffefa !important; }
+/* The bell's count sits on its corner, clear of the bell. */
+.nc-bell__count {
+  inset-block-start: 1px;
+  inset-inline-end: -3px;
+  min-inline-size: 16px;
+  padding-inline: 3px;
+  border-radius: 8px;
+  box-shadow: 0 0 0 2px var(--paper);
+  background: var(--terracotta);
+  color: #fffefa;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+}
 
 /* ================================================================== auth */
 
