@@ -27,7 +27,8 @@ export function useDeviceName() {
 }
 
 /** A session that names neither its device nor its kind: the one a person cannot recognise. */
-const unrecognised = (s: SessionDto) => !readableDeviceName(s.deviceName) && !s.platform
+export const isUnrecognised = (s: SessionDto) => !readableDeviceName(s.deviceName) && !s.platform
+const unrecognised = isUnrecognised
 
 /** Two times closer than this are one moment: the sign-in is not said apart from the last activity. */
 const SAME_MOMENT_MS = 60 * 60_000

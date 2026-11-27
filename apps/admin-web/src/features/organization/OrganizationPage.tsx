@@ -201,11 +201,12 @@ function TeachersTab() {
     <QueryBoundary isLoading={data.isLoading} error={data.error} onRetry={() => void data.refetch()}>
       {view && (
         <section className="sheet dir-sheet org-sheet" aria-label={tx(T.tabTeachers)}>
+          {/* The answer first, the sheet's first line; then the rule the supervisors work under, quietly. */}
+          <p className="org-answer" role="status">
+            {view.unassigned > 0 ? `${countWords(view.unassigned, TEACHERS_WAITING, locale)}.` : tx(T.teachersAllAssigned)}
+          </p>
           <div className="sheet-bar org-bar">
-            <p className={view.unassigned > 0 ? 'org-rule org-rule--waiting' : 'org-rule'} role="status">
-              <strong>{view.unassigned > 0 ? `${countWords(view.unassigned, TEACHERS_WAITING, locale)}.` : tx(T.teachersAllAssigned)}</strong>{' '}
-              {tx(view.strictScope ? T.scopeOn : T.scopeOff)}
-            </p>
+            <p className="org-rule">{tx(view.strictScope ? T.scopeOn : T.scopeOff)}</p>
             <span className="dir-count">{plural(PLURAL.teachers, view.teachers.length)}</span>
           </div>
           {assign.error && <p className="field__error org-error" role="alert">{describeError(assign.error, locale)}</p>}
@@ -363,8 +364,13 @@ function ChildrenTab({ operations }: { operations: Department }) {
   return (
     <QueryBoundary isLoading={learners.isLoading} error={learners.error} onRetry={() => void learners.refetch()}>
       <section className="sheet dir-sheet org-sheet" aria-label={tx(T.tabChildren)}>
+        {/* The answer first, the sheet's first line at the start edge (as on every page here): how many children
+            nobody supervises, or that every child has someone. Asked for those with none and there are none, the
+            empty sheet says it instead. */}
+        {learners.data && !(filter === 'unassigned' && rows.length === 0) && (
+          <p className="org-answer">{unplaced > 0 ? `${countWords(unplaced, CHILDREN_WAITING, locale)}.` : tx(T.allChildrenAssigned)}</p>
+        )}
         <div className="sheet-bar org-bar">
-          {/* The answer first: how many children nobody supervises, or that every child has someone. */}
           <SearchField value={query} onChange={setQuery} label={tx(T.search)} clearLabel={t('common.cancel')} />
           <div className="org-filter">
             <label className="field__label" htmlFor="org-filter">{tx(T.filter)}</label>
@@ -376,14 +382,7 @@ function ChildrenTab({ operations }: { operations: Department }) {
               ))}
             </SearchableSelect>
           </div>
-          {/* The answer, at the bar's end with the count: how many children nobody supervises, or that every child has someone.
-              Asked for those with none and there are none, the empty sheet says it instead. */}
-          {learners.data && !(filter === 'unassigned' && rows.length === 0) && (
-            <p className={unplaced > 0 ? 'org-rule org-rule--end org-rule--waiting' : 'org-rule org-rule--end'}>
-              <strong>{unplaced > 0 ? `${countWords(unplaced, CHILDREN_WAITING, locale)}.` : tx(T.allChildrenAssigned)}</strong>{' '}
-              {rows.length > 0 && <span className="org-rule__count">{countWords(rows.length, CHILDREN_COUNT, locale)}</span>}
-            </p>
-          )}
+          {rows.length > 0 && <span className="dir-count">{countWords(rows.length, CHILDREN_COUNT, locale)}</span>}
         </div>
         {rows.length === 0 ? (
           // Asked for the children with no supervisor and there are none: that is the answer, said as one.
@@ -461,7 +460,7 @@ function ChildrenTab({ operations }: { operations: Department }) {
                             onClick={() => setEditing(l)}
                             aria-label={`${l.supervisor ? tx(T.change) : tx(T.assign)} — ${l.name}`}
                           >
-                            {l.supervisor ? tx(T.change) : tx(T.assign)}
+                            {l.supervisor ? tx(T.changeSupervisor) : tx(T.assign)}
                           </button>
                         }
                       />
@@ -571,10 +570,12 @@ function DepartmentSheet({ department }: { department: Department }) {
                       {backedBy.map((l) => (
                         <span key={l.id} className="org-backup-line">
                           <span>{fill(tx(T.backupIs), { name: <bdi>{l.backup!.name}</bdi> })}</span>
-                          <Badge tone={STATUS_TONE[l.status]}>
-                            {tx(STATUS_LABEL[l.status])}
-                            {l.status === 'active' && l.activeUntil ? ` ${tx(T.until, { date: date(l.activeUntil) })}` : ''}
-                          </Badge>
+                          {/* Where the link stands is said only when it is not the usual (dormant): covering now, or run out. */}
+                          {l.status !== 'dormant' && (
+                            <Badge tone={l.status === 'active' ? 'coverage' : STATUS_TONE[l.status]}>
+                              {l.status === 'active' && l.activeUntil ? tx(T.coveringNowUntil, { date: date(l.activeUntil) }) : tx(STATUS_LABEL[l.status])}
+                            </Badge>
+                          )}
                         </span>
                       ))}
                     </span>

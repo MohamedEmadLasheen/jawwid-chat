@@ -117,7 +117,7 @@ export function RolesPage() {
                                   <button type="button" className="sa-name md__open" aria-current={current ? 'true' : undefined} onClick={() => open(r.id)}>
                                     <strong>{roleName(r)}</strong>
                                   </button>
-                                  {r.template && !allTemplates && <Badge tone="outline">{tx(SA.template)}</Badge>}
+                                  {r.template && !allTemplates && <Badge tone="neutral">{tx(SA.template)}</Badge>}
                                   {r.archived && <Badge tone="neutral">{tx(SA.archived)}</Badge>}
                                   {!canDefine && r.grantable && <Badge tone="ok" dot>{tx(SA.youCanGrant)}</Badge>}
                                 </span>
@@ -216,7 +216,7 @@ function RolePane({
                 {r.key}
               </code>
             )}
-            {r.template && <Badge tone="outline">{tx(SA.template)}</Badge>}
+            {r.template && <Badge tone="neutral">{tx(SA.template)}</Badge>}
             {r.archived && <Badge tone="neutral">{tx(SA.archived)}</Badge>}
             {!canDefine && r.grantable && <Badge tone="ok" dot>{tx(SA.youCanGrant)}</Badge>}
           </span>

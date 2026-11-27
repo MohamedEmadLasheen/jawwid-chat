@@ -188,7 +188,6 @@ html[lang='ar'] .support .mast .page-header__title .badge { font-family: var(--f
   .support-bar { gap: 8px; padding: 10px var(--space-3); margin-block-end: var(--space-3); }
   .support-bar__what { flex: 1 1 auto; }
   .support-left > span { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 8px; }
-  .support-left__until { display: none; }
   .support-bar__actions { flex: 1 1 100%; }
   .support-bar__actions > .btn { flex: 1; justify-content: center; min-block-size: 44px; }
   .support-tabs .seg__item { min-block-size: 44px; }

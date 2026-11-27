@@ -44,9 +44,8 @@
    count is the one mark for "someone waits". */
 .org-rule { flex: 1 1 320px; margin: 0; max-inline-size: 96ch; font-size: var(--fs-sm); line-height: 1.5; color: var(--ink-muted); }
 .org-rule > strong { font-weight: 600; color: var(--ink); }
-/* At the bar's end, the answer and the count read as one line. */
-.org-rule--end { flex: 0 1 auto; margin-inline-start: auto; text-align: end; }
-.org-rule__count { color: var(--ink-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* The view's answer: the sheet's first line, at the start edge, in the reading size (as on Accounts). */
+.org-answer { margin: 0; padding: 14px var(--space-4) 0; font-size: var(--fs-md); font-weight: 600; line-height: 1.5; color: var(--ink); }
 /* A supervisor's backup: who, and where the link stands, on a line of its own under their place. */
 .org-backup-line { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; font-size: var(--fs-sm); color: var(--ink-muted); }
 .org-group__count { font-weight: 400; }

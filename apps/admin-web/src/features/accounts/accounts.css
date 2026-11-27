@@ -31,8 +31,8 @@
 html[lang='ar'] .acct-sub > :not(:last-child)::after { content: '،'; }
 .acct-child { white-space: nowrap; }
 
-/* The page's answer, one quiet line at the head of the sheet; amber dot when some need a hand. */
-.acct-answer { margin: 0; padding: 12px var(--space-4) 0; font-size: var(--fs-sm); font-weight: 600; color: var(--ink); }
+/* The page's answer: the sheet's first line, at the start edge, in the reading size; an amber dot when some need a hand. */
+.acct-answer { margin: 0; padding: 14px var(--space-4) 0; font-size: var(--fs-md); font-weight: 600; line-height: 1.5; color: var(--ink); }
 .acct-answer--need::before { content: ''; display: inline-block; inline-size: 8px; block-size: 8px; margin-inline-end: 8px; border-radius: 50%; background: var(--waiting); vertical-align: 0.1em; }
 /* A support session still open: said at the top, with the way back in. */
 .acct-live { display: flex; flex-wrap: wrap; align-items: center; gap: 8px var(--space-3); margin-block-end: var(--space-4); }
@@ -57,7 +57,7 @@ html[lang='ar'] .acct-sub > :not(:last-child)::after { content: '،'; }
 .acct-grants .dir-cell-who { inline-size: 34%; }
 .acct-grants .dir-cell-quiet { white-space: nowrap; }
 .acct-grant--over .dir-name { font-weight: 500; color: var(--ink-muted); }
-.acct-cell-person { color: var(--ink); font-weight: 500; }
+.acct-cell-person { color: var(--ink); }
 /* Ending someone's access is plain at rest and red only under the pointer. */
 .acct-revoke.btn:hover:not(:disabled), .acct-revoke.btn:focus-visible { border-color: var(--urgent); background: var(--surface); color: var(--urgent); }
 .acct-table .dir-row:hover .row-actions2 > .acct-revoke.btn { border-color: var(--urgent); color: var(--urgent); }

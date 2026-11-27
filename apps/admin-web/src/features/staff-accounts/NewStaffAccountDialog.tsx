@@ -292,7 +292,7 @@ export function PermissionPreview({ roles, catalogue }: { roles: AccessRole[]; c
 export function RiskBadge({ risk }: { risk: string }) {
   const tx = useCopy()
   const label = RISK[risk]
-  return label ? <Badge tone="outline">{tx(label)}</Badge> : null
+  return label ? <Badge tone="neutral">{tx(label)}</Badge> : null
 }
 
 /** Keys grouped by page in catalogue order; a key the catalogue does not know is shown by its key. */

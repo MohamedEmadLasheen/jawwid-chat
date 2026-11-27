@@ -8,10 +8,10 @@ import { Icon } from '@/shared/components/Icon'
 import { PageHeader } from '@/shared/components/PageHeader'
 import { QueryBoundary } from '@/shared/components/States'
 import { mySessionsApi, sessionKeys, type SessionDto } from './api'
-import { D, DEVICES, SESSIONS, isSessionGone, sessionError, useCopy } from './copy'
+import { D, DEVICES, isSessionGone, sessionError, useCopy } from './copy'
 import { countWords } from '@/features/instalments/copy'
 import { T as PROFILE } from '@/features/profile/copy'
-import { SessionList, useDeviceName } from './SessionList'
+import { SessionList, isUnrecognised, useDeviceName } from './SessionList'
 import './devices.css'
 
 type Pending = { act: 'one'; session: SessionDto } | { act: 'others' }
@@ -65,8 +65,8 @@ export function MyDevices() {
             </h2>
             {sessions.length > 0 && (
               <span className="sheet__count">
-                {tx(D.summary, {
-                  sessions: countWords(sessions.length, SESSIONS, locale),
+                {/* The answer: on how many devices, and whether one of them cannot be recognised. */}
+                {tx(sessions.some(isUnrecognised) ? D.summaryUnknown : D.summary, {
                   devices: countWords(new Set(sessions.map(deviceName)).size, DEVICES, locale),
                 })}
               </span>

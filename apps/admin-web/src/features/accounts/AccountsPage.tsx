@@ -156,7 +156,7 @@ export function AccountsPage({ eyebrow }: { eyebrow?: string }) {
                       </span>
                     </td>
                     <td className={a.lastLoginAt ? 'dir-cell-quiet' : 'dir-cell-quiet dir-cell-quiet--none'} data-label={tx(A.lastLogin)}>
-                      {a.lastLoginAt ? <time dateTime={a.lastLoginAt} title={dateTime(a.lastLoginAt)}>{when(a.lastLoginAt, { start: true })}</time> : <span className="dir-none">{tx(A.never)}</span>}
+                      {a.lastLoginAt ? <time dateTime={a.lastLoginAt} title={dateTime(a.lastLoginAt)}>{when(a.lastLoginAt, { start: true })}</time> : <span className="dir-none" title={tx(A.never)}><span aria-hidden="true">—</span><span className="sr-only">{tx(A.never)}</span></span>}
                     </td>
                     <td className="cell-actions">
                       <OneActionAndMore

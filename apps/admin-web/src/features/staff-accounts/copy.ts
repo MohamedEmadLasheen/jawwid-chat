@@ -1,5 +1,6 @@
 import { ApiError } from '@/core/api/errors'
 import type { Pair } from '@/features/organization/copy'
+import type { CountForms } from '@/features/instalments/copy'
 
 export { useCopy, type Pair } from '@/features/organization/copy'
 
@@ -124,7 +125,7 @@ export const SA = {
   accessNone: { ar: 'لا صفحات متاحة لهذا الحساب.', en: 'This account can open no pages.' },
   srcSuperAdmin: { ar: 'صلاحية المدير الأعلى', en: 'Super admin' },
   srcTierDefault: { ar: 'الافتراضي لمستوى الحساب وقسمه', en: 'Default for its tier and department' },
-  allFrom: { ar: 'كلها من مصدر واحد: {source}.', en: 'All of it comes one way: {source}.' },
+  allFrom: { ar: 'مصدرها كلها: {source}.', en: 'Where all of it comes from: {source}.' },
   srcRole: { ar: 'دور: {role}', en: 'Role: {role}' },
   srcGranted: { ar: 'منحه {by} في {at}', en: 'granted by {by} on {at}' },
   grantPreviewTitle: { ar: 'ماذا سيتغير', en: 'What this would change' },
@@ -166,6 +167,7 @@ export const SA = {
   maxTier: { ar: 'أعلى مستوى', en: 'Highest tier' },
   permissions: { ar: 'الصلاحيات', en: 'Permissions' },
   members: { ar: 'الأعضاء', en: 'Members' },
+  allSetUp: { ar: 'كل الحسابات مُعَدّة.', en: 'Every account is set up.' },
   noHolders: { ar: 'لا أحد بعد', en: 'No one yet' },
   noHoldersYet: {
     ar: 'لا يحمل أحد هذا الدور بعد. يُمنح الدور من حسابات الموظفين.',
@@ -214,6 +216,12 @@ export const SA = {
   },
   grantedBy: { ar: '{name}، منحه {by}', en: '{name}, granted by {by}' },
 } satisfies Record<string, Pair>
+
+/** How many staff accounts are not set up yet (a first sign-in code waiting, or none sent): they lead the list. */
+export const NOT_SET_UP: CountForms = {
+  en: ['{n} account is not set up yet: it leads the list.', '{n} accounts are not set up yet: they lead the list.'],
+  ar: ['حساب واحد لم يُعَدّ بعد، وهو في أول القائمة.', 'حسابان لم يُعَدّا بعد، وهما في أول القائمة.', '{n} حسابات لم تُعَدّ بعد، وهي في أول القائمة.', '{n} حسابًا لم يُعَدّ بعد، وهي في أول القائمة.'],
+}
 
 export const TIER: Record<string, Pair> = {
   specialist: { ar: 'متخصص', en: 'Specialist' },

@@ -20,7 +20,8 @@ import { A } from '@/features/accounts/copy'
 import { Fact } from '@/features/profiles/RecordParts'
 import { useWhen } from '@/features/devices/when'
 import { roleFitsTier, staffAccountKeys, type AccessRole, type StaffAccount, type StaffAccountRole, type StaffFirstLogin } from './api'
-import { SA, STATUS, TIER, localized, pageLabel, useCopy } from './copy'
+import { NOT_SET_UP, SA, STATUS, TIER, localized, pageLabel, useCopy } from './copy'
+import { countWords } from '@/features/instalments/copy'
 import type { Deny, HeldKey } from './api'
 import { useAccessPreview, useAccessRoles, useAccessView, useDeny, useDenies, useGrantRole, useLiftDeny, useRevokeRole, useSetupCode, useStaffAccount, useStaffAccounts } from './hooks'
 import { useAccountsTabs } from './AccountsTabs'
@@ -85,6 +86,7 @@ export function StaffAccountsPage() {
   const q = query.trim().toLocaleLowerCase()
   // The accounts not set up yet lead the list (a code still waiting first); the rest keep the server's order.
   const setupRank = (a: StaffAccount) => (a.setupPending ? 0 : a.status === 'provisioned' ? 1 : 2)
+  const notSetUp = accounts.filter((a) => setupRank(a) < 2).length
   const listed = accounts
     .map((a, i) => [a, i] as const)
     .filter(
@@ -123,6 +125,12 @@ export function StaffAccountsPage() {
             missing={tx(SA.notInList)}
             list={
               <section className="sheet dir-sheet md-sheet" aria-label={tx(SA.title)}>
+                {/* The answer first: how many accounts are not set up yet (they lead the list), or that all are. */}
+                {accounts.length > 0 && (
+                  <p className={notSetUp > 0 ? 'acct-answer acct-answer--need' : 'acct-answer'}>
+                    {notSetUp > 0 ? countWords(notSetUp, NOT_SET_UP, locale) : tx(SA.allSetUp)}
+                  </p>
+                )}
                 <div className="sheet-bar md-bar">
                   <SearchField value={query} onChange={setQuery} label={tx(SA.search)} clearLabel={t('common.cancel')} />
                   <FilterChips
