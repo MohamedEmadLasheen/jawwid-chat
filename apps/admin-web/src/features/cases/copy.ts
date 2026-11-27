@@ -34,6 +34,9 @@ export const C = {
   save: { en: 'Save', ar: 'حفظ' },
   clearDue: { en: 'Clear', ar: 'مسح' },
   close: { en: 'Close', ar: 'إغلاق' },
+  pastDue: { en: 'Past due', ar: 'تجاوزت موعدها' },
+  factOpenedBy: { en: 'Opened by', ar: 'فتحها' },
+  moreActions: { en: 'More actions: {name}', ar: 'إجراءات أخرى: {name}' },
   // Opening
   escalate: { en: 'Escalate', ar: 'تصعيد' },
   caseTitle: { en: 'Title', ar: 'العنوان' },
@@ -45,6 +48,14 @@ export const C = {
   ownerIs: { en: 'Owner: {name}.', ar: 'المسؤول: {name}.' },
   openInEscalations: { en: 'Open in Escalations', ar: 'فتح في التصعيدات' },
   sent: { en: 'Sent. It is in Escalations, under "Opened by me".', ar: 'أُرسلت. تجدها في التصعيدات، ضمن "فتحتها أنا".' },
+} satisfies Record<string, Pair>
+
+/** The queue's groups: where a case stands. */
+export const GROUP_LABEL = {
+  past: { en: 'Past due', ar: 'تجاوزت موعدها' },
+  open: { en: 'Open', ar: 'مفتوحة' },
+  progress: { en: 'In progress', ar: 'قيد العمل' },
+  closed: { en: 'Closed', ar: 'مغلقة' },
 } satisfies Record<string, Pair>
 
 export const TAB_LABEL: Record<CaseTab, Pair> = {

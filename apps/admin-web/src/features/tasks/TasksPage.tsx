@@ -7,7 +7,12 @@ import { holdsAny, isSuperAdmin } from '@/core/permissions/capabilities'
 import { academyWallClockToIso, ACADEMY_ZONE, clock12In, dayMonthIn, isoToAcademyWallClock } from '@/core/time/academyTime'
 import { Badge } from '@/shared/components/Badge'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
-import { PageHeader } from '@/shared/components/PageHeader'
+import { PageHeader, type MastFigure } from '@/shared/components/PageHeader'
+import { RowActions } from '@/shared/components/RowActions'
+import type { MenuItem } from '@/shared/components/Menu'
+import { relativeTime } from '@/features/admin/copy'
+import { dashboardApi, dashboardKeys } from '@/features/dashboard/api'
+import { academyToday, addDays } from '@/features/schedule/viewState'
 import { ReasonDialog } from '@/shared/components/ReasonDialog'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
 import { ApiError } from '@/core/api/errors'
@@ -24,11 +29,11 @@ import {
   type TaskSummary,
   type TaskView,
 } from './api'
-import { C, DEPARTMENT_LABEL, EVENT_LABEL, LEVEL_LABEL, SOURCE_LABEL, STATE_LABEL, TAB_LABEL, useCopy } from './copy'
+import { C, DEPARTMENT_LABEL, EVENT_LABEL, GROUP_LABEL, LEVEL_LABEL, SOURCE_LABEL, STATE_LABEL, TAB_LABEL, useCopy } from './copy'
 import { sourceLink, stateOf, STATE_TONE, titleOf } from './format'
 import { FinanceTag, PriorityChip } from './PriorityChip'
 import { SearchableSelect } from '@/shared/components/SearchableSelect'
-import { TasksAreaTabs } from './TasksAreaTabs'
+import { CASES_ACCESS_KEYS, TasksAreaTabs } from './TasksAreaTabs'
 import './tasks.css'
 
 type Tab = TaskView | 'closed'
@@ -64,17 +69,34 @@ function useTabs(): { tabs: Tab[]; closedViews: TaskView[] } {
   return { tabs: [...views, 'closed'], closedViews: views.filter((v) => v !== 'decisions') }
 }
 
+/** When a task is due, as the list groups it. Overdue is the server's own flag, never recomputed. */
+type Group = 'overdue' | 'today' | 'week' | 'later' | 'none'
+const GROUPS: Group[] = ['overdue', 'today', 'week', 'later', 'none']
+function groupOf(t: Pick<TaskSummary, 'overdue' | 'dueAt'>, today: string): Group {
+  if (t.overdue) return 'overdue'
+  if (!t.dueAt) return 'none'
+  const day = isoToAcademyWallClock(t.dueAt).date
+  if (day <= today) return 'today'
+  return day <= addDays(today, 7) ? 'week' : 'later'
+}
+
 /**
  * PD-47: one Tasks page for every staff member. Mine, the team's (read-only
  * for a teacher's supervisor), the decisions waiting on the viewer, everything
- * (the super admin), and the closed ones with their history. Most urgent first,
- * in the server's order; nothing here decides who sees or may do what.
+ * (the super admin), and the closed ones with their history. Nothing here
+ * decides who sees or may do what.
+ *
+ * The page is a queue and an inspector: the masthead says how much of the
+ * viewer's own work is late or due today; the list is grouped by when a task
+ * is due (overdue first, in the server's order inside each group); the open
+ * task stays on screen beside it.
  *
  * Deep links: ?tab=, ?task=<id>, ?overdue=true, ?level=, ?category=.
  */
 export function TasksPage({ eyebrow }: { eyebrow?: string }) {
   const tx = useCopy()
   const { staff } = useSession()
+  const { number } = useI18n()
   const [params, setParams] = useSearchParams()
   const { tabs, closedViews } = useTabs()
   const asked = params.get('tab') as Tab | null
@@ -90,6 +112,8 @@ export function TasksPage({ eyebrow }: { eyebrow?: string }) {
   const [unmanaged, setUnmanaged] = useState(params.get('unmanaged') === 'true')
   const [openId, setOpenId] = useState<string | null>(params.get('task'))
   const [creating, setCreating] = useState(false)
+  // The filters fold behind one button; a view that arrives filtered shows them.
+  const [filtersOpen, setFiltersOpen] = useState(() => !!(params.get('level') || params.get('category') || params.get('overdue')))
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([])
   const { dir } = useI18n()
 
@@ -143,112 +167,197 @@ export function TasksPage({ eyebrow }: { eyebrow?: string }) {
   })
   const items = list.data?.pages.flatMap((p) => p.items) ?? []
   const canCreate = holdsAny(staff, ['tasks.create'])
+  const hasCases = holdsAny(staff, CASES_ACCESS_KEYS)
+  const today = academyToday()
+
+  // The masthead counts the viewer's own open tasks. They come from the unfiltered
+  // Mine list when all of it is loaded (the same request as the Mine view), else
+  // from the Dashboard's task counts; a figure neither can give is left out.
+  const mineQuery: ListQuery = useMemo(() => ({ view: 'mine', state: 'open' }), [])
+  const mine = useInfiniteQuery({
+    queryKey: keys.list(mineQuery),
+    queryFn: ({ pageParam }) => tasksApi.list(mineQuery, pageParam),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
+    staleTime: 15_000,
+  })
+  const counted = useQuery({ queryKey: dashboardKeys.section('tasks'), queryFn: () => dashboardApi.section('tasks'), staleTime: 60_000, retry: false })
+  const mineItems = mine.data?.pages.flatMap((p) => p.items) ?? []
+  const mineWhole = !!mine.data && !mine.hasNextPage
+  const tile = (key: string) => counted.data?.tiles.find((x) => x.key === key)
+  const figures: MastFigure[] = []
+  const overdueCount = mineWhole ? mineItems.filter((t) => t.overdue).length : tile('tasks.mine_overdue')?.count
+  if (overdueCount !== undefined) {
+    figures.push({
+      key: 'overdue',
+      label: tx(C.figOverdue),
+      value: number(overdueCount),
+      tone: overdueCount > 0 ? 'urgent' : 'quiet',
+      pressed: tab === 'mine' && overdue,
+      onClick: () => {
+        pick('mine')
+        setOverdue(!(tab === 'mine' && overdue))
+      },
+    })
+  }
+  if (mineWhole) {
+    const dueToday = mineItems.filter((t) => groupOf(t, today) === 'today').length
+    figures.push({ key: 'today', label: tx(C.figToday), value: number(dueToday), tone: dueToday > 0 ? 'key' : 'quiet' })
+  }
+  const openCount = mineWhole ? mineItems.length : tile('tasks.mine_open')?.count
+  if (openCount !== undefined) figures.push({ key: 'open', label: tx(C.figOpen), value: number(openCount) })
+  const waiting = tabs.includes('decisions') ? tile('tasks.awaiting_decision') : undefined
+  if (waiting) {
+    figures.push({
+      key: 'decisions',
+      label: tx(C.figDecisions),
+      value: waiting.capped ? `${number(waiting.count)}+` : number(waiting.count),
+      pressed: tab === 'decisions',
+      onClick: () => pick('decisions'),
+    })
+  }
+
+  const filterCount = (level ? 1 : 0) + (category ? 1 : 0) + (overdue && tab !== 'closed' ? 1 : 0) + (tab === 'closed' && closedView !== 'mine' ? 1 : 0)
+  const grouped = GROUPS.map((g) => ({ group: g, rows: items.filter((t) => groupOf(t, today) === g) })).filter((g) => g.rows.length > 0)
+  const row = (t: TaskSummary) => (
+    <TaskRow key={t.id} task={t} showAssignee={query.view !== 'mine'} selected={t.id === openId} onOpen={() => setOpenId(t.id)} />
+  )
 
   return (
     <div className="page tasks">
       <div className="page__inner">
-      <TasksAreaTabs />
-      <PageHeader
-        eyebrow={eyebrow}
-        title={tx(C.title)}
-        subtitle={tx(C.subtitle)}
-        actions={
-          canCreate ? (
-            <button type="button" className="btn btn--primary" onClick={() => setCreating(true)}>
-              {tx(C.newTask)}
-            </button>
-          ) : undefined
-        }
-      />
-      <div className="tasks__bar">
-        <div role="tablist" className="tasks__tabs" aria-label={tx(C.title)}>
-          {tabs.map((t, i) => (
-            <button
-              key={t}
-              ref={(el) => {
-                tabRefs.current[i] = el
-              }}
-              id={`tasks-tab-${t}`}
-              type="button"
-              role="tab"
-              aria-selected={tab === t}
-              aria-controls="tasks-tabpanel"
-              tabIndex={tab === t ? 0 : -1}
-              className="tasks__tab"
-              onClick={() => pick(t)}
-              onKeyDown={(e) => onTabKey(e, i)}
-            >
-              {tx(TAB_LABEL[t])}
-            </button>
-          ))}
-        </div>
-        <div className="tasks__filters">
-          {tab === 'closed' && closedViews.length > 1 && (
-            <SearchableSelect className="select" aria-label={tx(C.whose)} value={closedView} onValueChange={(v) => setClosedView(v as TaskView)}>
-              {closedViews.map((v) => (
-                <option key={v} value={v}>{tx(TAB_LABEL[v])}</option>
-              ))}
-            </SearchableSelect>
-          )}
-          <SearchableSelect className="select" aria-label={tx(C.level)} value={level} onValueChange={(v) => setLevel(v as Level | '')}>
-            <option value="">{tx(C.anyLevel)}</option>
-            {LEVELS.map((l) => (
-              <option key={l} value={l}>{tx(LEVEL_LABEL[l])}</option>
-            ))}
-          </SearchableSelect>
-          <SearchableSelect className="select" aria-label={tx(C.kind)} value={category} onValueChange={(v) => setCategory(v as Category | '')}>
-            <option value="">{tx(C.anyKind)}</option>
-            <option value="financial">{tx({ en: 'Finance', ar: 'مالية' })}</option>
-            <option value="operational">{tx(C.operational)}</option>
-          </SearchableSelect>
-          {tab !== 'closed' && (
-            <label className="tasks__check">
-              <input type="checkbox" checked={overdue} onChange={(e) => setOverdue(e.target.checked)} /> {tx(C.overdueOnly)}
-            </label>
-          )}
-          {gone && (
-            <button type="button" className="btn btn--ghost" onClick={() => setGone(false)}>
-              {tx(C.clearFilter, { filter: tx(C.goneOnly) })}
-            </button>
-          )}
-          {unmanaged && (
-            <button type="button" className="btn btn--ghost" onClick={() => setUnmanaged(false)}>
-              {tx(C.clearFilter, { filter: tx(C.unmanagedOnly) })}
-            </button>
-          )}
-        </div>
-      </div>
-      <div className="tasks__body">
-        <div id="tasks-tabpanel" role="tabpanel" aria-labelledby={`tasks-tab-${tab}`}>
-          <QueryBoundary isLoading={list.isLoading} error={list.error} onRetry={() => list.refetch()}>
-            {items.length === 0 && (
-              <EmptyState
-                title={tx(tab === 'closed' ? C.emptyClosed : C.empty)}
-                hint={tx(tab === 'closed' ? C.emptyClosedHint : C.emptyHint)}
-                action={
-                  canCreate && tab !== 'closed' ? (
-                    <button type="button" className="btn btn--sm" onClick={() => setCreating(true)}>
-                      {tx(C.emptyAction)}
-                    </button>
-                  ) : undefined
-                }
-              />
-            )}
-            <ul className="tasks__list ruled">
-              {items.map((t) => (
-                <TaskRow key={t.id} task={t} showAssignee={query.view !== 'mine'} selected={t.id === openId} onOpen={() => setOpenId(t.id)} />
-              ))}
-            </ul>
-            {list.hasNextPage && (
-              <button type="button" className="btn tasks__more" disabled={list.isFetchingNextPage} onClick={() => void list.fetchNextPage()}>
-                {tx(C.loadMore)}
+        <PageHeader
+          eyebrow={eyebrow}
+          title={tx(C.title)}
+          subtitle={tx(C.subtitle)}
+          figures={figures}
+          actions={
+            canCreate ? (
+              <button type="button" className="btn btn--primary" onClick={() => setCreating(true)}>
+                <Icon name="plus" size={16} />
+                {tx(C.newTask)}
               </button>
+            ) : undefined
+          }
+          tabs={hasCases ? <TasksAreaTabs /> : undefined}
+        />
+        <div className={openId ? 'tq tq--open' : 'tq'}>
+          <div className="sheet tq__sheet">
+            <div className="sheet-bar">
+              <div role="tablist" className="tasks__tabs" aria-label={tx(C.title)}>
+                {tabs.map((t, i) => (
+                  <button
+                    key={t}
+                    ref={(el) => {
+                      tabRefs.current[i] = el
+                    }}
+                    id={`tasks-tab-${t}`}
+                    type="button"
+                    role="tab"
+                    aria-selected={tab === t}
+                    aria-controls="tasks-tabpanel"
+                    tabIndex={tab === t ? 0 : -1}
+                    className="tasks__tab"
+                    onClick={() => pick(t)}
+                    onKeyDown={(e) => onTabKey(e, i)}
+                  >
+                    {tx(TAB_LABEL[t])}
+                  </button>
+                ))}
+              </div>
+              <div className="sheet-bar__end">
+                {gone && (
+                  <button type="button" className="chip tq__clear" aria-label={tx(C.clearFilter, { filter: tx(C.goneOnly) })} onClick={() => setGone(false)}>
+                    {tx(C.goneOnly)}
+                    <Icon name="close" size={14} />
+                  </button>
+                )}
+                {unmanaged && (
+                  <button type="button" className="chip tq__clear" aria-label={tx(C.clearFilter, { filter: tx(C.unmanagedOnly) })} onClick={() => setUnmanaged(false)}>
+                    {tx(C.unmanagedOnly)}
+                    <Icon name="close" size={14} />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="btn btn--sm tq__filter-toggle"
+                  aria-expanded={filtersOpen}
+                  aria-controls="tasks-filters"
+                  onClick={() => setFiltersOpen((v) => !v)}
+                >
+                  <Icon name="filter" size={16} />
+                  {tx(C.filters)}
+                  {filterCount > 0 && <span className="count">{number(filterCount)}</span>}
+                </button>
+              </div>
+            </div>
+            {filtersOpen && (
+              <div className="sheet-bar tasks__filters" id="tasks-filters">
+                {tab === 'closed' && closedViews.length > 1 && (
+                  <SearchableSelect className="select" aria-label={tx(C.whose)} value={closedView} onValueChange={(v) => setClosedView(v as TaskView)}>
+                    {closedViews.map((v) => (
+                      <option key={v} value={v}>{tx(TAB_LABEL[v])}</option>
+                    ))}
+                  </SearchableSelect>
+                )}
+                <SearchableSelect className="select" aria-label={tx(C.level)} value={level} onValueChange={(v) => setLevel(v as Level | '')}>
+                  <option value="">{tx(C.anyLevel)}</option>
+                  {LEVELS.map((l) => (
+                    <option key={l} value={l}>{tx(LEVEL_LABEL[l])}</option>
+                  ))}
+                </SearchableSelect>
+                <SearchableSelect className="select" aria-label={tx(C.kind)} value={category} onValueChange={(v) => setCategory(v as Category | '')}>
+                  <option value="">{tx(C.anyKind)}</option>
+                  <option value="financial">{tx({ en: 'Finance', ar: 'مالية' })}</option>
+                  <option value="operational">{tx(C.operational)}</option>
+                </SearchableSelect>
+                {tab !== 'closed' && (
+                  <label className="tasks__check">
+                    <input type="checkbox" checked={overdue} onChange={(e) => setOverdue(e.target.checked)} /> {tx(C.overdueOnly)}
+                  </label>
+                )}
+              </div>
             )}
-          </QueryBoundary>
+            <div id="tasks-tabpanel" role="tabpanel" aria-labelledby={`tasks-tab-${tab}`}>
+              <QueryBoundary isLoading={list.isLoading} error={list.error} onRetry={() => list.refetch()}>
+                {items.length === 0 ? (
+                  <EmptyState
+                    title={tx(tab === 'closed' ? C.emptyClosed : C.empty)}
+                    hint={tx(tab === 'closed' ? C.emptyClosedHint : C.emptyHint)}
+                    action={
+                      canCreate && tab !== 'closed' ? (
+                        <button type="button" className="btn btn--sm" onClick={() => setCreating(true)}>
+                          {tx(C.emptyAction)}
+                        </button>
+                      ) : undefined
+                    }
+                  />
+                ) : tab === 'closed' ? (
+                  <ul className="tq-rows">{items.map(row)}</ul>
+                ) : (
+                  grouped.map(({ group, rows }) => (
+                    <section key={group} className={`tq-group tq-group--${group}`} aria-labelledby={`tasks-group-${group}`}>
+                      <h2 className="tq-group__head" id={`tasks-group-${group}`}>
+                        <span>{tx(GROUP_LABEL[group])}</span>
+                        <span className={group === 'overdue' ? 'count count--urgent' : 'count count--quiet'}>{number(rows.length)}</span>
+                      </h2>
+                      <ul className="tq-rows">{rows.map(row)}</ul>
+                    </section>
+                  ))
+                )}
+                {list.hasNextPage && (
+                  <div className="tq__more">
+                    <button type="button" className="btn btn--sm tasks__more" disabled={list.isFetchingNextPage} onClick={() => void list.fetchNextPage()}>
+                      {tx(C.loadMore)}
+                    </button>
+                  </div>
+                )}
+              </QueryBoundary>
+            </div>
+          </div>
+          {/* Keyed by the task: a draft, a dialog or a date typed for one task never carries to the next. */}
+          {openId && <TaskPanel key={openId} id={openId} onClose={() => setOpenId(null)} />}
         </div>
-        {/* Keyed by the task: a draft, a dialog or a date typed for one task never carries to the next. */}
-        {openId && <TaskPanel key={openId} id={openId} onClose={() => setOpenId(null)} />}
-      </div>
       </div>
       {creating && <NewTaskDialog onClose={() => setCreating(false)} />}
     </div>
@@ -268,57 +377,63 @@ function OverdueMark() {
 
 function TaskRow({ task, showAssignee, selected, onOpen }: { task: TaskSummary; showAssignee: boolean; selected: boolean; onOpen: () => void }) {
   const tx = useCopy()
-  const { duration } = useI18n()
+  const { duration, locale } = useI18n()
   const when = useWhen()
   const title = useTitle()
   const state = stateOf(task)
   const closed = task.state === 'completed' || task.state === 'removed'
   const link = sourceLink(task)
   const late = !closed && task.overdue
+  const name = title(task)
   return (
-    <li className={`tasks__row${selected ? ' tasks__row--selected' : ''}${closed ? ' tasks__row--closed' : ''}`}>
-      <div className="tasks__level">{closed ? <Badge tone={STATE_TONE[state]}>{tx(STATE_LABEL[state])}</Badge> : <PriorityChip task={task} />}</div>
-      <div className="tasks__main">
+    <li className={`tq-row${selected ? ' tq-row--selected' : ''}${closed ? ' tq-row--closed' : ''}${late ? ' tq-row--late' : ''}`}>
+      <div className="tq-row__main">
         <button type="button" className="tasks__title" dir="auto" aria-current={selected ? 'true' : undefined} onClick={onOpen}>
-          {title(task)}
+          {name}
         </button>
-        <div className="tasks__meta">
+        <div className="tq-row__sub">
           {/* Where it came from: the kind of work for a system task, the person for one somebody gave. */}
           {task.source ? (
             <span className="tasks__source">{tx(SOURCE_LABEL[task.source.type])}</span>
           ) : (
             task.createdBy && <span className="tasks__source" dir="auto">{tx(C.createdBy, { name: task.createdBy.name })}</span>
           )}
-          {task.category === 'financial' && <FinanceTag />}
           {showAssignee && <span dir="auto">{tx(C.assignedTo, { name: task.assigneeName })}</span>}
-          {!closed && <span>{tx(C.age, { ago: duration(task.createdAt) })}</span>}
+          {task.category === 'financial' && <FinanceTag />}
+          {!closed && state !== 'open' && <Badge tone={STATE_TONE[state]}>{tx(STATE_LABEL[state])}</Badge>}
           {task.needsReassignment && !closed && <Badge tone="danger">{tx(C.assigneeLeft)}</Badge>}
         </div>
       </div>
-      <div className={`tasks__when${late ? ' tasks__when--late' : ''}`}>
+      {/* The one fact a queue is read for: how long until it is due, or how long since. */}
+      <div className="tq-row__when">
         {closed ? (
-          task.closedAt && <span>{tx(C.closedOn, { when: when(task.closedAt) })}</span>
-        ) : (
           <>
-            <span>{task.dueAt ? tx(C.due, { when: when(task.dueAt) }) : tx(C.noDue)}</span>
-            {late && (
-              <span className="tasks__late">
-                {task.priorityReason !== 'overdue' && <OverdueMark />}
-                {task.dueAt && <span>{tx(C.dueAgo, { ago: duration(task.dueAt) })}</span>}
-              </span>
-            )}
+            <Badge tone={STATE_TONE[state]}>{tx(STATE_LABEL[state])}</Badge>
+            {task.closedAt && <span className="tq-row__date">{tx(C.closedOn, { when: when(task.closedAt) })}</span>}
           </>
+        ) : task.dueAt ? (
+          <>
+            <span className="tq-row__age">
+              {late && task.priorityReason !== 'overdue' && <OverdueMark />}
+              {late ? tx(C.dueAgo, { ago: duration(task.dueAt) }) : relativeTime(task.dueAt, locale)}
+            </span>
+            <span className="tq-row__date">{tx(C.due, { when: when(task.dueAt) })}</span>
+          </>
+        ) : (
+          <span className="tq-row__date">{tx(C.noDue)}</span>
         )}
       </div>
-      <div className="tasks__state">{!closed && <Badge tone={STATE_TONE[state]}>{tx(STATE_LABEL[state])}</Badge>}</div>
-      <div className="tasks__go">
-        {link && !closed && (
-          <Link className="tasks__open" to={link} aria-label={`${tx(C.openSource)}: ${title(task)}`}>
-            {tx(C.openSource)}
-            <Icon name="chevronForward" size={16} />
-          </Link>
-        )}
-      </div>
+      <div className="tq-row__level">{!closed && <PriorityChip task={task} />}</div>
+      <RowActions
+        label={tx(C.moreActions, { name })}
+        primary={
+          link && !closed ? (
+            <Link className="btn btn--sm" to={link} aria-label={`${tx(C.openSource)}: ${name}`}>
+              {tx(C.openSource)}
+            </Link>
+          ) : undefined
+        }
+      />
     </li>
   )
 }
@@ -349,134 +464,182 @@ function TaskPanel({ id, onClose }: { id: string; onClose: () => void }) {
   // is not a failure to retry.
   if (one.error instanceof ApiError && (/TASK_NOT_FOUND$/.test(one.error.code) || one.error.status === 404)) {
     return (
-      <section className="tasks__panel" aria-label={tx(C.title)}>
-        <div className="tasks__panel-head">
+      <section className="tasks__panel sheet insp" aria-label={tx(C.title)}>
+        <div className="insp__head">
+          <div className="insp__top">
+            <span />
+            <CloseButton onClose={onClose} />
+          </div>
           <p className="tasks__text" role="status">{tx(C.notFound)}</p>
-          <button type="button" className="btn btn--ghost btn--sm" onClick={onClose}>{tx(C.close)}</button>
         </div>
       </section>
     )
   }
 
+  const live = !!t && t.state !== 'completed' && t.state !== 'removed'
+  // One thing to do, stated; everything else the server allows is behind "⋯".
+  const secondary: Array<{ key: 'out_of_scope' | 'return' | 'reassign' | 'remove'; label: string; icon: MenuItem['icon']; danger?: boolean }> = [
+    ...(can.has('reassign') ? [{ key: 'reassign' as const, label: tx(C.reassign), icon: 'swap' as const }] : []),
+    ...(can.has('return') ? [{ key: 'return' as const, label: tx(C.returnTask), icon: 'undo' as const }] : []),
+    ...(can.has('out_of_scope') ? [{ key: 'out_of_scope' as const, label: tx(C.outOfScope), icon: 'prohibit' as const }] : []),
+    ...(can.has('remove') ? [{ key: 'remove' as const, label: tx(C.remove), icon: 'trash' as const, danger: true }] : []),
+  ]
+  const completes = can.has('complete') || can.has('acknowledge')
+  // With nothing to complete, the first of the rest is the stated action.
+  const lead = completes ? null : (secondary[0] ?? null)
+  const rest = lead ? secondary.slice(1) : secondary
+
   return (
-    <section className="tasks__panel" aria-label={t ? title(t) : tx(C.title)}>
+    <section className="tasks__panel sheet insp" aria-label={t ? title(t) : tx(C.title)}>
       <QueryBoundary isLoading={one.isLoading} error={one.error} onRetry={() => one.refetch()}>
         {t && (
           <>
-            <div className="tasks__panel-head">
+            <header className="insp__head">
+              <div className="insp__top">
+                <span className="insp__kind">
+                  <Icon name={t.source ? 'bolt' : 'user'} size={16} />
+                  {t.source || !t.createdBy ? tx(SOURCE_LABEL[t.source?.type ?? 'manual']) : tx(C.createdBy, { name: t.createdBy.name })}
+                </span>
+                <CloseButton onClose={onClose} />
+              </div>
               <h2 className="tasks__panel-title" dir="auto">{title(t)}</h2>
-              <button type="button" className="btn btn--ghost btn--sm" onClick={onClose}>{tx(C.close)}</button>
-            </div>
-            <div className="tasks__chips">
-              {t.state !== 'completed' && t.state !== 'removed' && <PriorityChip task={t} />}
-              {t.category === 'financial' && <FinanceTag />}
-              <Badge tone={STATE_TONE[state]}>{tx(STATE_LABEL[state])}</Badge>
-              {/* A person's task names the person just below; the general label is only for one with no name. */}
-              {(t.source || !t.createdBy) && <Badge tone="outline">{tx(SOURCE_LABEL[t.source?.type ?? 'manual'])}</Badge>}
-            </div>
-            <p className="tasks__meta tasks__meta--panel">
-              <span dir="auto">{tx(C.assignedTo, { name: t.assigneeName })}</span>
-              {t.createdBy && <span dir="auto">· {tx(C.createdBy, { name: t.createdBy.name })}</span>}
-              <span className={t.overdue && t.state !== 'completed' && t.state !== 'removed' ? 'tasks__late' : undefined}>
-                · {t.dueAt ? tx(C.due, { when: when(t.dueAt) }) : tx(C.noDue)}
-              </span>
-              {t.overdue && t.priorityReason !== 'overdue' && t.state !== 'completed' && t.state !== 'removed' && <OverdueMark />}
-            </p>
-            {link && (
-              <p className="tasks__source-link">
-                <Link className="btn btn--sm" to={link}>{tx(C.openSource)}</Link>
-              </p>
-            )}
-            {t.instructions && t.state === 'open' && (
-              <div className="tasks__banner" role="note">
-                <p className="tasks__banner-title">{tx(C.instructions)}</p>
-                <p className="tasks__text" dir="auto">{t.instructions}</p>
+              <div className="tasks__chips">
+                {live && <PriorityChip task={t} />}
+                {t.category === 'financial' && <FinanceTag />}
+                <Badge tone={STATE_TONE[state]}>{tx(STATE_LABEL[state])}</Badge>
               </div>
-            )}
-            {t.sourceState === 'withdrawn' && t.state !== 'completed' && t.state !== 'removed' && (
-              <div className="tasks__banner" role="note">{tx(C.withdrawn)}</div>
-            )}
-            {t.needsReassignment && <div className="tasks__banner" role="note">{tx(C.assigneeLeft)}</div>}
-            {t.unmanaged && <div className="tasks__banner" role="note">{tx(C.unmanaged)}</div>}
-            {t.body && <p className="tasks__text" dir="auto">{t.body}</p>}
-            {t.closeReason && (
-              <p className="tasks__text" dir="auto">
-                <strong>{tx(C.closeReason)}:</strong> {t.closeReason}
-              </p>
-            )}
-            {op.error && <p className="field__error" role="alert">{describeError(op.error, locale)}</p>}
+            </header>
 
-            <div className="tasks__actions">
-              {can.has('complete') && (
-                <button type="button" className="btn btn--primary" disabled={op.isPending} onClick={() => op.mutate(() => tasksApi.complete(id))}>
-                  {tx(C.complete)}
-                </button>
-              )}
-              {can.has('acknowledge') && (
-                <button type="button" className="btn btn--primary" disabled={op.isPending} onClick={() => op.mutate(() => tasksApi.acknowledge(id))}>
-                  {tx(C.acknowledge)}
-                </button>
-              )}
-              {can.has('out_of_scope') && <button type="button" className="btn" onClick={() => setDialog('out_of_scope')}>{tx(C.outOfScope)}</button>}
-              {can.has('return') && <button type="button" className="btn" onClick={() => setDialog('return')}>{tx(C.returnTask)}</button>}
-              {can.has('reassign') && <button type="button" className="btn" onClick={() => setDialog('reassign')}>{tx(C.reassign)}</button>}
-              {can.has('remove') && <button type="button" className="btn" onClick={() => setDialog('remove')}>{tx(C.remove)}</button>}
-            </div>
-
-            {(can.has('due') || can.has('priority')) && (
-              <div className="tasks__controls">
-                {can.has('priority') && (
-                  <label className="field">
-                    <span className="field__label">{tx(C.manualLevel)}</span>
-                    <SearchableSelect
-                      clearable={false}
-                      className="select"
-                      value={t.manualPriority}
-                      disabled={op.isPending}
-                      onValueChange={(v) => {
-                        const next = v as Level
-                        op.mutate(() => tasksApi.setPriority(id, next))
-                      }}
-                    >
-                      {LEVELS.map((l) => (
-                        <option key={l} value={l}>{tx(LEVEL_LABEL[l])}</option>
-                      ))}
-                    </SearchableSelect>
-                  </label>
-                )}
-                {can.has('due') && (
-                  <DueControl
-                    key={t.dueAt ?? 'none'}
-                    date={due?.date ?? ''}
-                    time={due?.time ?? ''}
-                    disabled={op.isPending}
-                    onSave={(iso) => op.mutate(() => tasksApi.setDue(id, iso))}
-                  />
-                )}
-              </div>
-            )}
-
-            {can.has('comment') && (
-              <div className="tasks__comment">
-                <label className="field">
-                  <span className="field__label">{tx(C.comment)}</span>
-                  <textarea className="textarea" rows={2} maxLength={2000} value={comment} onChange={(e) => setComment(e.target.value)} />
-                </label>
+            <div className="insp__body">
+              <dl className="insp__facts">
                 <div>
-                  <button
-                    type="button"
-                    className="btn"
-                    disabled={!comment.trim() || op.isPending}
-                    onClick={() => op.mutate(() => tasksApi.comment(id, comment.trim()), { onSuccess: () => setComment('') })}
-                  >
-                    {tx(C.send)}
-                  </button>
+                  <dt>{tx(C.factAssignee)}</dt>
+                  <dd dir="auto">{t.assigneeName}</dd>
                 </div>
-              </div>
-            )}
+                {t.createdBy && (
+                  <div>
+                    <dt>{tx(C.factFrom)}</dt>
+                    <dd dir="auto">{t.createdBy.name}</dd>
+                  </div>
+                )}
+                <div>
+                  <dt>{tx(C.dueAt)}</dt>
+                  <dd className={t.overdue && live ? 'insp__late' : undefined}>
+                    {t.dueAt ? when(t.dueAt) : tx(C.noDue)}
+                    {t.overdue && t.priorityReason !== 'overdue' && live && <OverdueMark />}
+                  </dd>
+                </div>
+                {link && (
+                  <div>
+                    <dt>{tx(C.factWhere)}</dt>
+                    <dd>
+                      <Link className="insp__link" to={link}>
+                        {tx(C.openSource)}
+                        <Icon name="chevronForward" size={14} />
+                      </Link>
+                    </dd>
+                  </div>
+                )}
+              </dl>
 
-            <h3 className="tasks__history-title">{tx(C.history)}</h3>
-            <History task={t} />
+              {t.instructions && t.state === 'open' && (
+                <div className="tasks__banner" role="note">
+                  <p className="tasks__banner-title">{tx(C.instructions)}</p>
+                  <p className="tasks__text" dir="auto">{t.instructions}</p>
+                </div>
+              )}
+              {t.sourceState === 'withdrawn' && live && <div className="tasks__banner" role="note">{tx(C.withdrawn)}</div>}
+              {t.needsReassignment && <div className="tasks__banner" role="note">{tx(C.assigneeLeft)}</div>}
+              {t.unmanaged && <div className="tasks__banner" role="note">{tx(C.unmanaged)}</div>}
+              {t.body && <p className="tasks__text" dir="auto">{t.body}</p>}
+              {t.closeReason && (
+                <p className="tasks__text" dir="auto">
+                  <strong>{tx(C.closeReason)}:</strong> {t.closeReason}
+                </p>
+              )}
+              {op.error && <p className="field__error" role="alert">{describeError(op.error, locale)}</p>}
+
+              {(can.has('due') || can.has('priority')) && (
+                <div className="tasks__controls">
+                  {can.has('priority') && (
+                    <label className="field">
+                      <span className="field__label">{tx(C.manualLevel)}</span>
+                      <SearchableSelect
+                        clearable={false}
+                        className="select"
+                        value={t.manualPriority}
+                        disabled={op.isPending}
+                        onValueChange={(v) => {
+                          const next = v as Level
+                          op.mutate(() => tasksApi.setPriority(id, next))
+                        }}
+                      >
+                        {LEVELS.map((l) => (
+                          <option key={l} value={l}>{tx(LEVEL_LABEL[l])}</option>
+                        ))}
+                      </SearchableSelect>
+                    </label>
+                  )}
+                  {can.has('due') && (
+                    <DueControl
+                      key={t.dueAt ?? 'none'}
+                      date={due?.date ?? ''}
+                      time={due?.time ?? ''}
+                      disabled={op.isPending}
+                      onSave={(iso) => op.mutate(() => tasksApi.setDue(id, iso))}
+                    />
+                  )}
+                </div>
+              )}
+
+              {can.has('comment') && (
+                <div className="tasks__comment">
+                  <label className="field">
+                    <span className="field__label">{tx(C.comment)}</span>
+                    <textarea className="textarea" rows={2} maxLength={2000} value={comment} onChange={(e) => setComment(e.target.value)} />
+                  </label>
+                  <div>
+                    <button
+                      type="button"
+                      className="btn btn--sm"
+                      disabled={!comment.trim() || op.isPending}
+                      onClick={() => op.mutate(() => tasksApi.comment(id, comment.trim()), { onSuccess: () => setComment('') })}
+                    >
+                      {tx(C.send)}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <h3 className="tasks__history-title">{tx(C.history)}</h3>
+              <History task={t} />
+            </div>
+
+            {(completes || secondary.length > 0) && (
+              <footer className="insp__foot">
+                <RowActions
+                  label={tx(C.moreActions, { name: title(t) })}
+                  primary={
+                    can.has('complete') ? (
+                      <button type="button" className="btn btn--primary" disabled={op.isPending} onClick={() => op.mutate(() => tasksApi.complete(id))}>
+                        <Icon name="check" size={16} />
+                        {tx(C.complete)}
+                      </button>
+                    ) : can.has('acknowledge') ? (
+                      <button type="button" className="btn btn--primary" disabled={op.isPending} onClick={() => op.mutate(() => tasksApi.acknowledge(id))}>
+                        <Icon name="check" size={16} />
+                        {tx(C.acknowledge)}
+                      </button>
+                    ) : lead ? (
+                      <button type="button" className={lead.danger ? 'btn btn--danger' : 'btn'} onClick={() => setDialog(lead.key)}>
+                        {lead.label}
+                      </button>
+                    ) : undefined
+                  }
+                  more={rest.map((a) => ({ key: a.key, label: a.label, icon: a.icon, danger: a.danger, onSelect: () => setDialog(a.key) }))}
+                />
+              </footer>
+            )}
           </>
         )}
       </QueryBoundary>
@@ -525,6 +688,17 @@ function TaskPanel({ id, onClose }: { id: string; onClose: () => void }) {
         />
       )}
     </section>
+  )
+}
+
+/** Closes the inspector: a cross, with its name for whoever reads the text. */
+function CloseButton({ onClose }: { onClose: () => void }) {
+  const tx = useCopy()
+  return (
+    <button type="button" className="btn btn--ghost btn--icon btn--sm insp__close" title={tx(C.close)} onClick={onClose}>
+      <Icon name="close" size={16} />
+      <span className="sr-only">{tx(C.close)}</span>
+    </button>
   )
 }
 

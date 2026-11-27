@@ -8,7 +8,7 @@ import { useText } from '@/features/admin/copy'
 import { PageHeader } from '@/shared/components/PageHeader'
 import { EmptyState } from '@/shared/components/States'
 import { D } from './copy'
-import { DashboardSections, useDashboardSections } from './ManagerDashboard'
+import { DashboardSections, dashboardSummary, useDashboardSections } from './ManagerDashboard'
 
 export { DASHBOARD_REFRESH_MS } from './ManagerDashboard'
 
@@ -26,8 +26,9 @@ export function DashboardPage() {
 
 function ManagersDashboard() {
   const tx = useText()
-  const { t } = useI18n()
+  const { t, number } = useI18n()
   const d = useDashboardSections()
+  const sum = dashboardSummary(d.shown)
 
   return (
     <div className="page dash">
@@ -35,6 +36,14 @@ function ManagersDashboard() {
         <PageHeader
           title={t('nav.dashboard')}
           subtitle={tx(D.subtitle)}
+          figures={
+            d.settled && d.shown.length > 0
+              ? [
+                  { key: 'waiting', label: tx(D.figWaiting), value: number(sum.waiting), tone: sum.waiting > 0 ? 'key' : 'quiet' },
+                  { key: 'late', label: tx(D.figLate), value: number(sum.late), tone: sum.late > 0 ? 'urgent' : 'quiet' },
+                ]
+              : undefined
+          }
           actions={d.asked > 0 && <RefreshAction updatedAt={d.updatedAt} fetching={d.fetching} onRefresh={d.refetch} />}
         />
         {d.asked === 0 || (d.settled && d.shown.length === 0) ? <EmptyState title={tx(D.noSections)} /> : <DashboardSections shown={d.shown} />}

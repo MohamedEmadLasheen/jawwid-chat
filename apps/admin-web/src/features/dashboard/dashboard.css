@@ -1,130 +1,135 @@
-/* PD-44: the manager Dashboard. A ruled book of figures: each section is a
-   name beside its numbers; what is waiting is set as large serif numerals,
-   everything else as a plain line. Every figure is a link to its page. */
+/* PD-44: the manager Dashboard, an attention board. At the start, on one white
+   sheet: what needs the team now, the late and the largest first, each figure a
+   row to open. At the end, on the canvas: the sections with nothing waiting.
+   Every figure is one link to the page that resolves it. */
 
-.dash-book { border-block-end: 1px solid var(--hairline); }
-.dash-section {
-  display: grid;
-  grid-template-columns: 200px minmax(0, 1fr);
-  gap: var(--space-2) var(--space-5);
-  align-items: start;
-  padding-block: var(--space-4) var(--space-5);
-  border-block-start: 1px solid var(--hairline);
-}
-.dash-section__title {
+/* The sections are siblings in one list (the waiting ones first). From 1100px the
+   waiting ones float to the start as one sheet and the calm ones run beside them
+   in the ordinary flow: two columns that keep their own heights, with no wrapper
+   a section would have to move into. */
+.dash-board { display: flow-root; }
+.dash-needs__head {
+  display: flex;
+  align-items: center;
+  min-block-size: 48px;
   margin: 0;
-  padding-block-start: 9px;
-  font-family: var(--display);
-  font-size: var(--fs-lg);
+  padding: 8px var(--space-4);
+  border: 1px solid var(--hairline);
+  border-block-end-color: var(--hairline-soft);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  background: var(--surface);
+  font-size: var(--fs-md);
   font-weight: 600;
-  line-height: 1.3;
-  color: var(--ink);
 }
-html[lang='ar'] .dash-section__title { font-weight: 700; }
-.dash-section__body { min-inline-size: 0; }
-@media (max-width: 899px) {
-  .dash-section { grid-template-columns: minmax(0, 1fr); padding-block: var(--space-3) var(--space-4); }
-  .dash-section__title { padding-block-start: 0; }
-}
-
-/* What is waiting: large numerals in a ruled row that wraps. Each cell's start
-   rule and bottom rule are clipped at the edges, so a wrapped row stays clean. */
-.dash-ledger {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(188px, 1fr));
-  margin: 0;
-  padding: 0;
-  list-style: none;
+.dash-needs__count { margin-inline-start: 8px; }
+.dash-needs__clear, .dash-group--needs { background: var(--surface); border-inline: 1px solid var(--hairline); }
+.dash-needs__clear { margin: 0; padding: var(--space-5) var(--space-4); color: var(--ink-muted); font-size: var(--fs-sm); }
+/* The last piece of the sheet closes it. */
+:is(.dash-needs__clear, .dash-group--needs):not(:has(+ .dash-group--needs)) {
+  margin-block-end: var(--space-5);
+  border-block-end: 1px solid var(--hairline);
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
   overflow: hidden;
 }
-.dash-ledger > li {
-  display: flex;
-  margin-block-end: -1px;
-  margin-inline-start: -1px;
-  border-inline-start: 1px solid var(--hairline);
+@media (min-width: 1100px) {
+  .dash-board:not(.dash-board--one) :is(.dash-needs__head, .dash-needs__clear, .dash-group--needs) {
+    float: inline-start;
+    clear: inline-start;
+    box-sizing: border-box;
+    inline-size: calc(66.6% - var(--space-5));
+  }
+  .dash-board:not(.dash-board--one) .dash-group--calm { margin-inline-start: 66.6%; }
+  .dash-board--one { max-inline-size: 860px; }
+}
+
+/* --------------------------------------------------------- needs you now */
+.dash-group__title {
+  margin: 0;
+  padding: 8px var(--space-4) 7px;
+  background: var(--paper);
   border-block-end: 1px solid var(--hairline-soft);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-muted);
 }
-.dash-tile {
-  color: inherit;
-  text-decoration: none;
-  transition: background var(--dur-fast) var(--ease-out);
-}
+.dash-group--needs + .dash-group--needs { border-block-start: 1px solid var(--hairline-soft); }
+.dash-rows, .dash-lines { list-style: none; margin: 0; padding: 0; }
+
+.dash-tile { color: inherit; text-decoration: none; transition: background var(--dur-fast) var(--ease-out); }
 .dash-tile:hover { background: var(--surface-hover); }
 .dash-tile:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.dash-tile__text { display: grid; gap: 1px; min-inline-size: 0; }
+.dash-tile__note { font-size: var(--fs-xs); line-height: 1.5; color: var(--ink-muted); }
+
+/* A waiting figure: the number in display numerals, what it is, how old, and the way in. */
 .dash-tile--large {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-inline-size: 0;
-  padding: 10px var(--space-4) 12px;
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  min-block-size: 64px;
+  padding: 10px var(--space-4);
+  border-block-end: 1px solid var(--hairline-soft);
 }
-.dash-tile--large .dash-tile__label { order: -1; font-size: 12.5px; line-height: 1.45; color: var(--ink-muted); }
-/* Numerals share one baseline across a row: each is pushed to the foot of its cell, above
-   a line that is kept for the note whether or not there is one, so a label that wraps
-   to two lines never drops its figure below its neighbours'. */
+.dash-rows > li:last-child .dash-tile--large { border-block-end: 0; }
 .dash-tile--large .dash-tile__value {
-  margin-block-start: auto;
   font-family: var(--display);
-  font-size: var(--fs-kpi);
+  font-size: 30px;
   font-weight: 600;
-  line-height: 1.15;
+  line-height: 1.1;
   font-variant-numeric: tabular-nums lining-nums;
-  color: var(--ink);
-  /* The numeral is isolated left to right; it sits at the cell's start in either language. */
-  align-self: flex-start;
-  direction: ltr;
+  color: var(--teal);
   unicode-bidi: isolate;
 }
-.dash-tile--large:hover .dash-tile__value { color: var(--teal-dark); }
-.dash-tile__note { font-size: var(--fs-xs); line-height: 1.5; color: var(--ink-muted); }
-.dash-tile--large:not(:has(.dash-tile__note))::after { content: ''; block-size: calc(var(--fs-xs) * 1.5); }
-.dash-tile--late .dash-tile__value, .dash-tile--late:hover .dash-tile__value { color: var(--terracotta); }
-
-/* The rest of the section: a name, a figure. */
-.dash-lines {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  column-gap: var(--space-6);
-  margin: 0;
-  padding: 0;
-  list-style: none;
+.dash-tile--late .dash-tile__value { color: var(--terracotta); }
+.dash-tile--large .dash-tile__label { font-weight: 600; color: var(--ink); }
+.dash-tile--late .dash-tile__note { color: var(--terracotta); }
+.dash-tile__go {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-block-size: 30px;
+  padding-inline: 10px 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  color: var(--ink);
 }
-.dash-ledger + .dash-lines { margin-block-start: var(--space-2); }
-/* Every line in a row is as tall as the tallest, so their rules end together. */
-.dash-lines > li { display: flex; }
+.dash-tile--large:hover .dash-tile__go { border-color: var(--teal); color: var(--teal-dark); }
+
+/* A section's other figures, and the calm sections: a name, a figure. */
 .dash-tile--line {
-  flex: 1;
-  align-content: start;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: baseline;
   gap: 0 var(--space-3);
-  min-block-size: 36px;
-  padding: 7px var(--space-4) 6px;
+  min-block-size: 34px;
+  padding: 6px 0;
   border-block-end: 1px solid var(--hairline-soft);
   font-size: var(--fs-sm);
 }
+.dash-tile--line .dash-tile__text { grid-column: 1; grid-row: 1; }
 .dash-tile--line .dash-tile__value {
+  grid-column: 2;
+  grid-row: 1;
   font-family: var(--display);
   font-size: var(--fs-lg);
   font-weight: 600;
   font-variant-numeric: tabular-nums lining-nums;
-  direction: ltr;
   unicode-bidi: isolate;
 }
-.dash-tile--line .dash-tile__note { grid-column: 1 / -1; }
+.dash-lines > li:last-child .dash-tile--line { border-block-end: 0; }
 .dash-tile--zero { color: var(--ink-muted); }
-.dash-tile--zero .dash-tile__value { font-weight: 400; }
-@media (max-width: 767px) {
-  .dash-ledger { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .dash-tile--large { padding-inline: var(--space-3); }
-  .dash-ledger > li:nth-child(odd) .dash-tile--large { padding-inline-start: 3px; }
-  .dash-tile--line { min-block-size: 44px; padding-inline: 2px; padding-block: 11px 10px; }
-  /* One column here: the section's own rule closes the list, not a second hairline. */
-  .dash-lines > li:last-child .dash-tile--line { border-block-end: 0; }
-  .dash-section { padding-block-end: var(--space-3); }
-}
+.dash-tile--zero .dash-tile__value { font-weight: 400; color: var(--border-control); }
+/* Under a section's waiting rows its other figures step back: two quiet columns. */
+.dash-group--needs .dash-lines { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); column-gap: var(--space-6); padding: 4px var(--space-4) 8px; background: var(--surface); }
+
+/* ------------------------------------------------------------ calm column */
+.dash-group--calm .aside-group__title { margin-block-end: 2px; }
+/* The first calm section starts level with the sheet's head, under no rule. */
+:not(.dash-group--calm) + .dash-group--calm { margin-block-start: 0; padding-block-start: 0; border-block-start: 0; }
 
 .dash-section__clear,
 .dash-failed,
@@ -134,13 +139,19 @@ html[lang='ar'] .dash-section__title { font-weight: 700; }
   align-items: center;
   gap: var(--space-2) var(--space-3);
   margin: 0;
-  padding: 9px var(--space-4) 8px;
+  padding: 6px 0;
   font-size: var(--fs-sm);
   color: var(--ink-muted);
 }
+.dash-group--needs :is(.dash-failed, .dash-stale, .dash-section__clear) { padding-inline: var(--space-4); }
 .dash-failed__text { color: var(--terracotta); font-weight: 500; }
-.dash-stale { margin-block-end: var(--space-2); border-inline-start: 2px solid var(--gold-line); }
-.dash-loading { display: grid; grid-template-columns: repeat(3, minmax(0, 188px)); gap: var(--space-3); padding: 6px var(--space-4); }
+.dash-stale { margin-block-end: var(--space-2); padding-inline-start: var(--space-3); border-inline-start: 2px solid var(--gold-line); }
+.dash-loading { display: grid; gap: 6px; padding-block: 6px; }
+
 @media (max-width: 767px) {
-  .dash-section__clear, .dash-failed, .dash-stale, .dash-loading { padding-inline: 2px; }
+  .dash-tile--large { grid-template-columns: 56px minmax(0, 1fr) auto; padding-inline: var(--space-3); }
+  .dash-tile--large .dash-tile__value { font-size: 26px; }
+  .dash-tile__go { min-block-size: 40px; }
+  .dash-tile--line { min-block-size: 44px; align-items: center; }
+  .dash-group__title, .dash-group--needs .dash-lines { padding-inline: var(--space-3); }
 }
