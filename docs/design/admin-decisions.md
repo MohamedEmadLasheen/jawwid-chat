@@ -85,6 +85,19 @@ This replaces the earlier "labelled navigation" instruction.
   - At that width: amounts collided on Instalments, names were cut to two letters, the ledger squeezed names to 2px, statistics wrapped a name one word per line, and the leave table ran past its sheet. All are fixed.
   - The screenshot check now also flags content cut off by a box that hides overflow, not only content spilling past the page.
 
+### Rail critic round 2 (2026-11-27)
+- **Fit by measurement.** The open rail measures its own overflow (`data-tight` in `RailNav`) instead of using a fixed window height. On a 900px laptop the current place's four pages had pushed Admin & Settings out of view.
+- **One-page places.** A place whose list would be its one page carries the pill itself, so no repeated name is listed. Long page names end in an ellipsis inside their highlight.
+- **Thresholds.** They are set by each component's own width:
+  - figure strips step down below 940px;
+  - the payments ledger stacks below 960px;
+  - the week board narrows its teacher column (150px) and days (62px minimum) below 780px.
+  The folded rail at 1024 (about 890px of page) and the open rail at 1024 (about 690px) both hold.
+- **Latin names in the reply queue.** They take their own direction (`dir="auto"`, aligned with the column), so an overlong name is cut at its end.
+- **Kept as they are:**
+  - The 1280px content cap. A folded rail at 1440 centres the content, so the side margin reads 50px instead of 36px. The content flows; it does not jump.
+  - "Dashboard" under Dashboard. That place has two pages, Dashboard and Tasks.
+
 ## Lead decisions while integrating
 - Shared fixes the builders reported went into `system.css` (outline tags without dashes, table row headers, neutral dots visible on white, stacked-sheet spacing, Arabic count size, switch buttons, one-letter Arabic avatars, a neutral note under an urgent figure); the teachers stylesheet's global `.sheet + .sheet` rule moved into the system.
 - "Teacher profiles" in Arabic reads "مؤهلات المعلمين" (credentials review): it shared its name with Teacher files.

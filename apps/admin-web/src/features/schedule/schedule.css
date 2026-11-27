@@ -774,6 +774,9 @@ button.sc-heat--off { cursor: pointer; }
    days narrow so all seven days are in view rather than the week's start scrolled away. */
 .sc-sheet { container: sc-board / inline-size; }
 @container sc-board (max-width: 780px) and (min-width: 560px) {
-  .sc-grid--week { --sc-head-w: 150px; --sc-day-min: 62px; }
+  .sc-grid--week { --sc-head-w: 150px; --sc-day-min: 66px; }
   .sc-grid--week .sc-cell__of { display: none; }
+  /* The teacher's line ends in an ellipsis rather than mid-word. */
+  .sc-grid--week .sc-row__sub { display: block; text-overflow: ellipsis; }
+  .sc-grid--week .sc-dayhead__name { font-size: var(--fs-xs); }
 }

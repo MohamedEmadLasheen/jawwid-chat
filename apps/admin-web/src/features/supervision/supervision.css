@@ -33,3 +33,5 @@
 .sheet .table-wrap.sv-table-wrap { overflow-x: auto; }
 .sv-table-wrap .sv-cell-main { min-inline-size: 0; }
 .sv-dates { min-inline-size: 8.5rem; text-wrap: balance; }
+/* A reason typed in the other language keeps its own direction but lines up with its column. */
+.sv-cell-main [dir='auto'] { text-align: match-parent; }
