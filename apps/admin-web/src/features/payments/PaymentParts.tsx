@@ -2,6 +2,7 @@ import { useId, useState, type ReactNode } from 'react'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Badge, type Tone } from '@/shared/components/Badge'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
+import { RowActions } from '@/shared/components/RowActions'
 import { packageLabel } from '@/features/subscriptions/copy'
 import type { InvoiceStatus, Payment, PaymentRequest, ReceiptStatus, RequestStatus } from './api'
 import {
@@ -259,13 +260,17 @@ function RequestItem({ request: r, canCancel, onCancel }: { request: PaymentRequ
       )}
       {open && (r.link || canCancel) && (
         <div className="tf-actions">
-          {r.link && <CopyLinkButton link={r.link} />}
-          {r.link && <WhatsAppLink request={r} />}
-          {canCancel && (
-            <button type="button" className="btn btn--sm btn--ghost" onClick={onCancel} aria-label={tx(PAY.cancelRequestNamed, { label: r.label })}>
-              {tx(PAY.cancelRequest)}
-            </button>
-          )}
+          {/* One stated action (copy the link); sending and cancelling wait behind "⋯". */}
+          <RowActions
+            label={tx(PAY.moreForRequest, { label: r.label })}
+            primary={r.link ? <CopyLinkButton link={r.link} /> : undefined}
+            more={[
+              ...(r.link
+                ? [{ key: 'whatsapp', label: tx(PAY.whatsapp), icon: 'whatsapp' as const, onSelect: () => void window.open(whatsappUrl(r), '_blank', 'noopener,noreferrer') }]
+                : []),
+              ...(canCancel ? [{ key: 'cancel', label: tx(PAY.cancelRequestNamed, { label: r.label }), icon: 'xCircle' as const, danger: true, onSelect: onCancel }] : []),
+            ]}
+          />
         </div>
       )}
     </li>

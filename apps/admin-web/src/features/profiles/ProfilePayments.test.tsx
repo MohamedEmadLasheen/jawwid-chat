@@ -239,8 +239,11 @@ describe('PD-27 on the Parent Profile', () => {
     expect(within(r).getByText(/^Amount .*1,200\.00 · paid .*0\.00 · remaining .*1,200\.00$/)).toBeInTheDocument()
     // PD-30 (3): the package reads "3 months" (and "— N lessons" when the request buys lessons).
     expect(within(r).getByText('3 months')).toBeInTheDocument()
-    expect(within(r).getByRole('link', { name: 'Send on WhatsApp' })).toHaveAttribute('target', '_blank')
-    expect(within(r).getByRole('button', { name: 'Cancel the request: 3-month subscription' })).toBeInTheDocument()
+    // One stated action on the row (Copy link); sending and cancelling are in its "⋯" menu.
+    await userEvent.click(within(r).getByRole('button', { name: 'More actions: 3-month subscription' }))
+    expect(within(r).getByRole('menuitem', { name: 'Send on WhatsApp' })).toBeInTheDocument()
+    expect(within(r).getByRole('menuitem', { name: 'Cancel the request: 3-month subscription' })).toBeInTheDocument()
+    await userEvent.keyboard('{Escape}')
 
     const received = screen.getByRole('region', { name: 'Payments received' })
     const [cash, card] = within(received).getAllByRole('listitem')
@@ -413,7 +416,8 @@ describe('PD-27 on the Parent Profile', () => {
     serve(billing())
     on('POST', /\/payment-requests\/r-1\/cancel$/, () => json(billing({ requests: [request({ status: 'cancelled', cancelled: { at: '2026-10-22T10:00:00Z', by: PERSON, reason: 'wrong amount' } })] })))
     renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1#money' })
-    await userEvent.click(await screen.findByRole('button', { name: 'Cancel the request: 3-month subscription' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'More actions: 3-month subscription' }))
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Cancel the request: 3-month subscription' }))
     const dialog = screen.getByRole('dialog', { name: 'Cancel the request: 3-month subscription' })
     await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel the request' }))
     expect(within(dialog).getByText('Say why.')).toBeInTheDocument()
@@ -424,7 +428,9 @@ describe('PD-27 on the Parent Profile', () => {
     expect(bodyOf(calls('POST', /\/payment-requests\/r-1\/cancel$/)[0])).toEqual({ reason: 'wrong amount' })
     const requests = screen.getByRole('region', { name: 'Payment requests' })
     expect(await within(requests).findByText('Cancelled by Supervisor One: wrong amount')).toBeInTheDocument()
-    expect(within(requests).queryByRole('link', { name: 'Send on WhatsApp' })).not.toBeInTheDocument()
+    // A cancelled request has no actions left: no link to copy, no menu to send or cancel from.
+    expect(within(requests).queryByRole('button', { name: /More actions/ })).not.toBeInTheDocument()
+    expect(within(requests).queryByRole('button', { name: 'Copy link' })).not.toBeInTheDocument()
   })
 
   it('Record a payment: cash by default; towards a request prefills its remaining amount', async () => {
@@ -669,7 +675,13 @@ describe('PD-27 on the Parent Profile', () => {
     expect(screen.queryByRole('button', { name: 'Payment link' })).not.toBeInTheDocument()
     // Payment link and Void live in a row's menu: no instalment has one, here or on Overview.
     expect(screen.queryByRole('button', { name: /More actions: Autumn term/ })).not.toBeInTheDocument()
+    // Cancelling is not offered: not on the row, and not in its "⋯" menu.
     expect(within(requests).queryByRole('button', { name: /Cancel the request/ })).not.toBeInTheDocument()
+    for (const more of within(requests).queryAllByRole('button', { name: /More actions/ })) {
+      await userEvent.click(more)
+      expect(screen.queryByRole('menuitem', { name: /Cancel the request/ })).not.toBeInTheDocument()
+      await userEvent.keyboard('{Escape}')
+    }
     expect(screen.queryByRole('button', { name: 'Void' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Review in Payments' })).not.toBeInTheDocument()
     // Copying a link someone else created is still offered.

@@ -211,6 +211,7 @@ export const PAY = {
   period: { en: '{from} – {to}', ar: '{from} – {to}' },
   cancelRequest: { en: 'Cancel', ar: 'إلغاء' },
   cancelRequestNamed: { en: 'Cancel the request: {label}', ar: 'إلغاء الطلب: {label}' },
+  moreForRequest: { en: 'More actions: {label}', ar: 'إجراءات أخرى: {label}' },
   cancelHint: { en: 'The link stops working at once. The request stays in the list, marked cancelled.', ar: 'يتوقف الرابط فورًا. يبقى الطلب في القائمة مُعلَّمًا بأنه ملغى.' },
   cancelConfirm: { en: 'Cancel the request', ar: 'إلغاء الطلب' },
 
