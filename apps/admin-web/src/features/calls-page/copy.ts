@@ -112,11 +112,22 @@ export interface CallsPageCopy {
 }
 
 const pad = (n: number) => String(n).padStart(2, '0')
-function duration(s: number): string {
-  const h = Math.floor(s / 3600)
-  const m = Math.floor((s % 3600) / 60)
-  return h > 0 ? `${h}:${pad(m)}:${pad(s % 60)}` : `${m}:${pad(s % 60)}`
+/**
+ * A call's length in units ("5m 12s", "1h 05m"), never "5:12": beside a list's
+ * time of day, a length written as a clock reads as a second time.
+ */
+function lengthIn(units: { h: string; m: string; s: string }, sep: string) {
+  return (seconds: number): string => {
+    const h = Math.floor(seconds / 3600)
+    const m = Math.floor((seconds % 3600) / 60)
+    const s = seconds % 60
+    if (h > 0) return `${h}${sep}${units.h} ${pad(m)}${sep}${units.m}`
+    if (m > 0) return `${m}${sep}${units.m} ${pad(s)}${sep}${units.s}`
+    return `${s}${sep}${units.s}`
+  }
 }
+const durationEn = lengthIn({ h: 'h', m: 'm', s: 's' }, '')
+const durationAr = lengthIn({ h: 'س', m: 'د', s: 'ث' }, ' ')
 
 const ar: CallsPageCopy = {
   title: 'المكالمات',
@@ -155,7 +166,7 @@ const ar: CallsPageCopy = {
   declined: 'مرفوضة',
   ongoing: 'جارية',
   connectionLost: 'انقطع الاتصال',
-  duration,
+  duration: durationAr,
   colName: 'الاسم',
   colDirection: 'الاتجاه',
   colStatus: 'الحالة',
@@ -258,7 +269,7 @@ const en: CallsPageCopy = {
   declined: 'Declined',
   ongoing: 'Ongoing',
   connectionLost: 'Connection lost',
-  duration,
+  duration: durationEn,
   colName: 'Name',
   colDirection: 'Direction',
   colStatus: 'Status',

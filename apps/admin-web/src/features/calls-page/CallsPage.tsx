@@ -149,22 +149,26 @@ function RecentRow({
       </span>
       <span className="cp-row__body">
         <span className="cp-recent__who">
-          <span className={missed ? 'cp-row__name cp-row__name--missed' : 'cp-row__name'}>{name}</span>
+          <span className={missed ? 'cp-row__name cp-row__name--missed' : 'cp-row__name'} dir="auto">{name}</span>
           {isTrialGroup(conversation) && <TrialBadge />}
         </span>
         <span className="cp-recent__facts">
           <span className="sr-only">{direction === 'outgoing' ? copy.outgoing : copy.incoming}</span>
-          {/* Only a missed call is marked; an answered one is plain words. */}
+          {/* Only what is unusual is shown: a missed call is marked, a declined one is plain words,
+              and an answered call (the normal case) is said to assistive technology only, unless
+              it dropped, when "Connection lost" is the one fact. */}
           {missed ? (
             <Badge tone="danger">
               <span>{status}</span>
             </Badge>
           ) : (
-            <span className="cp-recent__outcome">{status}</span>
+            <span className={row.outcome === 'answered' ? 'sr-only' : 'cp-recent__outcome'}>{status}</span>
           )}
           {row.endReason === 'connection_lost' ? (
             <>
-              <span aria-hidden="true" className="cp-recent__sep">{locale === 'ar' ? '،' : ','}</span>
+              {row.outcome !== 'answered' && (
+                <span aria-hidden="true" className="cp-recent__sep">{locale === 'ar' ? '،' : ','}</span>
+              )}
               <span className="cp-recent__lost">{copy.connectionLost}</span>
             </>
           ) : null}
@@ -368,7 +372,7 @@ export function CallsPage() {
                 <Avatar name={n} seed={c.id} size="sm" />
                 <span className="cp-row__body">
                   <span className="cp-row__name">
-                    {n} {isTrialGroup(c) && <TrialBadge />}
+                    <bdi>{n}</bdi> {isTrialGroup(c) && <TrialBadge />}
                   </span>
                   <span className="cp-row__sub">{chat.kind[c.type] ?? c.type}</span>
                 </span>
