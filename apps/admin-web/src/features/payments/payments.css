@@ -276,8 +276,15 @@
 /* Net sits in the amount column's own box (the actions column's width kept clear after it), so its
    digits share the rows' edge; numerals end on the physical right in both languages. */
 .tx-table--payments .tx-end { inline-size: 12.5rem; }
-.tx-table--payments :is(td, th).cell-actions { inline-size: 6.5rem; }
-.pay-sum__term--net { box-sizing: content-box; display: inline-flex; justify-content: flex-end; gap: 8px; inline-size: 12.5rem; padding-inline: 14px; margin-inline-end: calc(6.5rem + 14px); }
+.tx-table--payments :is(td, th).cell-actions { inline-size: 8rem; }
+/* Fixed column widths (from the head) so the foot can stand exactly under the amount column. */
+@media (min-width: 768px) {
+  .table.tx-table--payments { table-layout: fixed; }
+  .tx-table--payments thead th:nth-child(4) { inline-size: 9.5rem; }
+}
+/* In a fixed table a column's width includes its padding: the box repeats the amount cell exactly,
+   and the margin is the actions column less the foot's own padding. */
+.pay-sum__term--net { box-sizing: border-box; display: inline-flex; justify-content: flex-end; gap: 8px; inline-size: 12.5rem; padding-inline: 14px; margin-inline-end: calc(8rem - var(--space-4)); }
 [dir='rtl'] .pay-sum__term--net { flex-direction: row-reverse; }
 .pay-sum__term--net .money__n { font-size: 20px; font-weight: 700; color: var(--ink); }
 [dir='ltr'] .pay-sum__term--net .money__c { display: inline-block; min-inline-size: 2.4em; text-align: left; }
