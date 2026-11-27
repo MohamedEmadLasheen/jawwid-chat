@@ -2,9 +2,11 @@ import { useMemo } from 'react'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { ACADEMY_ZONE, clock12In, isoToAcademyWallClock } from '@/core/time/academyTime'
 import type { CalendarDay, CalendarLesson, CalendarSummary, CalendarWindow } from './api'
-import { CATEGORY_LABEL, S, dayLabel, hoursOf, statusOf, useScheduleText } from './copy'
-import { swatchClass } from './palette'
-import { lessonLabel, lessonTime } from './Timeline'
+import { Badge } from '@/shared/components/Badge'
+import { Icon } from '@/shared/components/Icon'
+import { CATEGORY_LABEL, KIND_LABEL, S, dayLabel, hoursOf, joinList, statusOf, useScheduleText } from './copy'
+import type { Findings } from './issues'
+import { lessonClasses, lessonLabel, lessonName, lessonTime } from './Timeline'
 import { daysOf } from './viewState'
 
 /**
@@ -12,7 +14,8 @@ import { daysOf } from './viewState'
  * One section per day under a date bar that stays at the top while it scrolls;
  * in it, each teacher with something that day -- their lessons and the shift
  * time no student holds, in time order, every row a full-width target of at
- * least 44 px. A lesson opens the same details as on the grid.
+ * least 44 px. A lesson opens the same details as on the grid, and wears the
+ * same shapes (edge, dashed trial, struck, ghost, clash outline).
  */
 
 type Row =
@@ -28,7 +31,17 @@ function rowsOf(day: CalendarDay | undefined, lessons: CalendarLesson[]): Row[] 
   return (day?.leave.length ?? 0) > 0 ? [{ kind: 'leave' }, ...rows] : rows
 }
 
-export function AgendaView({ data, onLesson }: { data: CalendarWindow; onLesson: (l: CalendarLesson) => void }) {
+export function AgendaView({
+  data,
+  findings,
+  now,
+  onLesson,
+}: {
+  data: CalendarWindow
+  findings: Findings
+  now: string
+  onLesson: (l: CalendarLesson) => void
+}) {
   const tx = useScheduleText()
   const { locale } = useI18n()
   const byDay = useMemo(() => {
@@ -56,28 +69,47 @@ export function AgendaView({ data, onLesson }: { data: CalendarWindow; onLesson:
             {teachers.map(({ t, rows }) => (
               <div key={t.id} className="sc-agenda__teacher">
                 <div className="sc-agenda__who">
-                  <span className="sc-row__name"><bdi>{t.name}</bdi></span>
-                  <span className={`sc-cat sc-cat--${t.category}`}>{tx(CATEGORY_LABEL[t.category])}</span>
+                  <span className="sc-agenda__teacher-name"><bdi>{t.name}</bdi></span>
+                  {findings.absent.has(`${t.id}|${day}`) ? (
+                    <Badge tone="danger">{tx(S.onLeave)}</Badge>
+                  ) : (
+                    <span className="sc-cat">{tx(CATEGORY_LABEL[t.category])}</span>
+                  )}
                 </div>
                 <ul className="sc-agenda__list">
                   {rows.map((r) =>
                     r.kind === 'lesson' ? (
                       <li key={r.lesson.id}>
-                        <button
-                          type="button"
-                          className={`sc-agenda__item sc-agenda__item--${r.lesson.status} ${data.lessonFilter && !r.lesson.matches ? 'sc-c-none' : swatchClass(r.lesson.colorKey)}`}
-                          aria-label={lessonLabel(r.lesson, tx, locale, data.lessonFilter && !r.lesson.matches)}
-                          onClick={() => onLesson(r.lesson)}
-                        >
-                          <span className="sc-agenda__time">{lessonTime(r.lesson, locale)}</span>
-                          <span className="sc-agenda__name">
-                            <bdi>{r.lesson.anonymous ? tx(S.booked) : r.lesson.learner?.name ?? r.lesson.prospect?.name ?? tx(S.booked)}</bdi>
-                          </span>
-                          <span className="sc-agenda__status">
-                            {tx(statusOf(r.lesson))}
-                            {r.lesson.outsideShift && ` · ${tx(S.outsideMark)}`}
-                          </span>
-                        </button>
+                        {(() => {
+                          const l = r.lesson
+                          const miss = data.lessonFilter && !l.matches
+                          const clash = findings.clashing.has(l.id)
+                          const uncovered = findings.uncovered.has(l.id)
+                          const past = Date.parse(l.endsAt) <= Date.parse(now)
+                          const state = [
+                            tx(statusOf(l)),
+                            l.kind === 'makeup' ? tx(KIND_LABEL.makeup) : null,
+                            !l.anonymous && l.suspendedFor === 'payment' ? tx(S.paymentHold) : null,
+                            l.outsideShift ? tx(S.outsideMark) : null,
+                            clash ? tx(S.clash) : null,
+                            uncovered ? tx(S.needsSubstitute) : null,
+                          ].filter((x): x is string => !!x)
+                          return (
+                            <button
+                              type="button"
+                              className={`sc-agenda__item ${lessonClasses(l, { miss, past, clash, uncovered }).replace('sc-lesson ', '').replace(/sc-lesson--/g, 'sc-agenda__item--')}`}
+                              aria-label={lessonLabel(l, tx, locale, miss, { clash, uncovered })}
+                              onClick={() => onLesson(l)}
+                            >
+                              <span className="sc-agenda__time">{lessonTime(l, locale)}</span>
+                              <span className="sc-agenda__name">
+                                {l.status === 'paused' && <Icon name="pause" size={14} />}
+                                <bdi>{lessonName(l, tx)}</bdi>
+                              </span>
+                              <span className="sc-agenda__status">{joinList(state, locale)}</span>
+                            </button>
+                          )
+                        })()}
                       </li>
                     ) : r.kind === 'empty' ? (
                       <li key={`empty-${r.at}`} className="sc-agenda__empty">

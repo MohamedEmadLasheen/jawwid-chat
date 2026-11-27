@@ -22,6 +22,7 @@ export const S = {
     ar: 'شيفت كل معلم وحصصه ووقته الفارغ. يحسب الخادم كل رقم من الحصص نفسها.',
   },
   zoneNote: { en: 'Times in {zone}', ar: 'الأوقات {zone}' },
+  range: { en: 'Choose a date', ar: 'اختر تاريخًا' },
   today: { en: 'Today', ar: 'اليوم' },
   previous: { en: 'Previous', ar: 'السابق' },
   next: { en: 'Next', ar: 'التالي' },
@@ -38,8 +39,8 @@ export const S = {
 
   // Filters
   filters: { en: 'Filters', ar: 'عوامل التصفية' },
-  railFold: { en: 'Fold the filters to icons', ar: 'طيّ عوامل التصفية إلى أيقونات' },
-  railOpen: { en: 'Expand the filter rail', ar: 'توسيع شريط عوامل التصفية' },
+  moreFilters: { en: 'More filters', ar: 'المزيد من عوامل التصفية' },
+  weekStartsOn: { en: 'Week starts on', ar: 'يبدأ الأسبوع يوم' },
   clearAll: { en: 'Clear all', ar: 'مسح الكل' },
   search: { en: 'Search', ar: 'بحث' },
   noOptions: { en: 'Nothing to choose', ar: 'لا خيارات' },
@@ -103,22 +104,32 @@ export const S = {
   onLeave: { en: 'On leave', ar: 'في إجازة' },
   noLessonsDay: { en: 'No lessons', ar: 'لا حصص' },
   // "Label: number" -- no noun that would need a plural form after a count.
-  dayTotals: { en: 'Lessons: {lessons} · Empty: {empty}', ar: 'الحصص: {lessons} · الفارغ: {empty}' },
+  dayTotals: { en: 'Lessons: {lessons}, empty: {empty}', ar: 'الحصص: {lessons}، الفارغ: {empty}' },
+  allTeachers: { en: 'All teachers', ar: 'كل المعلمين' },
 
   // Legend
-  legend: { en: 'Legend', ar: 'دليل الألوان' },
+  legend: { en: 'Legend', ar: 'دليل الرموز' },
+  legendButton: { en: 'What the shapes mean', ar: 'معنى الأشكال والألوان' },
+  legendLessons: { en: 'Lessons', ar: 'الحصص' },
+  legendLane: { en: 'A teacher\'s day', ar: 'يوم المعلم' },
+  scheduled: { en: 'Booked', ar: 'محجوزة' },
+  pastLesson: { en: 'Already over', ar: 'انتهت' },
+  notHappening: { en: 'Moved away or called off', ar: 'نُقلت أو أُلغيت' },
+  clash: { en: 'Two lessons at once', ar: 'حصتان في وقت واحد' },
+  needsSubstitute: { en: 'Teacher on leave: needs a substitute', ar: 'المعلم في إجازة: تحتاج معلمًا بديلًا' },
+  nowLine: { en: 'Now', ar: 'الآن' },
   supervisorsLegend: { en: 'Supervisors', ar: 'المشرفون' },
-  supervisorsFilter: { en: 'Show one supervisor’s lessons:', ar: 'عرض حصص مشرف بعينه:' },
+  supervisorsFilter: { en: 'Supervisors (choose one to show only their students)', ar: 'المشرفون (اختر مشرفًا لعرض طلابه فقط)' },
   statusLegend: { en: 'Status', ar: 'الحالة' },
   noColor: { en: 'No color yet', ar: 'بلا لون بعد' },
   emptySlot: { en: 'Available time without a student', ar: 'وقت متاح بدون طالب' },
-  outsideShift: { en: 'Outside the shift', ar: 'خارج الشيفت' },
+  outsideShift: { en: 'Outside working hours', ar: 'خارج ساعات العمل' },
   shiftBand: { en: 'Shift', ar: 'الشيفت' },
-  workBand: { en: 'Working hours (hourly)', ar: 'ساعات العمل (بالساعة)' },
+  workBand: { en: 'Working hours', ar: 'ساعات العمل' },
   leaveBand: { en: 'Leave', ar: 'إجازة' },
   otherBooking: { en: 'Other booking', ar: 'حجز آخر' },
   booked: { en: 'Booked', ar: 'محجوز' },
-  outsideMark: { en: 'outside the shift', ar: 'خارج الشيفت' },
+  outsideMark: { en: 'outside working hours', ar: 'خارج ساعات العمل' },
 
   // Lesson details
   lessonTitle: { en: 'Lesson', ar: 'الحصة' },
@@ -129,8 +140,37 @@ export const S = {
   openStudent: { en: 'Open student profile', ar: 'افتح ملف الطالب' },
   anonymousLesson: { en: 'Another supervisor\'s student', ar: 'طالب لدى مشرف آخر' },
   movedHere: { en: 'Moved to this time', ar: 'نُقلت إلى هذا الموعد' },
-  paymentHold: { en: 'Suspended — payment', ar: 'معلّقة — الدفع' },
+  paymentHold: { en: 'Suspended until the family pays', ar: 'معلّقة حتى تدفع الأسرة' },
   close: { en: 'Close', ar: 'إغلاق' },
+  openDesk: { en: 'Open the teacher\'s schedule', ar: 'افتح جدول المعلم' },
+  openLesson: { en: 'Open the lesson', ar: 'افتح الحصة' },
+  showOnGrid: { en: 'Show on the schedule', ar: 'أظهرها في الجدول' },
+
+  // Needs your attention
+  attnTitle: { en: 'Needs your attention', ar: 'يحتاج انتباهك' },
+  attnNone: { en: 'Nothing needs you here', ar: 'لا شيء يحتاج انتباهك هنا' },
+  attnNoneHint: {
+    en: 'Two lessons at once, a teacher on leave with lessons, a lesson suspended for payment or booked outside working hours will appear here.',
+    ar: 'ستظهر هنا الحصص المتداخلة، والمعلم في إجازة ولديه حصص، والحصة المعلّقة للدفع أو المحجوزة خارج ساعات العمل.',
+  },
+  attnFold: { en: 'Hide what needs attention', ar: 'إخفاء ما يحتاج انتباهك' },
+  attnOpen: { en: 'Show what needs attention', ar: 'عرض ما يحتاج انتباهك' },
+  attnConflict: { en: '{teacher} has two lessons at {time}: {a} and {b}.', ar: 'لدى {teacher} حصتان في {time}: {a} و{b}.' },
+  attnConflictMany: { en: '{teacher} has {n} lessons at once from {time}.', ar: 'لدى {teacher} {n} في وقت واحد من {time}.' },
+  attnAbsent: { en: '{teacher} is on leave with {n} that need a substitute, the first at {time}.', ar: 'إجازة {teacher} تشمل {n} تحتاج معلمًا بديلًا، أولها {time}.' },
+  attnPayment: { en: '{student}\'s lesson at {time} with {teacher} is suspended until the family pays.', ar: 'حصة {student} في {time} مع {teacher} معلّقة حتى تدفع الأسرة.' },
+  attnOutside: { en: '{teacher} has {n} outside working hours, the first at {time}.', ar: 'لدى {teacher} {n} خارج ساعات العمل، أولها {time}.' },
+  attnOutsideOne: { en: '{teacher} has a lesson outside working hours at {time}.', ar: 'لدى {teacher} حصة خارج ساعات العمل في {time}.' },
+  attnAbsentOne: { en: '{teacher} is on leave with a lesson at {time} that needs a substitute.', ar: 'إجازة {teacher} تشمل حصة في {time} تحتاج معلمًا بديلًا.' },
+
+  // Week board
+  ofHours: { en: 'of {base} h', ar: 'من {base} س' },
+  noWorkingHours: { en: 'No working hours', ar: 'بلا ساعات عمل' },
+  markConflict: { en: 'Clash', ar: 'تعارض' },
+  markAbsent: { en: 'On leave', ar: 'إجازة' },
+  markPayment: { en: 'Payment', ar: 'الدفع' },
+  markOutside: { en: 'Outside', ar: 'خارج' },
+  todayMark: { en: 'Today', ar: 'اليوم' },
 
   // Shift (Teacher File)
   shiftTitle: { en: 'Shift', ar: 'الشيفت' },
@@ -217,6 +257,20 @@ export const notTaught = (l: { anonymous?: true; outcome?: string | null }) => !
 /** What a block says it is: the outcome for a lesson nobody teaches, else its calendar status. */
 export function statusOf(l: { status: CalendarStatus; anonymous?: true; outcome?: string | null }): Pair {
   return notTaught(l) ? OUTCOME_LABEL[l.outcome as string]! : STATUS_LABEL[l.status]
+}
+
+/** Items of a list in a sentence: "A, B" / "أ، ب". */
+export function joinList(parts: ReadonlyArray<string>, locale: 'ar' | 'en'): string {
+  return parts.join(locale === 'ar' ? '، ' : ', ')
+}
+
+/** "1 lesson", "2 lessons" / "حصة واحدة"، "حصتان"، "3 حصص"، "11 حصة": a count with its noun, in each language's grammar. */
+export function lessonsCount(n: number, locale: 'ar' | 'en'): string {
+  if (locale === 'en') return n === 1 ? '1 lesson' : `${n} lessons`
+  if (n === 1) return 'حصة واحدة'
+  if (n === 2) return 'حصتان'
+  if (n >= 3 && n <= 10) return `${n} حصص`
+  return `${n} حصة`
 }
 
 export const KIND_LABEL: Record<LessonKind, Pair> = {
