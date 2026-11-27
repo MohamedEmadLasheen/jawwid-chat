@@ -51,6 +51,10 @@ export interface CallsPageCopy {
   colDuration: string
   colWhen: string
   colCall: string
+  figScheduled: string
+  today: string
+  tomorrow: string
+  moreActions: string
   // tiles
   actions: string
   startCall: string
@@ -157,6 +161,10 @@ const ar: CallsPageCopy = {
   colDuration: 'المدة',
   colWhen: 'الوقت',
   colCall: 'اتصال',
+  figScheduled: 'مجدولة',
+  today: 'اليوم',
+  tomorrow: 'غدًا',
+  moreActions: 'طرق أخرى للبدء',
   actions: 'إجراءات المكالمات',
   startCall: 'بدء مكالمة',
   newLink: 'رابط مكالمة جديد',
@@ -255,6 +263,10 @@ const en: CallsPageCopy = {
   colDuration: 'Length',
   colWhen: 'When',
   colCall: 'Call',
+  figScheduled: 'Scheduled',
+  today: 'Today',
+  tomorrow: 'Tomorrow',
+  moreActions: 'More ways to start',
   actions: 'Call actions',
   startCall: 'Start call',
   newLink: 'New call link',

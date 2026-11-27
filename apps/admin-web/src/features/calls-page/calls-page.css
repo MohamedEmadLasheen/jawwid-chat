@@ -7,13 +7,10 @@
 
 /* ------------------------------------------------------------- the page */
 
-.cp-head { align-items: flex-end; margin-block-end: var(--space-4); }
-/* One thing to do first (start a call); the other three are quiet words beside it. */
-.cp-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; }
+/* Two sheets side by side: what is scheduled (and the pinned chats under it)
+   at the start, the account's history at the end. */
+.cp-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .cp-action { gap: 7px; }
-.cp-action.btn--primary { margin-inline-end: var(--space-2); }
-.cp-action.btn--ghost { padding-inline: 10px; font-weight: 500; }
-.cp-action:not(.btn--primary) .icon { color: var(--teal); }
 
 .cp-notice {
   display: flex;
@@ -21,68 +18,51 @@
   justify-content: space-between;
   gap: var(--space-3);
   margin-block-end: var(--space-4);
-  padding: 2px 0;
-  padding-inline-start: var(--space-3);
-  border-inline-start: 2px solid var(--success);
+  padding: 6px var(--space-3);
+  border: 1px solid var(--hairline);
+  border-inline-start: 3px solid var(--success);
+  border-radius: var(--radius);
+  background: var(--surface);
   font-size: var(--fs-sm);
-  color: var(--ink);
 }
 
-.cp-search { max-inline-size: 340px; margin-block-end: var(--space-5); }
-
-.cp-cols {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
-  gap: var(--space-6) var(--space-7);
-  align-items: start;
-}
-.cp-cols__main { display: grid; gap: var(--space-6); min-inline-size: 0; }
-.cp-cols__side { min-inline-size: 0; }
+.cp-cols { display: grid; grid-template-columns: minmax(320px, 2fr) minmax(0, 3fr); gap: var(--space-5); align-items: start; }
+.cp-cols__start, .cp-cols__end { display: grid; gap: var(--space-4); min-inline-size: 0; }
 @media (max-width: 1099px) {
   .cp-cols { grid-template-columns: minmax(0, 1fr); }
-  /* Pinned chats come before the long history when the columns stack. */
-  .cp-cols__side { order: -1; }
 }
-@media (max-width: 767px) {
-  .cp-actions { inline-size: 100%; gap: 0 2px; }
-  .cp-action.btn--primary { flex: 1 0 100%; justify-content: center; margin: 0 0 4px; }
-  .cp-action.btn--ghost { flex: 1 1 auto; justify-content: center; padding-inline: 6px; }
-  .cp-search { max-inline-size: none; }
-  /* Every button on the page, and every icon-only action, is a full touch target. */
-  .cp-page :is(.btn, .btn--sm) { min-block-size: 44px; }
-  .cp-page :is(.btn--icon, .btn--icon.btn--sm) { min-inline-size: 44px; }
-}
+.cp-search .search { max-inline-size: none; }
+.cp-search .input { background-color: var(--surface); }
 
-.cp-section { min-inline-size: 0; }
-.cp-section__title {
-  margin: 0;
-  padding-block-end: 8px;
-  border-block-end: 1px solid var(--hairline);
-}
+.cp-section { min-inline-size: 0; overflow: hidden; }
+.cp-section .state { padding: var(--space-4); }
 .cp-list { list-style: none; margin: 0; padding: 0; }
-.cp-empty {
-  margin: 0;
-  padding: var(--space-3) 0;
-  font-size: var(--fs-sm);
-  color: var(--ink-muted);
-}
-.cp-section .state { padding-block: var(--space-3) var(--space-4); }
-.cp-section .state .btn { margin-block-start: var(--space-1); }
-.cp-more { margin-block-start: var(--space-3); }
+.cp-empty { margin: 0; padding: var(--space-3) var(--space-4); font-size: var(--fs-sm); color: var(--ink-muted); }
+.cp-more { display: flex; justify-content: center; padding: var(--space-3); border-block-start: 1px solid var(--hairline-soft); }
 
 /* ------------------------------------------------------------ upcoming */
 
-/* A scheduled call reads hour first, in the display face. */
+/* An agenda: a heading per day, and each call hour first in the display face. */
+.cp-day__head {
+  margin: 0;
+  padding: 8px var(--space-4) 7px;
+  background: var(--paper);
+  border-block-end: 1px solid var(--hairline-soft);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+.cp-day + .cp-day .cp-day__head { border-block-start: 1px solid var(--hairline-soft); }
 .cp-up {
   display: grid;
-  grid-template-columns: 124px minmax(0, 1fr) auto;
+  grid-template-columns: 96px minmax(0, 1fr) auto;
   align-items: center;
-  gap: var(--space-4);
+  gap: var(--space-3);
   min-block-size: 64px;
-  padding: 10px 2px;
+  padding: 10px var(--space-4);
   border-block-end: 1px solid var(--hairline-soft);
 }
-.cp-up__when { display: grid; gap: 1px; }
+.cp-list > :last-child { border-block-end: 0; }
 .cp-up__time {
   font-family: var(--display);
   font-size: var(--fs-xl);
@@ -90,13 +70,10 @@
   line-height: 1.15;
   font-variant-numeric: tabular-nums lining-nums;
   color: var(--ink);
-  text-align: start;
 }
-.cp-up__day { font-size: var(--fs-xs); color: var(--ink-muted); }
-.cp-up--open .cp-up__time { color: var(--teal-dark); }
-@media (max-width: 479px) {
-  .cp-up { grid-template-columns: 96px minmax(0, 1fr) auto; gap: var(--space-3); }
-}
+/* A call that can be joined now is the one that stands out. */
+.cp-up--open { background: var(--teal-tint); }
+.cp-up--open .cp-up__time { color: var(--teal); }
 
 /* ---------------------------------------------------------------- rows */
 
@@ -104,8 +81,8 @@
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  min-block-size: 52px;
-  padding: 7px 2px;
+  min-block-size: 56px;
+  padding: 8px var(--space-4);
   border-block-end: 1px solid var(--hairline-soft);
   color: var(--ink);
 }
@@ -125,18 +102,17 @@
 .cp-row--button:disabled { cursor: default; opacity: 0.6; }
 .cp-row--button:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 
-.cp-row__body { flex: 1; min-inline-size: 0; display: grid; gap: 1px; }
-
+.cp-row__body { flex: 1; min-inline-size: 0; display: grid; gap: 2px; }
 .cp-row__name {
-  font-size: var(--fs-sm);
+  justify-self: start;
+  max-inline-size: 100%;
+  font-size: var(--fs-md);
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.cp-up .cp-row__name { justify-self: start; max-inline-size: 100%; font-size: var(--fs-md); }
 .cp-row__name--missed { color: var(--terracotta); }
-
 .cp-row__sub {
   display: inline-flex;
   align-items: center;
@@ -146,52 +122,53 @@
   overflow: hidden;
   white-space: nowrap;
 }
-
-.cp-row__badges { display: inline-flex; flex-wrap: wrap; gap: 2px var(--space-3); }
-.cp-row__badges .badge { font-size: var(--fs-xs); }
-
-.cp-row__end {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  flex: none;
-}
-
+.cp-row__badges { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px var(--space-2); }
+.cp-row__end { display: inline-flex; align-items: center; gap: var(--space-1); flex: none; }
 .cp-row__time { font-size: var(--fs-sm); color: var(--ink-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
-.cp-row__call { color: var(--teal); }
+.cp-row__call { gap: 6px; }
+.cp-row__call .icon { color: var(--teal); }
 .cp-row__icon { color: var(--teal); display: inline-flex; }
 
 /* -------------------------------------------------------------- history */
 
-.cp-table { inline-size: 100%; }
-.cp-table th:first-child, .cp-table td:first-child { padding-inline-start: 2px; }
-.cp-recent th[scope='row'] { position: static; padding-block: 7px; border-block-end: 1px solid var(--hairline-soft); background: none; color: var(--ink); font-size: var(--fs-sm); font-weight: inherit; text-align: start; }
-.cp-recent__name { display: flex; align-items: center; gap: 10px; min-inline-size: 0; }
-.cp-recent__dir { color: var(--ink-muted); white-space: nowrap; }
-.cp-recent__dir .icon { margin-inline-end: 5px; vertical-align: -2px; }
-.cp-recent__status { white-space: nowrap; }
-.cp-recent__lost { margin-inline-start: 6px; color: var(--ink-muted); font-size: var(--fs-xs); }
-.cp-recent__len { color: var(--ink-muted); }
-.cp-recent__call { inline-size: 44px; text-align: end; }
-.cp-table td.cp-recent__call { padding-block: 3px; }
-/* On a phone the table is a list: who and when, then how it went. */
+/* A past call: which way it went, who, how it ended, how long, when, and Call. */
+.cp-recent {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) 56px minmax(72px, auto) minmax(84px, auto);
+  align-items: center;
+  gap: var(--space-3);
+  min-block-size: 60px;
+  padding: 9px var(--space-4);
+  border-block-end: 1px solid var(--hairline-soft);
+}
+.cp-recent__dir {
+  display: grid;
+  place-items: center;
+  inline-size: 34px;
+  block-size: 34px;
+  border-radius: var(--radius);
+  background: var(--paper);
+  color: var(--ink-muted);
+}
+.cp-recent[data-direction='outgoing'] .cp-recent__dir { color: var(--teal); }
+.cp-recent--missed .cp-recent__dir { background: var(--terracotta-tint); color: var(--terracotta); }
+.cp-recent__who { display: flex; align-items: center; gap: 8px; min-inline-size: 0; }
+.cp-recent__facts { display: flex; flex-wrap: wrap; align-items: center; gap: 2px var(--space-2); font-size: var(--fs-xs); color: var(--ink-muted); }
+.cp-recent__len { font-size: var(--fs-sm); color: var(--ink-muted); font-variant-numeric: tabular-nums; text-align: end; }
+.cp-recent .cp-row__time { text-align: end; }
+.cp-recent .row-actions2 { justify-self: end; }
 @media (max-width: 767px) {
-  .cp-table thead { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); }
-  .cp-table, .cp-table tbody { display: block; }
-  .cp-recent {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto auto;
-    align-items: center;
-    gap: 0 var(--space-3);
-    padding: 8px 0;
-    border-block-end: 1px solid var(--hairline-soft);
-  }
-  .cp-table .cp-recent > *, .cp-table .cp-recent th[scope='row'] { padding: 0; border: 0; }
-  .cp-recent__who { grid-column: 1; grid-row: 1 / span 2; }
-  .cp-recent__when { grid-column: 2; grid-row: 1; justify-self: end; }
-  .cp-recent__status { grid-column: 2; grid-row: 2; justify-self: end; }
-  .cp-recent__dir, .cp-recent__len { display: none; }
-  .cp-recent__call { grid-column: 3; grid-row: 1 / span 2; }
+  .cp-recent { grid-template-columns: 34px minmax(0, 1fr) auto; padding-inline: var(--space-3); row-gap: 4px; }
+  .cp-recent__len { display: none; }
+  .cp-recent .cp-row__time { grid-column: 3; grid-row: 1; }
+  .cp-recent .row-actions2 { grid-column: 2 / -1; grid-row: 2; justify-self: start; }
+  .cp-up, .cp-row, .cp-day__head { padding-inline: var(--space-3); }
+  .cp-up { grid-template-columns: 84px minmax(0, 1fr) auto; }
+  .cp-actions { inline-size: 100%; }
+  .cp-action { flex: 1 1 auto; justify-content: center; }
+  /* Every button on the page, and every icon-only action, is a full touch target. */
+  .cp-page :is(.btn, .btn--sm) { min-block-size: 44px; }
+  .cp-page :is(.btn--icon, .btn--icon.btn--sm) { min-inline-size: 44px; }
 }
 
 /* ---------------------------------------------------------------- menu */

@@ -4,6 +4,7 @@ import { useI18n } from '@/core/i18n/I18nProvider'
 import { useSession } from '@/core/auth/SessionProvider'
 import { legalGateState } from '@/features/legal/legal'
 import { Avatar } from '@/shared/components/Avatar'
+import { Icon } from '@/shared/components/Icon'
 import { useCall } from './CallProvider'
 import { callCopyFor, type CallCopy } from './copy'
 import type { CallState } from './callController'
@@ -336,26 +337,13 @@ export function CallOverlay() {
   )
 }
 
-// Glyphs: inline, currentColor, never mirrored (a phone and a microphone are
-// physical objects -- cross-platform.md §4).
-const svg = (d: ReactNode) => (
-  <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="currentColor">
-    {d}
-  </svg>
-)
-const PhoneIcon = () =>
-  svg(<path d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.57a1 1 0 0 1-.25 1l-2.22 2.23Z" />)
-const HangUpIcon = () =>
-  svg(<path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1a1 1 0 0 1-.56.9 11.5 11.5 0 0 0-2.66 1.85 1 1 0 0 1-1.41 0L.29 13.1a1 1 0 0 1 0-1.41A16.9 16.9 0 0 1 12 7c4.5 0 8.6 1.75 11.71 4.69a1 1 0 0 1 0 1.41l-2.48 2.48a1 1 0 0 1-1.41 0 11.3 11.3 0 0 0-2.66-1.85 1 1 0 0 1-.56-.9v-3.1A15 15 0 0 0 12 9Z" />)
-const MicIcon = () =>
-  svg(<path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2Z" />)
-const MicOffIcon = () =>
-  svg(<path d="M19 11h-1.7c0 .74-.16 1.43-.43 2.05l1.23 1.23A6.9 6.9 0 0 0 19 11Zm-4 .16V5a3 3 0 0 0-5.9-.78L15 10.1v1.06ZM4.27 3 3 4.27l6 6V11a3 3 0 0 0 4.38 2.66l1.66 1.66A5 5 0 0 1 7 11H5a7 7 0 0 0 6 6.92V21h2v-3.08a6.9 6.9 0 0 0 3.32-1.33L19.73 20 21 18.73 4.27 3Z" />)
-const ChatIcon = () => svg(<path d="M20 2H4a2 2 0 0 0-2 2v18l4-4h14a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2Z" />)
-const CloseIcon = () =>
-  svg(<path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41Z" />)
-const LockIcon = () => (
-  <svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="currentColor">
-    <path d="M18 8h-1V6a5 5 0 0 0-10 0v2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2ZM9 6a3 3 0 0 1 6 0v2H9V6Z" />
-  </svg>
-)
+// Glyphs: the app's one icon set (shared/components/Icon), drawn in the control's
+// own colour. None of these is directional, so none mirrors in Arabic: a phone
+// and a microphone are physical objects (cross-platform.md §4).
+const PhoneIcon = () => <Icon name="phone" size={24} />
+const HangUpIcon = () => <Icon name="hangUp" size={26} />
+const MicIcon = () => <Icon name="mic" size={24} />
+const MicOffIcon = () => <Icon name="micOff" size={24} />
+const ChatIcon = () => <Icon name="chatText" size={24} />
+const CloseIcon = () => <Icon name="close" size={22} />
+const LockIcon = () => <Icon name="lock" size={13} />
