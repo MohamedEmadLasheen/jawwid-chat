@@ -931,7 +931,7 @@ mark.cw-hit { background: var(--gold-tint); color: inherit; border-radius: 2px; 
 .cw-hit-row { display: flex; align-items: flex-start; gap: 11px; inline-size: 100%; padding: 8px var(--cw-pad); border: 0; background: none; text-align: start; cursor: pointer; color: inherit; font: inherit; }
 .cw-hit-row:hover, .cw-hit-row:focus-visible { background: var(--surface-hover); }
 .cw-hit-row__main { flex: 1; min-inline-size: 0; display: grid; gap: 1px; }
-.cw-hit-row__top { display: flex; align-items: baseline; gap: 8px; }
+.cw-hit-row__top { display: flex; align-items: baseline; gap: 8px; min-inline-size: 0; }
 .cw-hit-row__where { flex: 1; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-sm); font-weight: 600; }
 .cw-hit-row__time { flex: none; font-size: var(--fs-xs); color: var(--ink-muted); }
 /* Two lines in the text's own direction, but starting on the pane's side (the two spellings are one value, per engine). */
