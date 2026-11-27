@@ -177,7 +177,7 @@ function Attention({ o, query }: { o: AdminOverview; query: ConversationsQuery }
           <h2 className="sheet__title" id="dash-attention">
             {tx(TEXT.needsAttention)}
           </h2>
-          {items.length > 0 && <span className="count count--urgent">{items.length}</span>}
+          {items.length > 0 && <span className="count">{items.length}</span>}
         </div>
       </header>
       {query.isLoading ? (

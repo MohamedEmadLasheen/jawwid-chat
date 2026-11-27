@@ -250,6 +250,8 @@
 .ts-inbox .rowx { border-block-end: 1px solid var(--line-2); }
 .ts-inbox .ts-rows > :last-child { border-block-end: 0; }
 .ts-inbox .ts-stale { color: var(--ink-2); font-weight: 400; }
-.ts-inbox .ts-slot--busy { color: var(--urgent); }
+.ts-inbox .ts-slot--free { color: var(--ink); }
+.ts-inbox .ts-slot--busy { color: var(--ink-muted); text-decoration: line-through; }
+.ts-inbox .ts-slot--busy .ts-slot__flag { text-decoration: none; display: inline-block; }
 .ts-inbox .rw-age { inline-size: 7rem; flex: none; text-align: end; }
-.ts-inbox .cell-actions { min-inline-size: 11rem; display: flex; justify-content: flex-end; }
+.ts-inbox .cell-actions { min-inline-size: 11rem; display: flex; justify-content: flex-start; }

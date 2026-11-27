@@ -262,7 +262,6 @@ function Unit({ lesson, strings, required, canReview, player, title }: { lesson:
               </div>
               <div className="lesson-audio__meta">
                 <Badge tone={STATUS[s.status].tone} dot>{tx(STATUS[s.status].label)}</Badge>
-                <code className="ltr">{s.id}</code>
               </div>
             </div>
             {s.status === 'noAudio' ? <p className="lesson-audio__hint">{tx(C.noAudio)}</p> : null}
