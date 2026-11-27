@@ -170,7 +170,7 @@ function LeadBody({ lead }: { lead: Lead }) {
       : lead.convertedAt || lead.stage === 'converted'
         ? tx(P.stateConverted)
         : lead.followUpDue && lead.nextFollowUpOn
-          ? tx(P.stateDue).replace('{date}', on(lead.nextFollowUpOn))
+          ? tx(P.stateDue)
           : lead.canConvert
             ? tx(P.stateConvert)
             : lead.stage === 'trial_booked'

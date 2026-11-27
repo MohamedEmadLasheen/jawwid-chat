@@ -115,7 +115,7 @@ export const P = {
   lastContactAge: { en: 'Last contact {age}', ar: 'آخر تواصل {age}' },
   addedAge: { en: 'Added {age}', ar: 'أُضيف {age}' },
   // The inspector's state, in one sentence
-  stateDue: { en: 'The follow-up planned for {date} has not been made.', ar: 'لم تتم المتابعة التي كانت مخططة في {date}.' },
+  stateDue: { en: 'The planned follow-up has not been made. Record the contact once you reach the family.', ar: 'لم تتم المتابعة المخططة. سجّل التواصل حين تصل إلى الأسرة.' },
   stateConvert: { en: 'Ready to hand over: convert the lead to pass the family to Operations.', ar: 'جاهز للتسليم: حوّل العميل لتنتقل الأسرة إلى التشغيل.' },
   stateNew: { en: 'Nobody has contacted this family yet.', ar: 'لم يتواصل أحد مع هذه الأسرة بعد.' },
   stateTrial: { en: 'A trial is booked; its outcome decides the next stage.', ar: 'حُجزت حصة تجريبية، ونتيجتها تحدد المرحلة التالية.' },
