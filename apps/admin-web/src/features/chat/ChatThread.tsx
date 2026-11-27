@@ -596,8 +596,8 @@ export function ChatThread({
             </span>
           </button>
         )}
+        {conv?.familyId && <FamilyFact familyId={conv.familyId} onOpen={infoShown ? undefined : onToggleInfo} />}
         <div className="cw-head__actions">
-          {conv?.familyId && <FamilyFact familyId={conv.familyId} onOpen={infoShown ? undefined : onToggleInfo} />}
           {conv && <CallButton conversationId={conversationId} peerLabel={name} isGroup={group} />}
           {conv && (
             <Menu
