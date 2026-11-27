@@ -103,7 +103,8 @@ describe('the Students page', () => {
     await screen.findByRole('link', { name: 'Child One' })
     await userEvent.type(screen.getByRole('searchbox', { name: 'Search by student or family name' }), 'alpha')
     await waitFor(() => expect(asked().some((u) => u.searchParams.get('q') === 'alpha')).toBe(true))
-    await chooseOption(userEvent, screen.getByRole('combobox', { name: 'Status' }), 'paused')
+    // The status filter is a row of tabs now, not a picker: the same filter, one click.
+    await userEvent.click(within(screen.getByRole('group', { name: 'Status' })).getByRole('button', { name: 'Paused' }))
     await waitFor(() => expect(asked().some((u) => u.searchParams.get('status') === 'paused')).toBe(true))
     await chooseOption(userEvent, screen.getByRole('combobox', { name: 'Teacher' }), 'none')
     await waitFor(() => expect(asked().some((u) => u.searchParams.get('teacher') === 'none')).toBe(true))

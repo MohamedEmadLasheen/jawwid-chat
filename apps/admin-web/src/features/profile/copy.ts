@@ -99,12 +99,12 @@ export const T = {
   reportsTo: { en: 'Reports to', ar: 'المدير المباشر' },
   noManager: { en: 'No reporting manager assigned', ar: 'لم يُحدَّد مدير مباشر' },
   officialFieldsNote: {
-    en: 'Role, permissions, account status and reporting line are official fields. They are not editable from a profile; ask the super admin.',
-    ar: 'الدور والصلاحيات وحالة الحساب والمدير المباشر حقول رسمية لا تُعدَّل من الملف الشخصي؛ تواصل مع المدير العام.',
+    en: 'Role, permissions, status and reporting line are official: only the super admin changes them.',
+    ar: 'الدور والصلاحيات وحالة الحساب والمدير المباشر حقول رسمية، يغيّرها المدير العام فقط.',
   },
   contactNote: {
-    en: 'Jawwid Chat stores no phone number or email for staff beyond the sign-in identifier.',
-    ar: 'لا يخزّن جوّد شات رقم هاتف أو بريدًا إلكترونيًا للموظفين سوى معرّف تسجيل الدخول.',
+    en: 'No staff phone or email is stored beyond the sign-in.',
+    ar: 'لا يُخزَّن للموظفين هاتف أو بريد سوى معرّف الدخول.',
   },
   inactive: { en: 'Inactive', ar: 'غير نشط' },
   active: { en: 'Active', ar: 'نشط' },
@@ -112,8 +112,8 @@ export const T = {
   // Responsibilities
   responsibilities: { en: 'Responsibilities & supervision', ar: 'المسؤوليات والإشراف' },
   responsibilitiesHint: {
-    en: 'Official labels describe what someone works on. They do not grant access to any module.',
-    ar: 'التصنيفات الرسمية تصف مجال عمل الشخص، ولا تمنح صلاحية الوصول إلى أي قسم.',
+    en: 'Labels describe the work. They grant no access to any module.',
+    ar: 'التصنيفات تصف العمل، ولا تمنح صلاحية الوصول إلى أي قسم.',
   },
   fromRecords: { en: 'From system records', ar: 'من سجلات النظام' },
   officialLabels: { en: 'Assigned responsibilities', ar: 'المسؤوليات المكلَّف بها' },
@@ -145,19 +145,26 @@ export const T = {
   workload: { en: 'My responsibilities at a glance', ar: 'مسؤولياتي في لمحة' },
   workloadOf: { en: 'Responsibilities at a glance', ar: 'المسؤوليات في لمحة' },
   workloadHint: {
-    en: 'Counted live from the families currently assigned to this person (churned families excluded). No names are shown.',
-    ar: 'تُحسب مباشرةً من الأسر المسندة حاليًا لهذا الشخص (باستثناء الأسر المنتهي اشتراكها). لا يُعرض اسم أيّ أسرة.',
+    en: 'Counted live from the families assigned now, churned ones left out. No names are shown.',
+    ar: 'تُحسب مباشرةً من الأسر المسندة حاليًا، دون المنتهي اشتراكها. لا يُعرض اسم أيّ أسرة.',
   },
   asOf: { en: 'As of {when}', ar: 'حتى {when}' },
   notTracked: { en: 'Not tracked in Jawwid Chat', ar: 'غير متتبَّع في جوّد شات' },
   notTrackedBody: {
-    en: 'Tasks, cases, complaints, follow-ups, attendance and performance scores have no records in this system, so no number is shown for them.',
-    ar: 'لا توجد سجلات في هذا النظام للمهام أو الحالات أو الشكاوى أو المتابعات أو الحضور أو مؤشرات الأداء، لذلك لا يُعرض لها أي رقم.',
+    en: 'tasks, cases, complaints, follow-ups, attendance and performance scores. No number is shown for them.',
+    ar: 'المهام والحالات والشكاوى والمتابعات والحضور ومؤشرات الأداء. لا يُعرض لها أي رقم.',
   },
+  whatCounts: { en: 'What each number counts', ar: 'ما الذي يعدّه كل رقم' },
+  loadTitle: { en: 'Load against the team', ar: 'العبء مقارنةً بالفريق' },
+  loadFamilies: { en: 'Assigned families', ar: 'الأسر المسندة' },
+  loadShare: { en: '{pct}% of the heaviest load in the team', ar: '{pct}% من أعلى عبء في الفريق' },
+  teamAverage: { en: 'Team average {n}', ar: 'متوسط الفريق {n}' },
+  heaviest: { en: 'Heaviest {n}', ar: 'الأعلى {n}' },
+  peers: { en: 'Among {n} people who report to the same manager.', ar: 'بين {n} ممن يتبعون المدير نفسه.' },
 
   // Team
   myTeam: { en: 'My team', ar: 'فريقي' },
-  myTeamHint: { en: 'Staff whose reporting line names you. You can open their profiles and, where marked, edit their professional details and responsibilities.', ar: 'الموظفون الذين يتبعونك مباشرة. يمكنك فتح ملفاتهم، وتعديل بياناتهم المهنية ومسؤولياتهم حيث يُشار إلى ذلك.' },
+  myTeamHint: { en: 'Staff whose reporting line names you. Open a profile; edit where marked.', ar: 'الموظفون الذين يتبعونك مباشرة. افتح الملف، وعدّل حيث يُشار إلى ذلك.' },
   directReports: { en: 'Direct reports', ar: 'المرؤوسون المباشرون' },
   noTeam: { en: 'Nobody reports to you yet. Reporting lines are set by the super admin.', ar: 'لا يتبعك أحد بعد. يحدّد المدير العام خطوط التبعية.' },
   search: { en: 'Search by name or title', ar: 'ابحث بالاسم أو المسمى' },
@@ -187,16 +194,16 @@ export const T = {
   viewOnlyBadge: { en: 'View only', ar: 'عرض فقط' },
   teamTotals: { en: 'Team totals', ar: 'إجماليات الفريق' },
   teamTotalsHint: {
-    en: 'Families, students, contacts, conversations and approvals belong to exactly one supervisor, so these are exact sums. Teachers are counted once even when they teach several members’ students.',
-    ar: 'الأسر والطلاب وجهات الاتصال والمحادثات والموافقات تتبع مشرفًا واحدًا فقط، لذا فهذه مجاميع دقيقة. يُحتسب المعلم مرة واحدة حتى لو درّس طلاب أكثر من عضو.',
+    en: 'Exact sums: each family, student, conversation and approval has one supervisor. A teacher is counted once.',
+    ar: 'مجاميع دقيقة: لكل أسرة وطالب ومحادثة وموافقة مشرف واحد. يُحتسب المعلم مرة واحدة.',
   },
   completeOf: { en: '{done}/{total}', ar: '{done}/{total}' },
 
   // Organization
   organization: { en: 'Organization overview', ar: 'نظرة عامة على المؤسسة' },
   organizationHint: {
-    en: 'Every number here is its own count from the database. Summed team figures are shown separately from unique totals and never mixed.',
-    ar: 'كل رقم هنا عدٌّ مستقل من قاعدة البيانات. تُعرض مجاميع الفرق منفصلة عن الإجماليات الفريدة ولا تُخلط بها.',
+    en: 'Each number is its own count. Team sums are shown apart from unique totals, never mixed.',
+    ar: 'كل رقم عدٌّ مستقل. تُعرض مجاميع الفرق منفصلة عن الإجماليات الفريدة ولا تُخلط بها.',
   },
   openOrganization: { en: 'Open the organization overview', ar: 'فتح النظرة العامة على المؤسسة' },
   tabOverview: { en: 'Organization', ar: 'المؤسسة' },
@@ -247,6 +254,25 @@ export const T = {
   system: { en: 'unknown actor', ar: 'جهة غير معروفة' },
   reason: { en: 'Reason', ar: 'السبب' },
   fields: { en: 'Changed', ar: 'التغييرات' },
+
+  // The file's head
+  reportsToLine: { en: 'Reports to', ar: 'يتبع' },
+  joinedLine: { en: 'Joined {date}', ar: 'انضم {date}' },
+  lastActiveLine: { en: 'Last active {when}', ar: 'آخر نشاط {when}' },
+  chat: { en: 'Chat', ar: 'محادثة' },
+  tabs: { en: 'Profile sections', ar: 'أقسام الملف' },
+  tabProfile: { en: 'Profile', ar: 'الملف' },
+  otherChange: { en: 'Profile changed', ar: 'تغيير في الملف' },
+
+  // The Team page
+  teamTitle: { en: 'Team', ar: 'الفريق' },
+  directoryHint: { en: 'Every staff account and who it reports to.', ar: 'كل حسابات الموظفين، ومن يتبع كلٌّ منها.' },
+  teamClosed: {
+    en: 'The team list opens for managers and the super admin. A staff profile still opens from a name.',
+    ar: 'قائمة الفريق متاحة للمديرين والمدير العام. يبقى ملف الموظف متاحًا من اسمه.',
+  },
+  people: { en: '{n} people', ar: '{n} شخصًا' },
+  colLoad: { en: 'Families', ar: 'الأسر' },
 
   // Completeness
   completeness: { en: 'Profile completeness', ar: 'اكتمال الملف' },

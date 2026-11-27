@@ -74,11 +74,11 @@ export function SessionList({
                 )}
               </td>
               {!compact && <td>{tx(PLATFORM[s.platform ?? 'unknown'])}</td>}
-              {!compact && <td>{dateTime(s.signedInAt)}</td>}
-              {!compact && <td>{s.lastSeenAt ? dateTime(s.lastSeenAt) : tx(D.notYet)}</td>}
+              {!compact && <td className="cell-nowrap"><time dateTime={s.signedInAt}>{dateTime(s.signedInAt)}</time></td>}
+              {!compact && <td className="cell-nowrap">{s.lastSeenAt ? <time dateTime={s.lastSeenAt}>{dateTime(s.lastSeenAt)}</time> : tx(D.notYet)}</td>}
               {onSignOut && (
                 <td>
-                  <button type="button" className="btn btn--sm btn--danger" onClick={() => onSignOut(s)}>
+                  <button type="button" className="btn btn--sm btn--ghost dev-signout" onClick={() => onSignOut(s)}>
                     {tx(D.signOut)}
                   </button>
                 </td>

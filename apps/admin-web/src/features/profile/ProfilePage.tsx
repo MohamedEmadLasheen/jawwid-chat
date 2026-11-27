@@ -1,13 +1,18 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { useI18n } from '@/core/i18n/I18nProvider'
+import { useQuery } from '@tanstack/react-query'
 import { ApiError } from '@/core/api/errors'
+import { useSession } from '@/core/auth/SessionProvider'
+import { canOpenArea, isSuperAdmin } from '@/core/permissions/capabilities'
+import { chatApi, chatKeys, type ChatConversation } from '@/features/chat/chatApi'
+import { Icon } from '@/shared/components/Icon'
 import { EmptyState, ErrorState } from '@/shared/components/States'
-import { MISSING_LABEL, T, useCopy } from './copy'
+import { T, useCopy } from './copy'
 import { useActivity, useStaffProfile } from './hooks'
-import { AccountSection, PersonalSection } from './PersonalSection'
+import { AccountSection, PersonalSection, ProfileHead } from './PersonalSection'
 import { ResponsibilitiesSection } from './ResponsibilitiesSection'
 import { WorkloadSection } from './WorkloadSection'
+import { LoadAgainstTeam } from './LoadAgainstTeam'
 import { ActivitySection } from './ActivitySection'
 import { ActionLogSection } from './ActionLogSection'
 import { TeamSection } from './TeamSection'
@@ -32,6 +37,10 @@ import { PresencePrivacy } from '@/features/chat/PresencePrivacy'
  *
  * The URL names only WHICH profile to ask for. Whether it can be seen, and
  * what can be changed on it, is the server's decision on every request.
+ *
+ * Read top to bottom the way a manager reads a person: who they are, a ledger
+ * of what they carry, then the work (their load against the team, their own
+ * words, what they did) beside the official record (responsibilities, account).
  */
 export function ProfilePage() {
   const { staffId } = useParams<{ staffId?: string }>()
@@ -42,83 +51,132 @@ export function ProfilePage() {
   const own = profile?.access.relation === 'self'
   const activity = useActivity(ref, Boolean(profile?.access.canReadAudit))
   const [changingManager, setChangingManager] = useState(false)
+  const [editing, setEditing] = useState(false)
+
+  // The form opens in "Personal profile", further down: bring it into view.
+  useEffect(() => {
+    if (editing) document.getElementById('sp-personal')?.scrollIntoView?.({ block: 'nearest' })
+  }, [editing])
 
   if (query.isLoading) return <ProfileSkeleton />
   if (query.error || !profile) {
     const notFound = query.error instanceof ApiError && query.error.isNotFound
     return (
-      <div className="page sp-page">
-        {notFound ? <EmptyState title={tx(T.notFound)} /> : <ErrorState error={query.error} onRetry={() => void query.refetch()} />}
-        {staffId && <Link to="/profile" className="btn btn--sm">{tx(T.back)}</Link>}
+      <div className="page pp sp-page">
+        <div className="page__inner">
+          {notFound ? <EmptyState title={tx(T.notFound)} /> : <ErrorState error={query.error} onRetry={() => void query.refetch()} />}
+          {staffId && <Link to="/profile" className="btn btn--sm">{tx(T.back)}</Link>}
+        </div>
       </div>
     )
   }
 
+  const mayEdit = profile.access.canEditProfessional || profile.access.canEditDisplayName
+
   return (
-    <div className="page sp-page">
-      <header className="sp-header">
-        <h1 className="page__title">{own ? tx(T.myProfile) : tx(T.profileOf)}</h1>
-        {!own && <Link to="/profile" className="btn btn--sm">{tx(T.back)}</Link>}
-        {/* PD-23: where this account is signed in -- one's own only. */}
-        {own && <Link to="/profile/devices" className="btn btn--sm">{tx(DEVICES.open)}</Link>}
-      </header>
+    <div className="page pp sp-page">
+      <div className="page__inner">
+        {own ? (
+          // PD-23: where this account is signed in is the profile's second tab -- one's own only.
+          <nav className="seg sp-tabsbar" aria-label={tx(T.tabs)}>
+            <span className="seg__item" aria-current="page">{tx(T.tabProfile)}</span>
+            <Link to="/profile/devices" className="seg__item">{tx(DEVICES.open)}</Link>
+          </nav>
+        ) : (
+          <p className="pp-back">
+            <Link to="/profile">{tx(T.back)}</Link>
+          </p>
+        )}
 
-      <Completeness missing={profile.completeness.missing} done={profile.completeness.complete} total={profile.completeness.total} />
+        <ProfileHead
+          profile={profile}
+          refKey={ref}
+          heading={own ? tx(T.myProfile) : tx(T.profileOf)}
+          actions={
+            (!own || (mayEdit && !editing)) && (
+              <>
+                {!own && <ChatWith staffId={profile.staffId} />}
+                {mayEdit && !editing && (
+                  <button type="button" className="btn btn--sm" onClick={() => setEditing(true)}>
+                    {tx(T.edit)}
+                  </button>
+                )}
+              </>
+            )
+          }
+        />
 
-      <div className="sp-grid">
-        <div className="sp-col">
-          <PersonalSection profile={profile} refKey={ref} />
-          <ResponsibilitiesSection profile={profile} refKey={ref} />
+        <WorkloadSection
+          workload={profile.workload}
+          asOf={profile.generatedAt}
+          title={own ? T.workload : T.workloadOf}
+          showDirectReports={profile.role === 'manager' || profile.role === 'super_admin' || profile.workload.directReports > 0}
+        />
+
+        <div className="pp-cols">
+          <div className="pp-main">
+            {!own && <LoadAgainstTeam profile={profile} />}
+            <PersonalSection profile={profile} refKey={ref} editing={editing} onDone={() => setEditing(false)} />
+            {/* PD-35 B7: what they did -- shown when the server lets the viewer read it. */}
+            <ActionLogSection staffId={profile.staffId} />
+            {profile.access.canReadAudit && <ActivitySection query={activity} />}
+          </div>
+          <aside className="pp-side">
+            <ResponsibilitiesSection profile={profile} refKey={ref} />
+            <AccountSection
+              profile={profile}
+              action={
+                profile.access.canManageReportingLine && (
+                  <button type="button" className="btn btn--sm btn--ghost" onClick={() => setChangingManager(true)}>
+                    {tx(T.changeManager)}
+                  </button>
+                )
+              }
+            />
+            {/* PD-37: one's own presence privacy. */}
+            {own && <PresencePrivacy />}
+          </aside>
         </div>
-        <div className="sp-col">
-          <AccountSection profile={profile} />
-          {/* PD-37: one's own presence privacy. */}
-          {own && <PresencePrivacy />}
-          {profile.access.canManageReportingLine && (
-            <div className="sp-inline-action">
-              <button type="button" className="btn btn--sm" onClick={() => setChangingManager(true)}>
-                {tx(T.changeManager)}
-              </button>
-            </div>
-          )}
-          <WorkloadSection
-            workload={profile.workload}
-            asOf={profile.generatedAt}
-            title={own ? T.workload : T.workloadOf}
-            showDirectReports={profile.role === 'manager' || profile.role === 'super_admin' || profile.workload.directReports > 0}
-          />
-          {profile.access.canReadAudit && <ActivitySection query={activity} />}
-          {/* PD-35 B7: what they did -- shown when the server lets the viewer read it. */}
-          <ActionLogSection staffId={profile.staffId} />
-        </div>
+
+        {own && profile.viewer.team && profile.role === 'manager' && <TeamSection />}
+        {own && profile.viewer.organizationOverview && <OrganizationPanel />}
+
+        {changingManager && (
+          <ReportingLineDialog profile={profile} refKey={ref} onClose={() => setChangingManager(false)} />
+        )}
       </div>
-
-      {own && profile.viewer.team && profile.role === 'manager' && <TeamSection />}
-      {own && profile.viewer.organizationOverview && <OrganizationPanel />}
-
-      {changingManager && (
-        <ReportingLineDialog profile={profile} refKey={ref} onClose={() => setChangingManager(false)} />
-      )}
     </div>
   )
 }
 
-function Completeness({ missing, done, total }: { missing: Array<keyof typeof MISSING_LABEL>; done: number; total: number }) {
-  const tx = useCopy()
-  const { locale } = useI18n()
-  const pct = total === 0 ? 100 : Math.round((done / total) * 100)
+/** The viewer's own direct chat with this staff member, among the conversations they already have. */
+function staffChat(list: ChatConversation[] | undefined, staffId: string): ChatConversation | null {
   return (
-    <div className="sp-completeness" role="status">
-      <div className="sp-completeness__bar" aria-hidden="true">
-        <span style={{ inlineSize: `${pct}%` }} />
-      </div>
-      <span>
-        {tx(T.completeness)}: {tx(T.completeCount, { done, total })}
-        {missing.length > 0 && (
-          <span className="sp-muted"> — {missing.map((m) => tx(MISSING_LABEL[m])).join(locale === 'ar' ? '، ' : ', ')}</span>
-        )}
-      </span>
-    </div>
+    (list ?? []).find(
+      (c) =>
+        c.type === 'direct' &&
+        !c.archivedAt &&
+        !c.familyId &&
+        !c.learnerId &&
+        c.members?.some((m) => m.actorKind === 'staff' && m.actorId === staffId) === true &&
+        c.members.every((m) => m.actorKind === 'staff'),
+    ) ?? null
+  )
+}
+
+/** "Chat": offered when the viewer already has a direct chat with this person. Opening a new one is the chat page's. */
+function ChatWith({ staffId }: { staffId: string }) {
+  const tx = useCopy()
+  const { staff } = useSession()
+  const mayChat = !!staff && !isSuperAdmin(staff.role) && canOpenArea(staff.role, 'chat')
+  const chats = useQuery({ queryKey: chatKeys.list, queryFn: chatApi.list, enabled: mayChat, staleTime: 30_000, retry: false })
+  const conversation = mayChat ? staffChat(chats.data, staffId) : null
+  if (!conversation) return null
+  return (
+    <Link className="btn btn--sm" to={`/chat/${encodeURIComponent(conversation.id)}`}>
+      <Icon name="conversations" size={16} />
+      {tx(T.chat)}
+    </Link>
   )
 }
 
@@ -126,16 +184,18 @@ function Completeness({ missing, done, total }: { missing: Array<keyof typeof MI
 function ProfileSkeleton() {
   const tx = useCopy()
   return (
-    <div className="page sp-page" aria-busy="true">
-      <span className="sr-only" role="status">{tx(T.myProfile)}…</span>
-      <div className="sp-grid">
-        <div className="sp-col">
-          <div className="card sp-card sp-skeleton" style={{ blockSize: 260 }} />
-          <div className="card sp-card sp-skeleton" style={{ blockSize: 160 }} />
-        </div>
-        <div className="sp-col">
-          <div className="card sp-card sp-skeleton" style={{ blockSize: 200 }} />
-          <div className="card sp-card sp-skeleton" style={{ blockSize: 220 }} />
+    <div className="page pp sp-page" aria-busy="true">
+      <div className="page__inner">
+        <span className="sr-only" role="status">{tx(T.myProfile)}…</span>
+        <div className="sp-skeleton" style={{ blockSize: 96 }} />
+        <div className="sp-skeleton" style={{ blockSize: 88 }} />
+        <div className="pp-cols">
+          <div className="pp-main">
+            <div className="sp-skeleton" style={{ blockSize: 220 }} />
+          </div>
+          <div className="pp-side">
+            <div className="sp-skeleton" style={{ blockSize: 180 }} />
+          </div>
         </div>
       </div>
     </div>

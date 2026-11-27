@@ -3,11 +3,13 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Avatar } from '@/shared/components/Avatar'
 import { Badge } from '@/shared/components/Badge'
+import { Icon } from '@/shared/components/Icon'
 import { PageHeader } from '@/shared/components/PageHeader'
 import { SearchField } from '@/shared/components/SearchField'
 import { SearchableSelect } from '@/shared/components/SearchableSelect'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
 import { studentPath } from '@/features/profiles/api'
+import { CountTabs } from '@/features/profiles/CountTabs'
 import { describeError, isProfileRefusal, useCopy, type Pair } from '@/features/profiles/copy'
 import { STUDENTS_PAGE_SIZE, type StudentQuery, type StudentStatus } from './api'
 import { useStudentList } from './hooks'
@@ -16,8 +18,8 @@ import '@/features/profiles/profiles.css'
 const S = {
   title: { en: 'Students', ar: 'الطلاب' },
   subtitle: {
-    en: 'Every student you may open, with their family, teacher and weekly times. Open a student for the full profile.',
-    ar: 'كل طالب يحق لك فتح ملفه، مع عائلته ومعلمه ومواعيده الأسبوعية. افتح الطالب لعرض ملفه كاملًا.',
+    en: 'Every student you may open, with family, teacher and weekly times.',
+    ar: 'كل طالب يحق لك فتح ملفه، مع عائلته ومعلمه ومواعيده الأسبوعية.',
   },
   search: { en: 'Search by student or family name', ar: 'ابحث باسم الطالب أو العائلة' },
   teacher: { en: 'Teacher', ar: 'المعلم' },
@@ -26,7 +28,6 @@ const S = {
   supervisor: { en: 'Supervisor', ar: 'المشرف' },
   allSupervisors: { en: 'All supervisors', ar: 'كل المشرفين' },
   status: { en: 'Status', ar: 'الحالة' },
-  allStatuses: { en: 'All statuses', ar: 'كل الحالات' },
   active: { en: 'Active', ar: 'نشط' },
   paused: { en: 'Paused', ar: 'متوقف مؤقتًا' },
   stopped: { en: 'Stopped', ar: 'متوقف نهائيًا' },
@@ -36,6 +37,8 @@ const S = {
   weekly: { en: 'Weekly times', ar: 'المواعيد الأسبوعية' },
   until: { en: 'back {day}', ar: 'يعود {day}' },
   none: { en: 'No students match.', ar: 'لا يوجد طلاب مطابقون.' },
+  noneHint: { en: 'Clear the search or a filter to widen the list.', ar: 'امسح البحث أو أحد عوامل التصفية لتوسيع القائمة.' },
+  all: { en: 'All', ar: 'الكل' },
   total: { en: '{n} students', ar: '{n} طالب' },
   pageOf: { en: 'Page {page} of {pages}', ar: 'صفحة {page} من {pages}' },
   prev: { en: 'Previous', ar: 'السابق' },
@@ -53,7 +56,7 @@ const TONE = { active: 'ok', paused: 'warn', stopped: 'danger' } as const
  */
 export function StudentDirectoryPage() {
   const tx = useCopy()
-  const { locale, t } = useI18n()
+  const { locale, t, number } = useI18n()
   const [params, setParams] = useSearchParams()
   const [q, setQ] = useState(() => params.get('q') ?? '')
   const deferred = useDeferredValue(q.trim())
@@ -88,11 +91,25 @@ export function StudentDirectoryPage() {
   const data = list.data
   const pages = data ? Math.max(1, Math.ceil(data.total / (data.limit || STUDENTS_PAGE_SIZE))) : 1
 
+  // The server counts the list it answered: only the open tab can show a number.
+  const count = (tab: StudentStatus | '') => (tab === status && data ? number(data.total) : undefined)
+
   return (
-    <div className="page">
+    <div className="page pp pp-list">
       <div className="page__inner">
         <PageHeader title={tx(S.title)} subtitle={tx(S.subtitle)} />
-        <div className="toolbar">
+        <CountTabs<StudentStatus | 'all'>
+          label={tx(S.status)}
+          value={status || 'all'}
+          onChange={(v) => set({ status: v === 'all' ? '' : v })}
+          tabs={[
+            { value: 'all', label: tx(S.all), count: count('') },
+            { value: 'active', label: tx(S.active), count: count('active') },
+            { value: 'paused', label: tx(S.paused), count: count('paused') },
+            { value: 'stopped', label: tx(S.stopped), count: count('stopped') },
+          ]}
+        />
+        <div className="pp-tools">
           <SearchField value={q} onChange={setQ} label={tx(S.search)} clearLabel={t('common.cancel')} />
           <label>
             <span className="field__label">{tx(S.teacher)}</span>
@@ -113,15 +130,6 @@ export function StudentDirectoryPage() {
               ))}
             </SearchableSelect>
           </label>
-          <label>
-            <span className="field__label">{tx(S.status)}</span>
-            <SearchableSelect className="select" value={status} onValueChange={(v) => set({ status: v })} aria-label={tx(S.status)}>
-              <option value="">{tx(S.allStatuses)}</option>
-              <option value="active">{tx(S.active)}</option>
-              <option value="paused">{tx(S.paused)}</option>
-              <option value="stopped">{tx(S.stopped)}</option>
-            </SearchableSelect>
-          </label>
         </div>
         {isProfileRefusal(list.error) ? (
           <EmptyState icon="lock" title={describeError(list.error, locale)} />
@@ -131,51 +139,64 @@ export function StudentDirectoryPage() {
             error={list.error}
             isEmpty={(data?.students.length ?? 0) === 0}
             emptyTitle={tx(S.none)}
+            emptyHint={tx(S.noneHint)}
             onRetry={() => void list.refetch()}
           >
-            <p className="field__hint">{tx(S.total, { n: String(data?.total ?? 0) })}</p>
             <div className="table-wrap">
-              <table className="table">
+              <table className="table pp-stack">
                 <thead>
                   <tr>
                     <th scope="col">{tx(S.student)}</th>
-                    <th scope="col">{tx(S.family)}</th>
                     <th scope="col">{tx(S.teacher)}</th>
                     <th scope="col">{tx(S.supervisor)}</th>
                     <th scope="col">{tx(S.status)}</th>
-                    <th scope="col">{tx(S.weekly)}</th>
+                    <th scope="col" className="num">{tx(S.weekly)}</th>
+                    <th scope="col" aria-hidden="true" />
                   </tr>
                 </thead>
                 <tbody>
                   {(data?.students ?? []).map((s) => (
                     <tr key={s.id}>
                       <td>
-                        <Link to={studentPath(s.id)} className="pf-person">
+                        <span className="pp-cell-two">
                           <Avatar name={s.name} seed={s.id} size="sm" />
-                          <span dir="auto">{s.name}</span>
-                        </Link>
+                          <span>
+                            <Link to={studentPath(s.id)} className="pp-cell-name"><bdi>{s.name}</bdi></Link>
+                            <span className="pp-cell-sub"><bdi>{s.family.displayName}</bdi></span>
+                          </span>
+                        </span>
                       </td>
-                      <td dir="auto">{s.family.displayName}</td>
-                      <td dir="auto">{s.teacher ? s.teacher.name : <span className="muted">{tx(S.noTeacher)}</span>}</td>
-                      <td dir="auto">{s.supervisor ? s.supervisor.name : '—'}</td>
-                      <td>
+                      <td data-label={tx(S.teacher)}>{s.teacher ? <bdi>{s.teacher.name}</bdi> : <span className="muted">{tx(S.noTeacher)}</span>}</td>
+                      <td data-label={tx(S.supervisor)}>{s.supervisor ? <bdi>{s.supervisor.name}</bdi> : '—'}</td>
+                      <td data-at="end">
                         <Badge tone={TONE[s.status]} dot>{tx(S[s.status])}</Badge>
-                        {s.status === 'paused' && s.returnOn && <> <span className="muted">{tx(S.until, { day: s.returnOn })}</span></>}
+                        {s.status === 'paused' && s.returnOn && <> <span className="muted pp-cell-sub">{tx(S.until, { day: s.returnOn })}</span></>}
                       </td>
-                      <td>{s.weeklySlots}</td>
+                      <td className="num" data-label={tx(S.weekly)}>{s.weeklySlots}</td>
+                      <td className="pp-cell-end">
+                        {/* The name is the link; this is only a larger target for the pointer. */}
+                        <span className="row-actions" aria-hidden="true">
+                          <Link to={studentPath(s.id)} className="pp-go" tabIndex={-1}>
+                            <Icon name="chevronForward" size={16} />
+                          </Link>
+                        </span>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-            <nav className="toolbar" aria-label={tx(S.pager)}>
-              <button type="button" className="btn btn--sm" disabled={page <= 1} onClick={() => set({ page: String(page - 1) }, true)}>
-                {tx(S.prev)}
-              </button>
-              <span>{tx(S.pageOf, { page: String(page), pages: String(pages) })}</span>
-              <button type="button" className="btn btn--sm" disabled={page >= pages} onClick={() => set({ page: String(page + 1) }, true)}>
-                {tx(S.next)}
-              </button>
+            <nav className="pp-pager" aria-label={tx(S.pager)}>
+              <span className="pp-total">{tx(S.total, { n: String(data?.total ?? 0) })}</span>
+              <span className="pp-pager__nav">
+                <button type="button" className="btn btn--sm" disabled={page <= 1} onClick={() => set({ page: String(page - 1) }, true)}>
+                  {tx(S.prev)}
+                </button>
+                <span>{tx(S.pageOf, { page: String(page), pages: String(pages) })}</span>
+                <button type="button" className="btn btn--sm" disabled={page >= pages} onClick={() => set({ page: String(page + 1) }, true)}>
+                  {tx(S.next)}
+                </button>
+              </span>
             </nav>
           </QueryBoundary>
         )}

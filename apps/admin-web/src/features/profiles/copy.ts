@@ -15,14 +15,16 @@ export const P = {
   // The parents list
   parentsTitle: { en: 'Parents', ar: 'أولياء الأمور' },
   parentsSubtitle: {
-    en: 'Contact details, children and payments. Operations and Sales record payments here; teachers never see any of it.',
-    ar: 'بيانات التواصل والأطفال والمدفوعات. يسجّل قسما العمليات والمبيعات المدفوعات هنا، ولا يرى المعلمون شيئًا منها.',
+    en: 'Contacts, children and payments. Teachers never see any of it.',
+    ar: 'بيانات التواصل والأطفال والمدفوعات. لا يرى المعلمون شيئًا منها.',
   },
   search: { en: 'Search a parent or a family', ar: 'ابحث عن ولي أمر أو أسرة' },
   parent: { en: 'Parent', ar: 'ولي الأمر' },
   family: { en: 'Family', ar: 'الأسرة' },
   children: { en: 'Children', ar: 'الأطفال' },
   noParents: { en: 'No parents to show.', ar: 'لا يوجد أولياء أمور لعرضهم.' },
+  noParentsHint: { en: 'The parents of the families you look after appear here.', ar: 'يظهر هنا أولياء أمور الأسر التي تتابعها.' },
+  noParentsFiltered: { en: 'Nothing matches this search and these filters. Clear one to widen the list.', ar: 'لا شيء يطابق البحث والتصفية. أزل أحدهما لتوسيع القائمة.' },
   // PD-44: the subscription filter (a child's PD-30 state)
   subscriptionFilter: { en: 'Subscription', ar: 'الاشتراك' },
   allParents: { en: 'All', ar: 'الكل' },
@@ -59,8 +61,8 @@ export const P = {
   phoneHint: { en: 'With the country code, e.g. +971 50 123 4567.', ar: 'مع رمز الدولة، مثل ‎+971 50 123 4567.' },
   about: { en: 'About this parent', ar: 'نبذة عن ولي الأمر' },
   aboutHint: {
-    en: 'A short internal note for the administration. The parent never sees it, nor do teachers.',
-    ar: 'ملاحظة داخلية قصيرة للإدارة. لا يراها ولي الأمر ولا المعلمون.',
+    en: 'Internal. The parent never sees it, nor do teachers.',
+    ar: 'داخلية. لا يراها ولي الأمر ولا المعلمون.',
   },
   noNote: { en: 'No note yet.', ar: 'لا توجد نبذة بعد.' },
   editNote: { en: 'Edit the note', ar: 'تعديل النبذة' },
@@ -83,8 +85,8 @@ export const P = {
   // Payments
   payments: { en: 'Payment information', ar: 'بيانات الدفع' },
   paymentsHint: {
-    en: 'Recorded here in Jawwid Chat by Operations and Sales. The parent sees their own payments in the app; teachers never see any of it.',
-    ar: 'يسجّلها قسما العمليات والمبيعات هنا في جوّد للمحادثات. يرى ولي الأمر مدفوعاته في التطبيق، ولا يرى المعلمون شيئًا منها.',
+    en: 'Recorded by Operations and Sales. The parent sees their own payments; teachers never see any of it.',
+    ar: 'يسجّلها قسما العمليات والمبيعات. يرى ولي الأمر مدفوعاته، ولا يرى المعلمون شيئًا منها.',
   },
   subscription: { en: 'Current subscription', ar: 'الاشتراك الحالي' },
   noPlan: { en: 'No plan recorded', ar: 'لا توجد باقة مسجّلة' },
@@ -95,8 +97,8 @@ export const P = {
   none: { en: 'None', ar: 'بدون' },
   timeline: { en: 'Payment timeline', ar: 'سجل المدفوعات' },
   timelineHint: {
-    en: 'Every instalment in date order. A payment is recorded once; a mistake is voided with a reason, never edited or deleted.',
-    ar: 'كل الأقساط بترتيب التاريخ. تُسجَّل الدفعة مرة واحدة، ويُلغى الخطأ مع ذكر السبب دون تعديل أو حذف.',
+    en: 'A payment is recorded once. A mistake is voided with a reason, never edited or deleted.',
+    ar: 'تُسجَّل الدفعة مرة واحدة. يُلغى الخطأ مع ذكر السبب، دون تعديل أو حذف.',
   },
   noInstalments: { en: 'No instalments yet.', ar: 'لا توجد أقساط بعد.' },
   addInstalments: { en: 'Add instalments', ar: 'إضافة أقساط' },
@@ -174,9 +176,29 @@ export const P = {
   notSet: { en: 'Not set', ar: 'غير محدد' },
   parents: { en: 'Parents', ar: 'أولياء الأمور' },
   parentsHint: {
-    en: 'Their Parent Profile opens for the administration that looks after this family.',
-    ar: 'يُفتح ملف ولي الأمر للإدارة المسؤولة عن هذه الأسرة.',
+    en: 'Opens for the administration that looks after this family.',
+    ar: 'يُفتح للإدارة المسؤولة عن هذه الأسرة.',
   },
+
+  // The file's bar: its index and its actions
+  fileIndex: { en: 'Sections', ar: 'الأقسام' },
+  ixChildren: { en: 'Children', ar: 'الأطفال' },
+  ixPackage: { en: 'Package', ar: 'الباقة' },
+  ixInstalments: { en: 'Instalments', ar: 'الأقساط' },
+  ixRequests: { en: 'Requests', ar: 'الطلبات' },
+  ixReceived: { en: 'Received', ar: 'المستلمة' },
+  ixInvoices: { en: 'Invoices', ar: 'الفواتير' },
+  ixReceipts: { en: 'Receipts', ar: 'الإيصالات' },
+  chat: { en: 'Chat', ar: 'محادثة' },
+  call: { en: 'Call', ar: 'اتصال' },
+  overdueShort: { en: 'Overdue', ar: 'متأخر' },
+  photo: { en: 'Photo', ar: 'الصورة' },
+  activity: { en: 'Activity', ar: 'النشاط' },
+  lessonsUsed: { en: '{used} of {total} lessons', ar: '{used} من {total} حصة' },
+  lessonsLeft: { en: '{n} left', ar: 'المتبقي {n}' },
+  subscriptionState: { en: 'Subscription', ar: 'الاشتراك' },
+  details: { en: 'Details', ar: 'البيانات' },
+  weekly: { en: 'Weekly times', ar: 'المواعيد الأسبوعية' },
 } satisfies Record<string, Pair>
 
 export const METHOD_LABEL: Record<PaymentMethod, Pair> = {
@@ -202,6 +224,29 @@ export function planLabel(n: number, locale: 'ar' | 'en'): string {
   if (n === 2) return 'باقة شهرين'
   if (n >= 3 && n <= 10) return `باقة ${n} أشهر`
   return `باقة ${n} شهرًا`
+}
+
+/**
+ * An amount as a ledger shows it: the figure and its currency apart, so the
+ * figure can be set in display numerals and the currency small beside it.
+ */
+export function moneyParts(amountMinor: number, currency: string, locale: 'ar' | 'en'): { amount: string; unit: string } {
+  const tag = locale === 'ar' ? 'ar-EG-u-nu-latn' : 'en-GB'
+  try {
+    const fmt = new Intl.NumberFormat(tag, { style: 'currency', currency })
+    const digits = fmt.resolvedOptions().maximumFractionDigits ?? 2
+    const parts = fmt.formatToParts(amountMinor / 10 ** digits)
+    const unit = parts.find((p) => p.type === 'currency')?.value ?? currency
+    const amount = parts
+      .filter((p) => p.type !== 'currency')
+      .map((p) => p.value)
+      .join('')
+      // What is left around the figure once the currency is lifted out: spaces and direction marks.
+      .replace(/^[\s\u200e\u200f\u061c]+|[\s\u200e\u200f\u061c]+$/g, '')
+    return { amount, unit }
+  } catch {
+    return { amount: (amountMinor / 100).toFixed(2), unit: currency }
+  }
 }
 
 /** The plans the server accepts (chat.family.subscription_plan_months). */

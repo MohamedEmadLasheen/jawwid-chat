@@ -1,5 +1,6 @@
 /* PD-21 support session. The banner stays in view: the administrator must never
-   forget whose account this is. */
+   forget whose account this is. It is the one terracotta band in the product,
+   because acting as someone else is the one state that must not be missed. */
 .support-banner {
   position: sticky;
   inset-block-start: 0;
@@ -7,39 +8,62 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
-  background: var(--danger-soft);
-  color: var(--text);
-  border-block-end: 2px solid var(--danger);
+  gap: var(--space-2) var(--space-4);
+  padding: 10px var(--space-6);
+  background: var(--terracotta-tint);
+  color: var(--ink);
+  border-block-end: 2px solid var(--terracotta);
+  font-size: var(--fs-sm);
 }
-.support-banner__until { font-variant-numeric: tabular-nums; }
+.support-banner strong { font-weight: 600; }
+.support-banner__until { font-variant-numeric: tabular-nums; color: var(--ink-muted); }
 .support-banner__actions { display: flex; gap: var(--space-2); margin-inline-start: auto; }
-.support-center { text-align: center; }
-.support-chats { display: grid; grid-template-columns: minmax(12rem, 18rem) 1fr; gap: var(--space-4); margin-block-start: var(--space-3); }
-@media (max-width: 720px) { .support-chats { grid-template-columns: 1fr; } }
-.support-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-1); align-content: start; }
+.support.page { padding-block-start: 0; padding-inline: 0; }
+.support.page > .page__inner { padding: var(--space-5) var(--space-6) 0; }
+.support-center { text-align: start; }
+
+/* The person's chats on the start side, the open one beside it: ruled, like the chat list. */
+.support-chats { display: grid; grid-template-columns: minmax(12rem, 18rem) minmax(0, 1fr); gap: 0 var(--space-6); margin-block-start: var(--space-4); align-items: start; }
+@media (max-width: 720px) {
+  .support-chats { grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
+  .support-banner { padding-inline: var(--space-4); }
+  .support.page > .page__inner { padding-inline: var(--space-4); }
+}
+.support-list { list-style: none; margin: 0; padding: 0; display: block; border-block-start: 1px solid var(--hairline); }
+.support-list > li.field__hint, .support-list > li.field__error { padding: 10px 2px; font-size: var(--fs-sm); }
 .support-list__item {
   inline-size: 100%;
   display: flex;
   justify-content: space-between;
+  align-items: center;
   gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  min-block-size: 44px;
+  padding: 8px var(--space-3);
+  border: 0;
+  border-block-end: 1px solid var(--hairline-soft);
+  border-radius: 0;
   background: none;
   color: inherit;
+  font: inherit;
+  font-size: var(--fs-sm);
   text-align: start;
   cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out);
 }
-.support-list__item--open { border-color: var(--accent); font-weight: var(--fw-medium); }
+.support-list__item:hover { background: var(--surface-hover); }
+.support-list__item--open { background: var(--teal-tint); font-weight: 600; box-shadow: inset 3px 0 0 var(--gold); }
+[dir='rtl'] .support-list__item--open { box-shadow: inset -3px 0 0 var(--gold); }
+.support-list__item:focus-visible { outline-offset: -2px; }
 .support-thread { min-inline-size: 0; }
-.support-messages { list-style: none; margin: 0 0 var(--space-3); padding: 0; display: grid; gap: var(--space-2); max-block-size: 55vh; overflow-y: auto; }
-.support-message { padding: var(--space-2) var(--space-3); border: 1px solid var(--border); border-radius: var(--radius); }
-.support-message__meta { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; font-size: var(--fs-sm); color: var(--text-muted); }
-.support-message__body { white-space: pre-wrap; overflow-wrap: anywhere; margin-block-start: var(--space-1); }
+.support-messages { list-style: none; margin: 0 0 var(--space-4); padding: 0; display: block; max-block-size: 55vh; overflow-y: auto; border-block-start: 1px solid var(--hairline); }
+.support-message { padding: 10px 2px; border: 0; border-block-end: 1px solid var(--hairline-soft); border-radius: 0; }
+.support-message__meta { display: flex; flex-wrap: wrap; gap: 2px var(--space-3); align-items: center; font-size: var(--fs-xs); color: var(--ink-muted); }
+.support-message__body { white-space: pre-wrap; overflow-wrap: anywhere; margin-block-start: 3px; font-size: var(--fs-sm); line-height: 1.6; }
 .support-composer { display: grid; gap: var(--space-2); justify-items: start; }
-.support-composer .field { inline-size: 100%; }
-.support-profile { display: grid; gap: var(--space-3); justify-items: start; max-inline-size: 36rem; margin-block-start: var(--space-3); }
-.support-profile .field { inline-size: 100%; }
-.support-profile__heading { font-size: var(--fs-lg); margin: var(--space-3) 0 0; }
+.support-composer .field { inline-size: 100%; margin: 0; }
+.support-profile { display: grid; gap: var(--space-3); justify-items: start; max-inline-size: 36rem; margin-block-start: var(--space-4); }
+.support-profile .field { inline-size: 100%; margin: 0; }
+.support-profile__heading { margin: var(--space-4) 0 0; padding-block-end: 6px; inline-size: 100%; border-block-end: 1px solid var(--hairline); font-family: var(--display); font-size: var(--fs-xl); font-weight: 600; }
+@media (prefers-reduced-motion: reduce) {
+  .support-list__item { transition: none; }
+}
