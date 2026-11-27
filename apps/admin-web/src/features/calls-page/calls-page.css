@@ -83,7 +83,6 @@
   color: var(--ink);
   text-align: start;
 }
-[dir='rtl'] .cp-up__time { text-align: right; }
 .cp-up__day { font-size: var(--fs-xs); color: var(--ink-muted); }
 .cp-up--open .cp-up__time { color: var(--teal-dark); }
 @media (max-width: 479px) {
@@ -126,7 +125,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.cp-up .cp-row__name { font-size: var(--fs-md); }
+.cp-up .cp-row__name { justify-self: start; max-inline-size: 100%; font-size: var(--fs-md); }
 .cp-row__name--missed { color: var(--terracotta); }
 
 .cp-row__sub {

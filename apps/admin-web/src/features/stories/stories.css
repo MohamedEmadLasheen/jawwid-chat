@@ -147,6 +147,10 @@
 }
 .studio-tab:hover { color: var(--ink); }
 .studio-tab[aria-current='page'] { color: var(--text-link); border-block-end-color: var(--accent); font-weight: 600; }
+@media (max-width: 767px) {
+  .studio-tab { display: inline-flex; align-items: center; min-block-size: 44px; padding-block: 0; }
+  .back-link { min-block-size: 44px; }
+}
 
 /* Figures: a ruled row of serif numerals. */
 .kpi-strip {
@@ -435,6 +439,7 @@ html[lang='ar'] .compose-step__title { font-weight: 700; }
 .add-country:focus-within { outline: 2px solid var(--focus); outline-offset: 2px; }
 @media (pointer: coarse) {
   .seg-chip, .add-country { min-block-size: 40px; }
+  .swatch { inline-size: 40px; block-size: 40px; }
 }
 
 .audience__missing {

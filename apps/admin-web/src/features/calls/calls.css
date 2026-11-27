@@ -132,9 +132,9 @@
 .call-window__round:disabled { opacity: 0.45; cursor: default; }
 .call-window__round[aria-pressed='true'] { background: var(--call-control-on); color: var(--call-bg); }
 .call-window__round--danger,
-.call-window__round--danger:hover:not(:disabled) { background: var(--call-hangup); color: #fffefa; }
+.call-window__round--danger:hover:not(:disabled) { background: var(--call-hangup); color: var(--call-fg); }
 .call-window__round--accept,
-.call-window__round--accept:hover:not(:disabled) { background: var(--call-accept); color: #fffefa; }
+.call-window__round--accept:hover:not(:disabled) { background: var(--call-accept); color: var(--call-fg); }
 .call-window__round--danger:hover:not(:disabled),
 .call-window__round--accept:hover:not(:disabled) { filter: brightness(1.12); }
 

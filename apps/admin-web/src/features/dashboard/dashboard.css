@@ -67,11 +67,11 @@ html[lang='ar'] .dash-section__title { font-weight: 700; }
   line-height: 1.15;
   font-variant-numeric: tabular-nums lining-nums;
   color: var(--ink);
+  /* The numeral is isolated left to right; it sits at the cell's start in either language. */
+  align-self: flex-start;
   direction: ltr;
   unicode-bidi: isolate;
-  text-align: start;
 }
-[dir='rtl'] .dash-tile--large .dash-tile__value { text-align: right; }
 .dash-tile--large:hover .dash-tile__value { color: var(--teal-dark); }
 .dash-tile__note { font-size: var(--fs-xs); color: var(--ink-muted); }
 
