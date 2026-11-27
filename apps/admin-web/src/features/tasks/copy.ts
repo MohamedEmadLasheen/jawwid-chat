@@ -56,6 +56,8 @@ export const C = {
     ar: 'هذه المهمة غير موجودة، أو ليست مما يحق لك رؤيته.',
   },
   openSource: { en: 'Open', ar: 'فتح' },
+  // A row's way to the page where the work is done.
+  goPage: { en: 'Open page', ar: 'افتح الصفحة' },
   createdBy: { en: 'Given by {name}', ar: 'أسندها {name}' },
   instructions: { en: 'Instructions', ar: 'التعليمات' },
   closeReason: { en: 'Reason', ar: 'السبب' },
@@ -107,7 +109,8 @@ export const C = {
 export const GROUP_LABEL = {
   overdue: { en: 'Overdue', ar: 'متأخرة' },
   today: { en: 'Due today', ar: 'تستحق اليوم' },
-  week: { en: 'Next 7 days', ar: 'خلال 7 أيام' },
+  tomorrow: { en: 'Due tomorrow', ar: 'تستحق غدًا' },
+  week: { en: 'This week', ar: 'خلال الأسبوع' },
   later: { en: 'Later', ar: 'لاحقًا' },
   none: { en: 'No due date', ar: 'بلا موعد' },
 } satisfies Record<string, Pair>

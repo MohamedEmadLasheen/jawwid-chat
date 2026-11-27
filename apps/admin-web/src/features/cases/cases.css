@@ -1,8 +1,8 @@
 /* PD-35 B5: the escalation queue. It shares its queue, groups, inspector and
    history with Tasks (tasks.css); only what differs lives here. */
-.tq-row--case { grid-template-columns: minmax(0, 1fr) minmax(150px, 200px) minmax(110px, auto); }
+.tq-row--case { grid-template-columns: minmax(0, 1fr) minmax(150px, 200px); }
 .cases__controls .input { inline-size: 100%; }
-@container tq (max-width: 760px) {
+@container tq (max-width: 700px) {
   .tq-row--case { grid-template-columns: minmax(0, 1fr) auto; }
-  .tq-row--case .tq-row__level { grid-column: 1; }
+  .tq-row--case .tq-row__main { grid-row: 1; }
 }

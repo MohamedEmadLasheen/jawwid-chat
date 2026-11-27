@@ -1,103 +1,100 @@
-/* PD-44: the manager Dashboard, an attention board. At the start, on one white
-   sheet: what needs the team now, the late and the largest first, each figure a
-   row to open. At the end, on the canvas: the sections with nothing waiting.
-   Every figure is one link to the page that resolves it. */
+/* PD-44: the manager Dashboard, an attention board (system.css tokens).
+   At the start, on one white sheet: what needs a manager now, ranked by need
+   (late first, then longest waiting), each figure a row to open. At the end,
+   on the canvas: the sections with nothing waiting, quiet. Every figure is one
+   link to the page that resolves it. Red is only for what is late. */
 
 /* The sections are siblings in one list (the waiting ones first). From 1100px the
    waiting ones float to the start as one sheet and the calm ones run beside them
    in the ordinary flow: two columns that keep their own heights, with no wrapper
-   a section would have to move into. */
-.dash-board { display: flow-root; }
+   a section would have to move into. Narrower, one column in reading order. */
+.dash-board { display: flex; flex-direction: column; }
+.dash-calm__head { order: 1; }
+.dash-group--calm { order: 2; }
+
 .dash-needs__head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  min-block-size: 48px;
+  gap: 6px 10px;
+  min-block-size: 60px;
   margin: 0;
-  padding: 8px var(--space-4);
-  border: 1px solid var(--hairline);
-  border-block-end-color: var(--hairline-soft);
+  padding: 12px var(--space-5);
+  border: 1px solid var(--line);
+  border-block-end-color: var(--line-2);
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   background: var(--surface);
-  font-size: var(--fs-md);
-  font-weight: 600;
 }
-.dash-needs__count { margin-inline-start: 8px; }
-.dash-needs__clear, .dash-group--needs { background: var(--surface); border-inline: 1px solid var(--hairline); }
-.dash-needs__clear { margin: 0; padding: var(--space-5) var(--space-4); color: var(--ink-muted); font-size: var(--fs-sm); }
+.dash-needs__title { font-family: var(--font-head); font-size: var(--fs-xl); font-weight: 700; color: var(--ink); }
+.dash-needs__late { font-size: var(--fs-sm); font-weight: 600; color: var(--urgent); }
+.dash-needs__sort { display: inline-flex; align-items: center; gap: 6px; margin-inline-start: auto; font-family: var(--font); font-size: var(--fs-sm); font-weight: 400; color: var(--ink-muted); }
+.dash-needs__clear, .dash-group--needs { background: var(--surface); border-inline: 1px solid var(--line); }
+.dash-needs__clear { margin: 0; padding: var(--space-5); color: var(--ink-muted); font-size: var(--fs-md); }
 /* The last piece of the sheet closes it. */
 :is(.dash-needs__clear, .dash-group--needs):not(:has(+ .dash-group--needs)) {
   margin-block-end: var(--space-5);
-  border-block-end: 1px solid var(--hairline);
+  border-block-end: 1px solid var(--line);
   border-radius: 0 0 var(--radius-lg) var(--radius-lg);
   overflow: hidden;
 }
 @media (min-width: 1100px) {
+  .dash-board { display: flow-root; }
   .dash-board:not(.dash-board--one) :is(.dash-needs__head, .dash-needs__clear, .dash-group--needs) {
     float: inline-start;
     clear: inline-start;
     box-sizing: border-box;
-    inline-size: calc(66.6% - var(--space-5));
+    inline-size: calc(66.6% - var(--space-6));
   }
-  .dash-board:not(.dash-board--one) .dash-group--calm { margin-inline-start: 66.6%; }
-  .dash-board--one { max-inline-size: 860px; }
+  .dash-board:not(.dash-board--one) :is(.dash-group--calm, .dash-calm__head) { margin-inline-start: 66.6%; }
+  .dash-board--one { max-inline-size: 880px; }
 }
 
 /* --------------------------------------------------------- needs you now */
 .dash-group__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin: 0;
-  padding: 8px var(--space-4) 7px;
-  background: var(--paper);
-  border-block-end: 1px solid var(--hairline-soft);
-  font-size: 12.5px;
+  font-family: var(--font-head);
+  font-size: var(--fs-sm);
   font-weight: 600;
-  color: var(--ink-muted);
+  color: var(--ink-2);
 }
-.dash-group--needs + .dash-group--needs { border-block-start: 1px solid var(--hairline-soft); }
+.dash-group__title .icon { color: var(--ink-muted); }
+.dash-group--needs .dash-group__title { padding: 8px var(--space-5); background: var(--surface-2); border-block: 1px solid var(--line-2); }
+.dash-group--needs:first-of-type .dash-group__title { border-block-start: 0; }
 .dash-rows, .dash-lines { list-style: none; margin: 0; padding: 0; }
 
 .dash-tile { color: inherit; text-decoration: none; transition: background var(--dur-fast) var(--ease-out); }
 .dash-tile:hover { background: var(--surface-hover); }
-.dash-tile:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.dash-tile:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; border-radius: 6px; }
 .dash-tile__text { display: grid; gap: 1px; min-inline-size: 0; }
-.dash-tile__note { font-size: var(--fs-xs); line-height: 1.5; color: var(--ink-muted); }
+.dash-tile__note { font-size: var(--fs-sm); line-height: 1.5; color: var(--ink-muted); }
 
-/* A waiting figure: the number in display numerals, what it is, how old, and the way in. */
+/* A waiting figure: the number, what it is and how long the oldest has waited, and the way in. */
 .dash-tile--large {
   display: grid;
-  grid-template-columns: 76px minmax(0, 1fr) auto;
+  grid-template-columns: 72px minmax(0, 1fr) auto;
   align-items: center;
-  gap: var(--space-3);
-  min-block-size: 64px;
-  padding: 10px var(--space-4);
-  border-block-end: 1px solid var(--hairline-soft);
+  gap: var(--space-4);
+  min-block-size: 68px;
+  padding: 10px var(--space-5);
+  border-block-end: 1px solid var(--line-2);
 }
 .dash-rows > li:last-child .dash-tile--large { border-block-end: 0; }
 .dash-tile--large .dash-tile__value {
-  font-family: var(--display);
+  font-family: var(--font-head);
   font-size: 30px;
-  font-weight: 600;
+  font-weight: 700;
   line-height: 1.1;
   font-variant-numeric: tabular-nums lining-nums;
-  color: var(--teal);
+  color: var(--ink);
   unicode-bidi: isolate;
 }
-.dash-tile--late .dash-tile__value { color: var(--terracotta); }
-.dash-tile--large .dash-tile__label { font-weight: 600; color: var(--ink); }
-.dash-tile--late .dash-tile__note { color: var(--terracotta); }
-.dash-tile__go {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  min-block-size: 30px;
-  padding-inline: 10px 6px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius);
-  background: var(--surface);
-  font-size: var(--fs-sm);
-  font-weight: 500;
-  color: var(--ink);
-}
-.dash-tile--large:hover .dash-tile__go { border-color: var(--teal); color: var(--teal-dark); }
+.dash-tile--late .dash-tile__value, .dash-tile--late .dash-tile__note { color: var(--urgent); }
+.dash-tile--large .dash-tile__label { font-size: var(--fs-md); font-weight: 600; color: var(--ink); }
+.dash-tile__go { display: inline-flex; color: var(--ink-muted); transition: color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out); }
+.dash-tile--large:hover .dash-tile__go { color: var(--teal); }
 
 /* A section's other figures, and the calm sections: a name, a figure. */
 .dash-tile--line {
@@ -105,31 +102,34 @@
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: baseline;
   gap: 0 var(--space-3);
-  min-block-size: 34px;
-  padding: 6px 0;
-  border-block-end: 1px solid var(--hairline-soft);
+  min-block-size: 38px;
+  padding: 8px 0;
+  border-block-end: 1px solid var(--line-2);
   font-size: var(--fs-sm);
+  color: var(--ink-2);
 }
 .dash-tile--line .dash-tile__text { grid-column: 1; grid-row: 1; }
 .dash-tile--line .dash-tile__value {
   grid-column: 2;
   grid-row: 1;
-  font-family: var(--display);
+  font-family: var(--font-head);
   font-size: var(--fs-lg);
   font-weight: 600;
   font-variant-numeric: tabular-nums lining-nums;
+  color: var(--ink);
   unicode-bidi: isolate;
 }
 .dash-lines > li:last-child .dash-tile--line { border-block-end: 0; }
 .dash-tile--zero { color: var(--ink-muted); }
-.dash-tile--zero .dash-tile__value { font-weight: 400; color: var(--border-control); }
+.dash-tile--zero .dash-tile__value { font-weight: 500; color: var(--ink-muted); }
 /* Under a section's waiting rows its other figures step back: two quiet columns. */
-.dash-group--needs .dash-lines { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); column-gap: var(--space-6); padding: 4px var(--space-4) 8px; background: var(--surface); }
+.dash-group--needs .dash-lines { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); column-gap: var(--space-6); padding: 2px var(--space-5) 8px; border-block-start: 1px solid var(--line-2); }
+.dash-group--needs .dash-lines .dash-tile--line { padding-inline: 0; }
 
 /* ------------------------------------------------------------ calm column */
-.dash-group--calm .aside-group__title { margin-block-end: 2px; }
-/* The first calm section starts level with the sheet's head, under no rule. */
-:not(.dash-group--calm) + .dash-group--calm { margin-block-start: 0; padding-block-start: 0; border-block-start: 0; }
+.dash-calm__head { margin: 0 0 var(--space-4); padding-block-start: 18px; font-family: var(--font-head); font-size: var(--fs-md); font-weight: 600; color: var(--ink-muted); }
+.dash-group--calm { margin-block-end: var(--space-5); }
+.dash-group--calm .dash-group__title { margin-block-end: 4px; }
 
 .dash-section__clear,
 .dash-failed,
@@ -143,15 +143,18 @@
   font-size: var(--fs-sm);
   color: var(--ink-muted);
 }
-.dash-group--needs :is(.dash-failed, .dash-stale, .dash-section__clear) { padding-inline: var(--space-4); }
-.dash-failed__text { color: var(--terracotta); font-weight: 500; }
-.dash-stale { margin-block-end: var(--space-2); padding-inline-start: var(--space-3); border-inline-start: 2px solid var(--gold-line); }
-.dash-loading { display: grid; gap: 6px; padding-block: 6px; }
+.dash-group--needs :is(.dash-failed, .dash-stale, .dash-section__clear) { padding: 10px var(--space-5); }
+.dash-failed__text { color: var(--ink); font-weight: 500; }
+.dash-stale { margin-block-end: var(--space-2); background: var(--waiting-tint); color: var(--ink); border-radius: 8px; padding-inline: var(--space-3); }
+.dash-loading { display: grid; gap: 6px; padding: 8px 0; }
+.dash-group--needs .dash-loading { padding-inline: var(--space-5); }
 
 @media (max-width: 767px) {
-  .dash-tile--large { grid-template-columns: 56px minmax(0, 1fr) auto; padding-inline: var(--space-3); }
+  .dash-needs__head { padding-inline: var(--space-4); }
+  .dash-needs__sort { margin-inline-start: 0; flex-basis: 100%; }
+  .dash-tile--large { grid-template-columns: 52px minmax(0, 1fr) auto; gap: var(--space-3); padding-inline: var(--space-4); }
   .dash-tile--large .dash-tile__value { font-size: 26px; }
-  .dash-tile__go { min-block-size: 40px; }
   .dash-tile--line { min-block-size: 44px; align-items: center; }
-  .dash-group__title, .dash-group--needs .dash-lines { padding-inline: var(--space-3); }
+  .dash-group--needs .dash-group__title, .dash-group--needs .dash-lines { padding-inline: var(--space-4); }
+  .dash .btn { min-block-size: 44px; }
 }

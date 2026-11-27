@@ -51,7 +51,7 @@ const keys = {
 /** "3 Nov, 6:00 PM": an instant on the academy's clock, 12-hour (PD-22, owner 2026-10-28). */
 function useWhen() {
   const { locale } = useI18n()
-  return (iso: string) => `${dayMonthIn(iso, ACADEMY_ZONE, locale)}, ${clock12In(iso, ACADEMY_ZONE, locale)}`
+  return (iso: string) => `${dayMonthIn(iso, ACADEMY_ZONE, locale)}${locale === 'ar' ? '، ' : ', '}${clock12In(iso, ACADEMY_ZONE, locale)}`
 }
 
 function useTitle() {
@@ -72,13 +72,14 @@ function useTabs(): { tabs: Tab[]; closedViews: TaskView[] } {
 }
 
 /** When a task is due, as the list groups it. Overdue is the server's own flag, never recomputed. */
-type Group = 'overdue' | 'today' | 'week' | 'later' | 'none'
-const GROUPS: Group[] = ['overdue', 'today', 'week', 'later', 'none']
+type Group = 'overdue' | 'today' | 'tomorrow' | 'week' | 'later' | 'none'
+const GROUPS: Group[] = ['overdue', 'today', 'tomorrow', 'week', 'later', 'none']
 function groupOf(t: Pick<TaskSummary, 'overdue' | 'dueAt'>, today: string): Group {
   if (t.overdue) return 'overdue'
   if (!t.dueAt) return 'none'
   const day = isoToAcademyWallClock(t.dueAt).date
   if (day <= today) return 'today'
+  if (day === addDays(today, 1)) return 'tomorrow'
   return day <= addDays(today, 7) ? 'week' : 'later'
 }
 
@@ -204,10 +205,9 @@ export function TasksPage({ eyebrow }: { eyebrow?: string }) {
   }
   if (mineWhole) {
     const dueToday = mineItems.filter((t) => groupOf(t, today) === 'today').length
-    figures.push({ key: 'today', label: tx(C.figToday), value: number(dueToday), tone: dueToday > 0 ? 'key' : 'quiet' })
+    figures.push({ key: 'today', label: tx(C.figToday), value: number(dueToday), tone: dueToday > 0 ? undefined : 'quiet' })
   }
-  const openCount = mineWhole ? mineItems.length : tile('tasks.mine_open')?.count
-  if (openCount !== undefined) figures.push({ key: 'open', label: tx(C.figOpen), value: number(openCount) })
+  // No "open" total: the list below is that number. The figures are what to act on, and two of them filter.
   const waiting = tabs.includes('decisions') ? tile('tasks.awaiting_decision') : undefined
   if (waiting) {
     figures.push({
@@ -234,7 +234,8 @@ export function TasksPage({ eyebrow }: { eyebrow?: string }) {
           figures={figures}
           actions={
             canCreate ? (
-              <button type="button" className="btn btn--primary" onClick={() => setCreating(true)}>
+              // One primary per screen: with a task open, its own action is the primary one.
+              <button type="button" className={openId ? 'btn' : 'btn btn--primary'} onClick={() => setCreating(true)}>
                 <Icon name="plus" size={16} />
                 {tx(C.newTask)}
               </button>
@@ -414,9 +415,10 @@ function TaskRow({ task, showAssignee, selected, onOpen }: { task: TaskSummary; 
               </>
             )}
           </span>
+          {!closed && <PriorityChip task={task} />}
           {task.category === 'financial' && <FinanceTag />}
           {!closed && state !== 'open' && <Badge tone={STATE_TONE[state]}>{tx(STATE_LABEL[state])}</Badge>}
-          {task.needsReassignment && !closed && <Badge tone="danger">{tx(C.goneOnly)}</Badge>}
+          {task.needsReassignment && !closed && <Badge tone="waiting">{tx(C.goneOnly)}</Badge>}
         </div>
       </div>
       {/* The one fact a queue is read for: how long until it is due, or how long since. */}
@@ -438,17 +440,14 @@ function TaskRow({ task, showAssignee, selected, onOpen }: { task: TaskSummary; 
           <span className="tq-row__date">{tx(C.noDue)}</span>
         )}
       </div>
-      <div className="tq-row__level">{!closed && <PriorityChip task={task} />}</div>
-      <RowActions
-        label={tx(C.moreActions, { name })}
-        primary={
-          link && !closed ? (
-            <Link className="btn btn--sm" to={link} aria-label={`${tx(C.openSource)}: ${name}`}>
-              {tx(C.openSource)}
-            </Link>
-          ) : undefined
-        }
-      />
+      {/* One stated action, in a slot of its own width so the column stays straight; the open task's is in its inspector. */}
+      <div className="tq-row__act">
+        {link && !closed && !selected && (
+          <Link className="btn btn--sm" to={link} aria-label={`${tx(C.goPage)}: ${name}`}>
+            {tx(C.goPage)}
+          </Link>
+        )}
+      </div>
     </li>
   )
 }
@@ -511,14 +510,13 @@ function TaskPanel({ id, onClose }: { id: string; onClose: () => void }) {
           <>
             <header className="insp__head">
               <div className="insp__top">
-                <span className="insp__kind">
-                  <Icon name={t.source ? 'bolt' : 'user'} size={16} />
-                  {t.source || !t.createdBy ? tx(SOURCE_LABEL[t.source?.type ?? 'manual']) : tx(C.createdBy, { name: t.createdBy.name })}
-                </span>
+                <h2 className="tasks__panel-title" dir="auto">{title(t)}</h2>
                 <CloseButton onClose={onClose} />
               </div>
-              <h2 className="tasks__panel-title" dir="auto">{title(t)}</h2>
               <div className="tasks__chips">
+                <span className="insp__kind">
+                  {t.source || !t.createdBy ? tx(SOURCE_LABEL[t.source?.type ?? 'manual']) : tx(C.createdBy, { name: t.createdBy.name })}
+                </span>
                 {live && <PriorityChip task={t} />}
                 {t.category === 'financial' && <FinanceTag />}
                 <Badge tone={STATE_TONE[state]}>{tx(STATE_LABEL[state])}</Badge>
@@ -901,6 +899,10 @@ function NewTaskDialog({ onClose }: { onClose: () => void }) {
     >
       <QueryBoundary isLoading={options.isLoading} error={options.error} onRetry={() => options.refetch()}>
         <label className="field">
+          <span className="field__label">{tx(C.taskTitle)}</span>
+          <input className="input" maxLength={200} value={title} onChange={(e) => setTitle(e.target.value)} />
+        </label>
+        <label className="field">
           <span className="field__label">{tx(C.assignee)}</span>
           <SearchableSelect className="select" value={assignee} onValueChange={(v) => setAssignee(v)}>
             <option value="">{tx(C.choose)}</option>
@@ -908,10 +910,6 @@ function NewTaskDialog({ onClose }: { onClose: () => void }) {
               <option key={`${p.kind}:${p.id}`} value={`${p.kind}:${p.id}`}>{p.name}</option>
             ))}
           </SearchableSelect>
-        </label>
-        <label className="field">
-          <span className="field__label">{tx(C.taskTitle)}</span>
-          <input className="input" maxLength={200} value={title} onChange={(e) => setTitle(e.target.value)} />
         </label>
         <label className="field">
           <span className="field__label">{tx(C.details)}</span>

@@ -8,7 +8,7 @@ import { Badge } from '@/shared/components/Badge'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
 import { Icon, type IconName } from '@/shared/components/Icon'
 import type { MenuItem } from '@/shared/components/Menu'
-import { PageHeader, type MastFigure } from '@/shared/components/PageHeader'
+import { PageHeader } from '@/shared/components/PageHeader'
 import { RowActions } from '@/shared/components/RowActions'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
 import { describeError } from '@/features/teacher-files/copy'
@@ -43,14 +43,15 @@ const SUBJECT_ICON: Record<CaseSubjectKind, IconName> = {
   feedback: 'chatText',
 }
 
-/** Where a case stands in the queue: past its due day first, then not started, then being worked on. */
-type Group = 'past' | 'open' | 'progress' | 'closed'
-const GROUPS: Group[] = ['past', 'open', 'progress', 'closed']
+/** Where a case stands in the queue, by its due day as Tasks is: past it first, then today or tomorrow, then later. */
+type Group = 'past' | 'soon' | 'later' | 'none' | 'closed'
+const GROUPS: Group[] = ['past', 'soon', 'later', 'none', 'closed']
 const isLive = (c: Pick<CaseSummary, 'status'>) => c.status === 'open' || c.status === 'in_progress'
 function groupOf(c: Pick<CaseSummary, 'status' | 'dueOn'>, today: string): Group {
   if (!isLive(c)) return 'closed'
-  if (c.dueOn && c.dueOn.slice(0, 10) < today) return 'past'
-  return c.status === 'open' ? 'open' : 'progress'
+  if (!c.dueOn) return 'none'
+  const left = daysUntil(c.dueOn, today)
+  return left < 0 ? 'past' : left <= 1 ? 'soon' : 'later'
 }
 
 /** A case's due day ("2026-11-29") as a date in the viewer's language: "29 November". */
@@ -99,23 +100,16 @@ export function CasesPage({ header }: { header?: React.ReactNode }) {
   })
   const cases = list.data?.cases ?? []
   const today = academyToday()
-  const grouped = GROUPS.map((g) => ({ group: g, rows: cases.filter((c) => groupOf(c, today) === g) })).filter((g) => g.rows.length > 0)
-  const count = (g: Group) => cases.filter((c) => groupOf(c, today) === g).length
-
-  // The figures are this view's own list, counted as it is grouped below.
-  const figures: MastFigure[] = list.data
-    ? [
-        { key: 'past', label: tx(GROUP_LABEL.past), value: number(count('past')), tone: count('past') > 0 ? 'urgent' : 'quiet' },
-        { key: 'open', label: tx(GROUP_LABEL.open), value: number(count('open')), tone: count('open') > 0 ? 'key' : 'quiet' },
-        { key: 'progress', label: tx(GROUP_LABEL.progress), value: number(count('progress')) },
-      ]
-    : []
+  // Inside a group, the nearest due day first.
+  const byDue = (x: CaseSummary, y: CaseSummary) => (x.dueOn ?? '9999').localeCompare(y.dueOn ?? '9999')
+  const grouped = GROUPS.map((g) => ({ group: g, rows: cases.filter((c) => groupOf(c, today) === g).sort(byDue) })).filter((g) => g.rows.length > 0)
   const strip = header ?? (holdsAny(staff, CASES_ACCESS_KEYS) ? <TasksAreaTabs /> : undefined)
 
   return (
     <div className="page cases">
       <div className="page__inner">
-        <PageHeader title={tx(C.title)} figures={figures} tabs={strip} />
+        {/* No figure strip: the groups below are the counts, past due first. */}
+        <PageHeader title={tx(C.title)} tabs={strip} />
         <div className={openId ? 'tq tq--open' : 'tq'}>
           <div className="sheet tq__sheet">
             <div className="sheet-bar cases__bar">
@@ -168,7 +162,7 @@ export function CasesPage({ header }: { header?: React.ReactNode }) {
                     </h2>
                     <ul className="tq-rows">
                       {rows.map((c) => (
-                        <CaseRow key={c.id} c={c} today={today} showStatus={group === 'past' || group === 'closed'} selected={c.id === openId} onOpen={() => setOpenId(c.id)} />
+                        <CaseRow key={c.id} c={c} today={today} selected={c.id === openId} onOpen={() => setOpenId(c.id)} />
                       ))}
                     </ul>
                   </section>
@@ -183,7 +177,7 @@ export function CasesPage({ header }: { header?: React.ReactNode }) {
   )
 }
 
-function CaseRow({ c, today, showStatus, selected, onOpen }: { c: CaseSummary; today: string; showStatus: boolean; selected: boolean; onOpen: () => void }) {
+function CaseRow({ c, today, selected, onOpen }: { c: CaseSummary; today: string; selected: boolean; onOpen: () => void }) {
   const tx = useCopy()
   const { locale } = useI18n()
   const day = useDay()
@@ -215,6 +209,7 @@ function CaseRow({ c, today, showStatus, selected, onOpen }: { c: CaseSummary; t
               tx(C.noOwner)
             )}
           </span>
+          <Badge tone={STATUS_TONE[c.status]}>{tx(STATUS_LABEL[c.status])}</Badge>
         </div>
       </div>
       <div className="tq-row__when">
@@ -227,8 +222,6 @@ function CaseRow({ c, today, showStatus, selected, onOpen }: { c: CaseSummary; t
           <span className="tq-row__date">{tx(C.noDue)}</span>
         )}
       </div>
-      {/* Where the group already says it (Open, In progress) the row does not repeat it. */}
-      <div className="tq-row__level">{showStatus && <Badge tone={STATUS_TONE[c.status]}>{tx(STATUS_LABEL[c.status])}</Badge>}</div>
     </li>
   )
 }

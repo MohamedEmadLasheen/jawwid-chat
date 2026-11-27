@@ -6,7 +6,7 @@ export { useCopy } from '@/features/organization/copy'
 /** PD-35 B5: escalation cases, Arabic and English side by side. */
 export const C = {
   title: { en: 'Escalations', ar: 'التصعيدات' },
-  sortNeed: { en: 'Past due first, then not started', ar: 'المتجاوزة موعدها أولًا، ثم التي لم تبدأ' },
+  sortNeed: { en: 'Past due first, then soonest due', ar: 'المتجاوزة موعدها أولًا، ثم الأقرب موعدًا' },
   empty: { en: 'No open escalations in this list', ar: 'لا تصعيدات مفتوحة في هذه القائمة' },
   emptyAll: { en: 'No escalations in this list', ar: 'لا تصعيدات في هذه القائمة' },
   emptyHint: {
@@ -54,8 +54,9 @@ export const C = {
 /** The queue's groups: where a case stands. */
 export const GROUP_LABEL = {
   past: { en: 'Past due', ar: 'تجاوزت موعدها' },
-  open: { en: 'Open', ar: 'مفتوحة' },
-  progress: { en: 'In progress', ar: 'قيد العمل' },
+  soon: { en: 'Due today or tomorrow', ar: 'موعدها اليوم أو غدًا' },
+  later: { en: 'Later', ar: 'لاحقًا' },
+  none: { en: 'No due date', ar: 'بلا موعد' },
   closed: { en: 'Closed', ar: 'مغلقة' },
 } satisfies Record<string, Pair>
 
