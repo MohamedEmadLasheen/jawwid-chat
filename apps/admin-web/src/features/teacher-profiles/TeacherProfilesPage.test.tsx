@@ -166,7 +166,8 @@ describe('the review queue', () => {
     })
     renderWithProviders(<TeacherProfilesPage />, { staff: makeStaff({ role: 'admin' }) })
 
-    expect(await screen.findByText(/^2 ·/)).toBeInTheDocument()
+    // Round 3: the count sits beside "Awaiting decision" in the teacher's header (no middle dot).
+    expect(await screen.findByText('Awaiting decision')).toHaveTextContent(/^Awaiting decision2$/)
   })
 
   it('shows an empty state when nothing is waiting', async () => {

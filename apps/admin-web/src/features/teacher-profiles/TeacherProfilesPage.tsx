@@ -33,22 +33,14 @@ import { RowActions } from '@/shared/components/RowActions'
  * and the server never sends the other three.
  */
 export function TeacherProfilesPage() {
-  const { t, number } = useI18n()
+  const { t } = useI18n()
   const query = usePendingReviews()
 
   return (
     <div className="page">
       <div className="page__inner">
-        <PageHeader
-          title={t('nav.teacher-profiles')}
-          figures={
-            query.profiles.length > 0
-              ? [
-                  { key: 'pending', label: t('tprofile.pending.title'), value: number(query.profiles.reduce((n, p) => n + p.pendingCertificates, 0)), tone: 'key' },
-                ]
-              : undefined
-          }
-        />
+        {/* No figure: the list below is the count (round 3). */}
+        <PageHeader title={t('nav.teacher-profiles')} />
 
         {/* With nothing to review, the page still stands on a sheet. */}
         <div className={query.profiles.length === 0 ? 'sheet' : undefined}>
@@ -84,9 +76,11 @@ function TeacherRow({ profile }: { profile: CertificateReviewItem }) {
           {profile.teacherName}
         </strong>
         {profile.pendingCertificates > 0 ? (
-          <Badge tone="warn">
-            {profile.pendingCertificates} · {t('tprofile.cert.state.pending')}
-          </Badge>
+          // Said once per teacher, not on every row: everything here waits by definition.
+          <span className="tp-waiting">
+            {t('tprofile.cert.state.pending')}
+            <span className="count">{profile.pendingCertificates}</span>
+          </span>
         ) : (
           <Badge tone="ok" dot>
             {t('tprofile.ready')}
@@ -103,7 +97,7 @@ function TeacherRow({ profile }: { profile: CertificateReviewItem }) {
 }
 
 function CertificateRow({ certificate }: { certificate: ReviewCertificate }) {
-  const { t, date } = useI18n()
+  const { t, date, locale } = useI18n()
   const decide = useDecideCertificate()
   const [rejecting, setRejecting] = useState(false)
 
@@ -117,20 +111,22 @@ function CertificateRow({ certificate }: { certificate: ReviewCertificate }) {
   return (
     <li className="rowx tp-cert">
       <div className="rw-who">
-        <span className="tp-cert__icon" aria-hidden="true">
-          <Icon name="certificates" size={18} />
-        </span>
         <span className="rw-who__text">
-          <strong className="rw-name" dir="auto">{certificate.title}</strong>
+          {/* The title opens the document: a credential is read before it is decided. */}
+          <button type="button" className="tp-cert__title" onClick={() => void openCertificate(certificate.id)}>
+            <Icon name="file" size={18} />
+            <strong className="rw-name" dir="auto">{certificate.title}</strong>
+          </button>
           <span className="rw-sub">
-            {certificate.issuingOrganization}
-            {certificate.issuedOn && <> · {date(certificate.issuedOn)}</>}
+            {certificate.issuingOrganization && <bdi dir="auto">{certificate.issuingOrganization}</bdi>}
+            {certificate.issuingOrganization && certificate.issuedOn && (locale === 'ar' ? '، ' : ', ')}
+            {certificate.issuedOn && <bdi>{date(certificate.issuedOn)}</bdi>}
           </span>
         </span>
       </div>
       <div className="rw-meta">{certificate.reviewNote && <span dir="auto">{certificate.reviewNote}</span>}</div>
       <div className="rw-tags">
-        <Badge tone={tone} dot>{t(`tprofile.cert.state.${certificate.state}` as const)}</Badge>
+        {certificate.state !== 'pending' && <Badge tone={tone} dot>{t(`tprofile.cert.state.${certificate.state}` as const)}</Badge>}
       </div>
 
       <div className="cell-actions">
