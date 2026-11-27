@@ -55,7 +55,6 @@
 .weekticks__day--today .weekticks__name { color: var(--ink); font-weight: 600; }
 
 /* Plain activity lines. */
-.ruled { list-style: none; margin: 0; padding: 0; }
 .today__line { display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; align-items: baseline; gap: 10px; padding: 9px 0; border-block-end: 1px solid var(--hairline-soft); font-size: var(--fs-sm); }
 .today__dot { inline-size: 7px; block-size: 7px; border-radius: 50%; border: 1.5px solid var(--border-strong); transform: translateY(-1px); }
 .today__dot--new { border-color: var(--teal); background: var(--teal); }

@@ -758,12 +758,14 @@ html[lang='ar'] .table { font-size: var(--fs-sm); }
 /* Large numerals in a ruled row: the answer to a row of stat cards. */
 .ledger {
   display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(0, 1fr);
+  /* As many cells as fit at a readable width; more wrap to a second ruled row. */
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   margin: 0 0 var(--space-5);
   padding: 0;
   list-style: none;
   border-block: 1px solid var(--hairline);
+  /* Each cell draws its own start and top rule, pulled one pixel out; the frame clips the outer ones. */
+  overflow: hidden;
 }
 .ledger__cell {
   display: flex;
@@ -773,26 +775,27 @@ html[lang='ar'] .table { font-size: var(--fs-sm); }
   padding: 14px var(--space-4) 13px;
   border: 0;
   border-inline-start: 1px solid var(--hairline);
+  border-block-start: 1px solid var(--hairline-soft);
+  margin: -1px 0 0;
+  margin-inline-start: -1px;
   background: none;
   color: inherit;
   font: inherit;
   text-align: start;
   text-decoration: none;
 }
-.ledger__cell:first-child { border-inline-start: 0; padding-inline-start: 2px; }
+.ledger__cell:first-child { padding-inline-start: 3px; }
 a.ledger__cell:hover, button.ledger__cell:hover { background: var(--surface-hover); }
 .ledger__cell[aria-pressed='true'], .ledger__cell[aria-current='true'] { box-shadow: inset 0 2px 0 var(--teal); }
 .ledger__label { font-size: 12.5px; color: var(--ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ledger__value { font-family: var(--display); font-size: var(--fs-kpi); font-weight: 600; line-height: 1.15; font-variant-numeric: tabular-nums lining-nums; color: var(--ink); direction: ltr; unicode-bidi: isolate; text-align: start; }
-[dir='rtl'] .ledger__value { text-align: right; }
+.ledger__value { font-family: var(--display); font-size: var(--fs-kpi); font-weight: 600; line-height: 1.15; font-variant-numeric: tabular-nums lining-nums; color: var(--ink); unicode-bidi: plaintext; text-align: start; }
 .ledger__unit { margin-inline-start: 5px; font-family: var(--font); font-size: var(--fs-xs); font-weight: 400; color: var(--ink-muted); }
 .ledger__note { font-size: var(--fs-xs); color: var(--ink-muted); }
 .ledger__cell--late .ledger__value, .ledger__cell--late .ledger__note { color: var(--terracotta); }
 @media (max-width: 767px) {
-  .ledger { grid-auto-flow: row; grid-template-columns: 1fr 1fr; }
-  .ledger__cell { padding-inline: var(--space-3); border-block-start: 1px solid var(--hairline-soft); }
-  .ledger__cell:nth-child(-n + 2) { border-block-start: 0; }
-  .ledger__cell:nth-child(odd) { border-inline-start: 0; padding-inline-start: 2px; }
+  .ledger { grid-template-columns: 1fr 1fr; }
+  .ledger__cell { padding-inline: var(--space-3); }
+  .ledger__cell:nth-child(odd) { padding-inline-start: 3px; }
   .ledger__value { font-size: 26px; }
 }
 
@@ -828,10 +831,13 @@ a.ledger__cell:hover, button.ledger__cell:hover { background: var(--surface-hove
 .kpi-card__sub { color: var(--ink-muted); }
 .metric--alert .metric__value { color: var(--terracotta); }
 .status-tile { border-block-start: 2px solid transparent; }
-.status-tile[aria-current='true'] { background: none; border-block-start-color: var(--teal); border-inline-start-color: var(--hairline); }
+.status-tile[aria-current='true'] { background: none; border-color: var(--hairline); border-block-start-color: var(--teal); border-block-end-color: var(--hairline-soft); }
 .status-tile[aria-current='true'] .status-tile__label { color: var(--teal-dark); }
 .status-tile__dot { inline-size: 7px; block-size: 7px; background: none; border: 1.5px solid var(--tile-tone); }
 .status-tile--deleted .status-tile__dot { background: var(--terracotta); border-color: var(--terracotta); }
+
+/* A plain hairline list. */
+.ruled { list-style: none; margin: 0; padding: 0; }
 
 /* ================================================================ states */
 
