@@ -241,6 +241,7 @@
 /* A clock time is read left to right; its box drops the chevron so "20:00" has the room. */
 .ts-hours input.ts-time { direction: ltr; text-align: center; font-variant-numeric: tabular-nums; min-inline-size: 0; inline-size: 100%; padding-inline: 6px; background-image: none; }
 .ts-gap { color: var(--waiting); font-weight: 500; }
+.ts-gap--quiet { color: var(--ink-muted); font-weight: 400; }
 .ts-hours .ts-window .input { min-inline-size: 0; inline-size: 100%; }
 .ts-note { display: block; margin-block-start: 2px; color: var(--ink-muted); font-size: var(--fs-xs); }
 
@@ -267,4 +268,36 @@
   .ts-inbox > .sheet-bar { overflow-x: auto; scrollbar-width: none; }
   .ts-inbox > .sheet-bar .chips { flex-wrap: nowrap; }
   .ts-inbox > .sheet-bar .chip { flex: none; }
+}
+
+/* Paused and stopped students (round 3). A note reads to two lines, not one cut short. */
+.rw-sub.st-note { white-space: normal; text-overflow: clip; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; max-inline-size: 22rem; }
+/* How near a return is, under its date: amber from two days out, when the family is told. */
+.st-soon { font-size: var(--fs-xs); color: var(--ink-muted); white-space: nowrap; }
+.st-soon--near { color: var(--waiting); font-weight: 600; }
+/* "Package left" has no source yet: said once for the list, in the bar; a row shows it only when known. */
+.st-package div { color: var(--ink-muted); }
+.st-package-note { margin-block: 0; color: var(--ink-muted); font-size: var(--fs-xs); }
+.st-package-note span { color: var(--ink-2); }
+/* Dates side by side start on the same line even when one carries a note under it. */
+.rw-dates .rw-date { align-content: start; }
+/* Fixed tracks so the dates line up down the list. */
+@media (min-width: 768px) {
+  .st-list .rw-who { flex: 0 0 19rem; }
+  .st-list .rw-meta:not(.st-package) { flex: 1 1 0; }
+  .st-list .rw-dates { flex: 0 0 15rem; }
+  .st-list .rw-dates .rw-date { inline-size: 7rem; }
+}
+
+/* Student schedules (round 3). The pickers sit on the canvas as a toolbar, flush with the list. */
+.ss-bar .sheet-bar { padding: 0; border: 0; }
+.ss-bar { margin-block-end: var(--space-4); }
+/* A pressed figure is marked by a teal rule under it, not an inset block (shared rule: system.css .figure--link[aria-pressed]). */
+.ss-page .figure--link[aria-pressed='true'] { background: none; box-shadow: inset 0 -3px 0 var(--teal); border-radius: 0; }
+.ss-page .figure--link[aria-pressed='true'] .figure__label { color: var(--teal-dark); font-weight: 600; }
+/* A group's count reads on the title's baseline. */
+.ts-desk .sheet__title { align-items: baseline; }
+@media (max-width: 767px) {
+  .ss-bar .sheet-bar { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); }
+  .ss-bar .ts-pick__field { inline-size: auto; min-inline-size: 0; }
 }
