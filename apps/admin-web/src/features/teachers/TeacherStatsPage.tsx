@@ -2,18 +2,21 @@ import { useCallback } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { ApiError } from '@/core/api/errors'
 import { Avatar } from '@/shared/components/Avatar'
-import { PageHeader, type MastFigure } from '@/shared/components/PageHeader'
+import { Badge } from '@/shared/components/Badge'
+import { MastFigures, PageHeader, type MastFigure } from '@/shared/components/PageHeader'
 import { QueryBoundary } from '@/shared/components/States'
 import { adminSectionPath } from '@/features/admin/sections'
 import type { CategoryStats, StatCategory, TeacherDetail } from './api'
 import { CATEGORY_LABEL, T, TS } from './copy'
-import { useTeacherDetail } from './hooks'
+import { useTeacherDetail, useTeacherStats } from './hooks'
 import { TeachersAreaTabs } from './area'
 import { MonthPicker } from './MonthPicker'
 import { Denied, StatsList } from './stats/StatsList'
 import { MessageTeacher } from './stats/MessageTeacher'
 import { OutcomeBars } from './stats/OutcomeBars'
-import { isFilter } from './stats/priority'
+import { clausesOf, flagsOf, isFilter, levelOf } from './stats/priority'
+import { useReason } from './stats/reason'
+import { LEVEL_TONE } from './stats/TeacherSheet'
 import { Pct, useCopy, useCopyNodes, useFormat } from './stats/format'
 import { TEACHER_ATTENTION_THRESHOLDS as TH } from './stats/thresholds'
 import './teachers.css'
@@ -102,6 +105,12 @@ function TeacherDetailView({
   const [params] = useSearchParams()
   const q = useTeacherDetail(id, month)
   const d = q.data
+  const reason = useReason()
+  // Why this teacher is where the list put them: the same level and reason as the row.
+  const listRow = useTeacherStats(month).data?.teachers.find((r) => r.teacher.id === id)
+  const flags = listRow ? flagsOf(listRow, TH) : null
+  const level = flags ? levelOf(flags) : null
+  const why = listRow && flags && level ? reason(clausesOf(listRow, flags, level)) : ''
   // The way back keeps the month: the list this record belongs to.
   const back = new URLSearchParams(params)
   back.delete('teacher')
@@ -120,7 +129,7 @@ function TeacherDetailView({
           key: 'attendance',
           label: tx(TS.colAttendance),
           value: <Pct value={d.rates.attendance} />,
-          note: tx(T.attendanceHint),
+          tone: d.rates.attendance === null ? 'quiet' : undefined,
         },
         {
           key: 'held',
@@ -139,7 +148,6 @@ function TeacherDetailView({
         lead={d ? <Avatar name={d.teacher.name} seed={d.teacher.id} size="lg" /> : undefined}
         title={d?.teacher.name ?? tx(T.title)}
         subtitle={tx(T.detailSubtitle, { month: fmt.month(month) })}
-        figures={figures}
         actions={
           <>
             {d && (
@@ -154,6 +162,13 @@ function TeacherDetailView({
           </>
         }
       />
+      {level && (
+        <p className="tsx-full__why">
+          <Badge tone={LEVEL_TONE[level]}>{tx(TS[level])}</Badge>
+          {why && <span>{why}</span>}
+        </p>
+      )}
+      {figures.length > 0 && <MastFigures figures={figures} />}
       {isForbidden(q.error) ? (
         <Denied />
       ) : (
@@ -192,7 +207,7 @@ function DetailBody({ detail: d }: { detail: TeacherDetail }) {
         </p>
       </div>
 
-      <aside className="ts-facts">
+      <aside className="ts-facts sheet tsx-full__facts">
         <Fact title={tx(T.reports)}>
           <Metric label={tx(T.onTime)} value={<Pct value={d.reports.onTimeRate} />} hint={tx(TS.ofN, { a: fmt.number(d.reports.onTime), b: fmt.number(d.reports.reports) })} />
           <Metric label={tx(T.medianDelay)} value={fmt.duration(d.reports.medianDelayMinutes)} />
@@ -260,8 +275,6 @@ function DetailBody({ detail: d }: { detail: TeacherDetail }) {
   )
 }
 
-/** One tick per lesson, grouped by lesson length. Past this many, a group is drawn at this length. */
-const TICK_LIMIT = 160
 /** Red only where a lesson was lost through the teacher or still has no report; the rest is neutral ink. */
 const ALARM: ReadonlySet<StatCategory> = new Set(['teacher_no_show', 'unreported'])
 
@@ -280,11 +293,6 @@ function CategoryCard({ category: c }: { category: CategoryStats }) {
         <p className="ts-muted ts-cat__empty">{tx(T.noData)}</p>
       ) : (
         <>
-          <div className="ts-ticks" aria-hidden="true">
-            {c.byDuration.map((b) => (
-              <span key={b.durationMinutes} className="ts-ticks__run" style={{ ['--n' as string]: Math.min(b.lessons, TICK_LIMIT) }} />
-            ))}
-          </div>
           <ul className="ts-cat__rows">
             {c.byDuration.map((b) => (
               <li key={b.durationMinutes} className="ts-cat__row">

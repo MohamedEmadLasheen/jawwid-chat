@@ -175,9 +175,9 @@ describe('the statistics', () => {
     // A teacher no-show makes the row urgent, whatever the other figures say; the reason says so.
     expect(within(one.closest('tbody')!).getByRole('columnheader', { name: /Urgent/ })).toBeInTheDocument()
     expect(within(one).getByText(/Missed 1 lesson without notice/)).toBeInTheDocument()
-    // Late reports below the threshold are not red; the on-time rate below its own is.
+    // Late reports below the threshold are not red; an on-time rate below its watch threshold is amber.
     expect(within(one).getByText('2')).not.toHaveClass('is-breach')
-    expect(within(one).getByText('75%').closest('.tsx-sub')).toHaveClass('is-breach')
+    expect(within(one).getByText('75%').closest('.tsx-sub')).toHaveClass('is-watch')
     const two = within(table).getByRole('button', { name: 'Teacher Two' }).closest('tr')!
     expect(within(two.closest('tbody')!).getByRole('columnheader', { name: /On track/ })).toBeInTheDocument()
     // The thresholds in use are stated under the list.

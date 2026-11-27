@@ -16,6 +16,8 @@ export function useReason() {
             return tx(TS.rNoShow, { lessons: lessons(c.n) })
           case 'lateRecent':
             return tx(TS.rLateRecent)
+          case 'lateHabit':
+            return tx(TS.rLateHabit)
           case 'lateNone':
             return tx(TS.rLateNone)
           case 'absences':
@@ -28,8 +30,6 @@ export function useReason() {
             return tx(TS.rReportsLate)
           case 'teacherExcuses':
             return tx(TS.rTeacherExcuses, { lessons: lessons(c.n) })
-          case 'trials':
-            return tx(TS.rTrials, { s: fmt.number(c.subscribed), t: fmt.number(c.total) })
           case 'noLessons':
             return tx(TS.rNoLessons)
         }

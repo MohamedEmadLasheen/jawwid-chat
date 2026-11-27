@@ -26,12 +26,12 @@ export interface Flags {
 export type Clause =
   | { key: 'noShow'; n: number }
   | { key: 'lateRecent' }
+  | { key: 'lateHabit' }
   | { key: 'lateNone' }
   | { key: 'absences'; absent: number; excused: number }
   | { key: 'absencesUnknown' }
   | { key: 'reportsLate' }
   | { key: 'teacherExcuses'; n: number }
-  | { key: 'trials'; subscribed: number; total: number }
   | { key: 'noLessons' }
 
 export interface Ranked {
@@ -63,8 +63,7 @@ export function levelOf(f: Flags): Level {
 /**
  * The reason a row is where it is, in what its columns do not say: a no-show,
  * whether late reports are a habit or a recent backlog, how the students'
- * absences break down. A row on track says something worth knowing instead
- * (its trials), or nothing.
+ * absences break down. A row on track says nothing, unless it had no lessons.
  */
 export function clausesOf(row: TeacherRow, f: Flags, level: Level): Clause[] {
   const out: Clause[] = []
@@ -72,7 +71,7 @@ export function clausesOf(row: TeacherRow, f: Flags, level: Level): Clause[] {
   if (f.late) {
     // The backlog read against the month's habit (the on-time rate under the number).
     if (row.reportsOnTimeRate === null) out.push({ key: 'lateNone' })
-    else if (f.onTime) out.push({ key: 'reportsLate' })
+    else if (f.onTime) out.push({ key: 'lateHabit' })
     else out.push({ key: 'lateRecent' })
   }
   if (f.attendance) {
@@ -88,8 +87,8 @@ export function clausesOf(row: TeacherRow, f: Flags, level: Level): Clause[] {
     if (excuses > 0 && out.length < 2) out.push({ key: 'teacherExcuses', n: excuses })
     return out.slice(0, 2)
   }
+  // On track needs no reason; only a month without lessons is worth a word.
   if (row.scheduled.lessons === 0 && row.held.lessons === 0 && row.upcoming.lessons === 0) return [{ key: 'noLessons' }]
-  if (row.trials && row.trials.total > 0) return [{ key: 'trials', subscribed: row.trials.subscribed, total: row.trials.total }]
   return []
 }
 

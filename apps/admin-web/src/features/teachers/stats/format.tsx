@@ -16,6 +16,12 @@ export const MORE_TEACHERS: CountedNoun = {
   ar: { one: 'معلمًا آخر', two: 'معلمَين آخرَين', few: 'معلمين آخرين', many: 'معلمًا آخر' },
 }
 
+/** "Ask for 9 late reports". */
+export const LATE_REPORTS: CountedNoun = {
+  en: { one: 'late report', other: 'late reports' },
+  ar: { one: 'التقرير المتأخر', two: 'التقريرين المتأخرين', few: 'تقارير متأخرة', many: 'تقريرًا متأخرًا' },
+}
+
 /** Lessons after a preposition ("missed 2 lessons", "غياب عن حصتين"). */
 export const LESSONS_AFTER: CountedNoun = {
   en: LESSONS.en,

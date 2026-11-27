@@ -52,6 +52,11 @@ export function TeacherSheet({
       variant="sheet"
       title={row.teacher.name}
       onClose={onClose}
+      actions={
+        <Link className="btn btn--ghost btn--icon btn--sm" to={fullHref} aria-label={tx(TS.sheetExpand)} title={tx(TS.sheetExpand)}>
+          <Icon name="expand" size={18} />
+        </Link>
+      }
       footer={
         <>
           {row.teacher.isActive && <MessageTeacher teacherId={row.teacher.id} teacherName={row.teacher.name} className="btn btn--primary" withIcon />}
@@ -71,22 +76,22 @@ export function TeacherSheet({
 
         <dl className="tsx-figs">
           <div className="tsx-fig">
-            <dt>{tx(TS.colLate)}</dt>
-            <dd className={flags.late ? 'tsx-fig__n is-breach' : 'tsx-fig__n'}>{fmt.number(row.unreported.lessons)}</dd>
+            <dt>{tx(TS.shortLate)}</dt>
+            <dd className={`tsx-fig__n${flags.late ? ' is-breach' : ''}${row.unreported.lessons === 0 ? ' is-zero' : ''}`}>{fmt.number(row.unreported.lessons)}</dd>
             {row.reportsOnTimeRate !== null && (
-              <dd className={flags.onTime ? 'tsx-fig__sub is-breach' : 'tsx-fig__sub'}>
+              <dd className={flags.onTime ? 'tsx-fig__sub is-watch' : 'tsx-fig__sub'}>
                 <Pct value={row.reportsOnTimeRate} /> {tx(TS.onTime)}
               </dd>
             )}
           </div>
           <div className="tsx-fig">
-            <dt>{tx(TS.colAttendance)}</dt>
-            <dd className={flags.attendance ? 'tsx-fig__n is-breach' : 'tsx-fig__n'}>
+            <dt>{tx(TS.shortAttendance)}</dt>
+            <dd className={flags.attendance ? 'tsx-fig__n is-watch' : 'tsx-fig__n'}>
               <Pct value={row.attendanceRate} />
             </dd>
           </div>
           <div className="tsx-fig">
-            <dt>{tx(TS.colLessons)}</dt>
+            <dt>{tx(TS.shortLessons)}</dt>
             <dd className="tsx-fig__n tsx-fig__n--ratio">
               <bdi dir="ltr" className="ltr">{`${fmt.number(row.held.lessons)} / ${fmt.number(row.scheduled.lessons)}`}</bdi>
             </dd>
@@ -137,7 +142,11 @@ export function TeacherSheet({
               </h3>
               <dl className="tsx-facts">
                 <Fact label={tx(TS.trialsSubscribed)}>
-                  <bdi>{tx(TS.ofN, { a: fmt.number(d.trials.subscribed), b: fmt.number(d.trials.total) })}</bdi>
+                  {d.trials.total === 0 ? (
+                    <span className="tsx-quiet">{tx(TS.noTrials)}</span>
+                  ) : (
+                    <bdi>{tx(TS.ofN, { a: fmt.number(d.trials.subscribed), b: fmt.number(d.trials.total) })}</bdi>
+                  )}
                 </Fact>
                 {summary && (
                   <>

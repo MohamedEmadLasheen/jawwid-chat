@@ -1,18 +1,19 @@
 import { useMemo, useState, type ReactNode } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { ApiError } from '@/core/api/errors'
 import { LOCALE_TAG, useI18n } from '@/core/i18n/I18nProvider'
 import { Avatar } from '@/shared/components/Avatar'
 import { Badge } from '@/shared/components/Badge'
 import { Icon } from '@/shared/components/Icon'
 import { Menu } from '@/shared/components/Menu'
-import { PageHeader, type MastFigure } from '@/shared/components/PageHeader'
+import { MastFigures, PageHeader, type MastFigure } from '@/shared/components/PageHeader'
+import { RowActions } from '@/shared/components/RowActions'
 import { SearchField } from '@/shared/components/SearchField'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
 import { T, TS } from '../copy'
 import { useTeacherStats } from '../hooks'
 import { downloadCsv, toCsv } from './exportCsv'
-import { LESSONS_AFTER, MORE_TEACHERS, Pct, TEACHERS, percentText, useCopy, useCopyNodes, useFormat } from './format'
+import { LATE_REPORTS, LESSONS_AFTER, MORE_TEACHERS, Pct, TEACHERS, percentText, useCopy, useCopyNodes, useFormat } from './format'
 import { MessageTeacher } from './MessageTeacher'
 import { matches, rank, totals, type Filter, type Level, type Ranked } from './priority'
 import { useReason } from './reason'
@@ -24,14 +25,18 @@ import './stats.css'
 const OK_SHOWN = 4
 const LEVELS: Level[] = ['urgent', 'watch', 'ok']
 
-/** The server said no: one calm line and a lock. It offers no retry, as a refusal is an answer. */
+/** The server said no: what is refused and who may open it. No retry, as a refusal is an answer. */
 export function Denied() {
   const { t } = useI18n()
+  const tx = useCopy()
   return (
-    <p className="ts-denied" role="alert">
-      <Icon name="lock" size={18} />
-      <span>{t('common.forbidden')}</span>
-    </p>
+    <div className="state state--forbidden tsx-denied" role="alert">
+      <span className="state__icon" aria-hidden="true">
+        <Icon name="lock" size={20} />
+      </span>
+      <div className="state__title">{t('common.forbidden')}</div>
+      <div className="state__body">{tx(TS.deniedHint)}</div>
+    </div>
   )
 }
 
@@ -88,6 +93,7 @@ export function StatsList({
   // Narrowed by a figure or a search, every match is shown.
   const collapsing = !filter && !needle
 
+  const forbidden = q.error instanceof ApiError && q.error.isForbidden
   const teachers = (n: number) => fmt.count(n, TEACHERS)
   const toggle = (key: Filter) => () => onFilter(filter === key ? null : key)
   const figures: MastFigure[] = q.data
@@ -168,7 +174,7 @@ export function StatsList({
 
   const actions = (
     <>
-      {q.data && q.data.teachers.length > 0 && (
+      {!forbidden && q.data && q.data.teachers.length > 0 && (
         <Menu
           label={tx(TS.exportList)}
           triggerClassName="btn btn--sm tsx-export"
@@ -184,16 +190,21 @@ export function StatsList({
           ]}
         />
       )}
-      {monthPicker}
+      {!forbidden && monthPicker}
     </>
   )
 
-  const forbidden = q.error instanceof ApiError && q.error.isForbidden
   const activeFigure = filter ? figures.find((f) => f.key === filter) : undefined
 
   return (
     <div className="tsx-page">
-      <PageHeader title={tx(T.title)} actions={actions} figures={figures} tabs={tabs} />
+      {/* The tabs belong to the area, so they sit under the title; the figures sit on the list they filter. */}
+      <PageHeader title={tx(T.title)} actions={actions} tabs={tabs} />
+      {figures.length > 0 && (
+        <div className="tsx-figures">
+          <MastFigures figures={figures} />
+        </div>
+      )}
       {forbidden ? (
         <Denied />
       ) : (
@@ -252,7 +263,7 @@ export function StatsList({
                               <span className="count">{fmt.number(items.length)}</span>
                               {askReports && (
                                 <Link className="card__link tsx-ghead__link" to={needsActionHref}>
-                                  {tx(TS.askReports)}
+                                  {tx(TS.askReports, { reports: fmt.count(sums.lateLessons, LATE_REPORTS) })}
                                 </Link>
                               )}
                             </span>
@@ -265,6 +276,8 @@ export function StatsList({
                             sentence={reason(r.clauses)}
                             folded={folded && !expanded && i >= OK_SHOWN}
                             onOpen={() => setOpenId(r.row.teacher.id)}
+                            fileHref={fileHref(r.row.teacher.id)}
+                            fullHref={fullHref(r.row.teacher.id)}
                           />
                         ))}
                         {folded && (
@@ -303,9 +316,24 @@ export function StatsList({
   )
 }
 
-function Row({ item, sentence, folded, onOpen }: { item: Ranked; sentence: string; folded: boolean; onOpen: () => void }) {
+function Row({
+  item,
+  sentence,
+  folded,
+  onOpen,
+  fileHref,
+  fullHref,
+}: {
+  item: Ranked
+  sentence: string
+  folded: boolean
+  onOpen: () => void
+  fileHref: string
+  fullHref: string
+}) {
   const tx = useCopy()
   const fmt = useFormat()
+  const navigate = useNavigate()
   const { row, level, flags } = item
   const name = row.teacher.name
   return (
@@ -329,13 +357,13 @@ function Row({ item, sentence, folded, onOpen }: { item: Ranked; sentence: strin
           {fmt.number(row.unreported.lessons)}
         </span>
         {row.reportsOnTimeRate !== null && (
-          <span className={flags.onTime ? 'tsx-sub is-breach' : 'tsx-sub'}>
+          <span className={flags.onTime ? 'tsx-sub is-watch' : 'tsx-sub'}>
             <Pct value={row.reportsOnTimeRate} /> {tx(TS.onTime)}
           </span>
         )}
       </td>
       <td className="num tsx-cell" data-label={tx(TS.shortAttendance)}>
-        <span className={`tsx-n${flags.attendance ? ' is-breach' : ''}${row.attendanceRate === null ? ' is-zero' : ''}`}>
+        <span className={`tsx-n${flags.attendance ? ' is-watch' : ''}${row.attendanceRate === null ? ' is-zero' : ''}`}>
           <Pct value={row.attendanceRate} />
         </span>
       </td>
@@ -345,18 +373,22 @@ function Row({ item, sentence, folded, onOpen }: { item: Ranked; sentence: strin
         </bdi>
       </td>
       <td className="tsx-act">
-        {level === 'urgent' && row.teacher.isActive ? (
-          <MessageTeacher teacherId={row.teacher.id} teacherName={name} />
-        ) : (
-          <button
-            type="button"
-            className="btn btn--sm"
-            onClick={(e) => (e.stopPropagation(), onOpen())}
-            aria-label={`${tx(T.open)}: ${name}`}
-          >
-            {tx(T.open)}
-          </button>
-        )}
+        <RowActions
+          label={`${tx(TS.moreActions)}: ${name}`}
+          primary={
+            level === 'urgent' && row.teacher.isActive ? (
+              <MessageTeacher teacherId={row.teacher.id} teacherName={name} />
+            ) : (
+              <button type="button" className="btn btn--sm tsx-open" onClick={onOpen} aria-label={`${tx(T.open)}: ${name}`}>
+                {tx(T.open)}
+              </button>
+            )
+          }
+          more={[
+            { key: 'file', label: tx(TS.openFile), icon: 'user', onSelect: () => navigate(fileHref) },
+            { key: 'full', label: tx(TS.fullStats), icon: 'chart', onSelect: () => navigate(fullHref) },
+          ]}
+        />
       </td>
     </tr>
   )

@@ -77,15 +77,15 @@ describe('the reason', () => {
   }
   it('says what the columns do not: a no-show, whether late reports are a habit or a recent backlog', () => {
     expect(reason(row('a', { noShow: 2, unrep: 4, onTime: 0.95 }))).toEqual(['noShow', 'lateRecent'])
-    expect(reason(row('a', { unrep: 4, onTime: 0.5 }))).toEqual(['reportsLate', 'teacherExcuses'])
+    expect(reason(row('a', { unrep: 4, onTime: 0.5 }))).toEqual(['lateHabit', 'teacherExcuses'])
     expect(reason(row('a', { unrep: 4, onTime: null }))).toEqual(['lateNone', 'teacherExcuses'])
   })
   it('a low attendance names the students’ absences, or says it plainly without a month summary', () => {
     expect(reason(row('a', { att: 0.7 }))).toEqual(['absences', 'teacherExcuses'])
     expect(reason(row('a', { att: 0.7, summary: false }))).toEqual(['absencesUnknown'])
   })
-  it('a row on track mentions its trials, or that it had no lessons', () => {
-    expect(reason(row('a', { trials: [2, 3] }))).toEqual(['trials'])
+  it('a row on track says nothing, unless it had no lessons', () => {
+    expect(reason(row('a', { trials: [2, 3] }))).toEqual([])
     expect(reason(row('a', { held: 0 }))).toEqual(['noLessons'])
     expect(reason(row('a', {}))).toEqual([])
   })
