@@ -534,7 +534,8 @@ describe('Western digits in what Jawwid wrote', () => {
 
   it('a scheduled call says when in the UI language, on the academy clock, with Western digits', () => {
     // 15:00 UTC is 17:00 in Cairo.
-    expect(callWhen('2026-11-29T15:00:00.000Z', 'en')).toBe('Sun 29 Nov, 5:00 PM (Cairo time)')
+    // (The space before PM is a narrow one on some ICU versions.)
+    expect(callWhen('2026-11-29T15:00:00.000Z', 'en')).toMatch(/^Sun 29 Nov, 5:00\sPM \(Cairo time\)$/)
     const ar = callWhen('2026-11-29T15:00:00.000Z', 'ar')
     expect(ar).toMatch(/29/)
     expect(ar).toMatch(/5:00/)
@@ -558,7 +559,7 @@ describe('Western digits in what Jawwid wrote', () => {
     renderChat('/chat/c1')
     expect(await screen.findByText('Trial lesson: Kid One, Kid Two')).toHaveClass('cw-card__title')
     // 14:30 UTC is 16:30 in Cairo.
-    expect(screen.getByText('When: Sat 28 Nov, 4:30 PM (Cairo time)')).toBeInTheDocument()
+    expect(screen.getByText(/^When: Sat 28 Nov, 4:30\sPM \(Cairo time\)$/)).toBeInTheDocument()
     expect(screen.getByText('Length: 30 min')).toBeInTheDocument()
     expect(screen.getByText('Level: beginner')).toBeInTheDocument()
     expect(screen.queryByText(/[٠-٩]/)).not.toBeInTheDocument()

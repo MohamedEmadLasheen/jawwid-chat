@@ -135,7 +135,9 @@ describe('Scheduled-call cards in the chat thread', () => {
 
     const soon = cardOf('call_scheduled', 0)
     expect(within(soon).getByText('Scheduled call')).toBeInTheDocument()
-    expect(within(soon).getByText('When: Mon 20 Oct, 15:30')).toBeInTheDocument()
+    // The thread sets the time from the card's instant (`startsAt`), on the academy clock and in the UI
+    // language, rather than repeating the sentence the server wrote once (`when`).
+    expect(within(soon).getByText(/^When: \w{3} \d{1,2} \w{3,4}, \d{1,2}:\d{2}\s[AP]M \(Cairo time\)$/)).toBeInTheDocument()
     expect(within(soon).getByText('By: Admin A')).toBeInTheDocument()
     expect(within(soon).getByRole('button', { name: 'Join' })).toBeDisabled()
     expect(within(soon).getByText('Join opens 10 minutes before the start.')).toBeInTheDocument()
