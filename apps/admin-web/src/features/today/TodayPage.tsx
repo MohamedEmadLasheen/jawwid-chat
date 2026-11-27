@@ -16,7 +16,10 @@ import { paymentKeys, paymentsApi } from '@/features/payments/api'
 import { calendarApi, calendarKeys } from '@/features/schedule/api'
 import { academyToday, addDays, weekStart } from '@/features/schedule/viewState'
 import { tasksApi } from '@/features/tasks/api'
-import { Icon } from '@/shared/components/Icon'
+import { Icon, type IconName } from '@/shared/components/Icon'
+import { PageHeader, type MastFigure } from '@/shared/components/PageHeader'
+import { formatMoney } from '@/features/instalments/copy'
+import { parentPath } from '@/features/profiles/api'
 import './today.css'
 
 /**
@@ -29,6 +32,20 @@ import './today.css'
 
 const T = {
   title: { en: 'Today', ar: 'اليوم' },
+  doNext: { en: 'Do next', ar: 'ابدأ بهذا' },
+  replies: { en: 'Waiting for a reply', ar: 'بانتظار رد' },
+  lateGroup: { en: 'Late instalments', ar: 'أقساط متأخرة' },
+  taskGroup: { en: 'Overdue tasks', ar: 'مهام متأخرة' },
+  receiptGroup: { en: 'Receipts to confirm', ar: 'إيصالات للتأكيد' },
+  open: { en: 'Open', ar: 'فتح' },
+  answer: { en: 'Answer', ar: 'ردّ' },
+  review: { en: 'Review', ar: 'مراجعة' },
+  file: { en: 'Open file', ar: 'فتح الملف' },
+  seeAll: { en: 'See all', ar: 'عرض الكل' },
+  daysLate: { en: '{n} days late', ar: 'متأخر {n} يومًا' },
+  dayLate: { en: '1 day late', ar: 'متأخر يومًا واحدًا' },
+  clear: { en: 'Nothing is waiting on you. New replies, late instalments, overdue tasks and receipts appear here, most urgent first.', ar: 'لا شيء بانتظارك. تظهر هنا الردود الجديدة والأقساط المتأخرة والمهام المتأخرة والإيصالات، الأشد إلحاحًا أولًا.' },
+  goChats: { en: 'Open conversations', ar: 'فتح المحادثات' },
   needs: { en: 'Needs you', ar: 'بانتظارك' },
   late: { en: 'Late instalments', ar: 'أقساط متأخرة' },
   dueToday: { en: '{n} due today', ar: 'يستحق اليوم: {n}' },
@@ -125,19 +142,67 @@ export function TodayPage() {
   const hijri = new Intl.DateTimeFormat(`${tag.replace(/-u-.*/, '')}-u-ca-islamic-umalqura-nu-latn`, { day: 'numeric', month: 'long', year: 'numeric', timeZone: ACADEMY_ZONE }).format(nowDate)
   const num = new Intl.NumberFormat(tag)
 
-  const unread = (chats.data ?? []).filter((c) => (c.unreadCount ?? 0) > 0)
   const copy = chatCopyFor(locale)
-  // The conversation that has waited longest for a reply comes first.
-  const first = [...unread].sort((a, b) => String(a.lastMessage?.createdAt ?? '').localeCompare(String(b.lastMessage?.createdAt ?? '')))[0]
 
-  const cells: Array<{ key: string; label: string; value: number; note?: string; to: string; late?: boolean }> = []
+  const needsReply = [...(chats.data ?? [])]
+    .filter((c) => c.needsReply || (c.unreadCount ?? 0) > 0)
+    .sort((a, b) => Number(b.needsReply) - Number(a.needsReply) || String(a.lastActivityAt ?? '').localeCompare(String(b.lastActivityAt ?? '')))
+  const late = (instalments.data?.items ?? []).filter((i) => i.status === 'overdue').sort((a, b) => b.days - a.days)
+  const overdueTasks = tasks.data?.items ?? []
+  const pending = receipts.data?.items ?? []
+  // The conversation that has waited longest for a reply comes first.
+  const first = needsReply[0]
+
+  const figures: MastFigure[] = []
   if (instalmentsPath && instalments.data) {
     const c = instalments.data.counts
-    cells.push({ key: 'late', label: tx(T.late), value: c.overdue, note: c.due > 0 ? fillN(tx(T.dueToday), num.format(c.due)) : undefined, to: instalmentsPath, late: c.overdue > 0 })
+    figures.push({ key: 'late', label: tx(T.late), value: num.format(c.overdue), note: c.due > 0 ? fillN(tx(T.dueToday), num.format(c.due)) : undefined, tone: c.overdue > 0 ? 'urgent' : 'quiet', to: instalmentsPath })
   }
-  if (chatPath === '/chat' && chats.data) cells.push({ key: 'chats', label: tx(T.chats), value: unread.length, to: '/chat' })
-  if (tasksPath && tasks.data) cells.push({ key: 'tasks', label: tx(T.tasks), value: tasks.data.items.length, to: tasksPath, late: tasks.data.items.length > 0 })
-  if (paymentsPath && receipts.data) cells.push({ key: 'receipts', label: tx(T.receipts), value: receipts.data.counts.pending ?? receipts.data.items.length, to: paymentsPath })
+  if (chatPath === '/chat' && chats.data) figures.push({ key: 'chats', label: tx(T.replies), value: num.format(needsReply.length), tone: needsReply.length > 0 ? 'key' : 'quiet', to: '/chat' })
+  if (tasksPath && tasks.data) figures.push({ key: 'tasks', label: tx(T.tasks), value: num.format(overdueTasks.length), tone: overdueTasks.length > 0 ? undefined : 'quiet', to: tasksPath })
+  if (paymentsPath && receipts.data) figures.push({ key: 'receipts', label: tx(T.receipts), value: num.format(receipts.data.counts.pending ?? pending.length), tone: pending.length > 0 ? undefined : 'quiet', to: paymentsPath })
+
+  /** One thing to do: what it is, the one fact that makes it urgent, and where it is done. */
+  interface Todo { key: string; icon: IconName; title: string; line?: string; fact?: string; urgent?: boolean; to: string; action: string }
+  const groups: Array<{ key: string; label: string; urgent: boolean; total: number; all: string; items: Todo[] }> = []
+  if (chatPath === '/chat' && needsReply.length > 0) {
+    groups.push({
+      key: 'replies', label: tx(T.replies), urgent: needsReply.some((c) => c.needsReply), total: needsReply.length, all: '/chat',
+      items: needsReply.slice(0, 4).map((c) => ({
+        key: c.id, icon: 'conversations' as const, title: conversationName(c, staff?.id, copy), line: c.lastMessage?.text ?? undefined,
+        fact: relativeTime(c.lastActivityAt, locale), urgent: c.needsReply, to: `/chat/${encodeURIComponent(c.id)}`, action: tx(T.answer),
+      })),
+    })
+  }
+  if (instalmentsPath && late.length > 0) {
+    groups.push({
+      key: 'late', label: tx(T.lateGroup), urgent: true, total: late.length, all: instalmentsPath,
+      items: late.slice(0, 4).map((i) => ({
+        key: i.id, icon: 'instalments' as const, title: i.account.name || i.family.name, line: [i.child?.name, i.label].filter(Boolean).join(' · ') || i.family.name,
+        fact: `${formatMoney(i.amountMinor, i.currency, locale)} · ${i.days === 1 ? tx(T.dayLate) : fillN(tx(T.daysLate), num.format(i.days))}`, urgent: true,
+        to: i.account.id ? parentPath(i.account.id) : instalmentsPath, action: tx(T.file),
+      })),
+    })
+  }
+  if (tasksPath && overdueTasks.length > 0) {
+    groups.push({
+      key: 'tasks', label: tx(T.taskGroup), urgent: true, total: overdueTasks.length, all: tasksPath,
+      items: overdueTasks.slice(0, 4).map((t) => ({
+        key: t.id, icon: 'tasks' as const, title: t.title, line: t.createdBy?.name ?? undefined,
+        fact: t.dueAt ? relativeTime(t.dueAt, locale) : undefined, urgent: true, to: tasksPath, action: tx(T.open),
+      })),
+    })
+  }
+  if (paymentsPath && pending.length > 0) {
+    groups.push({
+      key: 'receipts', label: tx(T.receiptGroup), urgent: false, total: receipts.data?.counts.pending ?? pending.length, all: paymentsPath,
+      items: pending.slice(0, 3).map((r) => ({
+        key: r.id, icon: 'payments' as const, title: r.family?.name ?? r.label, line: r.label,
+        fact: formatMoney(r.amountMinor, r.currency, locale), to: paymentsPath, action: tx(T.review),
+      })),
+    })
+  }
+  const loadingQueue = (chatPath === '/chat' && chats.isLoading) || (instalmentsPath !== null && instalments.isLoading) || (tasksPath !== null && tasks.isLoading)
 
   const lessons = useMemo(() => [...(day.data?.lessons ?? [])].sort((a, b) => a.startsAt.localeCompare(b.startsAt)), [day.data])
   const teacherName = (id: string) => day.data?.teachers.find((t) => t.id === id)?.name ?? ''
@@ -159,20 +224,29 @@ export function TodayPage() {
   return (
     <div className="page today">
       <div className="page__inner">
-        <header className="today__head">
-          <h1 className="page-header__title">{tx(T.title)}</h1>
-          <p className="today__date">
-            <span>{hijri}</span>
-            <span className="today__date-sep" aria-hidden="true" />
-            <span>{gregorian}</span>
-          </p>
-        </header>
+        <PageHeader
+          eyebrow={`${hijri} · ${gregorian}`}
+          title={tx(T.title)}
+          figures={figures}
+          actions={
+            first ? (
+              <Link to={`/chat/${encodeURIComponent(first.id)}`} className="btn btn--primary">
+                <Icon name="conversations" size={18} />
+                {tx(T.first)} {conversationName(first, staff?.id, copy)}
+              </Link>
+            ) : chatPath === '/chat' ? (
+              <Link to="/chat" className="btn">
+                {tx(T.goChats)}
+              </Link>
+            ) : undefined
+          }
+        />
 
-        {cells.length > 0 && (
-          <section aria-labelledby="today-needs">
-            <div className="today__needs-head">
-              <h2 className="section-label" id="today-needs">
-                {tx(T.needs)}
+        <div className="split split--wide-aside">
+          <section className="today__queue" aria-labelledby="today-next">
+            <div className="today__queue-head">
+              <h2 className="today__h" id="today-next">
+                {tx(T.doNext)}
               </h2>
               {hasRequests && (
                 <Link to="/requests" className="card__link">
@@ -180,83 +254,102 @@ export function TodayPage() {
                 </Link>
               )}
             </div>
-            <div className="ledger">
-              {cells.map((c) => (
-                <Link key={c.key} to={c.to} className={c.late ? 'ledger__cell ledger__cell--late' : 'ledger__cell'}>
-                  <span className="ledger__label">{c.label}</span>
-                  <span className={c.value === 0 ? 'ledger__value ledger__value--none' : 'ledger__value'}>{num.format(c.value)}</span>
-                  {c.note && <span className="ledger__note">{c.note}</span>}
-                </Link>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {first && (
-          <p className="today__first">
-            <span className="today__first-k">{tx(T.first)}</span>
-            <Link to={`/chat/${encodeURIComponent(first.id)}`} className="today__first-link">
-              {conversationName(first, staff?.id, copy)}
-              <Icon name="chevronForward" size={16} />
-            </Link>
-          </p>
-        )}
-
-        <div className="today__cols">
-          {calendarPath && (
-            <section className="today__lessons" aria-labelledby="today-lessons">
-              <div className="today__section-head">
-                <h2 className="section-label" id="today-lessons">
-                  {tx(T.lessons)}
-                </h2>
-                <Link to={calendarPath} className="card__link">
-                  {tx(T.calendar)}
-                </Link>
+            {groups.length === 0 && !loadingQueue && (
+              <div className="sheet">
+                <p className="today__clear">
+                  <Icon name="checkCircle" size={20} />
+                  {tx(T.clear)}
+                </p>
               </div>
-              {lessons.length === 0 ? (
-                <p className="today__empty">{tx(T.noLessons)}</p>
-              ) : (
-                <ol className="tl">
-                  {lessons.map((l, i) => {
-                    const problem = !l.anonymous && (l.suspendedFor === 'payment' || l.status === 'paused')
-                    const tagText = l.anonymous
-                      ? null
-                      : l.suspendedFor === 'payment'
-                        ? tx(T.unpaid)
-                        : l.status === 'paused'
-                          ? tx(T.paused)
-                          : l.status === 'moved'
-                            ? tx(T.moved)
-                            : l.kind === 'trial'
-                              ? tx(T.trial)
-                              : l.kind === 'makeup'
-                                ? tx(T.makeup)
-                                : null
-                    const who = l.anonymous ? tx(T.private) : (l.learner?.name ?? l.prospect?.name ?? '')
-                    return (
-                      <li key={l.id} className={`tl__row${problem ? ' tl__row--problem' : ''}${l.endsAt <= nowIso ? ' tl__row--past' : ''}`}>
-                        {i === nowIndex && (
-                          <span className="tl__now" aria-label={tx(T.now)}>
-                            <span className="tl__now-text">{tx(T.now)}</span>
-                          </span>
-                        )}
-                        {/* A time axis reads left to right in both languages. */}
-                        <time className="tl__time" dir="ltr" dateTime={l.startsAt}>
-                          {clock12In(l.startsAt, ACADEMY_ZONE, locale)}
-                        </time>
-                        <span className="tl__who">{who}</span>
-                        <span className="tl__teacher">{teacherName(l.teacherId)}</span>
-                        {tagText && <span className="tl__tag">{tagText}</span>}
-                      </li>
-                    )
-                  })}
-                </ol>
-              )}
+            )}
+            {groups.map((g) => (
+              <section className="sheet today__group" key={g.key} aria-label={g.label}>
+                <header className="sheet__head">
+                  <h3 className="sheet__title">
+                    {g.label}
+                    <span className={g.urgent ? 'count count--urgent today__count' : 'count today__count'}>{num.format(g.total)}</span>
+                  </h3>
+                  {g.total > g.items.length && (
+                    <Link to={g.all} className="card__link">
+                      {tx(T.seeAll)}
+                    </Link>
+                  )}
+                </header>
+                <ul className="todo">
+                  {g.items.map((it) => (
+                    <li key={it.key} className={it.urgent ? 'todo__row todo__row--urgent' : 'todo__row'}>
+                      <span className="todo__icon" aria-hidden="true">
+                        <Icon name={it.icon} size={20} />
+                      </span>
+                      <span className="todo__main">
+                        <bdi className="todo__title">{it.title}</bdi>
+                        {it.line && <bdi className="todo__line">{it.line}</bdi>}
+                      </span>
+                      {it.fact && <span className="todo__fact">{it.fact}</span>}
+                      <Link to={it.to} className="btn btn--sm">
+                        {it.action}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ))}
+          </section>
 
-              {week.data && weekDays.some((d) => d.lessons > 0) && (
-                <div className="today__week" aria-label={tx(T.week)}>
-                  <h2 className="section-label">{tx(T.week)}</h2>
-                  <ol className="weekticks">
+          <aside className="today__aside">
+            {calendarPath && (
+              <section className="aside-group" aria-labelledby="today-lessons">
+                <div className="today__section-head">
+                  <h2 className="aside-group__title" id="today-lessons">
+                    {tx(T.lessons)}
+                    {lessons.length > 0 && <span className="count count--quiet today__count">{num.format(lessons.length)}</span>}
+                  </h2>
+                  <Link to={calendarPath} className="card__link">
+                    {tx(T.calendar)}
+                  </Link>
+                </div>
+                {lessons.length === 0 ? (
+                  <p className="today__empty">{tx(T.noLessons)}</p>
+                ) : (
+                  <ol className="tl">
+                    {lessons.map((l, i) => {
+                      const problem = !l.anonymous && (l.suspendedFor === 'payment' || l.status === 'paused')
+                      const tagText = l.anonymous
+                        ? null
+                        : l.suspendedFor === 'payment'
+                          ? tx(T.unpaid)
+                          : l.status === 'paused'
+                            ? tx(T.paused)
+                            : l.status === 'moved'
+                              ? tx(T.moved)
+                              : l.kind === 'trial'
+                                ? tx(T.trial)
+                                : l.kind === 'makeup'
+                                  ? tx(T.makeup)
+                                  : null
+                      const who = l.anonymous ? tx(T.private) : (l.learner?.name ?? l.prospect?.name ?? '')
+                      return (
+                        <li key={l.id} className={`tl__row${problem ? ' tl__row--problem' : ''}${l.endsAt <= nowIso ? ' tl__row--past' : ''}`}>
+                          {i === nowIndex && (
+                            <span className="tl__now" aria-label={tx(T.now)}>
+                              <span className="tl__now-text">{tx(T.now)}</span>
+                            </span>
+                          )}
+                          <time className="tl__time ltr" dateTime={l.startsAt}>
+                            {clock12In(l.startsAt, ACADEMY_ZONE, locale)}
+                          </time>
+                          <span className="tl__who">
+                            <bdi>{who}</bdi>
+                            <bdi className="tl__teacher">{teacherName(l.teacherId)}</bdi>
+                          </span>
+                          {tagText && <span className={problem ? 'badge badge--danger' : 'badge badge--info'}>{tagText}</span>}
+                        </li>
+                      )
+                    })}
+                  </ol>
+                )}
+                {week.data && weekDays.some((d) => d.lessons > 0) && (
+                  <ol className="weekticks" aria-label={tx(T.week)}>
                     {weekDays.map((d) => (
                       <li key={d.day} className={d.day === today ? 'weekticks__day weekticks__day--today' : 'weekticks__day'}>
                         <span className="weekticks__bar" aria-hidden="true">
@@ -267,40 +360,40 @@ export function TodayPage() {
                       </li>
                     ))}
                   </ol>
-                </div>
+                )}
+              </section>
+            )}
+
+            <section className="aside-group" aria-labelledby="today-activity">
+              <div className="today__section-head">
+                <h2 className="aside-group__title" id="today-activity">
+                  {tx(T.activity)}
+                </h2>
+                <Link to="/notifications" className="card__link">
+                  {tx(T.all)}
+                </Link>
+              </div>
+              {(inbox.data?.entries.length ?? 0) === 0 ? (
+                <p className="today__empty">{tx(T.noActivity)}</p>
+              ) : (
+                <ul className="ruled today__lines">
+                  {inbox.data!.entries.slice(0, 6).map((e) => (
+                    <li key={e.id} className="today__line">
+                      <span className={e.read ? 'today__dot' : 'today__dot today__dot--new'} aria-hidden="true" />
+                      <span className="today__line-text">
+                        <strong>{e.title}</strong>
+                        {e.body && !e.body.startsWith(e.title) && <span> {e.body}</span>}
+                        {e.body && e.body.startsWith(e.title) && e.body.length > e.title.length && <span>{e.body.slice(e.title.length)}</span>}
+                      </span>
+                      <time className="today__line-time" dateTime={e.at}>
+                        {relativeTime(e.at, locale)}
+                      </time>
+                    </li>
+                  ))}
+                </ul>
               )}
             </section>
-          )}
-
-          <section className="today__activity" aria-labelledby="today-activity">
-            <div className="today__section-head">
-              <h2 className="section-label" id="today-activity">
-                {tx(T.activity)}
-              </h2>
-              <Link to="/notifications" className="card__link">
-                {tx(T.all)}
-              </Link>
-            </div>
-            {(inbox.data?.entries.length ?? 0) === 0 ? (
-              <p className="today__empty">{tx(T.noActivity)}</p>
-            ) : (
-              <ul className="ruled today__lines">
-                {inbox.data!.entries.slice(0, 8).map((e) => (
-                  <li key={e.id} className="today__line">
-                    <span className={e.read ? 'today__dot' : 'today__dot today__dot--new'} aria-hidden="true" />
-                    <span className="today__line-text">
-                      <strong>{e.title}</strong>
-                      {e.body && !e.body.startsWith(e.title) && <span> {e.body}</span>}
-                      {e.body && e.body.startsWith(e.title) && e.body.length > e.title.length && <span>{e.body.slice(e.title.length)}</span>}
-                    </span>
-                    <time className="today__line-time" dateTime={e.at}>
-                      {relativeTime(e.at, locale)}
-                    </time>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
+          </aside>
         </div>
       </div>
     </div>
