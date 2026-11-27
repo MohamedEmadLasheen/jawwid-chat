@@ -1100,3 +1100,7 @@ button.side__item.is-current::before { content: none; }
 .kbd { font-size: 12.5px; }
 /* A dangerous item in any menu stands apart from the rest. */
 .menu__item:not(.menu__item--danger) + .menu__item--danger { margin-block-start: 4px; border-block-start: 1px solid var(--line-2); }
+/* The place menus float beside the sidebar on their own, so the list scrolls when a long place is open
+   and never runs under the account block. */
+.sidebar .side__menu { position: fixed; inset-inline-start: calc(var(--sidebar-w) + 8px); inset-block-end: auto; }
+.side__nav { overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }

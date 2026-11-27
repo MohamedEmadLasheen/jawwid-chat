@@ -225,18 +225,21 @@ function RailItem({
   const sole = soleEntry(d)
   const unread = useUnreadChats()
   const badge = d.key === 'conversations' ? unread : 0
+  // Admin & Settings sits at the foot of the list, apart from the everyday places.
+  const itemClass = d.key === 'admin' ? 'side__entry side__entry--end' : RAIL_RULE_BEFORE.has(d.key) ? 'side__entry side__entry--rule' : 'side__entry'
   const menu = useRef<HTMLDivElement>(null)
   // The flyout opens level with its place; when that would run past the window's foot it moves up just enough.
   useLayoutEffect(() => {
     const el = menu.current
-    if (!el || !open) return
-    el.style.transform = ''
-    const r = el.getBoundingClientRect()
-    const over = r.bottom - (window.innerHeight - 12)
-    if (over > 0) el.style.transform = `translateY(${-Math.min(over, Math.max(0, r.top - 12))}px)`
-  }, [open])
-  // Admin & Settings sits at the foot of the list, apart from the everyday places.
-  const itemClass = d.key === 'admin' ? 'side__entry side__entry--end' : RAIL_RULE_BEFORE.has(d.key) ? 'side__entry side__entry--rule' : 'side__entry'
+    const row = el?.parentElement?.querySelector<HTMLElement>(':scope > .side__item')
+    if (!el || !row || !open) return
+    // The menu floats beside the sidebar (fixed), so the list itself may scroll; it opens level
+    // with its place, or ends level with it at the foot, and always stays inside the window.
+    const r = row.getBoundingClientRect()
+    const h = el.offsetHeight
+    const wanted = itemClass.includes('side__entry--end') ? r.bottom + 6 - h : r.top - 6
+    el.style.insetBlockStart = `${Math.max(12, Math.min(wanted, window.innerHeight - 12 - h))}px`
+  }, [open, itemClass])
 
   if (sole) {
     return (
