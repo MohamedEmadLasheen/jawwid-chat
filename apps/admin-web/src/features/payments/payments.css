@@ -228,7 +228,7 @@
 .tx-states { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 2px 10px; margin-block-start: 4px; }
 .pay-refunded { display: inline-flex; align-items: baseline; gap: 5px; }
 /* The refunded amount keeps its digits on the column's edge, its word after it. */
-[dir='rtl'] .pay-refunded { flex-direction: row-reverse; }
+[dir='rtl'] :is(.pay-refunded, .tx-day__net) { flex-direction: row-reverse; }
 .tx-method { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
 .tx-method .icon { flex: none; color: var(--ink-muted); }
 .tx-method__card { padding-inline-start: 25px; }
