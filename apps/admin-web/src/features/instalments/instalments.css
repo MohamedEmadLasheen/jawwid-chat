@@ -7,7 +7,15 @@
 .in-hint { margin: 0 0 var(--space-3); }
 
 .in-table-wrap { overflow-x: auto; }
+/* Wide enough to need no sideways scroll: the column heads stay in view down the page. */
+@media (min-width: 1100px) {
+  .in-table-wrap { overflow: visible; }
+  /* The page scrolls inside its own padding: the heads go up through it to the edge. */
+  .table.in-table th { inset-block-start: calc(-1 * var(--space-6)); }
+}
 .table.in-table td { vertical-align: top; padding-block: 10px; }
+/* Late, due today, upcoming: where one ends and the next begins, the rule is firmer. */
+.table.in-table .in-row--opens td { border-block-start: 2px solid var(--hairline); }
 .in-table .entity { align-items: flex-start; gap: 10px; }
 .in-table .entity__text { display: grid; gap: 1px; }
 .in-payer { color: var(--ink); text-decoration: none; }
@@ -51,13 +59,14 @@
 .in-chat--none { display: inline-grid; place-items: center; inline-size: var(--control-h-sm); block-size: var(--control-h-sm); color: var(--border-strong); }
 
 /* The plan: one tick per instalment this list holds. Teal is paid, terracotta
-   late, gold due today, grey still to come; the row's own tick stands taller. */
+   late, gold due today; the row's own tick stands taller. */
 .plan { display: inline-flex; align-items: center; gap: 8px; min-block-size: 22px; }
 .plan__ticks { display: flex; align-items: flex-end; gap: 3px; block-size: 16px; max-inline-size: 96px; }
-.plan__tick { flex: 0 1 7px; min-inline-size: 3px; block-size: 9px; border-radius: 1px; background: var(--border-strong); }
-.plan__tick--paid { background: var(--teal); }
-.plan__tick--overdue { background: var(--terracotta); }
-.plan__tick--due { background: var(--gold); }
+/* Still to come is an outline; what has happened is filled, so the strip reads without its colours. */
+.plan__tick { flex: 0 1 7px; min-inline-size: 4px; block-size: 9px; border-radius: 1px; box-shadow: inset 0 0 0 1px var(--border-control); }
+.plan__tick--paid { background: var(--teal); box-shadow: none; }
+.plan__tick--overdue { background: var(--terracotta); box-shadow: none; }
+.plan__tick--due { background: var(--gold); box-shadow: inset 0 0 0 1px var(--gold-line); }
 .plan__tick--here { block-size: 16px; }
 .plan__at { font-size: var(--fs-xs); color: var(--ink-muted); font-variant-numeric: tabular-nums; }
 
@@ -72,7 +81,8 @@
 @media (max-width: 767px) {
   .in-toolbar { gap: var(--space-1) var(--space-4); }
   .in-toolbar__note { margin-inline-start: 0; flex-basis: 100%; }
-  .in-check { min-block-size: 40px; }
+  .in-check { min-block-size: 44px; }
+  .in-set { margin: -12px -8px; padding: 12px 8px; }
   .in-table-wrap { overflow: visible; }
   .in-table, .in-table tbody { display: block; }
   .in-table thead { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip: rect(0 0 0 0); }
@@ -85,7 +95,8 @@
     padding: 12px 0;
     border-block-end: 1px solid var(--hairline-soft);
   }
-  .table.in-table td, .table.in-table tbody tr:last-child td { display: block; padding: 0; border: 0; inline-size: auto; max-inline-size: none; }
+  .table.in-table td, .table.in-table tbody tr:last-child td, .table.in-table .in-row--opens td { display: block; padding: 0; border: 0; inline-size: auto; max-inline-size: none; }
+  .table.in-table .in-row--opens { border-block-start: 2px solid var(--hairline); margin-block-start: -1px; }
   .in-td-payer { grid-area: payer; }
   .in-td-amount { grid-area: amount; }
   .in-td-for { grid-area: for; padding-inline-start: 38px !important; }

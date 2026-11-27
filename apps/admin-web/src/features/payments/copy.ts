@@ -51,8 +51,6 @@ export const PAY = {
   transferredLine: { en: 'Transferred {date}', ar: 'حُوِّل {date}' },
   viewReceipt: { en: 'View the receipt for {label}', ar: 'عرض إيصال {label}' },
   imageFailed: { en: 'The image did not load. Open the file instead.', ar: 'تعذّر تحميل الصورة. افتح الملف بدلًا منها.' },
-  decision: { en: 'Decision', ar: 'القرار' },
-  from: { en: 'From', ar: 'من' },
   // The ledger's rules, one line each.
   rules: { en: 'Ledger rules', ar: 'قواعد السجل' },
   ruleEdit: { en: 'A payment is never edited: a mistake is voided with a reason.', ar: 'لا تُعدَّل الدفعة أبدًا: يُلغى الخطأ مع ذكر السبب.' },
@@ -61,11 +59,7 @@ export const PAY = {
   // Settings: what changed and has not been saved yet.
   edited: { en: 'Edited', ar: 'معدَّل' },
   unsaved: { en: 'Not saved yet: {groups}', ar: 'لم يُحفظ بعد: {groups}' },
-  nothingToSave: { en: 'No changes.', ar: 'لا تغييرات.' },
-  saveScope: { en: 'One save for the changed groups.', ar: 'حفظ واحد للمجموعات المعدَّلة.' },
-  stripe: { en: 'Stripe', ar: 'Stripe' },
-  webhook: { en: 'Webhook', ar: 'Webhook' },
-  dueDay: { en: 'Due date', ar: 'يوم الاستحقاق' },
+  saveScope: { en: 'One save for every group you edit.', ar: 'حفظ واحد لكل مجموعة تعدّلها.' },
   family: { en: 'Family', ar: 'الأسرة' },
   forWhat: { en: 'For', ar: 'عن' },
   amountSent: { en: 'Amount sent', ar: 'المبلغ المحوَّل' },

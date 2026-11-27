@@ -161,10 +161,12 @@ export function InstalmentsPage({ eyebrow }: { eyebrow?: string }) {
                         </tr>
                       </thead>
                       <tbody>
-                        {data.items.map((row) => (
+                        {data.items.map((row, i) => (
                           <InstalmentRow
                             key={row.id}
                             row={row}
+                            // Where the list passes from late to due today to upcoming, the rule is a shade firmer.
+                            opens={i > 0 && data.items[i - 1]!.status !== row.status}
                             plan={plans.get(planKey(row)) ?? [row]}
                             view={planView}
                             canAssign={data.canAssignBillingSupervisor}
@@ -221,7 +223,21 @@ function PlanStrip({ row, plan, view }: { row: Instalment; plan: Instalment[]; v
   )
 }
 
-function InstalmentRow({ row, plan, view, canAssign, onAssign }: { row: Instalment; plan: Instalment[]; view: PlanView; canAssign: boolean; onAssign: () => void }) {
+function InstalmentRow({
+  row,
+  plan,
+  view,
+  opens,
+  canAssign,
+  onAssign,
+}: {
+  row: Instalment
+  plan: Instalment[]
+  view: PlanView
+  opens: boolean
+  canAssign: boolean
+  onAssign: () => void
+}) {
   const tx = useCopy()
   const { locale, date } = useI18n()
   const day = formatDay(row.dueDate, locale)
@@ -235,7 +251,7 @@ function InstalmentRow({ row, plan, view, canAssign, onAssign }: { row: Instalme
           : tx(I.today)
   const forWhom = row.child === null ? tx(I.family) : row.child.name ?? ''
   return (
-    <tr className={`in-row in-row--${row.status}`}>
+    <tr className={`in-row in-row--${row.status}${opens ? ' in-row--opens' : ''}`}>
       <td className="in-td-payer">
         <div className="entity">
           <Avatar name={row.account.name} seed={row.account.id ?? row.family.id} size="sm" />

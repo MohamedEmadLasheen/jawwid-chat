@@ -80,6 +80,7 @@ export const S = {
     ar: 'يبقى طلب ولي الأمر للتجديد هنا 30 يومًا مع اسم الطفل المعني.',
   },
   openParents: { en: 'Open Parents', ar: 'فتح أولياء الأمور' },
+  renewalsDenied: { en: 'You do not have access to renewal requests.', ar: 'لا تملك صلاحية عرض طلبات التجديد.' },
   renewed: { en: 'Renewed', ar: 'تم التجديد' },
   waiting: { en: 'Waiting', ar: 'بانتظار' },
   // The chat banner (staff view)

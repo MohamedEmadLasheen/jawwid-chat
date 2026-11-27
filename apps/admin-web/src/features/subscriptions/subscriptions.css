@@ -35,6 +35,8 @@
 
 /* Payments > Renewal requests: who asked, for which child, how long ago, where it stands. */
 .rn__hint { margin: 0 0 var(--space-3); max-inline-size: 86ch; font-size: var(--fs-sm); color: var(--ink-muted); }
+.rn__denied { display: flex; align-items: flex-start; gap: 8px; margin: 0; padding-block: var(--space-3); font-size: var(--fs-sm); color: var(--ink-muted); }
+.rn__denied .icon { flex: none; margin-block-start: 3px; color: var(--teal); }
 .rn-list { margin: 0; padding: 0; list-style: none; border-block-start: 1px solid var(--hairline); }
 .rn-row {
   display: grid;

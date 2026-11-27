@@ -2,10 +2,11 @@ import { Link } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Avatar } from '@/shared/components/Avatar'
 import { Badge } from '@/shared/components/Badge'
+import { Icon } from '@/shared/components/Icon'
 import { EmptyState, LoadingState } from '@/shared/components/States'
 import { relativeTime } from '@/features/admin/copy'
 import { studentPath } from '@/features/profiles/api'
-import { S, isRefusal, useCopy } from './copy'
+import { S, describeError, isRefusal, useCopy } from './copy'
 import { useRenewalRequests } from './hooks'
 import './subscriptions.css'
 
@@ -14,7 +15,15 @@ export function RenewalRequestsPanel() {
   const tx = useCopy()
   const { locale, dateTime } = useI18n()
   const q = useRenewalRequests()
-  if (q.error && isRefusal(q.error)) return null
+  // A reader the server refuses sees no queue: one calm line where the list would be.
+  if (q.error && isRefusal(q.error)) {
+    return (
+      <p className="rn__denied">
+        <Icon name="lockNote" size={16} />
+        <span>{tx(S.renewalsDenied)}</span>
+      </p>
+    )
+  }
   const rows = q.data?.requests ?? []
   return (
     <section className="rn" aria-labelledby="pay-renewals">
@@ -24,6 +33,9 @@ export function RenewalRequestsPanel() {
       <p className="rn__hint">{tx(S.renewalsHint)}</p>
       {q.isLoading ? (
         <LoadingState compact />
+      ) : q.error ? (
+        // A failed read is said, never shown as "no requests".
+        <EmptyState icon="alert" title={describeError(q.error, locale)} />
       ) : rows.length === 0 ? (
         <EmptyState
           title={tx(S.noRenewals)}

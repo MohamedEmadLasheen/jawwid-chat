@@ -166,6 +166,12 @@
 .pay-sum__hint { margin: 6px 0 0; font-size: var(--fs-xs); color: var(--ink-muted); }
 
 .pay-table-wrap { overflow-x: auto; }
+/* Wide enough to need no sideways scroll: the column heads stay in view down the page. */
+@media (min-width: 1100px) {
+  .pay-table-wrap { overflow: visible; }
+  /* The page scrolls inside its own padding: the heads go up through it to the edge. */
+  .table.pay-table th { inset-block-start: calc(-1 * var(--space-6)); }
+}
 .table.pay-table td { vertical-align: top; padding-block: 10px; }
 .pay-table .entity { align-items: flex-start; gap: 10px; }
 .pay-table .entity__text { display: grid; gap: 1px; }
@@ -249,7 +255,7 @@ html[lang='ar'] .pay-detail .tf-section__title { font-weight: 700; }
   .table.pay-table .pay-num, [dir='rtl'] .table.pay-table .pay-num { text-align: end; }
   .pay-refunded, [dir='rtl'] .pay-refunded { justify-content: flex-end; }
   /* Under the name, clear of the monogram. */
-  .table.pay-table :is(.pay-a-for, .pay-a-method, .pay-a-invoice, .pay-a-why, .pay-a-tries, .pay-a-last) { padding-inline-start: 38px; }
+  .table.pay-table tbody tr td:is(.pay-a-for, .pay-a-method, .pay-a-invoice, .pay-a-why, .pay-a-tries, .pay-a-last) { padding-inline-start: 38px; }
   .pay-a-for > .pay-quiet:only-child, .pay-a-invoice > .pay-quiet:only-child { display: none; }
   .pay-table td[data-label]::before { content: attr(data-label) ' '; font-family: var(--font); font-size: var(--fs-xs); font-weight: 400; color: var(--ink-muted); }
   /* Transactions: who and how much, what for and when, how and where it stands, the invoice; the way in at the end. */
@@ -261,7 +267,7 @@ html[lang='ar'] .pay-detail .tf-section__title { font-weight: 700; }
   .pay-table--attempts .pay-count { font-family: var(--font); font-size: var(--fs-sm); font-weight: 500; justify-self: start; text-align: start; }
   /* Stripe events: the type and its mode, what came of it, the object and when. */
   .table.pay-table--events tr { grid-template-areas: 'who status' 'why why' 'for date'; }
-  .table.pay-table--events td { padding-inline-start: 0; }
+  .table.pay-table--events tbody tr td { padding-inline-start: 0; }
   .pay-table--events .pay-a-date { color: var(--ink-muted); font-size: var(--fs-xs); }
 }
 
@@ -277,6 +283,8 @@ html[lang='ar'] .pay-detail .tf-section__title { font-weight: 700; }
 html[lang='ar'] .set-group__title { font-weight: 700; line-height: 1.45; }
 .set-group__hint { margin: 0; max-inline-size: 34ch; font-size: var(--fs-sm); color: var(--ink-muted); }
 .set-group__body { min-inline-size: 0; max-inline-size: 680px; }
+/* The reminders' line runs the width it needs to hold them in one row. */
+.set-group__body:has(.set-reminders) { max-inline-size: 880px; }
 .set-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 var(--space-4); }
 .set-grid > .field--wide { grid-column: 1 / -1; }
 .set-grid > .field:last-child { margin-block-end: 0; }
@@ -290,10 +298,10 @@ html[lang='ar'] .set-group__title { font-weight: 700; line-height: 1.45; }
 
 /* Reminders in the order they fire: before the due date, on it (the gold mark), after it. */
 .set-reminders { display: flex; flex-wrap: wrap; margin: 4px 0 0; padding: 0; list-style: none; }
-.set-reminder { position: relative; flex: 1 1 132px; padding-block: 12px 2px; padding-inline-end: var(--space-3); border-block-start: 1px solid var(--border-strong); }
+.set-reminder { position: relative; flex: 1 0 auto; padding-block: 12px 2px; padding-inline-end: var(--space-4); border-block-start: 1px solid var(--border-strong); }
 .set-reminder::before { content: ''; position: absolute; inset-block-start: -1px; inset-inline-start: 7px; inline-size: 1px; block-size: 7px; background: var(--border-control); }
 .set-reminder--due::before { inset-inline-start: 6px; inline-size: 3px; block-size: 9px; background: var(--gold); }
-.set-reminder label { display: inline-flex; align-items: center; gap: var(--space-2); min-block-size: 32px; font-size: var(--fs-sm); cursor: pointer; }
+.set-reminder label { display: inline-flex; align-items: center; gap: var(--space-2); min-block-size: 32px; font-size: var(--fs-sm); white-space: nowrap; cursor: pointer; }
 .set-reminder input { inline-size: 16px; block-size: 16px; margin: 0; accent-color: var(--teal); }
 .set-reminder--due label { font-weight: 600; }
 fieldset:disabled .set-reminder label { cursor: default; }
