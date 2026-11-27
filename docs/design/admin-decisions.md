@@ -8,8 +8,7 @@ One line each: what was decided, and why. Newest at the end of each section.
 - Screenshots: Playwright with the installed Chrome, against a local API seeded with synthetic data.
 
 ## Type and icons
-- Interface face: **Readex Pro** (OFL), self-hosted from `@fontsource/readex-pro` 5.3.0. Tested against IBM Plex Sans Arabic, Noto Sans Arabic, Alexandria, Rubik, Cairo, Tajawal and Almarai on real admin strings; Readex sets the largest and clearest at 13-15px in both scripts, its figures are steady in tables, and it was designed for long-session legibility. Alexandria was too loud for an 8-hour tool; Plex sets visibly smaller.
-- IBM Plex Sans Arabic stays for one job only: the teacher-board viewer redraws a board in the mobile app's own typeface.
+- Type: **Readex Pro** (600/700) for titles, navigation and figures, **IBM Plex Sans Arabic** (400/500/600) for reading text. Tested against Noto Sans Arabic, Alexandria, Rubik, Cairo, Tajawal and Almarai on real admin strings: Readex sets the clearest large figures and headings, Plex reads best in long text and is the mobile app's face. The pair is the academy's own sales-page pair (join.jawwid.com), so the admin and the brand speak with one voice. Both OFL, self-hosted (`@fontsource/readex-pro` 5.3.0; Plex was already bundled).
 - No display serif anywhere (the serif + cream + terracotta trio is the commonest tell of a generated page).
 - Icons: **Lucide** (`lucide-react` 1.70.0, ISC), one family, stroke 1.6 at 18px and up (heavier only when drawn small so it keeps its weight).
 
@@ -37,6 +36,12 @@ One line each: what was decided, and why. Newest at the end of each section.
 - No meta strings joined with middle dots; use commas or separate lines.
 - Type floor: 14px for content, 13px for metadata, 12px only for axis labels.
 - Avatars: one neutral tint and one letter (two joined Arabic letters form words), or the person's photo.
+
+## Palette (reference study)
+- The brand palette is read from the sales page's CSS: ground `#FFFBF3`, ink `#12333B`, teal `#1A5866`, deep teal `#123F4A`, gold `#DEA854`, mist `#E9F1F1`. The admin uses the same values; the previous admin teal (`#0F7A72`) was off-brand.
+- The sidebar is the brand mist, not the logo teal (owner's guidance overrides the references, several of which put brand colour in the navigation).
+- The sales page's pomegranate (`#A8442F`) is not used: it sits too close to the urgent red and to the rejected terracotta.
+- Ranking teachers against each other is an HR question; the statistics page orders by *need for intervention*, not by performance, and says so.
 
 ## Shell (critic round 0)
 - No top bar: search and the command palette (Ctrl/Cmd+K) sit at the top of the sidebar; the page header owns the first row (title at the start, controls at the end).
