@@ -53,7 +53,7 @@ import './materials.css'
 
 type Tab = 'library' | 'import' | 'recitations'
 const TABS: readonly Tab[] = ['library', 'import', 'recitations']
-const STATUS_TONE: Record<ItemStatus, Tone> = { draft: 'outline', in_review: 'info', published: 'ok', retired: 'warn' }
+const STATUS_TONE: Record<ItemStatus, Tone> = { draft: 'outline', in_review: 'info', published: 'ok', retired: 'neutral' }
 
 /**
  * PD-29: the Materials page -- the super admin's and the Teachers manager's.
@@ -297,7 +297,7 @@ function ItemRow({ item, busy, onEdit, onPreview, onStatus }: {
           <span>{tx(KIND_LABEL[item.kind])}</span>
           {surah && <span>{tx(M.surah)}: {locale === 'ar' ? surah.nameAr : surah.nameEn}</span>}
           <span>{item.ageGroups.length ? item.ageGroups.map((a) => tx(AGE_LABEL[a])).join('، ') : tx(M.allAges)}</span>
-          {item.sitePath && item.sitePath !== item.externalRef && <span className="mt-ref" dir="ltr">{item.sitePath}</span>}
+          {/* The lesson path stays in the item's form; the row keeps the reference (round 3). */}
           {item.externalRef && <span className="mt-ref" dir="ltr">{item.externalRef}</span>}
           {item.sortOrder !== null && <span>{tx(M.sortOrderShort, { n: String(item.sortOrder) })}</span>}
         </span>

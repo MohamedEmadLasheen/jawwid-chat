@@ -9,10 +9,10 @@ export function DueClockView({ dueAt, status, nowMs, overdueAt }: { dueAt: strin
   const c = dueClock(dueAt, status, nowMs, overdueAt)
   if (c.state === 'closed') return <span>{tx(MOD.closed)}</span>
   const text = tx(c.state === 'overdue' ? MOD.past : MOD.left, { h: c.hours, m: c.minutes })
-  const tone = c.state === 'overdue' ? 'danger' : c.state === 'warn' ? 'warn' : 'neutral'
+  // Plenty of time is plain text; a tag only when the time is short or past.
   return (
     <span data-testid="due-clock" data-state={c.state}>
-      <Badge tone={tone} dot={c.state !== 'ok'}>{text}</Badge>
+      {c.state === 'ok' ? <span className="mod-left">{text}</span> : <Badge tone={c.state === 'overdue' ? 'danger' : 'warn'} dot>{text}</Badge>}
     </span>
   )
 }

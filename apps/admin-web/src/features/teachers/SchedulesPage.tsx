@@ -17,6 +17,34 @@ const DEFAULT_ZONE = 'Africa/Cairo'
 const WEEKDAYS = [1, 2, 3, 4, 5, 6, 7]
 
 /**
+ * Round 3: working hours are picked as 24-hour clock times in 15-minute steps
+ * (the same clock as the students' times beside them), not typed into the
+ * browser's time box, which spoke "PM" in Arabic. A value off the steps that
+ * is already saved stays offered as it is.
+ */
+const QUARTERS = Array.from({ length: 96 }, (_, i) => `${String(Math.floor(i / 4)).padStart(2, '0')}:${String((i % 4) * 15).padStart(2, '0')}`)
+function timeOptions(current: string) {
+  const all = QUARTERS.includes(current) || !current ? QUARTERS : [...QUARTERS, current].sort()
+  return all.map((t) => ({ value: t, label: t }))
+}
+
+/** A time zone as a person reads it: the city and its offset now ("Cairo (GMT+2)"); the id stays the value. */
+function zoneOptions(current: string, locale: 'ar' | 'en') {
+  const list: string[] = (Intl as unknown as { supportedValuesOf?: (k: string) => string[] }).supportedValuesOf?.('timeZone') ?? [DEFAULT_ZONE]
+  const zones = list.includes(current) ? list : [current, ...list]
+  return zones.map((z) => {
+    let offset = ''
+    try {
+      offset = new Intl.DateTimeFormat(locale === 'ar' ? 'ar-EG-u-nu-latn' : 'en-GB', { timeZone: z, timeZoneName: 'shortOffset' }).formatToParts(new Date()).find((p) => p.type === 'timeZoneName')?.value ?? ''
+    } catch {
+      offset = ''
+    }
+    const city = (z.split('/').pop() ?? z).replace(/_/g, ' ')
+    return { value: z, label: offset ? `${city} (${offset})` : city, hint: z }
+  })
+}
+
+/**
  * The Teachers department's scheduling desk (PD-11 T2-T3): pick a teacher, then
  * set their weekly working hours and days off, and for each of their students
  * the regular lesson times (lessons are created from them four weeks ahead),
@@ -122,7 +150,7 @@ function WorkingHours({ teacherId }: { teacherId: string }) {
         {q.data && q.data.windows.length === 0 && <p className="ts-muted ts-section__hint">{tx(O.noAvailabilityYet)}</p>}
         <div className="field ts-inline">
           <label className="field__label" htmlFor={`tz-${teacherId}`}>{tx(O.timezone)}</label>
-          <input id={`tz-${teacherId}`} className="input" value={timezone} onChange={(e) => setTimezone(e.target.value)} />
+          <SearchableSelect id={`tz-${teacherId}`} value={timezone} onValueChange={(v) => setTimezone(v || DEFAULT_ZONE)} options={zoneOptions(timezone, locale)} clearable={false} />
         </div>
         <div className="ts-windows">
           {windows.map((w, i) => (
@@ -130,9 +158,9 @@ function WorkingHours({ teacherId }: { teacherId: string }) {
               <SearchableSelect className="select" aria-label={`${tx(O.when)} ${i + 1}`} value={w.weekday} onValueChange={(v) => set(i, { weekday: Number(v) })}>
                 {WEEKDAYS.map((d) => <option key={d} value={d}>{tx(WEEKDAY[d]!)}</option>)}
               </SearchableSelect>
-              <input className="input" type="time" aria-label={`start ${i + 1}`} value={w.start} onChange={(e) => set(i, { start: e.target.value })} />
+              <SearchableSelect className="select ts-time" aria-label={`start ${i + 1}`} value={w.start} onValueChange={(v) => v && set(i, { start: v })} options={timeOptions(w.start)} clearable={false} />
               <span aria-hidden>–</span>
-              <input className="input" type="time" aria-label={`end ${i + 1}`} value={w.end} onChange={(e) => set(i, { end: e.target.value })} />
+              <SearchableSelect className="select ts-time" aria-label={`end ${i + 1}`} value={w.end} onValueChange={(v) => v && set(i, { end: v })} options={timeOptions(w.end)} clearable={false} />
               <button type="button" className="btn btn--sm btn--ghost btn--icon" aria-label={tx(O.remove)} title={tx(O.remove)} onClick={() => setWindows((x) => x.filter((_, j) => j !== i))}>
                 <Icon name="close" size={16} />
               </button>

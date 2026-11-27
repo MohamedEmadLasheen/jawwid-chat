@@ -226,3 +226,15 @@ html[dir='rtl'] .tf-head__name[dir='auto'] { text-align: right; }
 
 /* The roster: the student count is a fact beside the name, not the row's loudest thing. */
 .tf-roster .rw-fact__n { font-size: var(--fs-lg); }
+
+/* Round 3: a teacher nobody supervises says so on the line under the name, in the waiting colour. */
+.tf-roster .rw-sub.tf-gap { color: var(--waiting); font-weight: 600; }
+
+/* Round 3, phone: a teacher is one compact card: the name, then the count, the tags and a small Open on one line. */
+@media (max-width: 767px) {
+  .tf-roster .rowlist tbody tr { align-items: center; row-gap: 8px; }
+  .tf-roster .rowlist .rw-tags { flex: 1 1 0; min-inline-size: 8rem; }
+  .tf-roster .rowlist td.cell-actions { flex: none; margin-inline-start: auto; }
+  .tf-roster .rowlist td.cell-actions .row-actions2 { inline-size: auto; }
+  .tf-roster .rowlist td.cell-actions .row-actions2 > .btn, .tf-roster .rowlist td.cell-actions .row-actions2 > a.btn { flex: none; }
+}

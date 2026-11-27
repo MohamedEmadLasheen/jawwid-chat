@@ -14,7 +14,11 @@
 .mt-items { list-style: none; margin: 0; padding: 0; }
 .mt-item__icon { display: grid; place-items: center; flex: none; inline-size: 36px; block-size: 36px; border-radius: var(--radius); background: var(--teal-tint); color: var(--teal); }
 .mt-item .rw-who { flex: 1 1 22rem; }
-.mt-item__meta { display: flex; flex-wrap: wrap; gap: 0 var(--space-3); color: var(--ink-muted); font-size: var(--fs-xs); }
+.mt-item__meta { display: flex; flex-wrap: wrap; gap: 0 var(--space-2); color: var(--ink-muted); font-size: var(--fs-sm); }
+/* The facts read as a list, joined by the language's comma (no middle dots); the reference ends the line. */
+.mt-item__meta > span:not(:last-child):not(:has(+ .mt-ref))::after { content: ','; }
+[dir='rtl'] .mt-item__meta > span:not(:last-child):not(:has(+ .mt-ref))::after { content: '،'; }
+.mt-item__meta > .mt-ref { margin-inline-start: var(--space-2); }
 .mt-item .rw-tags { flex: none; }
 @media (max-width: 899px) {
   .mt-lib { grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }

@@ -9,7 +9,7 @@
 .lesson-audio__unit-tab[aria-pressed='true'] { background: var(--teal-tint); color: var(--teal-dark); font-weight: 600; }
 
 .lesson-audio__unit-tab:focus-visible { outline-offset: -2px; }
-.lesson-audio__unit-name { font-size: var(--fs-sm); font-weight: 600; color: var(--ink); direction: ltr; unicode-bidi: isolate; overflow-wrap: anywhere; }
+.lesson-audio__unit-name { font-size: var(--fs-sm); font-weight: 600; color: var(--ink); unicode-bidi: isolate; overflow-wrap: anywhere; }
 .lesson-audio__count { font-size: var(--fs-xs); font-variant-numeric: tabular-nums; direction: ltr; unicode-bidi: isolate; }
 .lesson-audio__mark { grid-column: 1 / -1; font-size: var(--fs-xs); font-weight: 600; color: var(--waiting); }
 .lesson-audio__mark--decide { color: var(--urgent); }
@@ -52,3 +52,9 @@
   .lesson-audio__text { font-size: 2.5rem; }
   .lesson-audio__decide { margin-inline-start: 0; }
 }
+
+/* Round 3: the unit says how many of its words play, in words; the listen-first rule is said once. */
+.lesson-audio__plays { margin-inline-start: var(--space-3); color: var(--ink-muted); font-family: var(--font); font-size: var(--fs-sm); font-weight: 400; }
+.lesson-audio__lead { padding: 10px var(--space-4); border-block-end: 1px solid var(--hairline-soft); }
+.lesson-audio__earlier { margin-block-start: var(--space-2); }
+.lesson-audio__earlier > .lesson-audio__clip { margin-block-start: 0; }

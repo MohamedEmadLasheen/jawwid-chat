@@ -8,7 +8,16 @@
 .mod-check { display: inline-flex; align-items: center; gap: 8px; min-block-size: var(--control-h); font-size: var(--fs-sm); cursor: pointer; }
 .mod-check input { inline-size: 16px; block-size: 16px; accent-color: var(--teal); flex: none; }
 .mod-status { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 2px var(--space-3); }
-.mod-answered { color: var(--success); font-size: var(--fs-xs); font-weight: 500; }
+.mod-answered { color: var(--ink-muted); font-size: var(--fs-xs); font-weight: 400; }
+.mod-left { color: var(--ink-muted); font-size: var(--fs-sm); font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* On a phone the filters take two short lines, not a screen: the pickers side by side, the draft note left to the desktop. */
+@media (max-width: 767px) {
+  .mod-filters { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2) var(--space-3); }
+  .mod-filters .field { inline-size: auto; min-inline-size: 0; }
+  .mod-filters .field__label { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .mod-check { min-block-size: 44px; }
+  .mod-draft { display: none; }
+}
 .mod-when { color: var(--ink-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .mod-actions { display: flex; flex-wrap: wrap; gap: var(--space-1); }
 .mod-attachments { list-style: none; padding: 0; margin: 0; }

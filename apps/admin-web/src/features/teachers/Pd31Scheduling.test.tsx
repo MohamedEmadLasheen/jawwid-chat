@@ -448,8 +448,9 @@ describe('Needs action (PD-31)', () => {
     expect(within(stale).getByText('Thu 17:00', { selector: 'li' })).toHaveTextContent('(free)')
     expect(within(stale).getByText('3 Nov')).toBeInTheDocument()
     expect(within(stale).getByRole('note')).toHaveTextContent('No longer free')
-    expect(within(stale).getByRole('button', { name: 'Approve' })).toBeDisabled()
-    await viaMenu(stale, 'Reject')
+    // Round 3: a request that can no longer be approved offers no Approve; Reject is its stated action.
+    expect(within(stale).queryByRole('button', { name: 'Approve' })).toBeNull()
+    await userEvent.click(within(stale).getByRole('button', { name: 'Reject' }))
     const dialog = await screen.findByRole('dialog')
     await userEvent.type(within(dialog).getByLabelText('Note'), 'that time is gone')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))

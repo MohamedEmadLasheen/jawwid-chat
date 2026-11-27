@@ -60,9 +60,10 @@ export function ReportsPage() {
   // The counts only once there is something to count; an empty queue says so in the list.
   const figures: MastFigure[] = list.data && all.length > 0
     ? [
-        { key: 'open', label: tx(STATUS.open), value: number(all.filter((r) => r.status === 'open').length) },
-        { key: 'review', label: tx(STATUS.in_review), value: number(all.filter((r) => r.status === 'in_review').length) },
-        { key: 'urgent', label: tx(MOD.childSafetyBadge), value: number(all.filter((r) => r.priority === 'urgent' || r.reason === 'child_safety').length), tone: all.some((r) => r.priority === 'urgent' || r.reason === 'child_safety') ? 'urgent' : 'quiet' },
+        // Each figure is also its filter: a press narrows the queue to what it counts.
+        { key: 'open', label: tx(STATUS.open), value: number(all.filter((r) => r.status === 'open').length), onClick: () => setStatus((s) => (s === 'open' ? '' : 'open')), pressed: status === 'open' },
+        { key: 'review', label: tx(STATUS.in_review), value: number(all.filter((r) => r.status === 'in_review').length), onClick: () => setStatus((s) => (s === 'in_review' ? '' : 'in_review')), pressed: status === 'in_review' },
+        { key: 'urgent', label: tx(MOD.childSafetyBadge), value: number(all.filter((r) => r.priority === 'urgent' || r.reason === 'child_safety').length), tone: all.some((r) => r.priority === 'urgent' || r.reason === 'child_safety') ? 'urgent' : 'quiet', onClick: () => setUrgent((u) => !u), pressed: urgent },
       ]
     : []
 
@@ -74,7 +75,7 @@ export function ReportsPage() {
         label={tx(MOD.detailTitle)}
         detail={openId ? { id: openId, title: tx(MOD.detailTitle), body: <ReportDetailBody id={openId} canAct={canAct} onClose={() => setOpenId(null)} onGone={gone} />, onClose: () => setOpenId(null) } : null}
       >
-      <section className="sheet" aria-label={tx(MOD.title)}>
+      <section className="sheet mod-queue" aria-label={tx(MOD.title)}>
       <div className="sheet-bar mod-filters">
         <label className="field">
           <span className="field__label">{tx(MOD.filterStatus)}</span>
@@ -141,7 +142,7 @@ export function ReportsPage() {
                           {tx(REASON[r.reason] ?? { ar: r.reason, en: r.reason })}{' '}
                           {(r.priority === 'urgent' || r.reason === 'child_safety') && (
                             <Badge tone="danger" dot>
-                              {tx(MOD.childSafetyBadge)}
+                              {tx(r.reason === 'child_safety' ? MOD.urgentTag : MOD.childSafetyBadge)}
                             </Badge>
                           )}
                         </span>

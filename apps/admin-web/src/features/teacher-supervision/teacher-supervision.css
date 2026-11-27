@@ -5,7 +5,8 @@
 .th-body .table-wrap { border: 0; border-radius: 0; }
 .th-body .sheet > .table-wrap:last-child, .th-body .sheet > .rowlist:last-child { border-end-start-radius: var(--radius-lg); border-end-end-radius: var(--radius-lg); overflow: hidden; }
 .th-defaults__body { display: grid; gap: var(--space-3); }
-.th-defaults__body .table-wrap { border: 1px solid var(--hairline); border-radius: var(--radius); }
+/* Round 3: one surface, not a bordered table inside a bordered sheet. */
+.th-defaults__body .table-wrap { border: 0; border-radius: 0; }
 .th-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .th-muted { color: var(--ink-muted); }
 .th-subtitle { margin: var(--space-6) 0 0; padding-block-end: 8px; border-block-end: 1px solid var(--hairline); }
@@ -32,3 +33,8 @@
 .th-filters .th-check input[type='checkbox'] { margin-block-start: 0; }
 .th-reply-note { display: grid; gap: var(--space-2); margin-block-start: var(--space-2); }
 .th-reply-note .field__hint { margin: 0; }
+
+/* Round 3, phone: a stacked record inside a sheet keeps the sheet's inner margin (it sat 2px from the edge). */
+@media (max-width: 767px) {
+  .th-body .sheet .table.stack-table tbody tr { padding-inline: var(--space-4); }
+}

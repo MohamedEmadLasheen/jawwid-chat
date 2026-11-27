@@ -239,9 +239,10 @@ describe('Set-up checklist', () => {
     const user = userEvent.setup()
     renderWithProviders(<AppRoutes />, { staff: manager, route: '/teachers/files' })
     const table = await screen.findByRole('table')
-    expect(within(within(table).getByText('Teacher One').closest('tr')!).getByText('Setup incomplete')).toBeInTheDocument()
-    expect(within(within(table).getByText('Teacher Two').closest('tr')!).queryByText('Setup incomplete')).not.toBeInTheDocument()
-    expect(within(within(table).getByText('Teacher Three').closest('tr')!).queryByText('Setup incomplete')).not.toBeInTheDocument()
+    // Round 3: the tag also says how much is left ("Setup incomplete: 7 steps left").
+    expect(within(within(table).getByText('Teacher One').closest('tr')!).getByText(/^Setup incomplete/)).toBeInTheDocument()
+    expect(within(within(table).getByText('Teacher Two').closest('tr')!).queryByText(/^Setup incomplete/)).not.toBeInTheDocument()
+    expect(within(within(table).getByText('Teacher Three').closest('tr')!).queryByText(/^Setup incomplete/)).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /^Setup incomplete/ }))
     expect(within(table).getByText('Teacher One')).toBeInTheDocument()
     expect(within(table).queryByText('Teacher Two')).not.toBeInTheDocument()

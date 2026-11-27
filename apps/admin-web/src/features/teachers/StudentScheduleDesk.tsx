@@ -104,7 +104,8 @@ export function StudentScheduleDesk({ students, teachers }: { students: Schedule
               ))}
             </ul>
           ) : (
-            <span className="ts-muted">{tx(O.noTimesYet)}</span>
+            // A student with no weekly times is a gap to fill: said in the waiting colour (round 3).
+            <span className="ts-gap">{tx(O.noTimesYet)}</span>
           )}
         </td>
         <td className="rw-tags">

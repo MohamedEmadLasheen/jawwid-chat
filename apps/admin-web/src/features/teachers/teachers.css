@@ -235,8 +235,12 @@
 .ts-desk .sheet + .sheet { margin-block-start: 0; }
 .ts-queue + .ts-queue { margin-block-start: var(--space-5); }
 /* A working window: the day on its own line, then from and to, then remove. Nothing clipped in a 380px aside. */
-.ts-hours .ts-window { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto; align-items: center; gap: 6px var(--space-2); }
-.ts-hours .ts-window > .ss, .ts-hours .ts-window > select { grid-column: 1 / -1; inline-size: 100%; }
+/* Round 3: one line a window: the day, from, to, remove. Times read left to right in both languages. */
+.ts-hours .ts-window { display: grid; grid-template-columns: minmax(0, 1fr) 5rem auto 5rem auto; align-items: center; gap: 6px var(--space-2); }
+.ts-hours .ts-window > .ss, .ts-hours .ts-window > select { inline-size: 100%; min-inline-size: 0; }
+/* A clock time is read left to right; its box drops the chevron so "20:00" has the room. */
+.ts-hours input.ts-time { direction: ltr; text-align: center; font-variant-numeric: tabular-nums; min-inline-size: 0; inline-size: 100%; padding-inline: 6px; background-image: none; }
+.ts-gap { color: var(--waiting); font-weight: 500; }
 .ts-hours .ts-window .input { min-inline-size: 0; inline-size: 100%; }
 .ts-note { display: block; margin-block-start: 2px; color: var(--ink-muted); font-size: var(--fs-xs); }
 
@@ -254,4 +258,13 @@
 .ts-inbox .ts-slot--busy { color: var(--ink-muted); text-decoration: line-through; }
 .ts-inbox .ts-slot--busy .ts-slot__flag { text-decoration: none; display: inline-block; }
 .ts-inbox .rw-age { inline-size: 7rem; flex: none; text-align: end; }
-.ts-inbox .cell-actions { min-inline-size: 11rem; display: flex; justify-content: flex-start; }
+.ts-inbox .cell-actions { min-inline-size: 11rem; display: flex; justify-content: flex-end; }
+/* The reason sentence is what the row says: read at body size, not as metadata (round 3). */
+.ts-inbox .rw-reason { font-size: var(--fs-md); }
+.ts-inbox .ts-group__hint { font-size: var(--fs-sm); }
+/* On a phone the queue filters scroll on one line instead of wrapping over three. */
+@media (max-width: 767px) {
+  .ts-inbox > .sheet-bar { overflow-x: auto; scrollbar-width: none; }
+  .ts-inbox > .sheet-bar .chips { flex-wrap: nowrap; }
+  .ts-inbox > .sheet-bar .chip { flex: none; }
+}
