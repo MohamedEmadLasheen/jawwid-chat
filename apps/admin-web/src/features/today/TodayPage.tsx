@@ -16,6 +16,7 @@ import { paymentKeys, paymentsApi } from '@/features/payments/api'
 import { calendarApi, calendarKeys } from '@/features/schedule/api'
 import { academyToday, addDays, weekStart } from '@/features/schedule/viewState'
 import { tasksApi } from '@/features/tasks/api'
+import { Avatar } from '@/shared/components/Avatar'
 import { Icon, type IconName } from '@/shared/components/Icon'
 import { PageHeader, type MastFigure } from '@/shared/components/PageHeader'
 import { formatMoney } from '@/features/instalments/copy'
@@ -163,14 +164,14 @@ export function TodayPage() {
   if (paymentsPath && receipts.data) figures.push({ key: 'receipts', label: tx(T.receipts), value: num.format(receipts.data.counts.pending ?? pending.length), tone: pending.length > 0 ? undefined : 'quiet', to: paymentsPath })
 
   /** One thing to do: what it is, the one fact that makes it urgent, and where it is done. */
-  interface Todo { key: string; icon: IconName; title: string; line?: string; fact?: string; urgent?: boolean; to: string; action: string }
+  interface Todo { key: string; icon: IconName; title: string; line?: string; fact?: string; age?: string; urgent?: boolean; to: string; action: string }
   const groups: Array<{ key: string; label: string; urgent: boolean; total: number; all: string; items: Todo[] }> = []
   if (chatPath === '/chat' && needsReply.length > 0) {
     groups.push({
       key: 'replies', label: tx(T.replies), urgent: needsReply.some((c) => c.needsReply), total: needsReply.length, all: '/chat',
       items: needsReply.slice(0, 4).map((c) => ({
         key: c.id, icon: 'conversations' as const, title: conversationName(c, staff?.id, copy), line: c.lastMessage?.text ?? undefined,
-        fact: relativeTime(c.lastActivityAt, locale), urgent: c.needsReply, to: `/chat/${encodeURIComponent(c.id)}`, action: tx(T.answer),
+        age: relativeTime(c.lastActivityAt, locale), urgent: c.needsReply, to: `/chat/${encodeURIComponent(c.id)}`, action: tx(T.answer),
       })),
     })
   }
@@ -178,8 +179,8 @@ export function TodayPage() {
     groups.push({
       key: 'late', label: tx(T.lateGroup), urgent: true, total: late.length, all: instalmentsPath,
       items: late.slice(0, 4).map((i) => ({
-        key: i.id, icon: 'instalments' as const, title: i.account.name || i.family.name, line: [i.child?.name, i.label].filter(Boolean).join(' · ') || i.family.name,
-        fact: `${formatMoney(i.amountMinor, i.currency, locale)} · ${i.days === 1 ? tx(T.dayLate) : fillN(tx(T.daysLate), num.format(i.days))}`, urgent: true,
+        key: i.id, icon: 'instalments' as const, title: i.account.name || i.family.name, line: [i.child?.name, i.label].filter(Boolean).join(locale === 'ar' ? '، ' : ', ') || i.family.name,
+        fact: formatMoney(i.amountMinor, i.currency, locale), age: i.days === 1 ? tx(T.dayLate) : fillN(tx(T.daysLate), num.format(i.days)), urgent: true,
         to: i.account.id ? parentPath(i.account.id) : instalmentsPath, action: tx(T.file),
       })),
     })
@@ -189,7 +190,7 @@ export function TodayPage() {
       key: 'tasks', label: tx(T.taskGroup), urgent: true, total: overdueTasks.length, all: tasksPath,
       items: overdueTasks.slice(0, 4).map((t) => ({
         key: t.id, icon: 'tasks' as const, title: t.title, line: t.createdBy?.name ?? undefined,
-        fact: t.dueAt ? relativeTime(t.dueAt, locale) : undefined, urgent: true, to: tasksPath, action: tx(T.open),
+        age: t.dueAt ? relativeTime(t.dueAt, locale) : undefined, urgent: true, to: tasksPath, action: tx(T.open),
       })),
     })
   }
@@ -225,8 +226,8 @@ export function TodayPage() {
     <div className="page today">
       <div className="page__inner">
         <PageHeader
-          eyebrow={`${hijri} · ${gregorian}`}
           title={tx(T.title)}
+          subtitle={locale === 'ar' ? `${gregorian}، ${hijri}` : `${gregorian}, ${hijri}`}
           figures={figures}
           actions={
             first ? (
@@ -278,14 +279,15 @@ export function TodayPage() {
                 <ul className="todo">
                   {g.items.map((it) => (
                     <li key={it.key} className={it.urgent ? 'todo__row todo__row--urgent' : 'todo__row'}>
-                      <span className="todo__icon" aria-hidden="true">
-                        <Icon name={it.icon} size={20} />
-                      </span>
+                      <Avatar name={it.title} />
                       <span className="todo__main">
                         <bdi className="todo__title">{it.title}</bdi>
                         {it.line && <bdi className="todo__line">{it.line}</bdi>}
                       </span>
-                      {it.fact && <span className="todo__fact">{it.fact}</span>}
+                      <span className="todo__facts">
+                        {it.fact && <bdi className="todo__fact">{it.fact}</bdi>}
+                        {it.age && <span className={it.urgent ? 'todo__age todo__age--late' : 'todo__age'}>{it.age}</span>}
+                      </span>
                       <Link to={it.to} className="btn btn--sm">
                         {it.action}
                       </Link>

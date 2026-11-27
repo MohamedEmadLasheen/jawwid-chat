@@ -117,7 +117,7 @@
   --icon-accent: currentColor;
 
   /* Sidebar: the brand mist, never the logo teal. */
-  --sidebar-w: 248px;
+  --sidebar-w: 260px;
   --sidebar-bg: var(--brand-mist);
   --sidebar-fg: var(--ink);
   --sidebar-muted: var(--ink-2);
@@ -397,16 +397,17 @@ html[lang='ar'] .side__item { font-size: 14.5px; }
 .side__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-inline-end: 8px; }
 .side__close { color: var(--ink-2); }
 .side__product { padding-inline-start: 10px; border-inline-start: 1px solid var(--sidebar-line); font-family: var(--font-head); font-size: 12.5px; font-weight: 500; color: var(--ink-muted); white-space: nowrap; }
-.side__list { display: grid; gap: 1px; }
+.side__list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1px; }
+.side__list > li, .side__group { min-inline-size: 0; }
 .side__entry { position: relative; }
 .side__entry--rule { margin-block-start: 10px; padding-block-start: 10px; }
 .side__entry--rule::after { content: ''; position: absolute; inset-block-start: 0; inset-inline: 10px; border-block-start: 1px solid var(--sidebar-line); }
 .side__entry--end { margin-block-start: 10px; }
-.side__label { display: grid; line-height: 1.25; }
+.side__label { display: grid; min-inline-size: 0; overflow: hidden; line-height: 1.25; }
+.side__label > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .side__now { font-family: var(--font); font-size: 12.5px; font-weight: 400; color: var(--ink-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .side__item.is-current { min-block-size: 46px; }
 .side__caret { display: inline-flex; color: var(--ink-muted); }
-[dir='rtl'] .side__caret .icon { transform: scaleX(-1); }
 .side__subheading { margin: 8px 10px 2px; font-size: 12.5px; color: var(--ink-muted); }
 /* A place with several pages opens them beside the sidebar. */
 .side__menu {
@@ -976,7 +977,7 @@ a.ledger__cell:hover, button.ledger__cell:hover { background: var(--surface-hove
 /* ================================================================== auth */
 
 /* Split: the academy's day on one side (DayRuler), the form on the other. */
-.login.auth { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); min-block-size: 100%; padding: 0; background: var(--canvas); }
+.login.auth { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); place-items: stretch; min-block-size: 100vh; padding: 0; background: var(--canvas); }
 .auth__side { display: flex; flex-direction: column; min-inline-size: 0; background: var(--canvas); }
 .auth__top { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: 22px 28px; }
 .auth__mark-small { display: block; }
@@ -1003,7 +1004,7 @@ a.ledger__cell:hover, button.ledger__cell:hover { background: var(--surface-hove
 .auth__rule::before { content: ''; flex: none; inline-size: 8px; block-size: 8px; border-radius: 50%; border: 1.5px solid var(--border-control); }
 .auth__rule--met { color: var(--done); }
 .auth__rule--met::before { border-color: var(--done); background: var(--done); }
-.auth__brand { position: relative; display: flex; flex-direction: column; justify-content: space-between; overflow: hidden; padding: 36px 40px; background: var(--brand-teal-deep); color: #e7f1f1; }
+.auth__brand { position: relative; display: flex; flex-direction: column; justify-content: center; gap: 36px; overflow: hidden; padding: 48px clamp(32px, 5vw, 72px); background: var(--brand-teal-deep); color: #e7f1f1; }
 .auth__brand-head { position: relative; max-inline-size: 30ch; margin: 0; font-family: var(--font-head); font-size: 28px; font-weight: 600; line-height: 1.35; color: #fff; }
 .auth__brand-note { position: relative; margin: 0; font-size: var(--fs-sm); color: #b9d3d6; }
 .auth__ruler { position: relative; inline-size: 100%; block-size: auto; }
