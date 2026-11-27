@@ -1,6 +1,25 @@
+import { useCallback } from 'react'
+import { useI18n } from '@/core/i18n/I18nProvider'
 import type { Pair } from '@/features/organization/copy'
 
 export { useCopy } from '@/features/organization/copy'
+
+/**
+ * A board's day, as the teachers' pages write it: Arabic month names with Western digits
+ * ("26 نوفمبر 2026"), "26 Nov 2026" in English. The shared `date` writes Arabic days as
+ * "2026/11/26" (reported to the lead).
+ */
+export function useDay() {
+  const { locale } = useI18n()
+  return useCallback(
+    (iso: string) =>
+      new Intl.DateTimeFormat(locale === 'ar' ? 'ar-EG-u-nu-latn' : 'en-GB', { day: 'numeric', month: locale === 'ar' ? 'long' : 'short', year: 'numeric' }).format(new Date(iso)),
+    [locale],
+  )
+}
+
+/** A name set inside a sentence of the other script keeps its own direction. */
+export const isolate = (s: string) => `\u2068${s}\u2069`
 
 /**
  * PD-39 staff viewer copy. Wording rule (§10 1d, 5a): it never offers what the
@@ -17,6 +36,27 @@ export const B = {
   teacher: { en: 'Teacher', ar: 'المعلم' },
   chooseTeacher: { en: 'Choose a teacher', ar: 'اختر معلمًا' },
   chooseTeacherHint: { en: 'Their boards appear here.', ar: 'تظهر سبوراته هنا.' },
+  // Round 3: before a teacher is chosen, the teachers whose boards this account may read.
+  teachersHead: { en: 'Teachers whose boards you can read', ar: 'المعلمون الذين يمكنك الاطلاع على سبوراتهم' },
+  teachersHint: { en: 'Nothing is opened until you choose a teacher.', ar: 'لا يُفتح شيء حتى تختار معلمًا.' },
+  showBoards: { en: 'Show boards', ar: 'عرض السبورات' },
+  more: { en: 'More actions: {title}', ar: 'إجراءات أخرى: {title}' },
+  leftTag: { en: 'Left, boards kept', ar: 'غادر، سبوراته محفوظة' },
+  noTeachers: { en: 'No teachers to show', ar: 'لا يوجد معلمون' },
+  noTeachersHint: {
+    en: "A teacher appears here once you supervise them or back up their supervisor.",
+    ar: 'يظهر المعلم هنا حين تشرف عليه أو تنوب عن مشرفه.',
+  },
+  emptyBoard: { en: 'No pages', ar: 'بلا صفحات' },
+  /** A board unchanged for BOARD_STALE_DAYS or more says for how long. */
+  untouched: { en: 'Unchanged for {n} months', ar: 'لم تتغير منذ {n} أشهر' },
+  untouchedMany: { en: 'Unchanged for {n} months', ar: 'لم تتغير منذ {n} شهرًا' },
+  leftNotice: {
+    en: '{name} has left. Kept until {date}, then deleted for good unless copied to another teacher.',
+    ar: 'غادر {name}. السبورات محفوظة حتى {date}، ثم تُحذف نهائيًا ما لم تُنسخ إلى معلم آخر.',
+  },
+  boardsOf: { en: "{name}'s boards", ar: 'سبورات {name}' },
+  viewerSubtitle: { en: 'Opening this board is recorded in its access history.', ar: 'فتح هذه السبورة يُسجَّل في سجل الوصول الخاص بها.' },
   departed: { en: '{name} (left)', ar: '{name} (غادر)' },
   noBoards: { en: 'No boards', ar: 'لا توجد سبورات' },
   noBoardsHint: { en: 'This teacher has no boards in use or kept.', ar: 'ليس لدى هذا المعلم سبورات مستخدمة أو محفوظة.' },
@@ -48,7 +88,7 @@ export const B = {
     ar: 'تغيّر نص الآية منذ إدراجها. على المعلم إدراجها من جديد.',
   },
   imageLoading: { en: 'Loading the image…', ar: 'جارٍ تحميل الصورة…' },
-  imageUnavailable: { en: 'Image unavailable. Open the board again to reload it.', ar: 'الصورة غير متاحة. افتح السبورة من جديد لإعادة تحميلها.' },
+  imageUnavailable: { en: 'Image unavailable. Reopen to reload.', ar: 'الصورة غير متاحة. أعد فتح السبورة لتحميلها.' },
   unknownKind: { en: 'Not shown here: {kind}', ar: 'لا يُعرض هنا: {kind}' },
   quranSource: { en: 'Quran text: {source}', ar: 'نص القرآن: {source}' },
   pageText: { en: 'Text on this page', ar: 'النصوص في هذه الصفحة' },
