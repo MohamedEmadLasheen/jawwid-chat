@@ -83,7 +83,7 @@ export const PAY = {
     ar: 'يسجّل الاعتماد الدفعة ويصدر فاتورتها تمامًا كالدفع بالبطاقة. صحّح المبلغ أو التاريخ فقط إن اختلف التحويل عمّا كتبه ولي الأمر.',
   },
   correctedAmount: { en: 'Amount received (optional)', ar: 'المبلغ المستلم (اختياري)' },
-  correctedAmountHint: { en: 'Leave empty to accept {amount}.', ar: 'اتركه فارغًا لاعتماد {amount}.' },
+  correctedAmountHint: { en: 'Leave empty to accept the full amount ({amount}).', ar: 'اتركه فارغًا لاعتماد المبلغ كاملًا ({amount}).' },
   paidOn: { en: 'Paid on', ar: 'تاريخ الدفع' },
   rejectTitle: { en: 'Reject the receipt: {label}', ar: 'رفض الإيصال: {label}' },
   rejectHint: { en: 'The parent sees your reason in the app.', ar: 'يرى ولي الأمر السبب في التطبيق.' },

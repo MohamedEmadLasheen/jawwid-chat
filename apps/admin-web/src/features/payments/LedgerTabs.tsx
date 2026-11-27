@@ -479,7 +479,9 @@ function forWhat(request: Transaction['request'], locale: 'ar' | 'en', tx: Retur
   if (!request) return null
   const parts = [tx(PURPOSE_LABEL[request.purpose] ?? raw(request.purpose))]
   if (request.planMonths) parts.push(monthsLabel(request.planMonths, locale))
-  return parts.join(locale === 'ar' ? '، ' : ', ')
+  const said = parts.join(locale === 'ar' ? '، ' : ', ')
+  // A label that already says it ("Balance") needs no second line.
+  return said.trim() === request.label.trim() ? null : said
 }
 
 /**
@@ -528,11 +530,10 @@ function Totals({ totals }: { totals: TransactionTotal[] }) {
               <span className="pay-sum__op" aria-hidden="true">
                 =
               </span>
+              {/* The net stands under the amount column, digits on its edge, its currency beside them. */}
               <span className="pay-sum__term pay-sum__term--net">
                 <span className="pay-sum__k">{tx(LED.net)}</span>
-                <span className="pay-sum__v" dir="ltr">
-                  {figure(t.netMinor)}
-                </span>
+                <Money amountMinor={t.netMinor} currency={t.currency} />
               </span>
             </li>
           )
@@ -587,7 +588,7 @@ function TransactionRow({ t, onOpen, onInvoice }: { t: Transaction; onOpen: () =
         {t.request ? (
           <>
             <bdi>{t.request.label}</bdi>
-            <span className="pay-sub">{forWhat(t.request, locale, tx)}</span>
+            {forWhat(t.request, locale, tx) && <span className="pay-sub">{forWhat(t.request, locale, tx)}</span>}
           </>
         ) : (
           <span className="pay-quiet">{tx(LED.noRequestShort)}</span>

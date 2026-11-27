@@ -84,7 +84,9 @@
   .rq-page .rv-desk .rv__said { grid-area: said; }
   .rq-page .rv-desk .rv__said .rv__note { font-size: var(--fs-sm); }
   .rq-page .rv-desk .rv__file { grid-area: file; }
-  .rq-page .rv-desk .rv__image { grid-area: image; min-block-size: 0; max-block-size: none; place-items: start center; overflow: auto; scrollbar-width: thin; }
+  .rq-page .rv-desk .rv__image { position: relative; grid-area: image; min-block-size: 0; max-block-size: none; place-items: start center; overflow: auto; scrollbar-width: thin; }
+  /* The receipt reads at its width; where it runs on below the frame, the frame's foot fades to say so. */
+  .rq-page .rv-desk .rv__image::after { content: ''; position: sticky; inset-block-end: 0; grid-row: 2; justify-self: stretch; block-size: 28px; margin-block-start: -28px; background: linear-gradient(to bottom, transparent, var(--surface-2)); pointer-events: none; }
   .rq-page .rv-desk .rv__image img { inline-size: 100%; max-inline-size: 640px; max-block-size: none; }
   .rq-page .rv-desk .rv__image--file { place-items: center; }
   .rq-page .rv-desk .rv > .rq-foot { grid-area: foot; }
@@ -271,7 +273,14 @@
 .pay-sum__term { display: inline-flex; align-items: baseline; gap: 6px; }
 .pay-sum__k { font-size: var(--fs-xs); color: var(--ink-muted); }
 .pay-sum__v { font-family: var(--font-head); font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums lining-nums; }
-.pay-sum__term--net .pay-sum__v { font-size: 20px; font-weight: 700; color: var(--ink); }
+/* Net sits in the amount column's own box (the actions column's width kept clear after it), so its
+   digits share the rows' edge; numerals end on the physical right in both languages. */
+.tx-table--payments .tx-end { inline-size: 12.5rem; }
+.tx-table--payments :is(td, th).cell-actions { inline-size: 6.5rem; }
+.pay-sum__term--net { box-sizing: content-box; display: inline-flex; justify-content: flex-end; gap: 8px; inline-size: 12.5rem; padding-inline: 14px; margin-inline-end: calc(6.5rem + 14px); }
+[dir='rtl'] .pay-sum__term--net { flex-direction: row-reverse; }
+.pay-sum__term--net .money__n { font-size: 20px; font-weight: 700; color: var(--ink); }
+[dir='ltr'] .pay-sum__term--net .money__c { display: inline-block; min-inline-size: 2.4em; text-align: left; }
 .pay-sum__op { font-family: var(--font-head); font-size: 15px; color: var(--ink-muted); }
 
 /* What a reconcile found: a note with a teal edge, not a coloured band. */
@@ -403,6 +412,8 @@ fieldset:disabled .set-reminder label { cursor: default; }
 
   /* Receipts: who and how much on the first line, what for and when on the second. */
   .rv-row { padding-block: 12px; min-block-size: 68px; }
+  /* The note is a mark here; the plan keeps the line. */
+  .rv-row__note-word { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip: rect(0 0 0 0); }
   .rv__image { min-block-size: 200px; max-block-size: none; }
   .dialog .rv .rq-actions .btn { min-block-size: 48px; flex: 1 1 0; }
 
@@ -428,6 +439,10 @@ fieldset:disabled .set-reminder label { cursor: default; }
   /* The row itself opens the payment (its sheet holds the invoice): no buttons on the row. */
   .table.tx-table--payments td.cell-actions { position: absolute !important; inline-size: 1px; block-size: 1px; overflow: hidden; clip: rect(0 0 0 0); }
   .table.tx-table--payments .tx-c-amount { grid-row: 1 / span 3; }
+  /* One money edge down the ledger: the amount block has one width, its tags wrap inside it. */
+  .table.tx-table--payments tr:not(.tx-day) { grid-template-columns: minmax(0, 1fr) 9.5rem; }
+  .table.tx-table--payments .tx-states .badge { white-space: normal; text-align: right; }
+  .tx-table--payments .tx-end { inline-size: auto; }
   .tx-table .tx-c-who { grid-column: 1; grid-row: 1; }
   .tx-table .tx-c-amount { grid-column: 2; grid-row: 1; justify-self: end; }
   .tx-table .tx-states { flex-direction: column; align-items: flex-end; gap: 3px; }
@@ -450,6 +465,7 @@ fieldset:disabled .set-reminder label { cursor: default; }
   /* The totals rest at the foot: a phone has no room to hold them over the rows. */
   .tx-totals { position: static; grid-template-columns: minmax(0, 1fr); }
   .pay-sum__line { justify-content: flex-start; }
+  .pay-sum__term--net { inline-size: auto; padding: 0; margin: 0; }
   .pay-sum__currency { flex-basis: 100%; }
 
   .set__head, .set__body { padding-inline: var(--space-4); }

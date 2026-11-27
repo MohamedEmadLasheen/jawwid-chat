@@ -199,7 +199,7 @@ function QueueRow({ receipt: r, current, onOpen }: { receipt: Receipt; current: 
             {r.note && (
               <span className="rv-row__note">
                 <Icon name="chatText" size={14} />
-                {tx(PAY.hasNote)}
+                <span className="rv-row__note-word">{tx(PAY.hasNote)}</span>
               </span>
             )}
           </span>
