@@ -114,6 +114,8 @@ export const P = {
   voidedBy: { en: 'Voided by {name}: {reason}', ar: 'ألغاه {name}: {reason}' },
   forChild: { en: 'For {name}', ar: 'عن {name}' },
   forFamily: { en: 'For the family', ar: 'عن الأسرة' },
+  dueForChild: { en: 'Due {date} for {name}', ar: 'يستحق {date} عن {name}' },
+  dueForFamily: { en: 'Due {date} for the family', ar: 'يستحق {date} عن الأسرة' },
   recordPayment: { en: 'Record payment', ar: 'تسجيل دفعة' },
   void: { en: 'Void', ar: 'إلغاء' },
 
@@ -229,6 +231,32 @@ export const P = {
   lessonsLeftWord: { en: 'Lessons left', ar: 'الحصص المتبقية' },
   lessonsUsedWord: { en: 'Lessons used', ar: 'الحصص المستخدمة' },
   results: { en: 'Results', ar: 'النتائج' },
+
+  // The record's head (V3): one sentence, the highlights, one callout
+  lineFamily: { en: 'Parent in {family}', ar: 'ولي أمر في {family}' },
+  lineFollowedBy: { en: ', followed by {name}', ar: '، ويتابعها {name}' },
+  lineNoSupervisor: { en: ', with no Operations supervisor yet', ar: '، ولا مشرف عمليات لها بعد' },
+  hlNextInstalment: { en: 'Next instalment', ar: 'القسط القادم' },
+  hlNoneScheduled: { en: 'None scheduled', ar: 'لا شيء مجدول' },
+  hlLastContact: { en: 'Last contact', ar: 'آخر تواصل' },
+  hlNoChat: { en: 'No chat yet', ar: 'لا محادثة بعد' },
+  hlSignIn: { en: 'Sign-in', ar: 'تسجيل الدخول' },
+  hlSignedIn: { en: 'Has a sign-in', ar: 'لديه حساب دخول' },
+  hlNoSignIn: { en: 'Not set up', ar: 'لم يُعدّ بعد' },
+  hlNothingDue: { en: 'Nothing due', ar: 'لا شيء مستحق' },
+  calloutLate: { en: '{amount} overdue across {what}.', ar: 'متأخر على الأسرة {amount} في {what}.' },
+  calloutLateOne: { en: '{amount} overdue on one instalment.', ar: 'متأخر على الأسرة {amount} في قسط واحد.' },
+  calloutOldest: { en: 'The oldest, {label}, is {late}.', ar: 'أقدمها {label}، {late}.' },
+  calloutOnly: { en: '{label}, {late}.', ar: '{label}، {late}.' },
+  calloutLocked: { en: 'The subscription is locked: lessons stop until the family pays.', ar: 'الاشتراك مقفل: تتوقف الحصص حتى تسدد الأسرة.' },
+  calloutGrace: { en: 'The subscription is in its grace period.', ar: 'الاشتراك في فترة السماح.' },
+  calloutGraceBody: { en: 'Lessons stop when it ends unless the family pays.', ar: 'تتوقف الحصص عند انتهائها ما لم تسدد الأسرة.' },
+  calloutReceipts: { en: 'A receipt the family uploaded waits to be checked.', ar: 'إيصال رفعته الأسرة ينتظر المراجعة.' },
+  calloutReceiptsMany: { en: '{n} receipts the family uploaded wait to be checked.', ar: '{n} إيصالات رفعتها الأسرة تنتظر المراجعة.' },
+  calloutNoSupervisor: { en: 'No Operations supervisor follows this family yet.', ar: 'لا يتابع هذه الأسرة مشرف عمليات بعد.' },
+  assignSupervisor: { en: 'Assign a supervisor', ar: 'إسناد مشرف' },
+  requestPayment: { en: 'Request payment', ar: 'طلب دفعة' },
+  inactiveWord: { en: 'Inactive', ar: 'غير نشط' },
 } satisfies Record<string, Pair>
 
 /** Counted nouns, worded the way Arabic counts them (one, two, 3 to 10, 11 and up). */

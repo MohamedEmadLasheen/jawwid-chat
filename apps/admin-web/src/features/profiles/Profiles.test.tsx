@@ -370,7 +370,8 @@ describe('the Parent Profile is a record: a masthead and tabs', () => {
     expect(outstanding).toHaveClass('figure--urgent')
     expect(within(outstanding).getByText('1,250.50')).toHaveAttribute('dir', 'ltr')
     expect(within(outstanding).getByText(/^Overdue .*1,250\.50$/)).toBeInTheDocument()
-    expect(within(figure('Paid')).getByText('1,250.50')).toBeInTheDocument()
+    // What was paid is set out with the family's money, on the Money tab.
+    expect(within(screen.getByRole('table', { name: 'Totals' })).getByRole('row', { name: /^Paid/ })).toHaveTextContent('1,250.50')
     expect(within(figure('Open requests')).getByText('0')).toBeInTheDocument()
     // Overview: the late instalment with how late it is, and what to do about it.
     const waiting = within(screen.getByRole('region', { name: 'Needs attention now' })).getAllByRole('listitem')

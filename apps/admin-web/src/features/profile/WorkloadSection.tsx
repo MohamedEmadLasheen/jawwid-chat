@@ -6,6 +6,7 @@ import { METRICS, T, useCopy, type Pair } from './copy'
 
 type Key = keyof StaffWorkload
 const LABEL = Object.fromEntries(METRICS.map((m) => [m.key, m.label])) as Record<Key, Pair>
+export const WORKLOAD_LABEL = LABEL
 
 /**
  * The verified counts the server sends, set in two places and never twice:
@@ -21,11 +22,11 @@ function split(showDirectReports: boolean): { mast: Key[]; rest: Key[] } {
   return showDirectReports
     ? {
         mast: ['directReports', 'assignedFamilies', 'openConversations', 'pendingApprovals'],
-        rest: ['studentsInAssignedFamilies', 'parentContacts', 'teachersOfAssignedStudents'],
+        rest: ['parentContacts', 'teachersOfAssignedStudents', 'pendingApprovals'],
       }
     : {
         mast: ['assignedFamilies', 'studentsInAssignedFamilies', 'openConversations', 'pendingApprovals'],
-        rest: ['parentContacts', 'teachersOfAssignedStudents'],
+        rest: ['parentContacts', 'teachersOfAssignedStudents', 'pendingApprovals'],
       }
 }
 

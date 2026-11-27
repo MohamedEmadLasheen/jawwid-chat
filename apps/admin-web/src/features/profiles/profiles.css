@@ -39,7 +39,7 @@
 @media (max-width: 767px) {
   /* On a phone each figure is a line: its name at the start, the amount at the end. */
   .pp-money.ledger { grid-template-columns: minmax(0, 1fr); }
-  .pp-money .ledger__cell, .pp-money .ledger__cell:nth-child(odd) { flex-direction: row; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px var(--space-3); padding: 10px 2px; border-inline-start: 0; border-block-start: 1px solid var(--hairline-soft); }
+  .pp-money .ledger__cell, .pp-money .ledger__cell:nth-child(odd) { flex-direction: row; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px var(--space-3); padding: 10px 2px; border-inline-start: 0; border-block-start: 1px solid var(--line-2); }
   .pp-money .ledger__cell:first-child { border-block-start: 0; }
   .pp-money .ledger__value, [dir='rtl'] .pp-money .ledger__value { font-size: 23px; }
 }
@@ -64,7 +64,7 @@
 /* The family's history is drawn as a dotted timeline; it is told oldest first. */
 .pp-activity .pf-people { list-style: none; margin: 12px 0 0; padding: 0; display: block; }
 .pp-activity .pf-people > li { position: relative; padding: 0 0 14px; padding-inline-start: 20px; font-size: var(--fs-sm); line-height: 1.5; }
-.pp-activity .pf-people > li::before { content: ''; position: absolute; inset-block: 6px -6px; inset-inline-start: 3px; border-inline-start: 1px solid var(--hairline); }
+.pp-activity .pf-people > li::before { content: ''; position: absolute; inset-block: 6px -6px; inset-inline-start: 3px; border-inline-start: 1px solid var(--line); }
 .pp-activity .pf-people > li:last-child::before { display: none; }
 .pp-activity .pf-people > li::after {
   content: '';
@@ -75,7 +75,7 @@
   block-size: 7px;
   border-radius: 50%;
   border: 1.5px solid var(--border-control);
-  background: var(--paper);
+  background: var(--canvas);
 }
 .pp-activity .pf-people > li:last-child::after { border-color: var(--teal); background: var(--teal); }
 .pp-activity .pf-people .tf-muted { font-size: var(--fs-xs); }.pp-activity .pf-people p { margin: 2px 0 0; }
@@ -105,7 +105,7 @@
   justify-items: start;
   padding: 12px 2px 13px;
   border: 0;
-  border-block-end: 1px solid var(--hairline-soft);
+  border-block-end: 1px solid var(--line-2);
   border-radius: 0;
 }
 .pf-entry > * { grid-column: 1; }
@@ -115,14 +115,13 @@
 .pf-entry--voided { opacity: 1; color: var(--ink-muted); }
 .pf-entry--voided .pf-amount { text-decoration: line-through; }
 .pf-entry--voided strong { font-weight: 500; }
-/* A late instalment carries a terracotta edge, the way a problem row does everywhere. */
-.pf-entry--late::before { content: ''; position: absolute; inset-block: 12px; inset-inline-start: -12px; inline-size: 2px; background: var(--terracotta); }
+/* A late instalment is said by its tag and amount; no red edge down the row. */
 .pf-entry__head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px var(--space-3); inline-size: 100%; }
 .pf-entry__head > strong { font-weight: 600; }
 .pf-entry__head > .badge { align-self: center; }
 .pf-entry__head > .pf-amount {
   margin-inline-start: auto;
-  font-family: var(--display);
+  font-family: var(--font-head);
   font-size: var(--fs-lg);
   font-weight: 600;
   font-variant-numeric: tabular-nums lining-nums;
@@ -133,12 +132,12 @@
 /* The amount reads left to right in both languages, so its own start is the left:
    in Arabic the free space goes on its other side to carry it to the row's end. */
 [dir='rtl'] .pf-entry__head > .pf-amount { margin-inline: 0 auto; }
-.pf-entry__meta { margin: 0; display: flex; flex-wrap: wrap; gap: 2px var(--space-3); color: var(--ink-muted); font-size: var(--fs-xs); line-height: 1.55; }
-.pf-entry__meta > span + span::before { content: '·'; margin-inline-end: var(--space-3); color: var(--border-strong); }
+.pf-entry__meta { margin: 0; display: flex; flex-wrap: wrap; gap: 2px 5px; color: var(--ink-muted); font-size: var(--fs-sm); line-height: 1.55; }
+.pf-entry__meta > span:not(:last-child)::after { content: ','; }
+html[lang='ar'] .pf-entry__meta > span:not(:last-child)::after { content: '،'; }
 .pf-amount { font-variant-numeric: tabular-nums; font-weight: 500; }
-.pf-overdue { color: var(--terracotta); }
+.pf-overdue { color: var(--urgent); }
 @media (max-width: 640px) {
-  .pf-entry--late::before { inset-inline-start: -8px; }
   .pf-entry { grid-template-columns: minmax(0, 1fr); }
   .pf-entry > .tf-actions { grid-column: 1; grid-row: auto; justify-self: start; justify-content: flex-start; margin-block-start: 6px; }
 }
@@ -160,7 +159,7 @@
 /* ------------------------------------------------- feedback about teachers */
 
 .pp .tf-entries { list-style: none; margin: 4px 0 0; padding: 0; display: block; }
-.pp .tf-entry { padding: 12px 2px; border: 0; border-block-end: 1px solid var(--hairline-soft); border-radius: 0; display: grid; gap: 4px; justify-items: start; }
+.pp .tf-entry { padding: 12px 2px; border: 0; border-block-end: 1px solid var(--line-2); border-radius: 0; display: grid; gap: 4px; justify-items: start; }
 .pp .tf-entry__head { gap: 4px var(--space-3); font-size: var(--fs-sm); }
 .pp .tf-entry__body { font-size: var(--fs-sm); line-height: 1.6; }
 .pp .tf-followup { border-inline-start: 2px solid var(--teal); padding-inline-start: var(--space-3); }
@@ -176,15 +175,15 @@
   grid-auto-columns: minmax(0, 1fr);
   gap: 0;
   margin: 12px 0 0;
-  border-block: 1px solid var(--hairline);
+  border-block: 1px solid var(--line);
   font-size: var(--fs-sm);
 }
-.pp .tf-kv.sub-standing > dt, .pp .tf-kv.sub-standing > dd { border: 0; border-inline-start: 1px solid var(--hairline); padding-inline: var(--space-4); margin: 0; }
+.pp .tf-kv.sub-standing > dt, .pp .tf-kv.sub-standing > dd { border: 0; border-inline-start: 1px solid var(--line); padding-inline: var(--space-4); margin: 0; }
 .pp .tf-kv.sub-standing > dt { padding-block: 12px 0; font-size: 12.5px; color: var(--ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pp .tf-kv.sub-standing > dd { padding-block: 2px 13px; font-weight: 500; }
 .pp .tf-kv.sub-standing > :is(dt, dd):nth-child(-n + 2) { border-inline-start: 0; padding-inline-start: 2px; }
 .pp .tf-kv.sub-standing > dd:nth-of-type(n + 3) {
-  font-family: var(--display);
+  font-family: var(--font-head);
   font-size: var(--fs-2xl);
   font-weight: 600;
   line-height: 1.2;
@@ -194,12 +193,12 @@
 .pp .tf-kv.sub-standing > dd .field__hint { font-size: var(--fs-xs); margin-block-start: 2px; }
 @media (max-width: 900px) {
   .pp .tf-kv.sub-standing { grid-template-rows: none; grid-auto-flow: row; grid-template-columns: minmax(7rem, max-content) minmax(0, 1fr); }
-  .pp .tf-kv.sub-standing > dt, .pp .tf-kv.sub-standing > dd { border-inline-start: 0; border-block-end: 1px solid var(--hairline-soft); padding: 8px 2px; }
+  .pp .tf-kv.sub-standing > dt, .pp .tf-kv.sub-standing > dd { border-inline-start: 0; border-block-end: 1px solid var(--line-2); padding: 8px 2px; }
   .pp .tf-kv.sub-standing > dd:nth-of-type(n + 3) { font-size: var(--fs-xl); }
   .pp .tf-kv.sub-standing > :is(dt, dd):nth-last-child(-n + 2) { border-block-end: 0; }
 }
 .pp .sub-ledger { margin: 0; gap: 0; }
-.pp .sub-ledger__row { padding: 9px 2px; border-block-end: 1px solid var(--hairline-soft); font-size: var(--fs-sm); gap: 2px var(--space-3); }
+.pp .sub-ledger__row { padding: 9px 2px; border-block-end: 1px solid var(--line-2); font-size: var(--fs-sm); gap: 2px var(--space-3); }
 .pp .sub-ledger__row .btn { margin-inline-start: auto; }
 .pp .tf-subtitle + .field__hint { display: block; margin-block-start: 8px; font-size: var(--fs-xs); }
 .pp .tf-subtitle ~ .btn { margin-block-start: 8px; }
@@ -209,7 +208,7 @@
 .pp-schedule { margin-block-start: var(--space-4); }
 .pp-schedule__label { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px var(--space-3); margin: 0; }
 .pp-schedule__zone { font-size: var(--fs-xs); font-weight: 400; }
-.pp-slots { list-style: none; margin: 6px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0 var(--space-6); border-block-start: 1px solid var(--hairline-soft); }
-.pp-slots > li { padding: 9px 2px; border-block-end: 1px solid var(--hairline-soft); font-size: var(--fs-sm); font-weight: 500; }
+.pp-slots { list-style: none; margin: 6px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0 var(--space-6); border-block-start: 1px solid var(--line-2); }
+.pp-slots > li { padding: 9px 2px; border-block-end: 1px solid var(--line-2); font-size: var(--fs-sm); font-weight: 500; }
 .pp-slots > li .tf-muted { font-size: var(--fs-xs); font-weight: 400; }
 .pp-student-info .pp-empty { margin-block-start: 6px; }

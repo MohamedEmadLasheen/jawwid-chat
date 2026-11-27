@@ -36,17 +36,17 @@
 .acct-session__why { font-size: var(--fs-sm); line-height: 1.5; color: var(--ink); overflow-wrap: anywhere; }
 .acct-session .rec-attn__sub time, .acct-session .rec-attn__sub .ltr { font-variant-numeric: tabular-nums; }
 /* A live session is the one to see first: a terracotta edge, as a problem row carries everywhere. */
-.acct-session--live::before { content: ''; position: absolute; inset-block: 0; inset-inline-start: 0; inline-size: 3px; background: var(--terracotta); }
+.acct-session--live::before { content: ''; position: absolute; inset-block: 0; inset-inline-start: 0; inline-size: 3px; background: var(--urgent); }
 .acct-session--live:last-child::before { border-end-start-radius: var(--radius-lg); }
 .acct-session > .rec-attn__act { grid-column: 2 / -1; }
 
 /* Exceptional access: a grant that is over is said, not stressed. */
-.acct-grants { margin-block-start: 8px; border-block-start: 1px solid var(--hairline-soft); }
+.acct-grants { margin-block-start: 8px; border-block-start: 1px solid var(--line-2); }
 .acct-grant--over .dir-name { font-weight: 500; color: var(--ink-muted); }
 .acct-cell-person { color: var(--ink); font-weight: 500; }
 /* Ending someone's access is plain at rest and terracotta under the pointer. */
-.acct-revoke.btn:hover:not(:disabled), .acct-revoke.btn:focus-visible { border-color: var(--terracotta); background: var(--surface); color: var(--terracotta); }
-.acct-table .dir-row:hover .row-actions2 > .acct-revoke.btn { border-color: var(--terracotta); color: var(--terracotta); }
+.acct-revoke.btn:hover:not(:disabled), .acct-revoke.btn:focus-visible { border-color: var(--urgent); background: var(--surface); color: var(--urgent); }
+.acct-table .dir-row:hover .row-actions2 > .acct-revoke.btn { border-color: var(--urgent); color: var(--urgent); }
 
 @media (max-width: 767px) {
   /* On a phone the row keeps its actions: the stated one takes the width, "more" its own square. */
@@ -66,8 +66,8 @@
 .acct-code {
   margin: var(--space-4) 0;
   padding: var(--space-3) 0;
-  border-block: 1px solid var(--hairline);
-  font-family: var(--display);
+  border-block: 1px solid var(--line);
+  font-family: var(--font-head);
   font-size: var(--fs-2xl);
   font-weight: 600;
   font-variant-numeric: tabular-nums lining-nums;

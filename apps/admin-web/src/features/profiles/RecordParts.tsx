@@ -109,6 +109,14 @@ export function Calm({ children, icon = 'checkCircle' }: { children: ReactNode; 
   )
 }
 
+/**
+ * A label the server composed with a middle dot ("24-lesson package · 1/3")
+ * reads here as a phrase with a comma, the way every other line on a record does.
+ */
+export function plainLabel(label: string, locale: 'ar' | 'en'): string {
+  return label.replace(/\s+·\s+/g, locale === 'ar' ? '، ' : ', ')
+}
+
 /** A labelled fact on the canvas: a quiet label with its icon, the value under it. */
 export function Fact({ icon, label, children }: { icon?: IconName; label: string; children: ReactNode }) {
   return (

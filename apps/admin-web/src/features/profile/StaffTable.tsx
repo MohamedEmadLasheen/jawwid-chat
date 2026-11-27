@@ -1,4 +1,5 @@
 import { useId, useMemo, useState } from 'react'
+import { useRememberWalk } from '@/features/profiles/RecordHead'
 import { Link, useNavigate } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { PLURAL, usePlural } from '@/features/admin/copy'
@@ -102,6 +103,11 @@ export function StaffTable({ rows, showManager, note }: { rows: StaffSummary[]; 
   })
   const narrowed = [status !== 'all', role !== '', manager !== '', category !== ''].filter(Boolean).length
   const groups = showManager ? byManager(visible, locale) : [{ key: TEAM, kind: 'plain' as const, manager: null, rows: visible }]
+  // A profile opened from here walks the list in the order it is shown.
+  useRememberWalk(
+    'staff',
+    groups.flatMap((g) => g.rows.map((r) => ({ id: r.staffId, name: r.displayName }))),
+  )
   const columns = 6
   // A bar only where there is a team to read it against (two or more active people), and a load in it.
   const shareOf = (r: StaffSummary): number | null => {

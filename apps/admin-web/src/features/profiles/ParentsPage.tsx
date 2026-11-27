@@ -13,6 +13,7 @@ import { parentPath, type ParentAccessFilter, type ParentLocationFilter } from '
 import { LocationText } from '@/shared/location/LocationPicker'
 import { CHILDREN_COUNT, P, describeError, isProfileRefusal, useCopy } from './copy'
 import { useParents } from './hooks'
+import { useRememberWalk } from './RecordHead'
 import { IntakeDialog } from '@/features/intake/IntakeDialog'
 import { I } from '@/features/intake/copy'
 import { useIntakeOptions } from '@/features/intake/hooks'
@@ -65,6 +66,8 @@ export function ParentsPage({ eyebrow }: { eyebrow?: string }) {
     }, { replace: true })
   const list = useParents(deferred, access, location)
   const items = list.data?.items ?? []
+  // A parent's file walks this list in the order it is shown.
+  useRememberWalk('parents', list.data?.items)
   // PD-42: offered when the server says this viewer enters families.
   const intake = useIntakeOptions()
   const [adding, setAdding] = useState(false)

@@ -27,14 +27,14 @@
 .dir-table :is(th, td):last-child { padding-inline-end: var(--space-4); }
 .dir-table thead th {
   padding-block: 8px;
-  border-block-end: 1px solid var(--hairline-soft);
+  border-block-end: 1px solid var(--line-2);
   font-size: var(--fs-xs);
   font-weight: 500;
   color: var(--ink-muted);
   white-space: nowrap;
 }
 .dir-row { cursor: pointer; }
-.dir-row > td { border-block-end: 1px solid var(--hairline-soft); }
+.dir-row > td { border-block-end: 1px solid var(--line-2); }
 .dir-table > tbody:last-of-type > .dir-row:last-child > td { border-block-end: 0; }
 .dir-row:hover > td { background: var(--surface-hover); }
 .dir-row:has(.dir-name:focus-visible) > td { background: var(--teal-tint); }
@@ -57,13 +57,13 @@
 .dir-row:hover .row-actions2 > .btn { border-color: var(--teal); color: var(--teal); }
 
 /* A group of rows: its heading is a band on the canvas colour, with how many it holds. */
-.dir-group__head > th { padding-block: 9px; border-block-end: 1px solid var(--hairline-soft); background: var(--paper); font-weight: 400; }
-.dir-table > tbody:not(:first-of-type) > .dir-group__head > th { border-block-start: 1px solid var(--hairline-soft); }
+.dir-group__head > th { padding-block: 9px; border-block-end: 1px solid var(--line-2); background: var(--canvas); font-weight: 400; }
+.dir-table > tbody:not(:first-of-type) > .dir-group__head > th { border-block-start: 1px solid var(--line-2); }
 .dir-group__title { display: inline-flex; align-items: center; gap: 8px; font-size: var(--fs-sm); font-weight: 600; color: var(--ink); }
 .dir-group__label { font-weight: 400; color: var(--ink-muted); }
 .dir-group--unplaced > .dir-group__head > th { border-inline-start: 3px solid var(--gold-line); }
 
-.dir-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-3); margin: 0; padding: 10px var(--space-4); border-block-start: 1px solid var(--hairline-soft); font-size: var(--fs-sm); color: var(--ink-muted); }
+.dir-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-3); margin: 0; padding: 10px var(--space-4); border-block-start: 1px solid var(--line-2); font-size: var(--fs-sm); color: var(--ink-muted); }
 .dir-foot--note { font-size: var(--fs-xs); }
 .dir-total { font-variant-numeric: tabular-nums; }
 .dir-pager { display: inline-flex; align-items: center; gap: var(--space-3); font-variant-numeric: tabular-nums; }
@@ -81,7 +81,7 @@
 
   .dir-table, .dir-table > tbody { display: block; }
   .dir-table > thead { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); }
-  .dir-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 2px var(--space-3); min-block-size: 64px; padding: 10px var(--space-4); border-block-end: 1px solid var(--hairline-soft); }
+  .dir-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 2px var(--space-3); min-block-size: 64px; padding: 10px var(--space-4); border-block-end: 1px solid var(--line-2); }
   .dir-table > tbody:last-of-type > .dir-row:last-child { border-block-end: 0; }
   .dir-row > td, .dir-table :is(th, td):first-child, .dir-table :is(th, td):last-child { display: block; padding: 0; border: 0; }
   .dir-row:hover > td { background: none; }

@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Fact, Sheet } from '@/features/profiles/RecordParts'
 import { ABOUT_MAX, DISPLAY_NAME_MAX, JOB_TITLE_MAX, profileKeys, staffProfileApi, type StaffProfile } from './api'
-import { ACCOUNT_STATUS_LABEL, MISSING_LABEL, ROLE_LABEL, T, useCopy } from './copy'
+import { ACCOUNT_STATUS_LABEL, MISSING_LABEL, T, useCopy } from './copy'
 import { describeError, isConflict } from './errors'
 import { useAvatarRemove, useAvatarUpload, useUpdateProfile } from './hooks'
 import { preparePhoto, type PreparedPhoto } from './photo'
@@ -336,55 +336,55 @@ function ProfessionalForm({ profile, refKey, onDone }: { profile: StaffProfile; 
  * because they are official fields. Profile completeness closes the group as
  * one line over a thin rule, then the two rules that protect people.
  */
-export function AccountGroup({ profile }: { profile: StaffProfile }) {
+export function AccountGroup({ profile, completenessInHead = false }: { profile: StaffProfile; completenessInHead?: boolean }) {
   const tx = useCopy()
-  const { dateTime, locale } = useI18n()
+  const { locale } = useI18n()
   const status = profile.account.status
   const { complete, total, missing } = profile.completeness
   const pct = total === 0 ? 100 : Math.round((complete / total) * 100)
+  // The role, the status word and the last activity are in the record's head; the margin keeps the rest.
+  const statusNeedsSaying = !profile.account.hasLogin || (status !== null && status !== 'active')
   return (
     <section className="aside-group rec-group" aria-labelledby="sp-account" data-section="account">
       <div className="rec-group__head">
         <h2 id="sp-account" className="aside-group__title">{tx(T.accountFacts)}</h2>
       </div>
       <dl className="rec-facts">
-        <Fact icon="briefcase" label={tx(T.role)}>
-          {tx(ROLE_LABEL[profile.role] ?? { en: profile.role, ar: profile.role })}
-        </Fact>
-        <Fact icon="userCheck" label={tx(T.status)}>
-          {!profile.account.hasLogin ? (
-            tx(T.noLogin)
-          ) : status ? (
-            tx(ACCOUNT_STATUS_LABEL[status] ?? { en: status, ar: status })
-          ) : (
-            <span className="rec-missing">{tx(T.never)}</span>
-          )}
-        </Fact>
-        {!profile.reportingManager && (
-          <Fact icon="user" label={tx(T.reportsTo)}>
-            <span className="rec-missing">{tx(T.noManager)}</span>
-          </Fact>
-        )}
-        <Fact icon="history" label={tx(T.lastActivity)}>
-          {profile.lastActivityAt ? dateTime(profile.lastActivityAt) : <span className="rec-missing">{tx(T.never)}</span>}
-        </Fact>
         {profile.signInIdentity && (
           <Fact icon="mail" label={tx(T.signIn)}>
             <span dir="ltr" className="sp-ltr">{profile.signInIdentity}</span>
           </Fact>
         )}
+        {(statusNeedsSaying || !status) && (
+          <Fact icon="userCheck" label={tx(T.status)}>
+            {!profile.account.hasLogin ? (
+              tx(T.noLogin)
+            ) : status ? (
+              tx(ACCOUNT_STATUS_LABEL[status] ?? { en: status, ar: status })
+            ) : (
+              <span className="rec-missing">{tx(T.never)}</span>
+            )}
+          </Fact>
+        )}
+        {!profile.reportingManager && (
+          <Fact icon="user" label={tx(T.reportsTo)}>
+            <span className="rec-missing">{tx(T.noManager)}</span>
+          </Fact>
+        )}
       </dl>
-      <div className="sp-completeness">
-        <span>
-          {tx(T.completeness)}: {tx(T.completeCount, { done: complete, total })}
-          {missing.length > 0 && (
-            <span className="sp-muted"> — {missing.map((m) => tx(MISSING_LABEL[m])).join(locale === 'ar' ? '، ' : ', ')}</span>
-          )}
-        </span>
-        <span className="pp-meter" aria-hidden="true">
-          <span style={{ inlineSize: `${pct}%` }} />
-        </span>
-      </div>
+      {!completenessInHead && (
+        <div className="sp-completeness">
+          <span>
+            {tx(T.completeness)}: {tx(T.completeCount, { done: complete, total })}
+            {missing.length > 0 && (
+              <span className="sp-muted">{locale === 'ar' ? '، ينقصه: ' : '; missing: '}{missing.map((m) => tx(MISSING_LABEL[m])).join(locale === 'ar' ? '، ' : ', ')}</span>
+            )}
+          </span>
+          <span className="pp-meter" aria-hidden="true">
+            <span style={{ inlineSize: `${pct}%` }} />
+          </span>
+        </div>
+      )}
       <p className="rec-rule">{tx(T.officialFieldsNote)}</p>
       <p className="rec-rule">{tx(T.contactNote)}</p>
     </section>
