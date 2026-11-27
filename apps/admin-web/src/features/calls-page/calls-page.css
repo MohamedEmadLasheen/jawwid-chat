@@ -137,7 +137,7 @@
 /* A past call: which way it went, who, how it ended, how long, when, and Call. */
 .cp-recent {
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) 72px minmax(80px, auto) 150px;
+  grid-template-columns: 34px minmax(0, 1fr) 92px minmax(80px, auto) 150px;
   align-items: center;
   gap: var(--space-3);
   min-block-size: 60px;
@@ -163,8 +163,12 @@
 @media (max-width: 767px) {
   .cp-recent { grid-template-columns: 34px minmax(0, 1fr) auto; padding-inline: var(--space-3); row-gap: 4px; }
   .cp-recent__len { display: none; }
-  .cp-recent .cp-row__time { grid-column: 3; grid-row: 1; }
-  .cp-recent .row-actions2 { grid-column: 2 / -1; grid-row: 2; justify-self: start; }
+  /* Who and how it ended at the start; when, and the one action under it, at the end. */
+  .cp-recent { grid-template-rows: auto auto; }
+  .cp-recent__dir { grid-row: 1 / span 2; }
+  .cp-recent .cp-row__body { grid-column: 2; grid-row: 1 / span 2; }
+  .cp-recent .cp-row__time { grid-column: 3; grid-row: 1; justify-self: end; font-size: var(--fs-xs); }
+  .cp-recent .row-actions2 { grid-column: 3; grid-row: 2; justify-self: end; }
   .cp-up, .cp-row, .cp-day__head { padding-inline: var(--space-3); }
   .cp-up { grid-template-columns: 84px minmax(0, 1fr) auto; }
   .cp-actions { inline-size: 100%; }
@@ -315,7 +319,8 @@ html[lang='ar'] .cp-landing__title { font-weight: 700; line-height: 1.45; }
 .cp-recent__sep { margin-inline-start: calc(-1 * var(--space-3) + 1px); }
 /* One column: what is coming up, then who called, then the pinned chats. */
 @media (max-width: 1099px) {
-  .cp-cols { display: flex; flex-direction: column; }
+  /* Every sheet takes the full width of the one column (not its content's width). */
+  .cp-cols { display: flex; flex-direction: column; align-items: stretch; }
   .cp-cols__start { display: contents; }
   .cp-section--fav { order: 3; }
 }

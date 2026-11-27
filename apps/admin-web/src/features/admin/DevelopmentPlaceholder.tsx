@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { Icon } from '@/shared/components/Icon'
 import { PageHeader } from '@/shared/components/PageHeader'
 import { StatusBadge, useEyebrow } from './common'
-import { TEXT, useText } from './copy'
+import { TEXT, fill, useText } from './copy'
 import { adminSectionPath, sectionsInGroup, type AdminSection } from './sections'
 import './admin.css'
 
@@ -24,18 +24,20 @@ export function DevelopmentPlaceholder({ section }: { section: AdminSection }) {
         <PageHeader eyebrow={eyebrow} title={tx(section.label)} status={<StatusBadge status={section.status} />} />
         <div className={available.length ? 'split split--wide-aside' : undefined}>
           {/* One sheet: what the section will hold, and what stands in for it meanwhile. */}
+          {/* What the section will hold is its headline; "in development" is said once, by the
+              tag beside the title (and in words for assistive technology). */}
           <section className="sheet adm-soon" role="note" data-testid="development-placeholder" aria-label={tx(TEXT.willHold)}>
-            <header className="sheet__head">
-              <h2 className="sheet__title">{tx(TEXT.willHold)}</h2>
-            </header>
             <div className="sheet__body">
-              <p className="adm-soon__line">{tx(section.purpose)}</p>
+              <h2 className="adm-soon__line">{tx(section.purpose)}</h2>
               <p className="adm-soon__note">
-                <span className="adm-soon__status">{tx(TEXT.placeholderTitle)}</span> {tx(section.note)}
+                <span className="sr-only">{tx(TEXT.placeholderTitle)} </span>
+                {tx(section.note)}
               </p>
               {section.meanwhile && (
-                <Link className="btn adm-soon__go" to={adminSectionPath(section.meanwhile)}>
-                  {tx(ADMIN_SECTIONS.find((s) => s.key === section.meanwhile)?.label ?? section.label)}
+                <Link className="btn btn--primary adm-soon__go" to={adminSectionPath(section.meanwhile)}>
+                  {fill(tx(TEXT.openSection), {
+                    name: tx(ADMIN_SECTIONS.find((s) => s.key === section.meanwhile)?.label ?? section.label),
+                  })}
                 </Link>
               )}
               {section.legacy && (

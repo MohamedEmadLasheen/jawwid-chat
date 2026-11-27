@@ -262,6 +262,17 @@ export function CallOverlay() {
 
         {(state.phase === 'starting' || state.phase === 'outgoingRinging' || inCall) && (
           <>
+            {/* On its own, and the biggest: never beside Mute (call.md §6). It takes Decline's place,
+                never Answer's, so a second press on Answer cannot end the call it just took. */}
+            <RoundButton
+              label={state.phase === 'outgoingRinging' || state.phase === 'starting' ? copy.cancel : copy.hangUp}
+              tone="danger"
+              size="lg"
+              disabled={state.phase === 'starting'}
+              onClick={() => void controller.hangUp()}
+            >
+              <HangUpIcon />
+            </RoundButton>
             <div className="call-window__secondary">
               <RoundButton
                 label={state.microphoneMuted ? copy.unmute : copy.mute}
@@ -277,16 +288,6 @@ export function CallOverlay() {
                 </RoundButton>
               )}
             </div>
-            {/* On its own, and the biggest: never beside Mute (call.md §6). */}
-            <RoundButton
-              label={state.phase === 'outgoingRinging' || state.phase === 'starting' ? copy.cancel : copy.hangUp}
-              tone="danger"
-              size="lg"
-              disabled={state.phase === 'starting'}
-              onClick={() => void controller.hangUp()}
-            >
-              <HangUpIcon />
-            </RoundButton>
           </>
         )}
 

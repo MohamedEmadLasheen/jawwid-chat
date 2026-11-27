@@ -590,3 +590,39 @@ html[lang='ar'] .compose-step__title { font-weight: 700; }
 
 .daily__empty { margin: 0; padding: var(--space-4) 0; font-size: var(--fs-sm); color: var(--ink-muted); }
 .funnel__value small { font-size: var(--fs-xs); }
+
+/* Drafts waiting to be published: one quiet line above the grid, with the way to them. */
+.story-drafts {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px var(--space-3);
+  margin: 0;
+  padding: 10px var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: var(--fs-sm);
+}
+.story-drafts > .icon { flex: none; color: var(--waiting); }
+.story-drafts__text { flex: 1 1 16rem; min-inline-size: 0; }
+.story-drafts__label { font-weight: 600; }
+.story-drafts__go { flex: none; color: var(--teal); font-weight: 600; text-decoration: none; }
+.story-drafts__go:hover { text-decoration: underline; text-underline-offset: 3px; }
+.story-drafts__go:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
+
+/* Search and sort sit on the canvas over the grid: two controls do not need their own sheet. */
+.stories-studio .story-board__bar { padding: 0; border: 0; background: none; box-shadow: none; }
+
+/* On a phone the status tabs scroll; the end fades so a cut tab reads as "more", not a stray letter. */
+@media (max-width: 767px) {
+  .stories-studio .studio-tabs {
+    -webkit-mask-image: linear-gradient(to left, transparent 0, #000 28px);
+    mask-image: linear-gradient(to left, transparent 0, #000 28px);
+  }
+  [dir='rtl'] .stories-studio .studio-tabs {
+    -webkit-mask-image: linear-gradient(to right, transparent 0, #000 28px);
+    mask-image: linear-gradient(to right, transparent 0, #000 28px);
+  }
+}

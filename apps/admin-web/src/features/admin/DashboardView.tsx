@@ -66,7 +66,6 @@ export function DashboardView({ section }: { section: AdminSection }) {
         <PageHeader
           eyebrow={eyebrow}
           title={tx(section.label)}
-          subtitle={o?.organization.displayName}
           actions={
             <RefreshAction
               updatedAt={overview.dataUpdatedAt}
@@ -253,8 +252,9 @@ function Kpis({ o }: { o: AdminOverview }) {
   ]
   return (
     <section className="aside-group adm-totals" aria-labelledby="dash-totals">
+      {/* The academy's own name heads its numbers (it is not a subtitle under the page title). */}
       <h2 className="aside-group__title" id="dash-totals">
-        {tx(TEXT.totals)}
+        {o.organization.displayName || tx(TEXT.totals)}
       </h2>
       <ul className="adm-totals__list">
         {items.map((k) => (

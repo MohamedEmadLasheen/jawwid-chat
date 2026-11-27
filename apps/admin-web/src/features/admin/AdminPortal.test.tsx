@@ -218,7 +218,7 @@ describe('Dashboard', () => {
     // 2 staff + 3 teachers + 9 contacts
     expect(screen.getByText('14')).toBeInTheDocument()
 
-    const attention = screen.getByRole('region', { name: 'Needs attention' })
+    const attention = screen.getByRole('region', { name: 'Conversations and stories' })
     const waiting = await within(attention).findByRole('link', { name: /waiting on a reply from us/ })
     expect(waiting).toHaveAttribute('href', '/admin/conversations?state=waiting_on_jawwid')
     expect(within(attention).getByRole('link', { name: /still in draft/ })).toHaveAttribute(
@@ -239,7 +239,7 @@ describe('Dashboard', () => {
     renderWithProviders(<AppRoutes />, { staff: { ...superAdmin, permissions: ['chat.use'] }, route: '/admin/dashboard' })
     const chats = await screen.findByRole('region', { name: 'Chats' })
     expect(await within(chats).findByRole('link', { name: /Chats waiting for our reply/ })).toHaveAttribute('href', '/chat?view=waiting')
-    const attention = await screen.findByRole('region', { name: 'Needs attention' })
+    const attention = await screen.findByRole('region', { name: 'Conversations and stories' })
     // The sections come first; the inventory stays below them.
     expect(chats.compareDocumentPosition(attention) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(screen.getByText('QA Academy')).toBeInTheDocument()
