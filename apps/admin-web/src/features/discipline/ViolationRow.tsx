@@ -77,7 +77,7 @@ export function ViolationRow({ v, onDecide, extra }: { v: Violation; onDecide?: 
           <div className="dc-cell">
             {v.suggestedDecision && <span className="dc-muted">{tx(D.suggested, { d: tx(DECISION_LABEL[v.suggestedDecision]) })}</span>}
             {onDecide && (
-              <button type="button" className="btn btn--primary btn--sm" onClick={onDecide}>
+              <button type="button" className="btn btn--sm" onClick={onDecide}>
                 {tx(D.decide)}
               </button>
             )}

@@ -20,8 +20,8 @@ export function TeacherPicker({ value, onChange }: { value: string; onChange: (t
   const id = useId()
   const directory = useSupervisionDirectory()
   return (
-    <div className="field tr-picker">
-      <label className="field__label" htmlFor={id}>
+    <div className="tr-picker">
+      <label className="sr-only" htmlFor={id}>
         {tx(R.teacher)}
       </label>
       <SearchableSelect id={id} className="input" value={value} onValueChange={(v) => onChange(v)}>

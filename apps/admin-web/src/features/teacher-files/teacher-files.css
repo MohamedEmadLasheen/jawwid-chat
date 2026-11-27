@@ -220,6 +220,6 @@ html[dir='rtl'] .tf-head__name[dir='auto'] { text-align: right; }
 
 /* Inside the file a notice is a ruled line, and a name in a table is a quiet link. */
 .tf-section .banner--info, .tf-section .banner--warn { margin: var(--space-2) 0 0; padding: 6px 0; padding-inline-start: var(--space-3); border-radius: 0; background: none; border-inline-start: 2px solid var(--teal); color: var(--ink-muted); font-size: var(--fs-sm); }
-.tf-section .banner--warn { border-inline-start-color: var(--gold-line); color: var(--gold-text); }
+.tf-section .banner--warn { border-inline-start-color: var(--waiting); color: var(--ink); }
 .tf-section .table a, .th-body .table a, .tf-timeline a { color: var(--ink); font-weight: 600; text-decoration: none; }
 .tf-section .table a:hover, .th-body .table a:hover, .tf-timeline a:hover { color: var(--teal-dark); text-decoration: underline; text-underline-offset: 3px; }

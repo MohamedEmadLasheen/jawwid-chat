@@ -340,7 +340,7 @@ function Clip(props: {
         <span className="lesson-audio__decide">
           {canReview && c.canReview ? (
             <>
-              <button type="button" className="btn btn--sm btn--primary" disabled={!ready || approve.isPending} aria-describedby={heard ? undefined : hintId} onClick={() => approve.mutate()}>
+              <button type="button" className="btn btn--sm" disabled={!ready || approve.isPending} aria-describedby={heard ? undefined : hintId} onClick={() => approve.mutate()}>
                 {tx(C.approve)}
               </button>
               <button type="button" className="btn btn--sm" disabled={!ready} aria-describedby={heard ? undefined : hintId} onClick={() => setForm('reject')}>

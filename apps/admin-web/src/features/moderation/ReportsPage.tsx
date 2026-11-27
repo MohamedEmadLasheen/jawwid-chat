@@ -165,7 +165,7 @@ export function ReportsPage() {
                       {/* One stated action opens the report beside the list; the others are behind the menu. */}
                       <RowActions
                         primary={
-                          <button type="button" className={openId === r.id ? 'btn btn--sm btn--primary' : 'btn btn--sm'} onClick={() => { setGoneNotice(false); setOpenId(r.id) }}>
+                          <button type="button" className={'btn btn--sm'} onClick={() => { setGoneNotice(false); setOpenId(r.id) }}>
                             {tx(MOD.view)}
                           </button>
                         }

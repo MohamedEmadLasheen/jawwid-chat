@@ -72,12 +72,16 @@ export function TeacherAttendancePage({ basePath, eyebrow }: { basePath: string;
     <div className="page">
       <div className="page__inner">
         <PageHeader
-          eyebrow={eyebrow ?? tx(R.group)}
           title={tx(R.attendanceTitle)}
           status={facts.status}
-          subtitle={tx(R.attendanceSubtitle)}
           figures={facts.figures}
-          actions={facts.action}
+          actions={
+            <>
+              {/* Whose records these are: the control every sheet below answers to. */}
+              <TeacherPicker value={teacher} onChange={setTeacher} />
+              {facts.action}
+            </>
+          }
           tabs={
         <FilterChips<AttendanceSection>
           variant="tabs"
@@ -88,11 +92,9 @@ export function TeacherAttendancePage({ basePath, eyebrow }: { basePath: string;
         />
           }
         />
-        <div className="sheet tr-toolbar">
-          <div className="sheet-bar">
-          <TeacherPicker value={teacher} onChange={setTeacher} />
-          {/* The parents' suggestions are answered by those who decide; not Sales'. */}
-          {section === 'complaints' && !sales && (
+        {/* The parents' suggestions are answered by those who decide; not Sales'. */}
+        {section === 'complaints' && !sales && (
+        <div className="tr-toolbar">
             <FilterChips<ComplaintsView>
               label={tx(R.showing)}
               value={view}
@@ -102,9 +104,8 @@ export function TeacherAttendancePage({ basePath, eyebrow }: { basePath: string;
                 { value: 'suggestions', label: tx(R.suggestions) },
               ]}
             />
-          )}
-          </div>
         </div>
+        )}
         <div className="th-body">
           {section === 'leave' && <LeaveSection basePath={basePath} />}
           {section === 'lateness' && <LatenessSection {...rights} trialsOnly={sales} />}
