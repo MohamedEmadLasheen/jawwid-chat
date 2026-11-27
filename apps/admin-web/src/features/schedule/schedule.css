@@ -159,7 +159,7 @@
 .sc-filter__trigger .icon, .sc-more-toggle .icon { color: var(--ink-muted); }
 .sc-filter__trigger[aria-expanded='true'], .sc-more-toggle[aria-expanded='true'] { border-color: var(--teal); color: var(--ink); }
 .sc-more-toggle[aria-expanded='true'] { background: var(--surface-2); }
-.sc-filter--on { border-color: var(--teal-tint-2); background: var(--teal-tint); color: var(--teal-dark); font-weight: 600; }
+.sc-filter--on { border-color: var(--teal-tint-2); background: var(--accent-soft); color: var(--text-link); font-weight: 600; }
 .sc-filter--on .icon { color: var(--teal); }
 .sc-filter__value { color: var(--ink); font-weight: 600; }
 /* How many are chosen: a figure, not a pill. */
