@@ -95,7 +95,7 @@ export function ConversationInfo({ c }: { c: ChatConversation }) {
                 <span dir="auto">{x.displayName}</span>
                 <span className="cw-member__note">
                   {copy.mentionWaiting}
-                  {' · '}
+                  {copy.listSeparator}
                   {copy.mentionedBy(x.mentionedByName ?? copy.mentionSomeoneHere, dateTime(x.at))}
                 </span>
               </span>

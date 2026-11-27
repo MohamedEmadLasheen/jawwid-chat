@@ -49,7 +49,7 @@ function readInfoPref(): boolean {
  * the parent and teacher apps. What appears in the list is exactly what the
  * server will let this admin open (staff scope); nothing here filters or widens
  * it. Three panes -- list, thread, and the context panel (the family, then the
- * conversation's own details), which is a drawer below 1100px; below 768px one
+ * conversation's own details), which is a drawer below 1360px; below 768px one
  * pane shows at a time. J / K / Enter / Escape work the list from the keyboard.
  */
 export function ChatPage() {
@@ -78,7 +78,9 @@ export function ChatPage() {
   const cover = mayCover ? myCover.data : undefined
   const canGoAway = !!cover && !cover.away && cover.canHandOver
   const [handingOver, setHandingOver] = useState(false)
-  const wide = useMediaQuery('(min-width: 1100px)')
+  // The panel sits beside the thread only where the thread keeps a readable
+  // width (sidebar, list and panel take ~920px); below that it is a drawer.
+  const wide = useMediaQuery('(min-width: 1360px)')
   const resizable = useMediaQuery('(min-width: 1024px)')
   const listWidth = useResizableWidth(LIST_WIDTH_KEY, 360, 280, 520)
   const [infoPref, setInfoPref] = useState(readInfoPref)

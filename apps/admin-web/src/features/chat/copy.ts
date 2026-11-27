@@ -288,6 +288,9 @@ export const chatCopy = {
     section: { needs: 'بانتظار ردّنا', unread: 'غير مقروءة', rest: 'باقي المحادثات' } as Record<'needs' | 'unread' | 'rest', string>,
     waitedLabel: (age: string) => `تنتظر منذ ${age}`,
     queueOpen: 'فتح',
+    queueOrder: 'الأطول انتظارًا أولًا',
+    // On an internal note in the thread, beside the lock.
+    staffOnlyShort: 'للفريق فقط',
     newDivider: 'جديد',
     // The thread header's one urgent fact about the family.
     lateTag: (amount: string) => `${amount} متأخرة`,
@@ -321,7 +324,8 @@ export const chatCopy = {
     famDue: 'المستحق',
     famNothingDue: 'لا مستحقات',
     famOverdue: (amount: string) => `منها ${amount} متأخرة`,
-    famLate: (n: number) => (n === 1 ? 'متأخر يومًا' : n === 2 ? 'متأخر يومين' : n <= 10 ? `متأخر ${n} أيام` : `متأخر ${n} يومًا`),
+    // Follows "منها … متأخرة": says since when, not "late" again.
+    famLate: (n: number) => (n === 1 ? 'منذ يوم' : n === 2 ? 'منذ يومين' : n <= 10 ? `منذ ${n} أيام` : `منذ ${n} يومًا`),
     famNextDue: (date: string) => `الاستحقاق القادم ${date}`,
     famOpenRequest: 'طلب مفتوح',
     famRecord: 'تسجيل دفعة مستلمة',
@@ -339,7 +343,7 @@ export const chatCopy = {
       trial_group: 'مجموعة الحصص التجريبية',
       department_room: 'غرفة القسم',
     } as Record<string, string>,
-    role: { contact: 'ولي أمر', teacher: 'معلم', staff: 'جوّد', system: 'النظام' } as Record<string, string>,
+    role: { contact: 'ولي أمر', teacher: 'معلم', staff: 'فريق جوّد', system: 'النظام' } as Record<string, string>,
     system: {
       'group.created': (p: Record<string, unknown>) => `أُنشئت مجموعة الطالب${p.learner ? ` لـ ${String(p.learner)}` : ''}`,
       'group.membership_changed': (p: Record<string, unknown>) =>
@@ -620,6 +624,8 @@ export const chatCopy = {
     section: { needs: 'Needs a reply', unread: 'Unread', rest: 'Everything else' } as Record<'needs' | 'unread' | 'rest', string>,
     waitedLabel: (age: string) => `Waiting ${age}`,
     queueOpen: 'Open',
+    queueOrder: 'Longest wait first',
+    staffOnlyShort: 'Staff only',
     newDivider: 'New',
     lateTag: (amount: string) => `${amount} late`,
     dueTag: (amount: string) => `${amount} due`,
@@ -665,7 +671,7 @@ export const chatCopy = {
       trial_group: 'Trial group',
       department_room: 'Department room',
     } as Record<string, string>,
-    role: { contact: 'Parent', teacher: 'Teacher', staff: 'Jawwid', system: 'System' } as Record<string, string>,
+    role: { contact: 'Parent', teacher: 'Teacher', staff: 'Jawwid staff', system: 'System' } as Record<string, string>,
     system: {
       'group.created': (p: Record<string, unknown>) => `Student Group created${p.learner ? ` for ${String(p.learner)}` : ''}`,
       'group.membership_changed': (p: Record<string, unknown>) =>
