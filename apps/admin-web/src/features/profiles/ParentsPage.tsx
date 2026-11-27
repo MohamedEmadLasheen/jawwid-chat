@@ -170,7 +170,9 @@ export function ParentsPage({ eyebrow }: { eyebrow?: string }) {
                               <bdi>{p.name}</bdi>
                             </Link>
                             <span className="dir-sub">
-                              <bdi>{p.family.name}</bdi>
+                              <span>
+                                <bdi>{p.family.name}</bdi>
+                              </span>
                               <span>{countWords(p.childrenCount, CHILDREN_COUNT, locale)}</span>
                             </span>
                           </span>
@@ -183,7 +185,7 @@ export function ParentsPage({ eyebrow }: { eyebrow?: string }) {
                         </td>
                       )}
                       <td className={p.location?.countryCode ? 'dir-cell-quiet' : 'dir-cell-quiet dir-cell-quiet--none'} data-label={tx(P.location)}>
-                        {p.location ? <LocationText value={p.location} /> : <span className="dir-missing">{tx(P.notRecorded)}</span>}
+                        {p.location?.countryCode ? <LocationText value={p.location} /> : <span className="dir-missing">{tx(P.notRecorded)}</span>}
                       </td>
                       <td className="cell-actions">
                         <RowActions

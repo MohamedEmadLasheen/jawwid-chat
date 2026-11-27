@@ -243,7 +243,11 @@ export function StaffTable({ rows, showManager, note }: { rows: StaffSummary[]; 
                           </span>
                           <span className="dir-sub">
                             <span>{roleText}</span>
-                            {r.jobTitle && <bdi>{r.jobTitle}</bdi>}
+                            {r.jobTitle && (
+                              <span>
+                                <bdi>{r.jobTitle}</bdi>
+                              </span>
+                            )}
                             {/* What the server lets this viewer do with the profile: said on every row, at every width. */}
                             <span>{r.access.canEditProfessional || r.access.canManageResponsibilities ? tx(T.canEditBadge) : tx(T.viewOnlyBadge)}</span>
                           </span>

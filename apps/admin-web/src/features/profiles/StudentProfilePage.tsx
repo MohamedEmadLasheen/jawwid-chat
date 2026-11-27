@@ -173,6 +173,7 @@ function StudentFile({ s }: { s: StudentProfile }) {
         <div className="split rec-split">
           <div className="rec-main">
             <StudentAttention s={s} standing={standing} />
+            {hasFamily && s.family && <FamilyAtAGlance family={s.family} />}
           </div>
           <aside className="rec-aside">
             <StudentFacts s={s} />
@@ -414,6 +415,25 @@ function ScheduleSheet({ s }: { s: StudentProfile }) {
         )}
       </Sheet>
     </div>
+  )
+}
+
+/** On Overview: who to call about this child, one line each, each a way into the parent's file. */
+function FamilyAtAGlance({ family }: { family: NonNullable<StudentProfile['family']> }) {
+  const tx = useCopy()
+  return (
+    <Sheet id="st-family-glance" title={tx(P.family)} action={<span className="rec-sheet__aside"><bdi>{family.name}</bdi></span>}>
+      <ul className="rec-list">
+        {family.parents.map((p) => (
+          <li key={p.id} className="rec-kid rec-kid--compact">
+            <Avatar name={p.name} seed={p.id} size="sm" />
+            <Link className="rec-kid__name" to={parentPath(p.id)}>
+              <bdi>{p.name}</bdi>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </Sheet>
   )
 }
 
