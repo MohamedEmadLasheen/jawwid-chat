@@ -78,7 +78,8 @@ export const asksViewer = (c: ChatConversation): boolean => c.needsReply || isUn
 /** Still owed an answer, the one to take first leading; the viewer's own archive and closed conversations left out. */
 export function waitingFirst(conversations: ChatConversation[]): ChatConversation[] {
   const live = conversations.filter((c) => !c.viewerState?.archived && c.archivedAt === null)
-  return groupQueue(live, () => 0, asksViewer)
+  // A family owed an answer comes before a colleague's summons: the pane's first row is the reply to write now.
+  return groupQueue(live, (c) => (c.needsReply ? 1 : 0), asksViewer)
     .filter((s) => s.key !== 'rest')
     .flatMap((s) => (s.key === 'unread' ? [...s.rows].sort((a, b) => at(a) - at(b)) : s.rows))
 }

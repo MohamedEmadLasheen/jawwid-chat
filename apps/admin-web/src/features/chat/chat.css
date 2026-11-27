@@ -35,8 +35,8 @@
 
 /* The kind of conversation, as a small tab on the monogram's corner. */
 .cw .typed-avatar__glyph {
-  inset-block-end: -3px;
-  inset-inline-end: -3px;
+  inset-block-end: -5px;
+  inset-inline-end: -6px;
   inline-size: 21px;
   block-size: 21px;
   border-radius: 6px;
@@ -1107,8 +1107,10 @@ mark.cw-hit { background: var(--teal-tint-2); color: inherit; border-radius: 3px
   .cw .workspace__list { border-inline-end: 0; }
   /* The phone's own bar already names the page: the list keeps its actions, not a second title. */
   .cw .workspace__title { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); }
-  .cw .workspace__head { padding-block-start: 10px; }
-  .cw .workspace__title-row { min-block-size: 0; }
+  .cw:not(.cw--read) .workspace__head { grid-template-columns: minmax(0, 1fr) auto; padding-block-start: 12px; }
+  .cw:not(.cw--read) .workspace__head > * { grid-column: 1 / -1; }
+  .cw:not(.cw--read) .workspace__head > .search { grid-column: 1; grid-row: 1; }
+  .cw:not(.cw--read) .workspace__head > .workspace__title-row { grid-column: 2; grid-row: 1; min-block-size: 0; }
   .cw .conv-list { padding-inline: 6px; }
   .cw .athread { padding-inline: 12px; }
   .cw .bubble-row { max-inline-size: 86%; }
