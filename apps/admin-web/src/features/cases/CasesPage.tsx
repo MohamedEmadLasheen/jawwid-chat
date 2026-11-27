@@ -6,14 +6,15 @@ import { useSession } from '@/core/auth/SessionProvider'
 import { holdsAny } from '@/core/permissions/capabilities'
 import { Badge } from '@/shared/components/Badge'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
-import { Icon, type IconName } from '@/shared/components/Icon'
+import { Icon } from '@/shared/components/Icon'
 import type { MenuItem } from '@/shared/components/Menu'
-import { PageHeader, type MastFigure } from '@/shared/components/PageHeader'
+import { PageHeader } from '@/shared/components/PageHeader'
 import { RowActions } from '@/shared/components/RowActions'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
 import { describeError } from '@/features/teacher-files/copy'
 import { academyToday } from '@/features/schedule/viewState'
-import { casesApi, type CaseDetail, type CaseStatus, type CaseSubjectKind, type CaseSummary, type CaseTab } from './api'
+import { ACADEMY_ZONE, clock12In, dayMonthIn } from '@/core/time/academyTime'
+import { casesApi, type CaseDetail, type CaseStatus, type CaseSummary, type CaseTab } from './api'
 import { C, EVENT_LABEL, GROUP_LABEL, STATUS_LABEL, SUBJECT_LABEL, TAB_LABEL, TARGET_LABEL, useCopy } from './copy'
 import { CASES_ACCESS_KEYS, TasksAreaTabs } from '@/features/tasks/TasksAreaTabs'
 import { SearchableSelect } from '@/shared/components/SearchableSelect'
@@ -27,34 +28,43 @@ const keys = {
   owners: (id: string) => ['cases', 'owners', id] as const,
 }
 
-const STATUS_TONE: Record<CaseStatus, 'warn' | 'info' | 'ok' | 'neutral'> = {
-  open: 'warn',
+/** Not started is plain; being worked on is information; resolved is done. Urgency is the due day's to say. */
+const STATUS_TONE: Record<CaseStatus, 'info' | 'ok' | 'outline'> = {
+  open: 'info',
   in_progress: 'info',
   resolved: 'ok',
-  cancelled: 'neutral',
+  cancelled: 'outline',
 }
-const SUBJECT_ICON: Record<CaseSubjectKind, IconName> = {
-  teacher: 'teachers',
-  lesson: 'calendar',
-  learner: 'students',
-  complaint: 'alert',
-  feedback: 'chatText',
-}
-
-/** Where a case stands in the queue: past its due day first, then not started, then being worked on. */
-type Group = 'past' | 'open' | 'progress' | 'closed'
-const GROUPS: Group[] = ['past', 'open', 'progress', 'closed']
+/** Where a case stands in the queue, by its due day as Tasks is: past it first, then today or tomorrow, then later. */
+type Group = 'past' | 'today' | 'tomorrow' | 'week' | 'later' | 'none' | 'closed'
+const GROUPS: Group[] = ['past', 'today', 'tomorrow', 'week', 'later', 'none', 'closed']
 const isLive = (c: Pick<CaseSummary, 'status'>) => c.status === 'open' || c.status === 'in_progress'
 function groupOf(c: Pick<CaseSummary, 'status' | 'dueOn'>, today: string): Group {
   if (!isLive(c)) return 'closed'
-  if (c.dueOn && c.dueOn.slice(0, 10) < today) return 'past'
-  return c.status === 'open' ? 'open' : 'progress'
+  if (!c.dueOn) return 'none'
+  const left = daysUntil(c.dueOn, today)
+  return left < 0 ? 'past' : left === 0 ? 'today' : left === 1 ? 'tomorrow' : left <= 7 ? 'week' : 'later'
 }
 
-/** A case's due day ("2026-11-29") as a date in the viewer's language. */
+/** A case is due by the end of its day: grey while there is time, amber on the day itself (its last day), red once it has passed. */
+const breachOf = (left: number) => (left < 0 ? 'late' : left === 0 ? 'soon' : 'later')
+
+/** A case's due day ("2026-11-29") as a date in the viewer's language: "29 November". */
 function useDay() {
-  const { date } = useI18n()
-  return (day: string) => date(`${day.slice(0, 10)}T12:00:00Z`)
+  const { locale } = useI18n()
+  return (day: string) => dayMonthIn(`${day.slice(0, 10)}T12:00:00Z`, ACADEMY_ZONE, locale)
+}
+
+/** Whole days from the academy's today to a due day: negative once it has passed. */
+function daysUntil(day: string, today: string): number {
+  return Math.round((Date.parse(`${day.slice(0, 10)}T12:00:00Z`) - Date.parse(`${today}T12:00:00Z`)) / 86_400_000)
+}
+
+/** "today", "tomorrow", "in 3 days", "3 days ago", in the viewer's language. */
+function useDaysWords() {
+  const { locale } = useI18n()
+  const f = new Intl.RelativeTimeFormat(locale === 'ar' ? 'ar-EG-u-nu-latn' : 'en-GB', { numeric: 'auto' })
+  return (days: number) => f.format(days, 'day')
 }
 
 /**
@@ -85,23 +95,16 @@ export function CasesPage({ header }: { header?: React.ReactNode }) {
   })
   const cases = list.data?.cases ?? []
   const today = academyToday()
-  const grouped = GROUPS.map((g) => ({ group: g, rows: cases.filter((c) => groupOf(c, today) === g) })).filter((g) => g.rows.length > 0)
-  const count = (g: Group) => cases.filter((c) => groupOf(c, today) === g).length
-
-  // The figures are this view's own list, counted as it is grouped below.
-  const figures: MastFigure[] = list.data
-    ? [
-        { key: 'past', label: tx(GROUP_LABEL.past), value: number(count('past')), tone: count('past') > 0 ? 'urgent' : 'quiet' },
-        { key: 'open', label: tx(GROUP_LABEL.open), value: number(count('open')), tone: count('open') > 0 ? 'key' : 'quiet' },
-        { key: 'progress', label: tx(GROUP_LABEL.progress), value: number(count('progress')) },
-      ]
-    : []
+  // Inside a group, the nearest due day first.
+  const byDue = (x: CaseSummary, y: CaseSummary) => (x.dueOn ?? '9999').localeCompare(y.dueOn ?? '9999')
+  const grouped = GROUPS.map((g) => ({ group: g, rows: cases.filter((c) => groupOf(c, today) === g).sort(byDue) })).filter((g) => g.rows.length > 0)
   const strip = header ?? (holdsAny(staff, CASES_ACCESS_KEYS) ? <TasksAreaTabs /> : undefined)
 
   return (
     <div className="page cases">
       <div className="page__inner">
-        <PageHeader title={tx(C.title)} subtitle={tx(C.subtitle)} figures={figures} tabs={strip} />
+        {/* No figure strip: the groups below are the counts, past due first. */}
+        <PageHeader title={tx(C.title)} tabs={strip} />
         <div className={openId ? 'tq tq--open' : 'tq'}>
           <div className="sheet tq__sheet">
             <div className="sheet-bar cases__bar">
@@ -123,6 +126,9 @@ export function CasesPage({ header }: { header?: React.ReactNode }) {
                 ))}
               </div>
               <div className="sheet-bar__end">
+                <span className="tq__sort">
+                  {tx(C.sortNeed)}
+                </span>
                 <label className="cases__closed">
                   <input type="checkbox" checked={closed} onChange={(e) => setClosed(e.target.checked)} /> {tx(C.showClosed)}
                 </label>
@@ -150,7 +156,7 @@ export function CasesPage({ header }: { header?: React.ReactNode }) {
                     </h2>
                     <ul className="tq-rows">
                       {rows.map((c) => (
-                        <CaseRow key={c.id} c={c} late={group === 'past'} selected={c.id === openId} onOpen={() => setOpenId(c.id)} />
+                        <CaseRow key={c.id} c={c} today={today} selected={c.id === openId} onOpen={() => setOpenId(c.id)} />
                       ))}
                     </ul>
                   </section>
@@ -165,35 +171,49 @@ export function CasesPage({ header }: { header?: React.ReactNode }) {
   )
 }
 
-function CaseRow({ c, late, selected, onOpen }: { c: CaseSummary; late: boolean; selected: boolean; onOpen: () => void }) {
+function CaseRow({ c, today, selected, onOpen }: { c: CaseSummary; today: string; selected: boolean; onOpen: () => void }) {
   const tx = useCopy()
+  const { locale } = useI18n()
   const day = useDay()
+  const words = useDaysWords()
+  const live = isLive(c)
+  const left = c.dueOn ? daysUntil(c.dueOn, today) : null
+  const late = live && left !== null && breachOf(left) === 'late'
+  const soon = live && left !== null && breachOf(left) === 'soon'
+  const sep = locale === 'ar' ? '، ' : ', '
   return (
-    <li className={`tq-row tq-row--case${selected ? ' tq-row--selected' : ''}${late ? ' tq-row--late' : ''}`}>
+    <li className={`tq-row tq-row--case${selected ? ' tq-row--selected' : ''}${late ? ' tq-row--late' : ''}${soon ? ' tq-row--soon' : ''}`}>
       <div className="tq-row__main">
         <button type="button" className="cases__title" dir="auto" aria-current={selected ? 'true' : undefined} onClick={onOpen}>
           {c.title}
         </button>
         <div className="tq-row__sub">
-          <span className="cases__about">
-            <Icon name={SUBJECT_ICON[c.subject.kind]} size={14} />
-            <span>{tx(SUBJECT_LABEL[c.subject.kind])}:</span> <bdi>{c.subject.label}</bdi>
+          {/* What it is about and whose it is, as one line of words. */}
+          <span className="tq-row__why">
+            {tx(SUBJECT_LABEL[c.subject.kind])}{' '}
+            <bdi>{c.subject.label}</bdi>
+            {sep}
+            {c.owner ? (
+              <>
+                {tx(C.owner)}{' '}
+                <bdi>{c.owner.name}</bdi>
+              </>
+            ) : (
+              tx(C.noOwner)
+            )}
           </span>
-          <span>{c.owner ? <bdi>{c.owner.name}</bdi> : tx(C.noOwner)}</span>
+          <Badge tone={STATUS_TONE[c.status]}>{tx(STATUS_LABEL[c.status])}</Badge>
         </div>
       </div>
       <div className="tq-row__when">
-        {c.dueOn ? (
+        {c.dueOn && left !== null ? (
           <>
-            <span className="tq-row__age">{late ? tx(C.pastDue) : tx(C.dueOn, { date: day(c.dueOn) })}</span>
-            {late && <span className="tq-row__date">{tx(C.dueOn, { date: day(c.dueOn) })}</span>}
+            <span className="tq-row__age">{live ? tx(late ? C.wasDue : C.dueWhen, { when: words(left) }) : tx(C.dueOn, { date: day(c.dueOn) })}</span>
+            {live && <span className="tq-row__date">{day(c.dueOn)}</span>}
           </>
         ) : (
           <span className="tq-row__date">{tx(C.noDue)}</span>
         )}
-      </div>
-      <div className="tq-row__level">
-        <Badge tone={STATUS_TONE[c.status]}>{tx(STATUS_LABEL[c.status])}</Badge>
       </div>
     </li>
   )
@@ -201,7 +221,7 @@ function CaseRow({ c, late, selected, onOpen }: { c: CaseSummary; late: boolean;
 
 function CasePanel({ id, onClose }: { id: string; onClose: () => void }) {
   const tx = useCopy()
-  const { locale, dateTime } = useI18n()
+  const { locale } = useI18n()
   const day = useDay()
   const qc = useQueryClient()
   const one = useQuery({ queryKey: keys.one(id), queryFn: () => casesApi.get(id) })
@@ -215,6 +235,7 @@ function CasePanel({ id, onClose }: { id: string; onClose: () => void }) {
   }
   const op = useMutation({ mutationFn: (fn: () => Promise<CaseDetail>) => fn(), onSuccess: done })
   const live = !!c && isLive(c)
+  const words = useDaysWords()
   // Named after the case once what it shows has arrived (the owners list too, for someone who acts).
   const ready = !!c && (!c.canAct || owners.isFetched)
   // One stated action (Resolve while the case is live); the rest behind "⋯".
@@ -235,19 +256,24 @@ function CasePanel({ id, onClose }: { id: string; onClose: () => void }) {
           <>
             <header className="insp__head">
               <div className="insp__top">
-                <span className="insp__kind">
-                  <Icon name={SUBJECT_ICON[c.subject.kind]} size={16} />
-                  {tx(SUBJECT_LABEL[c.subject.kind])}
-                </span>
+                <h2 className="cases__panel-title" dir="auto">{c.title}</h2>
                 <button type="button" className="btn btn--ghost btn--icon btn--sm insp__close" title={tx(C.close)} onClick={onClose}>
                   <Icon name="close" size={16} />
                   <span className="sr-only">{tx(C.close)}</span>
                 </button>
               </div>
-              <h2 className="cases__panel-title" dir="auto">{c.title}</h2>
               <div className="tasks__chips">
+                <span className="insp__kind">
+                  {tx(SUBJECT_LABEL[c.subject.kind])} <bdi>{c.subject.label}</bdi>
+                </span>
                 <Badge tone={STATUS_TONE[c.status]}>{tx(STATUS_LABEL[c.status])}</Badge>
               </div>
+              {/* The due day in words, coloured as on the row: the one fact the queue is read for. */}
+              {live && c.dueOn && (
+                <p className={`insp__due insp__due--${breachOf(daysUntil(c.dueOn, academyToday()))}`}>
+                  {tx(daysUntil(c.dueOn, academyToday()) < 0 ? C.wasDue : C.dueWhen, { when: words(daysUntil(c.dueOn, academyToday())) })}
+                </p>
+              )}
             </header>
 
             <div className="insp__body">
@@ -322,11 +348,14 @@ function CasePanel({ id, onClose }: { id: string; onClose: () => void }) {
               <ol className="cases__history">
                 {c.events.map((e) => (
                   <li key={e.id}>
-                    <strong>{tx(EVENT_LABEL[e.kind])}</strong>
-                    {e.kind === 'status' && e.after?.status ? <> — {tx(STATUS_LABEL[e.after.status as CaseStatus])}</> : null}
+                    <span>
+                      <strong>{tx(EVENT_LABEL[e.kind])}</strong>
+                      {e.kind === 'status' && e.after?.status ? <>: {tx(STATUS_LABEL[e.after.status as CaseStatus])}</> : null}
+                    </span>{' '}
                     <span className="cases__history-by">
-                      {' · '}
-                      <bdi>{e.actor.name}</bdi> · <time dateTime={e.at}>{dateTime(e.at)}</time>
+                      <bdi>{e.actor.name}</bdi>
+                      {locale === 'ar' ? '، ' : ', '}
+                      <time dateTime={e.at}>{`${dayMonthIn(e.at, ACADEMY_ZONE, locale)}${locale === 'ar' ? '، ' : ', '}${clock12In(e.at, ACADEMY_ZONE, locale)}`}</time>
                     </span>
                     {e.note && <p className="cases__text" dir="auto">{e.note}</p>}
                   </li>

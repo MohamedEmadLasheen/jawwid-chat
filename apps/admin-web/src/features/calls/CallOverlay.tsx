@@ -225,7 +225,7 @@ export function CallOverlay() {
           {state.phase === 'live' && state.liveSince !== null && <Clock since={state.liveSince} />}
           {state.phase === 'ended' && state.durationSeconds !== null && state.durationSeconds > 0 && (
             <>
-              {status ? ' · ' : ''}
+              {status ? (locale === 'ar' ? '، ' : ', ') : ''}
               <span dir="ltr">{copy.duration(state.durationSeconds)}</span>
             </>
           )}

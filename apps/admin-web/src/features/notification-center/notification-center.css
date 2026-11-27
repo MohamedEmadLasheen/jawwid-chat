@@ -1,4 +1,4 @@
-/* PD-34: the bell (top bar) and the Notification Center page. */
+/* PD-34: the bell (sidebar foot, phone bar) and the Notification Center page (system.css tokens). */
 .nc-bell { position: relative; }
 .nc-bell__count {
   position: absolute;
@@ -6,88 +6,110 @@
   inset-inline-end: 2px;
   min-inline-size: 18px;
   padding-inline: var(--space-1);
-  border-radius: var(--radius-full);
-  background: var(--danger);
-  color: var(--text-inverse);
-  font-size: var(--fs-xs);
+  border-radius: 9px;
+  background: var(--urgent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
   line-height: 18px;
   text-align: center;
 }
 
-/* The masthead's tabs sit on its lower edge (see tasks.css for why the page states it). */
+/* The masthead's tabs sit on its lower edge. */
 .nc-page .page-header.mast--tabs { padding-block-end: 0; }
 .nc-page .mast__tabs .seg { flex-wrap: nowrap; }
 
-/* An agenda: one sheet, a heading per day, a line per notification. */
-.nc-sheet { max-inline-size: 920px; overflow: hidden; }
-.nc-sheet > .state { padding: var(--space-5) var(--space-4); }
+/* An agenda: one sheet, a band per day, a line per notification. */
+.nc-sheet { overflow: hidden; }
+/* The page is one reading column: the header and its tabs end where the list does. */
+.nc-page .page__inner { max-inline-size: 960px; margin-inline: 0 auto; }
+.nc-sheet > .state { padding: var(--space-6) var(--space-5); }
 .nc-day__head {
   display: flex;
   align-items: center;
   gap: 8px;
   margin: 0;
-  padding: 9px var(--space-4) 8px;
-  background: var(--paper);
-  border-block: 1px solid var(--hairline-soft);
-  font-size: 12.5px;
+  padding: 8px var(--space-5);
+  background: var(--surface-2);
+  border-block: 1px solid var(--line-2);
+  font-family: var(--font-head);
+  font-size: var(--fs-sm);
   font-weight: 600;
-  color: var(--ink-muted);
+  color: var(--ink-2);
 }
 .nc-day:first-child .nc-day__head { border-block-start: 0; }
+/* What asks for action: its own sheet, its head a title rather than a day band. */
+.nc-asks { margin-block-end: var(--space-5); }
+.nc-asks__head { display: flex; align-items: center; gap: 10px; margin: 0; padding: 14px var(--space-5) 10px; border-block-end: 1px solid var(--line-2); font-family: var(--font-head); font-size: var(--fs-lg); font-weight: 700; color: var(--ink); }
+.nc-item__open.btn--ghost { color: var(--teal); }
 .nc-list { list-style: none; margin: 0; padding: 0; }
 .nc-item {
   display: grid;
-  grid-template-columns: 8px 34px minmax(0, 1fr) auto minmax(72px, auto);
-  align-items: center;
-  gap: 2px var(--space-3);
-  min-block-size: 60px;
-  padding: 9px var(--space-4);
-  border-block-end: 1px solid var(--hairline-soft);
+  grid-template-columns: 36px minmax(0, 1fr) auto 168px;
+  align-items: start;
+  gap: 2px var(--space-4);
+  min-block-size: 64px;
+  padding: 14px var(--space-5);
+  border-block-end: 1px solid var(--line-2);
 }
 .nc-list > .nc-item:last-child { border-block-end: 0; }
-/* Unread: a solid teal dot and a bold title. Read: nothing in the dot's place. */
-.nc-item__dot { inline-size: 8px; block-size: 8px; border-radius: 50%; }
-.nc-item--unread .nc-item__dot { background: var(--teal); }
+.nc-item:hover { background: var(--surface-hover); }
+/* The kind as a plain mark; unread adds a teal dot on its corner and a bold title. */
 .nc-item__icon {
+  position: relative;
   display: grid;
   place-items: center;
-  inline-size: 34px;
-  block-size: 34px;
-  border-radius: var(--radius);
-  background: var(--paper);
+  inline-size: 36px;
+  block-size: 36px;
   color: var(--ink-muted);
 }
-.nc-item--unread .nc-item__icon { background: var(--teal-tint); color: var(--teal); }
-.nc-item__text { min-inline-size: 0; }
-.nc-item__title { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; font-weight: 500; color: var(--ink); overflow-wrap: anywhere; }
-.nc-item--unread .nc-item__title { font-weight: 700; }
+.nc-item--unread .nc-item__icon { color: var(--teal); }
+.nc-item__dot {
+  position: absolute;
+  inset-block-start: 4px;
+  inset-inline-end: 3px;
+  inline-size: 9px;
+  block-size: 9px;
+  border-radius: 50%;
+  background: var(--teal);
+  box-shadow: 0 0 0 2px var(--surface);
+}
+.nc-item__text { display: grid; gap: 2px; min-inline-size: 0; padding-block-start: 6px; }
+.nc-item__title { font-size: var(--fs-md); font-weight: 500; color: var(--ink-2); overflow-wrap: anywhere; }
+.nc-item--unread .nc-item__title { font-weight: 700; color: var(--ink); }
 .nc-item__body {
-  margin: 1px 0 0;
+  margin: 0;
   color: var(--ink-muted);
   font-size: var(--fs-sm);
   overflow: hidden;
   display: -webkit-box;
-  -webkit-line-clamp: 1;
+  -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
 }
-.nc-item__time { font-size: var(--fs-xs); color: var(--ink-muted); white-space: nowrap; font-variant-numeric: tabular-nums; unicode-bidi: isolate; }
-.nc-item__actions { display: flex; justify-content: flex-end; }
-.nc-more { display: flex; justify-content: center; padding: var(--space-3); border-block-start: 1px solid var(--hairline-soft); }
+.nc-item__due { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 4px 0 0; font-size: var(--fs-sm); font-weight: 600; color: var(--ink-muted); }
+.nc-item__ask { font-weight: 500; color: var(--ink-2); }
+.nc-item__due--soon { color: var(--waiting); }
+.nc-item__due--late { color: var(--urgent); }
+.nc-item__time { padding-block-start: 8px; justify-self: start; font-size: var(--fs-sm); color: var(--ink-muted); white-space: nowrap; font-variant-numeric: tabular-nums; unicode-bidi: isolate; }
+.nc-item__actions { display: flex; justify-content: flex-end; padding-block-start: 2px; }
+.nc-more { display: flex; justify-content: center; padding: var(--space-3); border-block-start: 1px solid var(--line-2); }
 
-/* Settings: the groups at the start, one group's sheet beside them. */
-.nc-settings { display: grid; grid-template-columns: 240px minmax(0, 560px); gap: var(--space-5); align-items: start; }
+/* Settings: the two groups stacked. */
+.nc-settings { display: grid; gap: var(--space-5); }
+.nc-settings__state { font-size: var(--fs-sm); color: var(--ink-muted); }
 .nc-settings__nav { display: grid; gap: 2px; }
 .nc-settings__link {
   display: flex;
   align-items: center;
   gap: 10px;
-  min-block-size: 40px;
+  min-block-size: 42px;
   padding: 0 12px;
   border: 0;
-  border-radius: var(--radius);
+  border-radius: 8px;
   background: none;
-  color: var(--ink);
+  color: var(--ink-2);
   font: inherit;
+  font-family: var(--font-head);
   font-size: var(--fs-sm);
   font-weight: 500;
   text-align: start;
@@ -95,51 +117,54 @@
   transition: background var(--dur-fast) var(--ease-out);
 }
 .nc-settings__link .icon { color: var(--ink-muted); }
-.nc-settings__link:hover { background: var(--surface-hover); }
-.nc-settings__link[aria-current='true'] { background: var(--surface); box-shadow: inset 0 0 0 1px var(--hairline); color: var(--teal-dark); font-weight: 600; }
+.nc-settings__link:hover { background: var(--surface-hover); color: var(--ink); }
+.nc-settings__link[aria-current='true'] { background: var(--surface); box-shadow: 0 0 0 1px var(--line), var(--shadow-lift); color: var(--ink); font-weight: 600; }
 .nc-settings__link[aria-current='true'] .icon { color: var(--teal); }
-.nc-settings__hint { margin: 0 0 var(--space-3); max-inline-size: 52ch; }
+.nc-settings__hint { margin: 0 0 var(--space-3); max-inline-size: 56ch; font-size: var(--fs-sm); color: var(--ink-muted); }
 .nc-check {
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-block-size: 44px;
-  font-size: var(--fs-sm);
+  gap: 12px;
+  min-block-size: 48px;
+  font-size: var(--fs-md);
   cursor: pointer;
 }
-.nc-check input { flex: none; inline-size: 16px; block-size: 16px; accent-color: var(--teal); }
+.nc-check input { flex: none; inline-size: 18px; block-size: 18px; accent-color: var(--teal); }
 .nc-check > .icon { flex: none; color: var(--ink-muted); }
-.nc-check--lead { font-size: var(--fs-md); }
 .nc-check--lead strong { font-weight: 600; }
 .nc-check--locked { cursor: default; }
 .nc-check__name { flex: 1; min-inline-size: 0; }
-.nc-check__note { display: inline-flex; align-items: center; gap: 5px; color: var(--ink-muted); font-size: var(--fs-xs); }
+.nc-check__note { display: inline-flex; align-items: center; gap: 5px; color: var(--ink-muted); font-size: var(--fs-sm); }
 .nc-kinds { list-style: none; margin: 0; padding: 0; }
-.nc-kinds > li { border-block-end: 1px solid var(--hairline-soft); }
+.nc-kinds > li { border-block-end: 1px solid var(--line-2); }
 .nc-kinds > li:last-child { border-block-end: 0; }
-.nc-hours { display: grid; grid-template-columns: repeat(2, minmax(0, 160px)); gap: var(--space-3); }
+.nc-hours { display: grid; grid-template-columns: repeat(2, minmax(0, 170px)); gap: var(--space-3); }
 .nc-hours .field { margin: 0; }
 .nc-hours .input { inline-size: 100%; direction: ltr; }
 /* The control reads left to right; in an Arabic page its value still sits under its label. */
 [dir='rtl'] .nc-hours .input { text-align: end; }
 [dir='rtl'] .nc-hours .input::-webkit-datetime-edit { display: flex; justify-content: flex-end; }
-.nc-settings__actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-block-start: var(--space-4); padding-block-start: var(--space-4); border-block-start: 1px solid var(--hairline-soft); }
+.nc-settings__actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-block-start: var(--space-4); padding-block-start: var(--space-4); border-block-start: 1px solid var(--line-2); }
 
 @media (max-width: 899px) {
   .nc-settings { grid-template-columns: minmax(0, 1fr); gap: var(--space-3); }
   .nc-settings__nav { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
-  .nc-settings__link { flex: none; min-block-size: 44px; border: 1px solid var(--hairline); background: var(--surface); }
-  .nc-settings__link[aria-current='true'] { background: var(--teal); box-shadow: none; border-color: var(--teal); color: var(--text-inverse); }
-  .nc-settings__link[aria-current='true'] .icon { color: var(--text-inverse); }
+  .nc-settings__link { flex: none; min-block-size: 44px; box-shadow: 0 0 0 1px var(--line); background: var(--surface); }
+  .nc-settings__link[aria-current='true'] { background: var(--teal-tint); box-shadow: none; color: var(--teal-dark); }
 }
 @media (max-width: 767px) {
-  /* What happened on the start side; the time over the way in on the end side. */
-  .nc-item { grid-template-columns: 8px 34px minmax(0, 1fr) auto; padding-inline: var(--space-3); row-gap: 2px; }
-  .nc-item__dot, .nc-item__icon, .nc-item__text { grid-row: 1 / span 2; }
-  .nc-item__time { grid-column: 4; grid-row: 1; justify-self: end; }
-  .nc-item__actions { grid-column: 4; grid-row: 2; }
+  /* What happened at the start; the time above the way in at the end. */
+  .nc-item { grid-template-columns: 32px minmax(0, 1fr) auto; padding-inline: var(--space-4); row-gap: 8px; }
+  .nc-item__icon { inline-size: 32px; grid-row: 1 / span 2; }
+  .nc-item__text { grid-row: 1; }
+  .nc-item__time { grid-column: 3; grid-row: 1; }
+  .nc-item__actions { grid-column: 2 / -1; grid-row: 2; justify-content: flex-start; }
   .nc-item__actions:empty { display: none; }
-  .nc-day__head { padding-inline: var(--space-3); }
+  .nc-day__head { padding-inline: var(--space-4); }
   /* Every button here is a full touch target on a phone. */
   .nc-page :is(.btn, .btn--sm) { min-block-size: 44px; }
 }
+
+/* In the sheet of what asks for action, one title weight: the dot alone says unread. */
+.nc-asks .nc-item__title { font-weight: 600; color: var(--ink); }
+.nc-asks .nc-item__time.nc-item__due { margin: 0; padding-block-start: 8px; }

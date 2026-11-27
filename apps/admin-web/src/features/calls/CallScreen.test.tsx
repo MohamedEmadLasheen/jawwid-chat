@@ -332,7 +332,7 @@ describe('history and lifecycle hygiene', () => {
     renderScreen()
     fireEvent.click(await screen.findByRole('button', { name: 'Call history' }))
     expect(await screen.findByText('No answer')).toBeTruthy()
-    expect(screen.getByText(/Call ended · 2:05/)).toBeTruthy()
+    expect(screen.getByText(/Call ended, 2:05/)).toBeTruthy()
   })
 
   it('removes exactly its own socket listeners on unmount', async () => {

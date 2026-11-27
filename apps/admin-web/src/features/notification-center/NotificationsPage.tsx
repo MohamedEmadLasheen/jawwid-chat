@@ -2,13 +2,13 @@ import { useId, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { LOCALE_TAG, useI18n } from '@/core/i18n/I18nProvider'
-import { Badge } from '@/shared/components/Badge'
 import { FilterChips } from '@/shared/components/FilterChips'
 import { Icon, type IconName } from '@/shared/components/Icon'
 import { PageHeader } from '@/shared/components/PageHeader'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
 import { inboxApi, inboxKeys, routeFor, type InboxEntryDto, type InboxTab, type NotificationSettingsDto } from './api'
-import { CATEGORIES, N, SYSTEM, TABS, useCopy } from './copy'
+import { CATEGORIES, N, SYSTEM, TABS, useCopy, type Pair } from './copy'
+import { fill, relativeTime } from '@/features/admin/copy'
 import './notification-center.css'
 
 type View = InboxTab | 'settings'
@@ -21,6 +21,18 @@ const CATEGORY_ICON: Record<string, IconName> = {
   task: 'tasks',
   announcement: 'megaphoneSimple',
   system: 'info',
+}
+
+const DAY_MS = 86_400_000
+
+/** What an entry's one action opens, said on its button. */
+const OPEN_LABEL: Record<string, Pair> = {
+  open_conversation: { en: 'Open conversation', ar: 'افتح المحادثة' },
+  open_calls: { en: 'Open calls', ar: 'افتح المكالمات' },
+  view_payments: { en: 'Open payments', ar: 'افتح المدفوعات' },
+  open_case: { en: 'Open escalation', ar: 'افتح التصعيد' },
+  open_task: { en: 'Open task', ar: 'افتح المهمة' },
+  open_teacher_records: { en: "Open teacher's record", ar: 'افتح سجل المعلم' },
 }
 
 /** The reader's own calendar day of an instant, as a sortable key. */
@@ -37,9 +49,11 @@ const dayKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padSt
  */
 export function NotificationsPage() {
   const tx = useCopy()
-  const { number } = useI18n()
   const client = useQueryClient()
-  const counts = useQuery({ queryKey: inboxKeys.counts, queryFn: inboxApi.counts })
+  const counts = useQuery({
+    queryKey: inboxKeys.counts,
+    queryFn: inboxApi.counts,
+  })
   const tabs = counts.data?.tabs ?? ['all']
   const [chosen, setView] = useState<View>('all')
   const view: View = chosen === 'settings' || tabs.includes(chosen) ? chosen : 'all'
@@ -55,15 +69,9 @@ export function NotificationsPage() {
       <div className="page__inner">
         <PageHeader
           title={tx(N.title)}
-          subtitle={tx(N.subtitle)}
-          figures={
-            unread === undefined
-              ? undefined
-              : [{ key: 'unread', label: tx(TABS.unread), value: number(unread), tone: unread > 0 ? 'key' : 'quiet' }]
-          }
           actions={
             view !== 'settings' && (unread ?? 0) > 0 ? (
-              <button type="button" className="btn btn--primary" onClick={() => readAll.mutate()} disabled={readAll.isPending}>
+              <button type="button" className="btn" onClick={() => readAll.mutate()} disabled={readAll.isPending}>
                 <Icon name="doubleCheck" size={16} />
                 {tx(N.markAllRead)}
               </button>
@@ -76,7 +84,11 @@ export function NotificationsPage() {
               onChange={setView}
               variant="tabs"
               options={[
-                ...tabs.map((t) => ({ value: t as View, label: tx(TABS[t]), count: t === 'all' ? undefined : counts.data?.perTab[t] })),
+                ...tabs.map((t) => ({
+                  value: t as View,
+                  label: tx(TABS[t]),
+                  count: t === 'all' || !counts.data?.perTab[t] ? undefined : counts.data.perTab[t],
+                })),
                 { value: 'settings' as View, label: tx(N.settingsTab) },
               ]}
             />
@@ -112,10 +124,19 @@ function Agenda({ tab, onShowAll }: { tab: InboxTab; onShowAll: () => void }) {
     navigate(to)
   }
 
-  // Grouped by the reader's own day, newest first as the server sends them.
+  // What still asks the reader to act leads, the nearest breach first (no due time last).
+  const asks = useMemo(
+    () =>
+      entries
+        .filter((e) => e.requiresAction && !e.acted)
+        .sort((x, y) => (x.dueAt ? Date.parse(x.dueAt) : Infinity) - (y.dueAt ? Date.parse(y.dueAt) : Infinity)),
+    [entries],
+  )
+  // The rest, grouped by the reader's own day, newest first as the server sends them.
   const days = useMemo(() => {
     const out: Array<{ key: string; entries: InboxEntryDto[] }> = []
     for (const e of entries) {
+      if (e.requiresAction && !e.acted) continue
       const key = dayKey(new Date(e.at))
       const last = out[out.length - 1]
       if (last && last.key === key) last.entries.push(e)
@@ -126,14 +147,94 @@ function Agenda({ tab, onShowAll }: { tab: InboxTab; onShowAll: () => void }) {
   const now = new Date()
   const today = dayKey(now)
   const yesterday = dayKey(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1))
-  const dayFmt = new Intl.DateTimeFormat(LOCALE_TAG[locale], { weekday: 'long', day: 'numeric', month: 'long' })
+  const dayFmt = new Intl.DateTimeFormat(LOCALE_TAG[locale], {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  })
   // The reader's own clock, as the days are the reader's own.
-  const clock = new Intl.DateTimeFormat(LOCALE_TAG[locale], { hour: 'numeric', minute: '2-digit' })
+  const clock = new Intl.DateTimeFormat(LOCALE_TAG[locale], {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  })
   const dayLabel = (key: string) => (key === today ? tx(N.today) : key === yesterday ? tx(N.yesterday) : dayFmt.format(new Date(`${key}T12:00:00`)))
 
+  const row = (entry: InboxEntryDto, inAsks = false) => {
+    const to = routeFor(entry.action)
+    const waiting = entry.requiresAction && !entry.acted
+    // Time to breach, where the server gives a due time: amber in the last day, red once it has passed.
+    const due = waiting && entry.dueAt ? Date.parse(entry.dueAt) - now.getTime() : null
+    const breach = due === null ? null : due < 0 ? 'late' : due < DAY_MS ? 'soon' : 'later'
+    return (
+      <li key={entry.id} className={`nc-item${entry.read ? '' : ' nc-item--unread'}`} data-testid={`nc-${entry.id}`}>
+        <span className="nc-item__icon" title={tx(CATEGORIES[entry.category] ?? SYSTEM)}>
+          <Icon name={entry.action?.kind === 'open_case' ? 'needsAction' : (CATEGORY_ICON[entry.category] ?? 'info')} size={18} />
+          {!entry.read && <span className="nc-item__dot" role="img" aria-label={tx(TABS.unread)} />}
+        </span>
+        <div className="nc-item__text">
+          <span className="nc-item__title">
+            <bdi>{entry.title}</bdi>
+          </span>
+          {entry.body && (
+            <p className="nc-item__body">
+              <bdi>{entry.body}</bdi>
+            </p>
+          )}
+          {waiting && !(inAsks && entry.dueAt) && (
+            <p className={`nc-item__due${breach ? ` nc-item__due--${breach}` : ''}`}>
+              {/* Inside the group that already says it, only the time to breach. */}
+              {!inAsks && <span className="nc-item__ask">{tx(TABS.action)}</span>}
+              {entry.dueAt && (
+                <span>
+                  {fill(tx(breach === 'late' ? N.wasDue : N.dueBy), {
+                    when: relativeTime(entry.dueAt, locale, now),
+                  })}
+                </span>
+              )}
+            </p>
+          )}
+        </div>
+        {/* In the sheet of what asks for action, the time slot holds the time to breach, its measure. */}
+        {inAsks && entry.dueAt ? (
+          <time className={`nc-item__time nc-item__due nc-item__due--${breach}`} dateTime={entry.dueAt}>
+            {fill(tx(breach === 'late' ? N.wasDue : N.dueBy), { when: relativeTime(entry.dueAt, locale, now) })}
+          </time>
+        ) : (
+          <time className="nc-item__time" dateTime={entry.at}>
+            {/* Out of the day agenda a time needs its day. */}
+            {inAsks && dayKey(new Date(entry.at)) !== today ? `${dayLabel(dayKey(new Date(entry.at)))} ` : ''}
+            {clock.format(new Date(entry.at))}
+          </time>
+        )}
+        <div className="nc-item__actions">
+          {to && (
+            <button
+              type="button"
+              className={waiting ? 'btn btn--sm nc-item__open' : 'btn btn--sm btn--ghost nc-item__open'}
+              onClick={() => void open(entry, to)}
+            >
+              {tx(OPEN_LABEL[entry.action?.kind ?? ''] ?? N.open)}
+            </button>
+          )}
+        </div>
+      </li>
+    )
+  }
+
   return (
-    <div className="sheet nc-sheet">
-      <QueryBoundary isLoading={list.isLoading} error={list.error} onRetry={() => void list.refetch()}>
+    <QueryBoundary isLoading={list.isLoading} error={list.error} onRetry={() => void list.refetch()}>
+      {/* What asks for action stands on its own sheet, before the agenda. */}
+      {asks.length > 0 && (
+        <section className="sheet nc-sheet nc-asks" aria-labelledby="nc-asks">
+          <h2 className="nc-asks__head" id="nc-asks">
+            {tx(N.asks)}
+            <span className="count count--urgent">{asks.length}</span>
+          </h2>
+          <ul className="nc-list">{asks.map((e) => row(e, true))}</ul>
+        </section>
+      )}
+      <div className="sheet nc-sheet">
         {entries.length === 0 && (
           <EmptyState
             title={tx(tab === 'all' ? N.empty : N.emptyTab)}
@@ -151,43 +252,8 @@ function Agenda({ tab, onShowAll }: { tab: InboxTab; onShowAll: () => void }) {
           <section key={day.key} className="nc-day" aria-labelledby={`nc-day-${day.key}`}>
             <h2 className="nc-day__head" id={`nc-day-${day.key}`}>
               <span>{dayLabel(day.key)}</span>
-              {day.entries.some((e) => !e.read) && <span className="count">{day.entries.filter((e) => !e.read).length}</span>}
             </h2>
-            <ul className="nc-list">
-              {day.entries.map((entry) => {
-                const to = routeFor(entry.action)
-                return (
-                  <li key={entry.id} className={`nc-item${entry.read ? '' : ' nc-item--unread'}`} data-testid={`nc-${entry.id}`}>
-                    <span className="nc-item__dot" aria-hidden="true" />
-                    <span className="nc-item__icon" title={tx(CATEGORIES[entry.category] ?? SYSTEM)}>
-                      <Icon name={CATEGORY_ICON[entry.category] ?? 'info'} size={18} />
-                    </span>
-                    <div className="nc-item__text">
-                      <span className="nc-item__title">
-                        <bdi>{entry.title}</bdi>
-                        {entry.requiresAction && !entry.acted && <Badge tone="warn">{tx(TABS.action)}</Badge>}
-                      </span>
-                      {entry.body && <p className="nc-item__body"><bdi>{entry.body}</bdi></p>}
-                    </div>
-                    <time className="nc-item__time" dateTime={entry.at}>
-                      {clock.format(new Date(entry.at))}
-                    </time>
-                    <div className="nc-item__actions">
-                      {to && (
-                        <button
-                          type="button"
-                          className="btn btn--sm nc-item__open"
-                          title={tx(N.open)}
-                          onClick={() => void open(entry, to)}
-                        >
-                          {tx(N.open)}
-                        </button>
-                      )}
-                    </div>
-                  </li>
-                )
-              })}
-            </ul>
+            <ul className="nc-list">{day.entries.map((e) => row(e))}</ul>
           </section>
         ))}
         {list.hasNextPage && (
@@ -197,8 +263,8 @@ function Agenda({ tab, onShowAll }: { tab: InboxTab; onShowAll: () => void }) {
             </button>
           </div>
         )}
-      </QueryBoundary>
-    </div>
+      </div>
+    </QueryBoundary>
   )
 }
 
@@ -208,52 +274,46 @@ const fromClock = (v: string): number | null => {
   return h !== undefined && m !== undefined && Number.isInteger(h) && Number.isInteger(m) ? h * 60 + m : null
 }
 
-type Group = 'push' | 'quiet'
-
-/** Settings: the groups at the start, one group's sheet beside them. */
+/** Settings: the two groups stacked, each on its own sheet; every change is applied as it is made. */
 function SettingsPanel() {
   const tx = useCopy()
   const client = useQueryClient()
-  const [group, setGroup] = useState<Group>('push')
-  const settings = useQuery({ queryKey: inboxKeys.settings, queryFn: inboxApi.settings })
+  const settings = useQuery({
+    queryKey: inboxKeys.settings,
+    queryFn: inboxApi.settings,
+  })
   const save = useMutation({
     mutationFn: (body: Record<string, unknown>) => inboxApi.setSettings(body),
     onSuccess: (next) => client.setQueryData(inboxKeys.settings, next),
   })
   const s = settings.data
-  const groups: Array<{ key: Group; label: string; icon: IconName }> = [
+  const groups: Array<{ key: 'push' | 'quiet'; label: string; icon: IconName }> = [
     { key: 'push', label: tx(N.pushHeading), icon: 'notifications' },
     { key: 'quiet', label: tx(N.quietHours), icon: 'bellOff' },
   ]
 
   return (
     <section className="nc-settings" aria-labelledby="nc-settings-title">
-      <h2 id="nc-settings-title" className="sr-only">{tx(N.settings)}</h2>
-      <nav className="nc-settings__nav" aria-label={tx(N.settings)}>
-        {groups.map((g) => (
-          <button
-            key={g.key}
-            type="button"
-            className="nc-settings__link"
-            aria-current={group === g.key ? 'true' : undefined}
-            onClick={() => setGroup(g.key)}
-          >
-            <Icon name={g.icon} size={18} />
-            {g.label}
-          </button>
-        ))}
-      </nav>
-      <div className="sheet nc-settings__sheet">
-        <div className="sheet__head">
-          <h3 className="sheet__title">{groups.find((g) => g.key === group)!.label}</h3>
+      <h2 id="nc-settings-title" className="sr-only">
+        {tx(N.settings)}
+      </h2>
+      {groups.map((g) => (
+        <div key={g.key} className="sheet nc-settings__sheet">
+          <div className="sheet__head">
+            <h3 className="sheet__title">
+              <Icon name={g.icon} size={18} />
+              {g.label}
+            </h3>
+            {save.isPending && <span className="nc-settings__state">{tx(N.saving)}</span>}
+          </div>
+          <div className="sheet__body">
+            <QueryBoundary isLoading={settings.isLoading} error={settings.error} onRetry={() => void settings.refetch()} compact>
+              {s && g.key === 'push' && <PushForm settings={s} saving={save.isPending} onSave={(body) => save.mutate(body)} />}
+              {s && g.key === 'quiet' && <QuietForm settings={s} saving={save.isPending} onSave={(body) => save.mutate(body)} />}
+            </QueryBoundary>
+          </div>
         </div>
-        <div className="sheet__body">
-          <QueryBoundary isLoading={settings.isLoading} error={settings.error} onRetry={() => void settings.refetch()} compact>
-            {s && group === 'push' && <PushForm settings={s} saving={save.isPending} onSave={(body) => save.mutate(body)} />}
-            {s && group === 'quiet' && <QuietForm settings={s} saving={save.isPending} onSave={(body) => save.mutate(body)} />}
-          </QueryBoundary>
-        </div>
-      </div>
+      ))}
     </section>
   )
 }
@@ -277,7 +337,11 @@ function PushForm({ settings, saving, onSave }: FormProps) {
                 type="checkbox"
                 checked={c.locked || c.push}
                 disabled={c.locked || saving}
-                onChange={(e) => onSave({ categories: [{ category: c.category, push: e.target.checked }] })}
+                onChange={(e) =>
+                  onSave({
+                    categories: [{ category: c.category, push: e.target.checked }],
+                  })
+                }
               />
               <Icon name={CATEGORY_ICON[c.category] ?? 'info'} size={18} />
               <span className="nc-check__name">{tx(CATEGORIES[c.category] ?? SYSTEM)}</span>
@@ -316,12 +380,16 @@ function QuietForm({ settings, saving, onSave }: FormProps) {
       <p className="field__hint nc-settings__hint">{tx(N.quietHint)}</p>
       <div className="nc-hours">
         <div className="field">
-          <label className="field__label" htmlFor={`${ids}-from`}>{tx(N.from)}</label>
+          <label className="field__label" htmlFor={`${ids}-from`}>
+            {tx(N.from)}
+          </label>
           {/* A native time control: left to right in both languages, under its label. */}
           <input id={`${ids}-from`} className="input" type="time" dir="ltr" value={from} onChange={(e) => setFrom(e.target.value)} />
         </div>
         <div className="field">
-          <label className="field__label" htmlFor={`${ids}-until`}>{tx(N.until)}</label>
+          <label className="field__label" htmlFor={`${ids}-until`}>
+            {tx(N.until)}
+          </label>
           <input id={`${ids}-until`} className="input" type="time" dir="ltr" value={until} onChange={(e) => setUntil(e.target.value)} />
         </div>
       </div>

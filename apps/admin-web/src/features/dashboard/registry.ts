@@ -113,16 +113,17 @@ export const TILES: Readonly<Record<string, TileSpec>> = {
     backlog: true,
     href: () => '/chat?view=waiting',
   },
+  // An escalation assigned to the manager, or open in their department, is work waiting on them.
   'cases.mine_open': {
     label: { en: 'Cases assigned to me', ar: 'حالات مسندة إليّ' },
     icon: 'tasks',
-    backlog: false,
+    backlog: true,
     href: () => '/cases?tab=mine',
   },
   'cases.department_open': {
     label: { en: 'Open cases in the department', ar: 'حالات مفتوحة في القسم' },
     icon: 'tasks',
-    backlog: false,
+    backlog: true,
     href: () => '/cases?tab=department',
   },
   'cases.overdue': {

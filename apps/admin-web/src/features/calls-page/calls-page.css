@@ -2,7 +2,7 @@
  * The Calls page (PD-13). Every class carries the `cp-` prefix -- nothing here
  * styles a shared or generic name -- uses the paper tokens (so dark mode
  * follows) and logical properties only (so RTL is a mirror, not overrides).
- * Gold never carries text here.
+ * Gold is not used here (it means "here and now" in the navigation only).
  */
 
 /* ------------------------------------------------------------- the page */
@@ -19,10 +19,9 @@
   gap: var(--space-3);
   margin-block-end: var(--space-4);
   padding: 6px var(--space-3);
-  border: 1px solid var(--hairline);
-  border-inline-start: 3px solid var(--success);
-  border-radius: var(--radius);
-  background: var(--surface);
+  border-radius: 8px;
+  background: var(--done-tint);
+  color: var(--ink);
   font-size: var(--fs-sm);
 }
 
@@ -31,7 +30,9 @@
 @media (max-width: 1099px) {
   .cp-cols { grid-template-columns: minmax(0, 1fr); }
 }
+.cp-search { flex: 0 1 280px; min-inline-size: 0; }
 .cp-search .search { max-inline-size: none; }
+.cp-search .input { min-block-size: var(--control-h-sm); }
 .cp-search .input { background-color: var(--surface); }
 
 .cp-section { min-inline-size: 0; overflow: hidden; }
@@ -45,12 +46,13 @@
 /* An agenda: a heading per day, and each call hour first in the display face. */
 .cp-day__head {
   margin: 0;
-  padding: 8px var(--space-4) 7px;
-  background: var(--paper);
-  border-block-end: 1px solid var(--hairline-soft);
-  font-size: 12.5px;
+  padding: 8px var(--space-4);
+  background: var(--surface-2);
+  border-block-end: 1px solid var(--line-2);
+  font-family: var(--font-head);
+  font-size: var(--fs-sm);
   font-weight: 600;
-  color: var(--ink-muted);
+  color: var(--ink-2);
 }
 .cp-day + .cp-day .cp-day__head { border-block-start: 1px solid var(--hairline-soft); }
 .cp-up {
@@ -64,9 +66,9 @@
 }
 .cp-list > :last-child { border-block-end: 0; }
 .cp-up__time {
-  font-family: var(--display);
+  font-family: var(--font-head);
   font-size: var(--fs-xl);
-  font-weight: 600;
+  font-weight: 700;
   line-height: 1.15;
   font-variant-numeric: tabular-nums lining-nums;
   color: var(--ink);
@@ -112,7 +114,8 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.cp-row__name--missed { color: var(--terracotta); }
+/* Missed is said by its tag; the name stays in ink. */
+.cp-row__name--missed { color: var(--ink); }
 .cp-row__sub {
   display: inline-flex;
   align-items: center;
@@ -124,9 +127,9 @@
 }
 .cp-row__badges { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px var(--space-2); }
 .cp-row__end { display: inline-flex; align-items: center; gap: var(--space-1); flex: none; }
-.cp-row__time { font-size: var(--fs-sm); color: var(--ink-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.cp-row__time { font-size: var(--fs-sm); color: var(--ink-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .cp-row__call { gap: 6px; }
-.cp-row__call .icon { color: var(--teal); }
+.cp-row__call .icon { color: var(--ink-2); }
 .cp-row__icon { color: var(--teal); display: inline-flex; }
 
 /* -------------------------------------------------------------- history */
@@ -134,28 +137,28 @@
 /* A past call: which way it went, who, how it ended, how long, when, and Call. */
 .cp-recent {
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) 56px minmax(72px, auto) minmax(84px, auto);
+  grid-template-columns: 34px minmax(0, 1fr) 72px minmax(80px, auto) 150px;
   align-items: center;
   gap: var(--space-3);
   min-block-size: 60px;
   padding: 9px var(--space-4);
   border-block-end: 1px solid var(--hairline-soft);
 }
+/* Which way it went: a plain mark, no tile; a missed call's mark is red, as its tag is. */
 .cp-recent__dir {
   display: grid;
   place-items: center;
   inline-size: 34px;
   block-size: 34px;
-  border-radius: var(--radius);
-  background: var(--paper);
   color: var(--ink-muted);
 }
-.cp-recent[data-direction='outgoing'] .cp-recent__dir { color: var(--teal); }
-.cp-recent--missed .cp-recent__dir { background: var(--terracotta-tint); color: var(--terracotta); }
+.cp-recent--missed .cp-recent__dir { color: var(--ink-2); }
 .cp-recent__who { display: flex; align-items: center; gap: 8px; min-inline-size: 0; }
-.cp-recent__facts { display: flex; flex-wrap: wrap; align-items: center; gap: 2px var(--space-2); font-size: var(--fs-xs); color: var(--ink-muted); }
-.cp-recent__len { font-size: var(--fs-sm); color: var(--ink-muted); font-variant-numeric: tabular-nums; text-align: end; }
-.cp-recent .cp-row__time { text-align: end; }
+.cp-recent__facts { display: flex; flex-wrap: wrap; align-items: center; gap: 2px var(--space-3); font-size: var(--fs-sm); color: var(--ink-muted); }
+.cp-recent__facts .badge { font-size: var(--fs-sm); }
+.cp-recent__len { display: inline-flex; align-items: center; justify-content: flex-end; gap: 4px; font-size: var(--fs-sm); color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+.cp-recent__outcome { color: var(--ink-2); }
+.cp-recent .cp-row__time { text-align: start; }
 .cp-recent .row-actions2 { justify-self: end; }
 @media (max-width: 767px) {
   .cp-recent { grid-template-columns: 34px minmax(0, 1fr) auto; padding-inline: var(--space-3); row-gap: 4px; }
@@ -221,7 +224,7 @@
 .cp-picker { display: grid; gap: var(--space-3); margin-block-start: var(--space-4); }
 .cp-picker__scroll { max-block-size: min(55vh, 460px); overflow-y: auto; }
 .cp-picker__section + .cp-picker__section { margin-block-start: var(--space-4); }
-.cp-picker .cp-section__title { font-size: 12.5px; font-weight: 500; color: var(--ink-muted); }
+.cp-picker .cp-section__title { font-size: var(--fs-xs); font-weight: 600; color: var(--ink-2); }
 .cp-picker .cp-row { padding-inline: 2px; min-block-size: 52px; }
 
 .cp-picked {
@@ -243,16 +246,16 @@
 
 /* ---------------------------------------------------------- chat card */
 
-/* A reference card in a thread: ruled, with a gold start edge, not a bubble. */
+/* A reference card in a thread: a white surface with a teal start edge, not a bubble. */
 .cp-card {
   display: grid;
   gap: var(--space-1);
   min-inline-size: 220px;
   max-inline-size: 360px;
   padding: var(--space-3);
-  border: 1px solid var(--hairline);
-  border-inline-start: 3px solid var(--gold);
-  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  border-inline-start: 3px solid var(--teal);
+  border-radius: 8px;
   background: var(--surface);
   color: var(--ink);
 }
@@ -290,14 +293,14 @@
   gap: var(--space-2);
   inline-size: min(100%, 440px);
   padding: var(--space-5) 0 0;
-  border-block-start: 2px solid var(--gold);
+  border-block-start: 1px solid var(--line);
 }
 .cp-landing__glyph { display: inline-flex; color: var(--teal); }
 .cp-landing__title {
   margin: 0;
-  font-family: var(--display);
+  font-family: var(--font-head);
   font-size: var(--fs-2xl);
-  font-weight: 600;
+  font-weight: 700;
   line-height: 1.25;
 }
 html[lang='ar'] .cp-landing__title { font-weight: 700; line-height: 1.45; }
@@ -307,4 +310,12 @@ html[lang='ar'] .cp-landing__title { font-weight: 700; line-height: 1.45; }
 
 @media (max-width: 480px) {
   .cp-form__row { grid-template-columns: 1fr; }
+}
+
+.cp-recent__sep { margin-inline-start: calc(-1 * var(--space-3) + 1px); }
+/* One column: what is coming up, then who called, then the pinned chats. */
+@media (max-width: 1099px) {
+  .cp-cols { display: flex; flex-direction: column; }
+  .cp-cols__start { display: contents; }
+  .cp-section--fav { order: 3; }
 }
