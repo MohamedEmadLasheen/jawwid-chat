@@ -660,8 +660,8 @@ html[lang='ar'] .field__label { font-size: 13.5px; }
 .badge--outline { border: 0; color: var(--ink-muted); }
 /* PD-32: the Trial label keeps its own violet pair, the same as the app's. It is a
    small square tag with its own glyph, so it takes no status dot. */
-.badge.badge--trial { background: var(--trial-bg) !important; color: var(--trial-fg); padding: 1px 7px; border-radius: var(--radius-sm); font-size: var(--fs-xs); gap: 4px; }
-.badge.badge--trial::before { display: none; }
+:root .badge.badge--trial { background: var(--trial-bg) !important; color: var(--trial-fg); padding: 1px 7px; border-radius: var(--radius-sm); font-size: var(--fs-xs); gap: 4px; }
+:root .badge.badge--trial::before { display: none; }
 /* A badge that only counts is a number, not a status. */
 .badge--count::before { display: none; }
 
@@ -952,11 +952,11 @@ html[lang='ar'] .dialog__title { font-weight: 700; }
 /* ============================================================== overlays */
 
 .menu, [role='menu'], .searchable-select__list, .ss__list { border-radius: var(--radius-lg); }
-.menu__popover { box-shadow: var(--shadow-pop); border-color: var(--hairline); border-radius: var(--radius-lg); animation: fade var(--dur-fast) var(--ease-out); }
-.menu__item { font-size: var(--fs-sm); border-radius: var(--radius); }
-.menu__item .icon { color: var(--teal); }
-/* The bell's count sits on its corner, clear of the bell. */
-.nc-bell__count {
+:root .menu__popover { box-shadow: var(--shadow-pop); border-color: var(--hairline); border-radius: var(--radius-lg); animation: fade var(--dur-fast) var(--ease-out); }
+:root .menu__item { font-size: var(--fs-sm); border-radius: var(--radius); }
+:root .menu__item .icon { color: var(--teal); }
+/* The bell's count sits on its corner, clear of the bell. (Feature sheets load after this one: the top bar's scope outranks theirs.) */
+.topbar .nc-bell__count {
   inset-block-start: 1px;
   inset-inline-end: -3px;
   min-inline-size: 16px;
@@ -1058,8 +1058,8 @@ html[lang='ar'] .auth .login__title { font-weight: 700; line-height: 1.4; }
 .login:not(.auth) { background: var(--paper); }
 .login:not(.auth) .login__card { border: 1px solid var(--hairline); border-radius: var(--radius-lg); box-shadow: none; }
 .login:not(.auth) .login__title { font-family: var(--display); }
-/* A picker's list floats over the page. */
-.ss__popup { box-shadow: var(--shadow-pop); border-color: var(--hairline); border-radius: var(--radius-lg); }
+/* A picker's list floats over the page. (Component sheets load after this one; `:root` outranks them.) */
+:root .ss__popup { box-shadow: var(--shadow-pop); border-color: var(--hairline); border-radius: var(--radius-lg); }
 
 /* The rail is paper in both schemes, so its lockup follows the scheme like any other. */
 @media (prefers-color-scheme: dark) {

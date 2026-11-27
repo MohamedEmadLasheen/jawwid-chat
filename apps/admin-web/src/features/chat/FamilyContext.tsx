@@ -58,6 +58,8 @@ export function FamilyContext({ c }: { c: ChatConversation }) {
       queryKey: profileKeys.student(child.id),
       queryFn: () => profilesApi.student(child.id),
       staleTime: 5 * 60_000,
+      // A child outside this viewer's scope answers 404: asked once, then left without a teacher's name.
+      retry: false,
     })),
   })
 
