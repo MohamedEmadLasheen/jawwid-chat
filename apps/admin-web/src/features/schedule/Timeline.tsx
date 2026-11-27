@@ -359,7 +359,7 @@ export function DayView({
     const headW = head?.getBoundingClientRect().width ?? 0
     // Bring the anchor to just past the sticky teacher column.
     // A whole hour just past the sticky teacher column and the edge control.
-    const gutter = a.left > s.left + headW + 1 || a.right < s.right - headW - 1 ? 32 : 0
+    const gutter = scroller.scrollWidth > scroller.clientWidth + 1 ? 34 : 0
     const delta = rtl ? -(s.right - headW - gutter - a.right) : a.left - (s.left + headW + gutter)
     scroller.scrollBy({ left: delta })
     // Only when the day changes: a re-read keeps where the person scrolled to.

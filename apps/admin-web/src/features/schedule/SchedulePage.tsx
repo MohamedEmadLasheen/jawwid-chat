@@ -62,7 +62,7 @@ export function SchedulePage() {
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [byTeacher, setByTeacher] = useState(false)
   const [more, setMore] = useStoredFlag('jawwid.schedule.filters-open')
-  const [attnFolded, setAttnFolded] = useStoredFlag('jawwid.schedule.attention-folded', typeof window !== 'undefined' && window.innerWidth < 1366 && window.innerWidth > 720)
+  const [attnFolded, setAttnFolded] = useStoredFlag('jawwid.schedule.attention-folded', typeof window !== 'undefined' && window.innerWidth < 1200 && window.innerWidth > 720)
   const [attnFoldedNarrow, setAttnFoldedNarrow] = useState(true)
   // What an attention item points at: while hovered, and after it is chosen.
   const [hover, setHover] = useState<Highlight | null>(null)
@@ -211,9 +211,9 @@ export function SchedulePage() {
           <div className="mast__row sc-mast__row">
             <div className="sc-mast__title">
               <h1 className="page-header__title">{tx(S.title)}</h1>
-              <DateJump title={title} date={state.date} label={tx(S.range)} onPick={(date) => update({ ...state, date })} />
+              <DateJump title={title} zone={zoneLabel(options.data?.zone ?? ACADEMY_ZONE, locale)} date={state.date} label={tx(S.range)} onPick={(date) => update({ ...state, date })} />
               {!narrow && steps}
-              <span className="sc-zone">{zoneLabel(options.data?.zone ?? ACADEMY_ZONE, locale)}</span>
+              <span className="sc-zone" title={zoneLabel(options.data?.zone ?? ACADEMY_ZONE, locale)}>{zoneLabel(options.data?.zone ?? ACADEMY_ZONE, locale)}</span>
             </div>
             <div className="page-header__actions sc-mast__actions">
               {narrow && steps}
@@ -444,7 +444,7 @@ function moveBetweenBlocks(e: ReactKeyboardEvent<HTMLDivElement>) {
  * The range being looked at, in the display face; it opens a small popover to
  * jump to a date. Escape and a click outside close it.
  */
-function DateJump({ title, date, label, onPick }: { title: string; date: string; label: string; onPick: (date: string) => void }) {
+function DateJump({ title, zone, date, label, onPick }: { title: string; zone: string; date: string; label: string; onPick: (date: string) => void }) {
   const [open, setOpen] = useState(false)
   const box = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -464,7 +464,7 @@ function DateJump({ title, date, label, onPick }: { title: string; date: string;
   }, [open])
   return (
     <div className="sc-jump" ref={box}>
-      <button type="button" className="sc-jump__button" aria-haspopup="dialog" aria-expanded={open} title={label} onClick={() => setOpen((v) => !v)}>
+      <button type="button" className="sc-jump__button" aria-haspopup="dialog" aria-expanded={open} title={`${label} (${zone})`} onClick={() => setOpen((v) => !v)}>
         <span className="sc-range" aria-live="polite">{title}</span>
         <Icon name="chevronDown" size={16} />
       </button>

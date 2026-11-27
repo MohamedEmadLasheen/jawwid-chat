@@ -32,6 +32,7 @@ function DayHead({ day, today, narrow, onOpen }: { day: string; today: string; n
       <button
         type="button"
         className="sc-dayhead__button"
+        title={narrow ? tx(S.noWorkingHours) : undefined}
         aria-label={`${tx(S.openDay, { teacher: tx(S.allTeachers), day: dayLabel(day, locale, { weekday: 'long', day: 'numeric', month: 'long' }) })}${isToday ? `, ${tx(S.todayMark)}` : ''}`}
         onClick={onOpen}
       >
@@ -126,12 +127,10 @@ export function WeekBoard({
                     <span className="sc-cell__n">{h(booked)}</span>
                     <span className="sc-cell__of">{tx(S.hours, { h: '' }).trim()}</span>
                   </span>
-                  <span className="sc-cell__foot">
-                    <span className="sc-cell__bar" aria-hidden="true">
-                      {base > 0 && <span style={{ inlineSize: `${load * 100}%` }} />}
-                    </span>
-                    {mark && <span className={`sc-mark sc-mark--${mark}`}>{tx(MARK[mark])}</span>}
+                  <span className="sc-cell__bar" aria-hidden="true">
+                    {base > 0 && <span style={{ inlineSize: `${load * 100}%` }} />}
                   </span>
+                  {mark && <span className={`sc-mark sc-mark--${mark}`}>{tx(MARK[mark])}</span>}
                 </button>
               </div>
             )
@@ -160,6 +159,12 @@ export function MonthView({ data, today, onOpenDay }: { data: CalendarSummary; t
   }, [data.from])
   const month = daysOf(data.from, data.to)
   const cells = useMemo(() => new Map(data.cells.map((c) => [`${c.teacherId}|${c.day}`, c])), [data.cells])
+  // Lessons after hours on most of the month's days are one fact about the teacher, said once.
+  const chronicOutside = useMemo(() => {
+    const days = new Map<string, number>()
+    for (const c of data.cells) if (c.outsideMinutes > 0) days.set(c.teacherId, (days.get(c.teacherId) ?? 0) + 1)
+    return new Map([...days].filter(([, n]) => n >= 5))
+  }, [data.cells])
   const working = useMemo(
     () => month.map((d) => data.cells.some((c) => c.day === d && (c.shiftMinutes > 0 || c.workMinutes > 0 || c.lessons > 0))),
     [month, data.cells],
@@ -186,7 +191,7 @@ export function MonthView({ data, today, onOpenDay }: { data: CalendarSummary; t
       </div>
       {data.teachers.map((t, row) => (
         <div key={t.id} className="sc-row" role="row" aria-label={t.name}>
-          <TeacherHead t={t} />
+          <TeacherHead t={t} outsideDays={chronicOutside.get(t.id) ?? 0} />
           {month.map((d, i) => {
             const c = cells.get(`${t.id}|${d}`)
             if (!c || (!working[i] && c.lessons === 0)) return <div key={d} role="cell" className={`sc-heat sc-heat--none${working[i] ? '' : ' sc-heat--narrow'}`} />
@@ -207,7 +212,9 @@ export function MonthView({ data, today, onOpenDay }: { data: CalendarSummary; t
               `sc-heat--${off ? 'off' : heat(c)}`,
               c.inShiftLeaveMinutes > 0 && c.inShiftLeaveMinutes >= c.shiftMinutes ? 'sc-heat--leave' : '',
               c.emptyMinutes > 0 ? 'sc-heat--has-empty' : '',
-              c.outsideMinutes > 0 ? 'sc-heat--outside' : '',
+              c.outsideMinutes > 0 && !chronicOutside.has(t.id) ? 'sc-heat--outside' : '',
+              // A whole day of leave that still holds lessons: they need a substitute.
+              c.shiftMinutes > 0 && c.inShiftLeaveMinutes >= c.shiftMinutes && c.lessons > 0 ? 'sc-heat--uncovered' : '',
               data.lessonFilter && c.matching > 0 ? 'sc-heat--match' : '',
               d === today ? 'sc-heat--today' : '',
             ]
