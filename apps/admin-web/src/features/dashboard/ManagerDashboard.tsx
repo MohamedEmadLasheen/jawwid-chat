@@ -61,11 +61,11 @@ export function useDashboardSections() {
 /** The sections `useDashboardSections` decided to show, in the registry's order. */
 export function DashboardSections({ shown }: { shown: ReturnType<typeof useDashboardSections>['shown'] }) {
   return (
-    <>
+    <div className="dash-book">
       {shown.map(({ spec, query }) => (
         <Section key={spec.key} spec={spec} query={query} />
       ))}
-    </>
+    </div>
   )
 }
 
@@ -74,81 +74,86 @@ function Section({ spec, query }: { spec: SectionSpec; query: SectionQuery }) {
   const { t, time } = useI18n()
   const titleId = `dash-section-${spec.key}`
   const tiles = tilesOf(query.data)
+  const present = new Set(tiles.map((x) => x.key))
+  // What wants doing is set large; the section's other figures are plain lines under it.
+  const waiting = tiles.filter((tile) => TILES[tile.key]!.backlog && tile.count > 0)
+  const rest = tiles.filter((tile) => !waiting.includes(tile))
 
   return (
     <section className="dash-section" aria-labelledby={titleId}>
       <h2 id={titleId} className="dash-section__title">
         {tx(spec.title)}
       </h2>
-      {query.isLoading ? (
-        <div role="status" aria-live="polite">
-          <span className="sr-only">{t('common.loading')}</span>
-          <div className="kpi-grid">
+      <div className="dash-section__body">
+        {query.isLoading ? (
+          <div role="status" aria-live="polite" className="dash-loading">
+            <span className="sr-only">{t('common.loading')}</span>
             {[0, 1, 2].map((i) => (
-              <Skeleton key={i} height={118} radius={12} />
+              <Skeleton key={i} height={58} radius={4} />
             ))}
           </div>
-        </div>
-      ) : !query.data ? (
-        // A figure that failed is never shown as zero.
-        <div className="state state--compact" role="alert">
-          <span className="state__icon" aria-hidden="true">
-            <Icon name="alert" size={22} />
-          </span>
-          <div className="state__title">{tx(D.failed)}</div>
-          <button type="button" className="btn btn--sm" onClick={() => void query.refetch()}>
-            <Icon name="refresh" size={16} />
-            {t('common.retry')}
-          </button>
-        </div>
-      ) : (
-        <>
-          {/* Figures kept from an earlier read are shown only with this warning. */}
-          {query.error && (
-            <div className="stale-banner" role="status">
-              <Icon name="alert" size={16} />
-              <span>{fill(tx(TEXT.staleData), { time: time(new Date(query.dataUpdatedAt).toISOString()) })}</span>
-              <button type="button" className="btn btn--sm" onClick={() => void query.refetch()}>
-                {t('common.retry')}
-              </button>
-            </div>
-          )}
-          {tiles.every((tile) => tile.count === 0) ? (
-            <p className="dash-section__clear">
-              <Icon name="check" size={16} />
-              {tx(D.allClear)}
-            </p>
-          ) : (
-            <ul className="kpi-grid">
-              {tiles.map((tile) => (
-                <Tile key={tile.key} tile={tile} present={new Set(tiles.map((x) => x.key))} />
-              ))}
-            </ul>
-          )}
-        </>
-      )}
+        ) : !query.data ? (
+          // A figure that failed is never shown as zero.
+          <div className="dash-failed" role="alert">
+            <span className="dash-failed__text">{tx(D.failed)}</span>
+            <button type="button" className="btn btn--sm" onClick={() => void query.refetch()}>
+              <Icon name="refresh" size={16} />
+              {t('common.retry')}
+            </button>
+          </div>
+        ) : (
+          <>
+            {/* Figures kept from an earlier read are shown only with this warning. */}
+            {query.error && (
+              <div className="dash-stale" role="status">
+                <span>{fill(tx(TEXT.staleData), { time: time(new Date(query.dataUpdatedAt).toISOString()) })}</span>
+                <button type="button" className="btn btn--sm" onClick={() => void query.refetch()}>
+                  {t('common.retry')}
+                </button>
+              </div>
+            )}
+            {tiles.every((tile) => tile.count === 0) ? (
+              <p className="dash-section__clear">{tx(D.allClear)}</p>
+            ) : (
+              <>
+                {waiting.length > 0 && (
+                  <ul className="dash-ledger">
+                    {waiting.map((tile) => (
+                      <Figure key={tile.key} tile={tile} present={present} large />
+                    ))}
+                  </ul>
+                )}
+                {rest.length > 0 && (
+                  <ul className="dash-lines">
+                    {rest.map((tile) => (
+                      <Figure key={tile.key} tile={tile} present={present} />
+                    ))}
+                  </ul>
+                )}
+              </>
+            )}
+          </>
+        )}
+      </div>
     </section>
   )
 }
 
-function Tile({ tile, present }: { tile: DashboardTile; present: ReadonlySet<string> }) {
+/** One figure and the page that resolves it: a large numeral when it is waiting, a line otherwise. */
+function Figure({ tile, present, large = false }: { tile: DashboardTile; present: ReadonlySet<string>; large?: boolean }) {
   const tx = useText()
   const { number, locale } = useI18n()
   const spec = TILES[tile.key]!
   const alert = spec.backlog && tile.count > 0
+  const shape = large ? 'dash-tile dash-tile--large' : 'dash-tile dash-tile--line'
+  const tone = alert ? ' dash-tile--alert' : tile.count === 0 ? ' dash-tile--zero' : ''
   return (
     <li>
-      <Link to={spec.href(present)} className={alert ? 'kpi-card dash-tile dash-tile--alert' : 'kpi-card dash-tile'}>
-        <span className="kpi-card__top">
-          <span className="kpi-card__icon" aria-hidden="true">
-            <Icon name={spec.icon} size={18} />
-          </span>
-          <span className="kpi-card__label">{tx(spec.label)}</span>
-          <Icon name="chevronForward" size={16} />
-        </span>
-        <span className="kpi-card__value">{tile.capped ? `${number(tile.count)}+` : number(tile.count)}</span>
+      <Link to={spec.href(present)} className={shape + tone}>
+        <span className="dash-tile__label">{tx(spec.label)}</span>
+        <span className="dash-tile__value">{tile.capped ? `${number(tile.count)}+` : number(tile.count)}</span>
         {tile.oldestAt && tile.count > 0 && (
-          <span className="kpi-card__sub">{fill(tx(D.oldest), { age: relativeTime(tile.oldestAt, locale) })}</span>
+          <span className="dash-tile__note">{fill(tx(D.oldest), { age: relativeTime(tile.oldestAt, locale) })}</span>
         )}
       </Link>
     </li>

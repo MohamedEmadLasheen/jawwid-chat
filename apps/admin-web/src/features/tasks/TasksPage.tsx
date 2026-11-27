@@ -219,8 +219,15 @@ export function TasksPage({ eyebrow }: { eyebrow?: string }) {
       </div>
       <div className="tasks__body">
         <div id="tasks-tabpanel" role="tabpanel" aria-labelledby={`tasks-tab-${tab}`}>
-          <QueryBoundary isLoading={list.isLoading} error={list.error} isEmpty={items.length === 0} emptyTitle={tx(C.empty)} onRetry={() => list.refetch()}>
-            <ul className="tasks__list">
+          <QueryBoundary
+            isLoading={list.isLoading}
+            error={list.error}
+            isEmpty={items.length === 0}
+            emptyTitle={tx(C.empty)}
+            emptyHint={tx(tab === 'closed' ? C.emptyClosedHint : C.emptyHint)}
+            onRetry={() => list.refetch()}
+          >
+            <ul className="tasks__list ruled">
               {items.map((t) => (
                 <TaskRow key={t.id} task={t} showAssignee={query.view !== 'mine'} selected={t.id === openId} onOpen={() => setOpenId(t.id)} />
               ))}
@@ -258,28 +265,45 @@ function TaskRow({ task, showAssignee, selected, onOpen }: { task: TaskSummary; 
   const title = useTitle()
   const state = stateOf(task)
   const closed = task.state === 'completed' || task.state === 'removed'
+  const link = sourceLink(task)
+  const late = !closed && task.overdue
   return (
-    <li className={`tasks__row${selected ? ' tasks__row--selected' : ''}`}>
-      <button type="button" className="tasks__title" dir="auto" aria-current={selected ? 'true' : undefined} onClick={onOpen}>
-        {title(task)}
-      </button>
-      <div className="tasks__chips">
-        {!closed && <PriorityChip task={task} />}
-        {task.category === 'financial' && <FinanceTag />}
-        <Badge tone={STATE_TONE[state]}>{tx(STATE_LABEL[state])}</Badge>
-        <Badge tone="outline">{tx(SOURCE_LABEL[task.source?.type ?? 'manual'])}</Badge>
-        {task.needsReassignment && !closed && <Badge tone="danger">{tx(C.assigneeLeft)}</Badge>}
+    <li className={`tasks__row${selected ? ' tasks__row--selected' : ''}${closed ? ' tasks__row--closed' : ''}`}>
+      <div className="tasks__level">{closed ? <Badge tone={STATE_TONE[state]}>{tx(STATE_LABEL[state])}</Badge> : <PriorityChip task={task} />}</div>
+      <div className="tasks__main">
+        <button type="button" className="tasks__title" dir="auto" aria-current={selected ? 'true' : undefined} onClick={onOpen}>
+          {title(task)}
+        </button>
+        <div className="tasks__meta">
+          <span className="tasks__source">{tx(SOURCE_LABEL[task.source?.type ?? 'manual'])}</span>
+          {task.category === 'financial' && <FinanceTag />}
+          {showAssignee && <span dir="auto">{tx(C.assignedTo, { name: task.assigneeName })}</span>}
+          {!closed && <span>{tx(C.age, { ago: duration(task.createdAt) })}</span>}
+          {task.needsReassignment && !closed && <Badge tone="danger">{tx(C.assigneeLeft)}</Badge>}
+        </div>
       </div>
-      <div className="tasks__meta">
-        {showAssignee && <span dir="auto">{tx(C.assignedTo, { name: task.assigneeName })}</span>}
+      <div className={`tasks__when${late ? ' tasks__when--late' : ''}`}>
         {closed ? (
           task.closedAt && <span>{tx(C.closedOn, { when: when(task.closedAt) })}</span>
         ) : (
           <>
             <span>{task.dueAt ? tx(C.due, { when: when(task.dueAt) }) : tx(C.noDue)}</span>
-            {task.overdue && task.priorityReason !== 'overdue' && <OverdueMark />}
-            <span>· {tx(C.age, { ago: duration(task.createdAt) })}</span>
+            {late && (
+              <span className="tasks__late">
+                {task.priorityReason !== 'overdue' && <OverdueMark />}
+                {task.dueAt && <span>{tx(C.dueAgo, { ago: duration(task.dueAt) })}</span>}
+              </span>
+            )}
           </>
+        )}
+      </div>
+      <div className="tasks__state">{!closed && <Badge tone={STATE_TONE[state]}>{tx(STATE_LABEL[state])}</Badge>}</div>
+      <div className="tasks__go">
+        {link && !closed && (
+          <Link className="tasks__open" to={link} aria-label={`${tx(C.openSource)}: ${title(task)}`}>
+            {tx(C.openSource)}
+            <Icon name="chevronForward" size={16} />
+          </Link>
         )}
       </div>
     </li>
@@ -312,23 +336,23 @@ function TaskPanel({ id, onClose }: { id: string; onClose: () => void }) {
   // is not a failure to retry.
   if (one.error instanceof ApiError && (/TASK_NOT_FOUND$/.test(one.error.code) || one.error.status === 404)) {
     return (
-      <section className="tasks__panel card" aria-label={tx(C.title)}>
+      <section className="tasks__panel" aria-label={tx(C.title)}>
         <div className="tasks__panel-head">
           <p className="tasks__text" role="status">{tx(C.notFound)}</p>
-          <button type="button" className="btn btn--ghost" onClick={onClose}>{tx(C.close)}</button>
+          <button type="button" className="btn btn--ghost btn--sm" onClick={onClose}>{tx(C.close)}</button>
         </div>
       </section>
     )
   }
 
   return (
-    <section className="tasks__panel card" aria-label={t ? title(t) : tx(C.title)}>
+    <section className="tasks__panel" aria-label={t ? title(t) : tx(C.title)}>
       <QueryBoundary isLoading={one.isLoading} error={one.error} onRetry={() => one.refetch()}>
         {t && (
           <>
             <div className="tasks__panel-head">
               <h2 className="tasks__panel-title" dir="auto">{title(t)}</h2>
-              <button type="button" className="btn btn--ghost" onClick={onClose}>{tx(C.close)}</button>
+              <button type="button" className="btn btn--ghost btn--sm" onClick={onClose}>{tx(C.close)}</button>
             </div>
             <div className="tasks__chips">
               {t.state !== 'completed' && t.state !== 'removed' && <PriorityChip task={t} />}
@@ -336,15 +360,17 @@ function TaskPanel({ id, onClose }: { id: string; onClose: () => void }) {
               <Badge tone={STATE_TONE[state]}>{tx(STATE_LABEL[state])}</Badge>
               <Badge tone="outline">{tx(SOURCE_LABEL[t.source?.type ?? 'manual'])}</Badge>
             </div>
-            <p className="tasks__meta">
+            <p className="tasks__meta tasks__meta--panel">
               <span dir="auto">{tx(C.assignedTo, { name: t.assigneeName })}</span>
               {t.createdBy && <span dir="auto">· {tx(C.createdBy, { name: t.createdBy.name })}</span>}
-              <span>· {t.dueAt ? tx(C.due, { when: when(t.dueAt) }) : tx(C.noDue)}</span>
+              <span className={t.overdue && t.state !== 'completed' && t.state !== 'removed' ? 'tasks__late' : undefined}>
+                · {t.dueAt ? tx(C.due, { when: when(t.dueAt) }) : tx(C.noDue)}
+              </span>
               {t.overdue && t.priorityReason !== 'overdue' && t.state !== 'completed' && t.state !== 'removed' && <OverdueMark />}
             </p>
             {link && (
-              <p>
-                <Link className="btn" to={link}>{tx(C.openSource)}</Link>
+              <p className="tasks__source-link">
+                <Link className="btn btn--sm" to={link}>{tx(C.openSource)}</Link>
               </p>
             )}
             {t.instructions && t.state === 'open' && (
@@ -531,8 +557,10 @@ function History({ task }: { task: TaskDetail }) {
             {e.kind === 'due_changed' && (
               <> — {before?.dueAt ? when(before.dueAt) : tx(C.noDue)} {arrow} {after?.dueAt ? when(after.dueAt) : tx(C.noDue)}</>
             )}
-            {' · '}
-            <span dir="auto">{e.actor ? e.actor.name : tx(C.system)}</span> · <time dateTime={e.at}>{when(e.at)}</time>
+            <span className="tasks__history-by">
+              {' · '}
+              <span dir="auto">{e.actor ? e.actor.name : tx(C.system)}</span> · <time dateTime={e.at}>{when(e.at)}</time>
+            </span>
             {e.body && <p className="tasks__text" dir="auto">{e.body}</p>}
           </li>
         )

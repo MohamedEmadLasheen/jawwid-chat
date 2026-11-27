@@ -11,6 +11,11 @@ export const C = {
     ar: 'كل ما يجب على أحد إنجازه، حتى يُنجَز. لا تغادر المهمة القائمة إلا إذا أُنجزت أو أُزيلت أو أُسندت لغيره.',
   },
   empty: { en: 'Nothing here.', ar: 'لا شيء هنا.' },
+  emptyHint: {
+    en: 'A task appears here when someone gives you one, or when a payment, lesson or request needs you.',
+    ar: 'تظهر المهمة هنا حين يسندها أحد إليك، أو حين يحتاج دفع أو حصة أو طلب إلى إجراء منك.',
+  },
+  emptyClosedHint: { en: 'Tasks you finish or remove are kept here with their history.', ar: 'تُحفظ هنا المهام المنجزة أو المُزالة مع سجلها.' },
   loadMore: { en: 'Show more', ar: 'عرض المزيد' },
   newTask: { en: 'New task', ar: 'مهمة جديدة' },
   // Filters
@@ -29,6 +34,7 @@ export const C = {
   due: { en: 'Due {when}', ar: 'الموعد {when}' },
   noDue: { en: 'No due date', ar: 'بلا موعد' },
   age: { en: 'Opened {ago}', ar: 'فُتحت {ago}' },
+  dueAgo: { en: 'due {ago}', ar: 'استحقت {ago}' },
   closedOn: { en: 'Closed {when}', ar: 'أُغلقت {when}' },
   // The panel
   close: { en: 'Close', ar: 'إغلاق' },

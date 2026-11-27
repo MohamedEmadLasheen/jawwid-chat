@@ -300,7 +300,8 @@ describe('Calls page layout', () => {
     expect(within(rows[0]!).getByText('Outgoing')).toBeInTheDocument()
     expect(within(rows[0]!).getByText('Parent One')).toBeInTheDocument()
     expect(within(rows[0]!).getByText('Answered')).toBeInTheDocument()
-    expect(within(rows[0]!).getByText('· 2:05')).toBeInTheDocument()
+    // The length has its own column in the history table.
+    expect(within(rows[0]!).getByText('2:05')).toBeInTheDocument()
     // CHATSCHED-013: a call that dropped says so beside its outcome.
     expect(within(rows[0]!).getByText('· Connection lost')).toBeInTheDocument()
     expect(within(rows[1]!).queryByText(/Connection lost/)).not.toBeInTheDocument()

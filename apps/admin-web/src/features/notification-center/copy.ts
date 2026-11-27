@@ -12,6 +12,11 @@ export const N = {
   },
   bell: { en: 'Notifications, {n} unread', ar: 'الإشعارات، {n} غير مقروءة' },
   empty: { en: 'You are all caught up', ar: 'لا جديد لديك' },
+  emptyHint: {
+    en: 'Messages, missed calls, tasks and payments that need you are listed here as they arrive.',
+    ar: 'تظهر هنا الرسائل والمكالمات الفائتة والمهام والمدفوعات التي تحتاج إليك فور وصولها.',
+  },
+  emptyTabHint: { en: 'Nothing in this view. The other tabs may hold more.', ar: 'لا شيء في هذا العرض. قد تجد المزيد في التبويبات الأخرى.' },
   markAllRead: { en: 'Mark all as read', ar: 'تحديد الكل كمقروء' },
   loadOlder: { en: 'Show older', ar: 'عرض الأقدم' },
   open: { en: 'Open', ar: 'فتح' },

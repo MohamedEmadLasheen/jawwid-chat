@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Badge } from '@/shared/components/Badge'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
+import { PageHeader } from '@/shared/components/PageHeader'
 import { QueryBoundary } from '@/shared/components/States'
 import { describeError } from '@/features/teacher-files/copy'
 import { casesApi, type CaseDetail, type CaseStatus, type CaseSummary, type CaseTab } from './api'
@@ -52,10 +53,7 @@ export function CasesPage({ header }: { header?: React.ReactNode }) {
   return (
     <div className="page cases">
       {header ?? <TasksAreaTabs />}
-      <header className="page__header">
-        <h1 className="page__title">{tx(C.title)}</h1>
-        <p className="page__subtitle">{tx(C.subtitle)}</p>
-      </header>
+      <PageHeader title={tx(C.title)} subtitle={tx(C.subtitle)} />
       <div className="cases__bar">
         <div role="tablist" className="ts-tabs" aria-label={tx(C.title)}>
           {TABS.map((t) => (
@@ -79,8 +77,15 @@ export function CasesPage({ header }: { header?: React.ReactNode }) {
         </label>
       </div>
       <div className="cases__body">
-        <QueryBoundary isLoading={list.isLoading} error={list.error} isEmpty={cases.length === 0} emptyTitle={tx(C.empty)} onRetry={() => list.refetch()}>
-          <ul className="cases__list">
+        <QueryBoundary
+          isLoading={list.isLoading}
+          error={list.error}
+          isEmpty={cases.length === 0}
+          emptyTitle={tx(C.empty)}
+          emptyHint={tx(C.emptyHint)}
+          onRetry={() => list.refetch()}
+        >
+          <ul className="cases__list ruled">
             {cases.map((c) => (
               <CaseRow key={c.id} c={c} selected={c.id === openId} onOpen={() => setOpenId(c.id)} />
             ))}
@@ -92,18 +97,29 @@ export function CasesPage({ header }: { header?: React.ReactNode }) {
   )
 }
 
+/** A case's due day ("2026-11-29") as a date in the viewer's language. */
+function useDay() {
+  const { date } = useI18n()
+  return (day: string) => date(`${day.slice(0, 10)}T12:00:00Z`)
+}
+
 function CaseRow({ c, selected, onOpen }: { c: CaseSummary; selected: boolean; onOpen: () => void }) {
   const tx = useCopy()
+  const day = useDay()
   return (
     <li className={`cases__row${selected ? ' cases__row--selected' : ''}`}>
-      <button type="button" className="cases__title" onClick={onOpen}>
-        {c.title}
-      </button>
-      <div className="cases__meta">
+      <div className="cases__main">
+        <button type="button" className="cases__title" dir="auto" aria-current={selected ? 'true' : undefined} onClick={onOpen}>
+          {c.title}
+        </button>
+        <div className="cases__meta">
+          <span>{tx(SUBJECT_LABEL[c.subject.kind])}:</span> <bdi>{c.subject.label}</bdi>
+          <span>· {c.owner ? <bdi>{c.owner.name}</bdi> : tx(C.noOwner)}</span>
+          {c.dueOn && <span>· {tx(C.dueOn, { date: day(c.dueOn) })}</span>}
+        </div>
+      </div>
+      <div className="cases__state">
         <Badge tone={STATUS_TONE[c.status]}>{tx(STATUS_LABEL[c.status])}</Badge>
-        <span>{tx(SUBJECT_LABEL[c.subject.kind])}:</span> <span dir="auto">{c.subject.label}</span>
-        <span>· {c.owner ? c.owner.name : tx(C.noOwner)}</span>
-        {c.dueOn && <span>· {tx(C.dueOn, { date: c.dueOn })}</span>}
       </div>
     </li>
   )
@@ -111,7 +127,8 @@ function CaseRow({ c, selected, onOpen }: { c: CaseSummary; selected: boolean; o
 
 function CasePanel({ id, onClose }: { id: string; onClose: () => void }) {
   const tx = useCopy()
-  const { locale } = useI18n()
+  const { locale, dateTime } = useI18n()
+  const day = useDay()
   const qc = useQueryClient()
   const one = useQuery({ queryKey: keys.one(id), queryFn: () => casesApi.get(id) })
   const c = one.data
@@ -128,20 +145,20 @@ function CasePanel({ id, onClose }: { id: string; onClose: () => void }) {
   const ready = !!c && (!c.canAct || owners.isFetched)
 
   return (
-    <section className="cases__panel card" aria-label={ready && c ? c.title : tx(C.title)}>
+    <section className="cases__panel" aria-label={ready && c ? c.title : tx(C.title)}>
       <QueryBoundary isLoading={one.isLoading} error={one.error} onRetry={() => one.refetch()}>
         {c && (
           <>
             <div className="cases__panel-head">
               <h2 className="cases__panel-title" dir="auto">{c.title}</h2>
-              <button type="button" className="btn btn--ghost" onClick={onClose}>{tx(C.close)}</button>
+              <button type="button" className="btn btn--ghost btn--sm" onClick={onClose}>{tx(C.close)}</button>
             </div>
             <p className="cases__meta">
               <Badge tone={STATUS_TONE[c.status]}>{tx(STATUS_LABEL[c.status])}</Badge>{' '}
-              {tx(C.openedBy, { name: c.openedBy.name })} · {tx(TARGET_LABEL[c.target])}
+              <span dir="auto">{tx(C.openedBy, { name: c.openedBy.name })}</span> · {tx(TARGET_LABEL[c.target])}
             </p>
             <p className="cases__meta">
-              {tx(C.about)}: {tx(SUBJECT_LABEL[c.subject.kind])} — <span dir="auto">{c.subject.label}</span>
+              {tx(C.about)}: {tx(SUBJECT_LABEL[c.subject.kind])} — <bdi>{c.subject.label}</bdi>
             </p>
             {c.body && <p className="cases__text" dir="auto">{c.body}</p>}
             {op.error && <p className="field__error" role="alert">{describeError(op.error, locale)}</p>}
@@ -192,11 +209,11 @@ function CasePanel({ id, onClose }: { id: string; onClose: () => void }) {
                     <button type="button" className="btn" onClick={() => setClosing('cancelled')}>{tx(C.cancel)}</button>
                   </div>
                 )}
-                <button type="button" className="btn btn--ghost" onClick={() => setNoting(true)}>{tx(C.addNote)}</button>
+                <button type="button" className="btn btn--ghost btn--sm cases__note" onClick={() => setNoting(true)}>{tx(C.addNote)}</button>
               </div>
             ) : (
               <p className="cases__meta">
-                {tx(C.owner)}: {c.owner?.name ?? tx(C.noOwner)} · {c.dueOn ? tx(C.dueOn, { date: c.dueOn }) : tx(C.noDue)}
+                {tx(C.owner)}: {c.owner ? <bdi>{c.owner.name}</bdi> : tx(C.noOwner)} · {c.dueOn ? tx(C.dueOn, { date: day(c.dueOn) }) : tx(C.noDue)}
               </p>
             )}
 
@@ -206,8 +223,10 @@ function CasePanel({ id, onClose }: { id: string; onClose: () => void }) {
                 <li key={e.id}>
                   <strong>{tx(EVENT_LABEL[e.kind])}</strong>
                   {e.kind === 'status' && e.after?.status ? <> — {tx(STATUS_LABEL[e.after.status as CaseStatus])}</> : null}
-                  {' · '}
-                  {e.actor.name} · <time dateTime={e.at}>{new Date(e.at).toLocaleString(locale === 'ar' ? 'ar-EG-u-nu-latn' : 'en-GB')}</time>
+                  <span className="cases__history-by">
+                    {' · '}
+                    <bdi>{e.actor.name}</bdi> · <time dateTime={e.at}>{dateTime(e.at)}</time>
+                  </span>
                   {e.note && <p className="cases__text" dir="auto">{e.note}</p>}
                 </li>
               ))}

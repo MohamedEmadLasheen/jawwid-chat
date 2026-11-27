@@ -1,3 +1,4 @@
+/* PD-34: the bell (top bar) and the Notification Center page. */
 .nc-bell { position: relative; }
 .nc-bell__count {
   position: absolute;
@@ -12,18 +13,105 @@
   line-height: 18px;
   text-align: center;
 }
-.nc-tabs { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-block: var(--space-3); }
+
+.nc-page .page__inner { max-inline-size: 980px; margin-inline: 0; }
+.nc-tabs { margin: 0; }
+.nc-tabs .seg { flex-wrap: nowrap; }
+.nc-bar { display: flex; justify-content: flex-end; padding-block: 6px 2px; }
+
+/* One line per notification: a dot, what happened, when, and the way to it.
+   A filled teal dot is unread; a ring has been read. */
 .nc-list { list-style: none; margin: 0; padding: 0; }
 .nc-item {
   display: grid;
-  grid-template-columns: 1fr auto;
-  gap: var(--space-1) var(--space-3);
-  padding: var(--space-3) var(--space-1);
-  border-block-end: 1px solid var(--border);
+  grid-template-columns: 9px minmax(0, 1fr) auto 84px;
+  align-items: start;
+  gap: 2px var(--space-3);
+  padding: 12px 2px 11px;
+  border-block-end: 1px solid var(--hairline-soft);
 }
-.nc-item--unread .nc-item__title { font-weight: var(--fw-bold); }
-.nc-item__time { color: var(--text-muted); font-size: var(--fs-xs); white-space: nowrap; }
-.nc-item__body, .nc-item__actions { grid-column: 1 / -1; }
-.nc-item__body { color: var(--text); font-size: var(--fs-sm); }
-.nc-settings { margin-block-start: var(--space-4); display: grid; gap: var(--space-3); max-inline-size: 560px; }
-.nc-settings__row { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+.nc-item__dot {
+  inline-size: 7px;
+  block-size: 7px;
+  margin-block-start: 0.6em;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 50%;
+}
+.nc-item--unread .nc-item__dot { border-color: var(--teal); background: var(--teal); }
+.nc-item__text { min-inline-size: 0; }
+.nc-item__title { display: block; font-weight: 500; color: var(--ink); overflow-wrap: anywhere; }
+.nc-item--unread .nc-item__title { font-weight: 700; }
+.nc-item__body { margin: 1px 0 0; color: var(--ink-muted); font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.nc-item__meta {
+  display: grid;
+  justify-items: end;
+  gap: 1px;
+  padding-block-start: 2px;
+  font-size: var(--fs-xs);
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+.nc-item__time { font-variant-numeric: tabular-nums; }
+.nc-item__actions { display: flex; justify-content: flex-end; }
+.nc-item__open { gap: 2px; padding-inline: 8px 4px; font-weight: 600; }
+.nc-more { margin-block-start: var(--space-4); }
+@media (max-width: 767px) {
+  .nc-item { grid-template-columns: 9px minmax(0, 1fr) auto; }
+  .nc-item__meta { grid-column: 2; grid-row: 2; display: flex; gap: var(--space-2); justify-items: start; }
+  .nc-item__actions { grid-column: 3; grid-row: 1 / span 2; align-self: center; }
+}
+
+/* Settings: two columns under one rule, each label above what it controls. */
+.nc-settings { margin-block-start: var(--space-7); padding-block-start: var(--space-5); border-block-start: 1px solid var(--hairline); }
+.nc-settings__title {
+  margin: 0 0 var(--space-4);
+  font-family: var(--display);
+  font-size: var(--fs-xl);
+  font-weight: 600;
+  line-height: 1.3;
+}
+html[lang='ar'] .nc-settings__title { font-weight: 700; }
+.nc-settings__cols {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-5) var(--space-7);
+  align-items: start;
+}
+@media (max-width: 767px) {
+  .nc-settings__cols { grid-template-columns: minmax(0, 1fr); }
+}
+.nc-settings__col { min-inline-size: 0; }
+.nc-settings__head {
+  display: flex;
+  align-items: center;
+  min-block-size: 44px;
+  margin: 0;
+  border-block-end: 1px solid var(--hairline);
+  font-size: var(--fs-md);
+  font-weight: 600;
+  color: var(--ink);
+}
+.nc-settings__hint { margin: 6px 0 var(--space-3); max-inline-size: 46ch; }
+.nc-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-block-size: 40px;
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+.nc-check input { flex: none; inline-size: 16px; block-size: 16px; accent-color: var(--teal); }
+.nc-check--lead { font-size: var(--fs-md); }
+.nc-check--lead strong { font-weight: 600; }
+.nc-check--locked { cursor: default; }
+.nc-check__name { flex: 1; min-inline-size: 0; }
+.nc-check__note { color: var(--ink-muted); font-size: var(--fs-xs); }
+.nc-hours { display: grid; grid-template-columns: repeat(2, minmax(0, 150px)); gap: var(--space-3); }
+.nc-hours .field { margin: 0; }
+.nc-hours .input { inline-size: 100%; direction: ltr; }
+.nc-settings__actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-block-start: var(--space-3); }
+.nc-kinds { list-style: none; margin: 0; padding: 0; }
+.nc-kinds > li { border-block-end: 1px solid var(--hairline-soft); }
+@media (max-width: 767px) {
+  .nc-check { min-block-size: 44px; }
+}

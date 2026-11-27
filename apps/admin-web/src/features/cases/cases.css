@@ -1,98 +1,27 @@
-/* PD-35 B5: the escalation-case queue. Tokens only; layout reuses .page, .card, .field. */
-.cases__bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  margin-block-end: var(--space-3);
-}
-/* The tab strip is the shared .ts-tabs (teachers.css); the bar owns the spacing. */
-.cases__bar .ts-tabs {
-  margin-block-end: 0;
-}
-.cases__closed {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-}
-.cases__body {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-4);
-}
-@media (min-width: 960px) {
-  .cases__body:has(.cases__panel) {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
-  }
-}
-.cases__list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: var(--space-2);
-}
+/* PD-35 B5: the escalation queue. It shares its strip, list, open-case column
+   and history with Tasks (tasks.css); only what differs lives here. */
 .cases__row {
-  padding: var(--space-3);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 2px var(--space-4);
+  padding: 13px 2px 12px;
+  border-block-end: 1px solid var(--hairline-soft);
+  transition: background var(--dur-fast) var(--ease-out);
 }
-.cases__row--selected {
-  border-color: var(--accent);
-}
-.cases__title {
-  all: unset;
-  cursor: pointer;
-  font-weight: 600;
-}
-.cases__title:focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: 2px;
-}
-.cases__meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-1);
-  margin: var(--space-1) 0 0;
-  color: var(--text-muted);
-  font-size: var(--fs-sm);
-}
-.cases__panel {
-  padding: var(--space-4);
-}
-.cases__panel-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-2);
-}
-.cases__panel-title {
-  margin: 0;
-  font-size: var(--fs-lg);
-}
-.cases__text {
-  white-space: pre-wrap;
-  margin: var(--space-2) 0;
-}
+.cases__main { min-inline-size: 0; }
+.cases__state { padding-block-start: 2px; }
+.cases__row .cases__meta { gap: 2px 5px; }
+.cases__panel .cases__meta { color: var(--ink-muted); }
 .cases__controls {
   display: grid;
-  gap: var(--space-2);
-  margin-block: var(--space-3);
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: var(--space-3) var(--space-4);
+  margin-block: var(--space-4);
+  padding-block-start: var(--space-4);
+  border-block-start: 1px solid var(--hairline-soft);
 }
-.cases__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
-.cases__history-title {
-  font-size: var(--fs-md);
-  margin: var(--space-4) 0 var(--space-2);
-}
-.cases__history {
-  margin: 0;
-  padding-inline-start: var(--space-4);
-  display: grid;
-  gap: var(--space-2);
-}
+.cases__controls .field { margin: 0; }
+.cases__controls .cases__actions { grid-column: 1 / -1; margin: 0; }
+.cases__note { justify-self: start; }
+

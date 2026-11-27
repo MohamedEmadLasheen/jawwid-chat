@@ -40,6 +40,13 @@ export interface CallsPageCopy {
   /** CHATSCHED-013: beside the outcome, when the call dropped and nobody came back. */
   connectionLost: string
   duration: (seconds: number) => string
+  // the history table's column names
+  colName: string
+  colDirection: string
+  colStatus: string
+  colDuration: string
+  colWhen: string
+  colCall: string
   // tiles
   actions: string
   startCall: string
@@ -136,6 +143,12 @@ const ar: CallsPageCopy = {
   ongoing: 'جارية',
   connectionLost: 'انقطع الاتصال',
   duration,
+  colName: 'الاسم',
+  colDirection: 'الاتجاه',
+  colStatus: 'الحالة',
+  colDuration: 'المدة',
+  colWhen: 'الوقت',
+  colCall: 'اتصال',
   actions: 'إجراءات المكالمات',
   startCall: 'بدء مكالمة',
   newLink: 'رابط مكالمة جديد',
@@ -224,6 +237,12 @@ const en: CallsPageCopy = {
   ongoing: 'Ongoing',
   connectionLost: 'Connection lost',
   duration,
+  colName: 'Name',
+  colDirection: 'Direction',
+  colStatus: 'Status',
+  colDuration: 'Length',
+  colWhen: 'When',
+  colCall: 'Call',
   actions: 'Call actions',
   startCall: 'Start call',
   newLink: 'New call link',
