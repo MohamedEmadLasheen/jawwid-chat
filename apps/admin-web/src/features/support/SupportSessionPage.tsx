@@ -4,7 +4,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { newIdempotencyKey } from '@/core/api/client'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Avatar } from '@/shared/components/Avatar'
-import { Badge } from '@/shared/components/Badge'
 import { Icon } from '@/shared/components/Icon'
 import { PageHeader } from '@/shared/components/PageHeader'
 import { EmptyState, LoadingState } from '@/shared/components/States'
@@ -116,29 +115,34 @@ export function SupportSessionPage() {
   return (
     <div className="page support">
       <div className="page__inner">
+        {/* The session's own bar: whose account this is, on the record, the time left, and the way out. It never scrolls away. */}
+        <div className="support-bar" role="region" aria-label={tx(S.tag)}>
+          <span className="support-bar__what">
+            <Icon name="headset" size={18} />
+            <span>
+              <strong>{tx(S.tag)}</strong> <span className="support-bar__acting">{tx(S.acting, { name: session.target.name, kind })}</span>
+            </span>
+          </span>
+          <span className={minutes !== null && minutes <= LAST_MINUTES ? 'support-left support-left--last' : 'support-left'} role="timer">
+            <Icon name="timer" size={16} />
+            <span>
+              {minutes !== null && <strong>{tx(S.left, { time: countWords(minutes, MINUTES, locale) })}</strong>}
+              <span className="support-left__until">{tx(S.until, { time: time(session.expiresAt) })}</span>
+            </span>
+          </span>
+          <span className="support-bar__actions">
+            <button type="button" className="btn btn--sm support-bar__btn" disabled={refresh.isPending} onClick={() => refresh.mutate()}>
+              {tx(S.extend)}
+            </button>
+            <button type="button" className="btn btn--sm support-bar__exit" disabled={exit.isPending} onClick={() => exit.mutate()}>
+              <Icon name="signOut" size={16} />
+              {tx(S.exit)}
+            </button>
+          </span>
+        </div>
         <PageHeader
           lead={<Avatar name={session.target.name} seed={session.target.accountId} size="lg" />}
           title={session.target.name}
-          status={<Badge tone="waiting">{tx(S.tag)}</Badge>}
-          subtitle={tx(S.acting, { name: session.target.name, kind })}
-          actions={
-            <>
-              <span className={minutes !== null && minutes <= LAST_MINUTES ? 'support-left support-left--last' : 'support-left'} role="timer">
-                <Icon name="timer" size={16} />
-                <span>
-                  {minutes !== null && <strong>{tx(S.left, { time: countWords(minutes, MINUTES, locale) })}</strong>}
-                  <span className="support-left__until">{tx(S.until, { time: time(session.expiresAt) })}</span>
-                </span>
-              </span>
-              <button type="button" className="btn" disabled={refresh.isPending} onClick={() => refresh.mutate()}>
-                {tx(S.extend)}
-              </button>
-              <button type="button" className="btn btn--primary" disabled={exit.isPending} onClick={() => exit.mutate()}>
-                <Icon name="signOut" size={16} />
-                {tx(S.exit)}
-              </button>
-            </>
-          }
           tabs={
             family && (
               <div className="seg support-tabs" role="tablist" aria-label={tx(S.tabsLabel, { name: session.target.name })}>

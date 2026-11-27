@@ -21,19 +21,22 @@
 .acct-table .dir-row { cursor: default; }
 .acct-table .dir-row:hover .dir-name { color: var(--ink); }
 .acct-table strong.dir-name:hover { text-decoration: none; }
-.acct-table .dir-cell-who { inline-size: 46%; }
-/* The line under the name runs as text, so a long list of children wraps inside itself
-   and never leaves the family alone on a line. The facts are parted by commas, never by
-   dots; the comma trails the fact before it and carries the place a line may break. */
-.acct-sub { display: block; font-size: var(--fs-sm); line-height: 1.55; color: var(--ink-muted); overflow-wrap: anywhere; }
-.acct-sub > :not(:last-child)::after { content: ',\200B'; margin-inline-end: 5px; }
-html[lang='ar'] .acct-sub > :not(:last-child)::after { content: '،\200B'; }
-/* A family's children: a line of their own under who the account is. */
-.acct-children { display: block; font-size: var(--fs-xs); line-height: 1.55; color: var(--ink-muted); overflow-wrap: anywhere; }
+.acct-table .dir-cell-who { inline-size: 62%; }
+/* The name, and beside it where the account stands when that is not the usual. */
+.acct-name-line { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; min-inline-size: 0; }
+/* The line under the name is one line: the kind, the family, the children by name, parted by
+   commas (never by dots); a long list of children ends in an ellipsis, the whole in its title. */
+.acct-sub { display: block; max-inline-size: 64ch; font-size: var(--fs-sm); line-height: 1.55; color: var(--ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.acct-sub > :not(:last-child)::after { content: ','; margin-inline-end: 5px; }
+html[lang='ar'] .acct-sub > :not(:last-child)::after { content: '،'; }
 .acct-state { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
 .acct-table time { font-variant-numeric: tabular-nums; }
-/* The stated action is plain until the row is under the pointer, as in every directory. */
+/* The stated action is a quiet word until the row is under the pointer (or it has focus), so thirty
+   rows do not read as thirty buttons; under the pointer it is the row's control, framed. */
 .acct-table .dir-row .row-actions2 > .btn { white-space: nowrap; }
+@media (min-width: 768px) {
+  .acct-table .dir-row:not(:hover):not(:focus-within) .row-actions2 > .btn { border-color: transparent; background: none; }
+}
 
 /* A support session: whose account, why it was opened, then by whom and when. */
 .acct-session__why { font-size: var(--fs-sm); line-height: 1.5; color: var(--ink); overflow-wrap: anywhere; }
@@ -56,7 +59,7 @@ html[lang='ar'] .acct-sub > :not(:last-child)::after { content: '،\200B'; }
   .acct-table.dir-table .dir-row > td.cell-actions:last-child:empty { display: none; }
   .acct-table .row-actions2 { display: flex; }
   .acct-table .row-actions2 > .btn { flex: 1; justify-content: center; border-color: var(--border-strong); color: var(--ink); }
-  .acct-state { justify-content: flex-end; }
+  .acct-sub { white-space: normal; }
   .acct-session > .rec-attn__act { grid-column: 1 / -1; }
   .acct-session .row-actions2, .acct-session .row-actions2 > .btn { inline-size: 100%; justify-content: center; }
 }

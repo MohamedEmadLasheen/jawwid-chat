@@ -60,7 +60,7 @@ type Pending =
  */
 export function StaffAccountsPage() {
   const tx = useCopy()
-  const { locale, t } = useI18n()
+  const { locale, t, number } = useI18n()
   const { staff } = useSession()
   const client = useQueryClient()
   const tabs = useAccountsTabs()
@@ -129,9 +129,12 @@ export function StaffAccountsPage() {
                     label={tx(SA.show)}
                     value={status}
                     onChange={setStatus}
+                    formatCount={number}
                     options={(['all', 'active', 'provisioned', 'suspended'] as const).map((s) => ({
                       value: s,
                       label: s === 'all' ? tx(SA.all) : tx(STATUS[s]!),
+                      // How many each would show: a "Not set up" that is not empty is seen before it is chosen.
+                      count: s === 'all' ? accounts.length : accounts.filter((a) => a.status === s).length,
                     }))}
                   />
                   {((roles.data?.roles.length ?? 0) > 0 || (staff && isSuperAdmin(staff.role) && departments.length > 1)) && (
@@ -202,7 +205,7 @@ export function StaffAccountsPage() {
                               </span>
                             </td>
                             <td className="dir-cell-state">
-                              <StaffState account={a} />
+                              <StaffState account={a} inList />
                             </td>
                           </tr>
                         )
@@ -257,12 +260,15 @@ export function StaffAccountsPage() {
 
 /**
  * Where a staff account stands. A first sign-in code still waiting is the
- * one thing to see (an amber word: it waits on the person); an account not
- * set up, suspended or deactivated is a quiet word, and so is an active one.
+ * one thing to see, and an account not set up waits on someone too (amber
+ * words); a suspended or deactivated one is a quiet word. An active one says
+ * nothing in the list (`inList`), so the accounts not set up are its only
+ * marks; its own sheet names it.
  */
-function StaffState({ account: a }: { account: StaffAccount }) {
+function StaffState({ account: a, inList = false }: { account: StaffAccount; inList?: boolean }) {
   const tx = useCopy()
   const status = tx(STATUS[a.status] ?? { ar: a.status, en: a.status })
+  if (inList && a.status === 'active' && !a.setupPending) return null
   return (
     <span className="acct-state">
       {a.setupPending && <Badge tone="waiting">{tx(SA.setupPending)}</Badge>}
@@ -270,7 +276,7 @@ function StaffState({ account: a }: { account: StaffAccount }) {
         <Badge tone="neutral">{status}</Badge>
       ) : (
         // A code still waiting already says the account is not set up.
-        !(a.status === 'provisioned' && a.setupPending) && <Badge tone={a.status === 'suspended' ? 'neutral' : 'outline'}>{status}</Badge>
+        !(a.status === 'provisioned' && a.setupPending) && <Badge tone={a.status === 'provisioned' ? 'waiting' : a.status === 'suspended' ? 'neutral' : 'outline'}>{status}</Badge>
       )}
     </span>
   )
@@ -517,26 +523,39 @@ function AccessPanel({ staffId, accountName, previewRoleId, canManage }: { staff
           <p className="md-part__none">{tx(SA.accessNone)}</p>
         ) : (
           <ul className="md-groups" aria-label={tx(SA.accessTitle)}>
-            {view.data.pages.map((p) => (
+            {view.data.pages.map((p) => {
+              // Where the page's permissions came from is said once under its name when they all came the same way.
+              const sourcesOf = (k: HeldKey) => k.sources.map(sourceText)
+              const first = p.keys[0] ? sourcesOf(p.keys[0]).join('\n') : ''
+              const shared = p.keys.length > 1 && p.keys.every((k) => sourcesOf(k).join('\n') === first) ? sourcesOf(p.keys[0]!) : null
+              return (
               <li key={p.page} className="md-group">
-                <span className="md-group__title">{tx(pageLabel(p.page))}</span>
+                <span className="md-group__head">
+                  <span className="md-group__title">{tx(pageLabel(p.page))}</span>
+                  {shared?.map((s, i) => (
+                    <span key={i} className="md-check__src">
+                      {s}
+                    </span>
+                  ))}
+                </span>
                 <ul className="md-checks">
                   {p.keys.map((k) => (
                     <li key={k.key} className={k.denied ? 'md-check md-check--off' : 'md-check'}>
                       <Icon name={k.denied ? 'prohibit' : 'check'} size={16} />
                       <span className="md-check__text">
                         <span className="md-check__label">
-                          <span className={k.denied ? 'md-struck' : undefined}>{label(k.label)}</span>
-                          <code className="sa-key" dir="ltr">
-                            {k.key}
-                          </code>
+                          {/* The permission's key is for whoever needs it, on hover: the page reads in words. */}
+                          <span className={k.denied ? 'md-struck' : undefined} title={k.key}>
+                            {label(k.label)}
+                          </span>
                           {k.denied && <Badge tone="warn">{tx(SA.restricted)}</Badge>}
                         </span>
-                        {k.sources.map((s, i) => (
-                          <span key={i} className="md-check__src">
-                            {sourceText(s)}
-                          </span>
-                        ))}
+                        {!shared &&
+                          sourcesOf(k).map((s, i) => (
+                            <span key={i} className="md-check__src">
+                              {s}
+                            </span>
+                          ))}
                       </span>
                       {enforced && canManage && k.deniable && !k.denied && (
                         <button type="button" className="btn btn--sm btn--ghost md-check__act" aria-label={tx(SA.restrictTitle, { key: k.key, name: accountName })} onClick={() => setRestricting(k)}>
@@ -547,7 +566,8 @@ function AccessPanel({ staffId, accountName, previewRoleId, canManage }: { staff
                   ))}
                 </ul>
               </li>
-            ))}
+              )
+            })}
           </ul>
         )}
       </Part>

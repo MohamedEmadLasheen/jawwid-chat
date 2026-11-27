@@ -33,6 +33,8 @@
 /* In the list a name is ink, like every list of people here; the open one takes the accent. */
 .sa-page .md-table .sa-name { justify-self: start; color: var(--ink); }
 .sa-page .md-row:hover .sa-name, .sa-page .md-row--current .sa-name { color: var(--teal); }
+/* The open row is said by its tint; its name is not a link to underline. */
+.sa-page .md-row--current .sa-name { text-decoration: none; }
 
 /* ------------------------------------------------------- list and detail */
 
@@ -113,6 +115,7 @@ html[lang='ar'] .md-pane__title { line-height: 1.45; }
 .md-groups { list-style: none; margin: var(--space-3) 0 0; padding: 0; display: grid; }
 .md-group { display: grid; grid-template-columns: minmax(120px, 180px) minmax(0, 1fr); gap: 0 var(--space-4); padding-block: 8px; border-block-start: 1px solid var(--line-2); }
 .md-group:first-child { border-block-start: 0; padding-block-start: 0; }
+.md-group__head { display: grid; align-content: start; gap: 2px; min-inline-size: 0; }
 .md-group__title { padding-block-start: 5px; font-size: var(--fs-sm); font-weight: 600; color: var(--ink); overflow-wrap: anywhere; }
 .md-checks { list-style: none; margin: 0; padding: 0; display: grid; min-inline-size: 0; }
 .md-part > .md-checks { margin-block-start: var(--space-2); }

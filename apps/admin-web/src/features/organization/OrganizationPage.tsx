@@ -16,6 +16,7 @@ import { CHILDREN_COUNT } from '@/features/profiles/copy'
 import { studentPath } from '@/features/profiles/api'
 import { SupervisorColors } from '@/features/schedule/SupervisorColors'
 import { useDay } from '@/features/devices/when'
+import { fill } from '@/features/profiles/RecordHead'
 import type { BackupLink, BackupStatus, Cover, Department, DepartmentMember, LearnerAssignment, TeacherAssignment } from './api'
 import { CHILDREN_WAITING, DEPARTMENT_LABEL, POSITION_LABEL, STATUS_LABEL, T, TEACHERS_WAITING, describeError, useCopy } from './copy'
 import { useAssignTeacher, useCovers, useEndCover, useExtendCover, useLearners, useStructure, useTeacherAssignments } from './hooks'
@@ -322,6 +323,7 @@ function ChildrenTab({ operations }: { operations: Department }) {
   const [handingOver, setHandingOver] = useState<DepartmentMember | null>(null)
   const supervisors = useMemo(() => operations.members.filter((m) => m.position === 'supervisor'), [operations.members])
 
+  const unplaced = (learners.data?.learners ?? []).filter((l) => !l.supervisor).length
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase()
     return (learners.data?.learners ?? []).filter((l) => {
@@ -362,6 +364,12 @@ function ChildrenTab({ operations }: { operations: Department }) {
     <QueryBoundary isLoading={learners.isLoading} error={learners.error} onRetry={() => void learners.refetch()}>
       <section className="sheet dir-sheet org-sheet" aria-label={tx(T.tabChildren)}>
         <div className="sheet-bar org-bar">
+          {/* The answer first: how many children nobody supervises, or that every child has someone. */}
+          {learners.data && (
+            <p className={unplaced > 0 ? 'org-rule org-rule--waiting org-rule--line' : 'org-rule org-rule--line'} role="status">
+              <strong>{unplaced > 0 ? `${countWords(unplaced, CHILDREN_WAITING, locale)}.` : tx(T.allChildrenAssigned)}</strong>
+            </p>
+          )}
           <SearchField value={query} onChange={setQuery} label={tx(T.search)} clearLabel={t('common.cancel')} />
           <div className="org-filter">
             <label className="field__label" htmlFor="org-filter">{tx(T.filter)}</label>
@@ -376,7 +384,8 @@ function ChildrenTab({ operations }: { operations: Department }) {
           <span className="dir-count">{countWords(rows.length, CHILDREN_COUNT, locale)}</span>
         </div>
         {rows.length === 0 ? (
-          <EmptyState title={tx(T.noChildren)} />
+          // Asked for the children with no supervisor and there are none: that is the answer, said as one.
+          <EmptyState title={tx(filter === 'unassigned' && !query.trim() ? T.allChildrenAssigned : T.noChildren)} />
         ) : (
           <table className="dir-table dir-table--grouped org-table">
             <thead>
@@ -490,6 +499,11 @@ function DepartmentSheet({ department }: { department: Department }) {
   // PD-33: who is away and who is covering, for the Operations team.
   const covers = useCovers(operations).data?.covers ?? []
   const headingId = `org-dept-${department.id}`
+  const date = useDay()
+  // The supervisors first (they hold the children), their backups after; each group keeps the server's order.
+  const team = [...department.members].sort((a, b) => Number(a.position !== 'supervisor') - Number(b.position !== 'supervisor'))
+  // The backup links that still stand (dormant, active or run out); those ended or switched off are history.
+  const inForce = department.backups.filter((l) => l.status !== 'ended' && l.status !== 'deactivated')
 
   return (
     <section className="sheet rec-sheet org-dept" aria-labelledby={headingId}>
@@ -531,7 +545,11 @@ function DepartmentSheet({ department }: { department: Department }) {
             </tr>
           </thead>
           <tbody>
-            {department.members.map((m: DepartmentMember) => (
+            {team.map((m: DepartmentMember) => {
+              // Who covers whom, said on the people it concerns: a supervisor's backup, a backup's supervisors.
+              const backedBy = inForce.filter((l) => l.primary?.id === m.id && l.backup)
+              const backs = inForce.filter((l) => l.backup?.id === m.id && l.primary)
+              return (
               <tr key={m.id} className="dir-row">
                 <td className="dir-cell-who">
                   <span className="dir-who">
@@ -540,7 +558,18 @@ function DepartmentSheet({ department }: { department: Department }) {
                       <Link to={profilePath(m.id)} className="dir-name">
                         <bdi>{m.name}</bdi>
                       </Link>
-                      <span className="org-sub">{tx(POSITION_LABEL[m.position])}</span>
+                      <span className="org-sub org-sub--facts">
+                        <span>{tx(POSITION_LABEL[m.position])}</span>
+                        {backedBy.map((l) => (
+                          <span key={l.id}>
+                            {fill(tx(T.backupIs), { name: <bdi>{l.backup!.name}</bdi> })} ({tx(STATUS_LABEL[l.status])}
+                            {l.status === 'active' && l.activeUntil ? ` ${tx(T.until, { date: date(l.activeUntil) })}` : ''})
+                          </span>
+                        ))}
+                        {backs.length > 0 && (
+                          <span>{fill(tx(T.backupFor), { names: <bdi>{backs.map((l) => l.primary!.name).join(tx(T.listComma))}</bdi> })}</span>
+                        )}
+                      </span>
                     </span>
                   </span>
                 </td>
@@ -558,7 +587,8 @@ function DepartmentSheet({ department }: { department: Department }) {
                   </td>
                 )}
               </tr>
-            ))}
+              )
+            })}
           </tbody>
         </table>
       )}

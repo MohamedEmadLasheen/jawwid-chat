@@ -26,12 +26,28 @@ html[lang='ar'] .support .mast .page-header__title .badge { font-family: var(--f
 .support-center { text-align: start; }
 .support-foot { flex: none; margin: 0; padding-block: 0 var(--space-4); font-size: var(--fs-xs); color: var(--ink-muted); }
 
-/* The time left: a quiet figure until the last minutes, then red (a deadline about to pass). */
-.support-left { display: inline-flex; align-items: center; gap: 8px; margin-inline-end: var(--space-2); font-size: var(--fs-sm); color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+/* The session's bar: deep teal across the top of the page, so acting as someone is never mistaken
+   for one's own desk. What it is and whose account, the time left, and the two ways on. */
+.support-bar { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px var(--space-4); margin-block-end: var(--space-4); padding: 10px var(--space-4); border-radius: var(--radius-lg); background: var(--teal-deep); color: var(--text-inverse); }
+.support-bar__what { flex: 1 1 320px; display: flex; align-items: center; gap: 10px; min-inline-size: 0; font-size: var(--fs-sm); line-height: 1.5; }
+.support-bar__what > .icon { flex: none; }
+.support-bar__what strong { font-weight: 600; }
+.support-bar__acting { opacity: 0.85; }
+.support-bar__actions { display: inline-flex; flex-wrap: wrap; gap: 8px; }
+.support-bar .btn { min-block-size: 34px; }
+.support-bar__btn.btn { border-color: color-mix(in srgb, var(--text-inverse) 35%, transparent); background: transparent; color: var(--text-inverse); }
+.support-bar__btn.btn:hover:not(:disabled) { border-color: var(--text-inverse); background: color-mix(in srgb, var(--text-inverse) 8%, transparent); }
+/* The way out is the strongest control on the page: white on the bar. */
+.support-bar__exit.btn { border-color: var(--surface); background: var(--surface); color: var(--teal-deep); font-weight: 600; }
+.support-bar__exit.btn:hover:not(:disabled) { background: var(--teal-tint); }
+.support-bar .btn:focus-visible { outline: 2px solid var(--text-inverse); outline-offset: 2px; }
+
+/* The time left: a quiet figure until the last minutes, then the urgent tag (a deadline about to pass). */
+.support-left { display: inline-flex; align-items: center; gap: 8px; font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
 .support-left > span { display: grid; line-height: 1.3; }
-.support-left strong { font-weight: 600; color: var(--ink); }
-.support-left__until { font-size: var(--fs-xs); }
-.support-left--last, .support-left--last strong { color: var(--urgent); }
+.support-left strong { font-weight: 600; }
+.support-left__until { font-size: var(--fs-xs); opacity: 0.85; }
+.support-left--last strong { padding: 0 6px; border-radius: var(--radius); background: var(--urgent-tint); color: var(--urgent); }
 .support-tabs { overflow-x: auto; scrollbar-width: none; }
 .support-tabs::-webkit-scrollbar { display: none; }
 
@@ -51,7 +67,7 @@ html[lang='ar'] .support .mast .page-header__title .badge { font-family: var(--f
 }
 .support-side { display: flex; flex-direction: column; min-inline-size: 0; min-block-size: 0; border-inline-end: 1px solid var(--line); }
 .support-side__head { flex: none; display: flex; align-items: baseline; gap: 8px; min-block-size: 52px; padding: 14px var(--space-4) 10px; border-block-end: 1px solid var(--line-2); }
-.support-side__title { margin: 0; font-family: var(--font-head); font-size: var(--fs-xl); font-weight: 600; line-height: 1.3; }
+.support-side__title { margin: 0; font-family: var(--font-head); font-size: var(--fs-md); font-weight: 600; line-height: 1.4; }
 .support-side__count { font-size: var(--fs-sm); color: var(--ink-muted); font-variant-numeric: tabular-nums; }
 .support-list { flex: 1; min-block-size: 0; overflow-y: auto; list-style: none; margin: 0; padding: 0; }
 .support-list__note { padding: var(--space-4); font-size: var(--fs-sm); color: var(--ink-muted); }
@@ -138,7 +154,7 @@ html[lang='ar'] .support .mast .page-header__title .badge { font-family: var(--f
 
 .support-composer { flex: none; display: grid; gap: 6px; padding: 8px var(--space-4) 12px; border-block-start: 1px solid var(--line); background: var(--canvas); }
 .support-composer > .field__error { margin: 0; }
-.support-composer__flag { margin: 0; display: flex; align-items: center; gap: 6px; font-size: var(--fs-xs); font-weight: 500; line-height: 1.5; color: var(--waiting); }
+.support-composer__flag { margin: 0; display: flex; align-items: center; gap: 6px; font-size: var(--fs-xs); font-weight: 500; line-height: 1.5; color: var(--ink-muted); }
 .support-composer__flag .icon { flex: none; }
 .support-composer__bar { display: flex; align-items: flex-end; gap: 4px; padding: 3px; border: 1px solid var(--border-strong); border-radius: var(--radius-lg); background: var(--surface); transition: border-color var(--dur-fast) var(--ease-out); }
 .support-composer__bar:focus-within { border-color: var(--teal); outline: 2px solid var(--teal); outline-offset: -1px; }
@@ -166,14 +182,15 @@ html[lang='ar'] .support .mast .page-header__title .badge { font-family: var(--f
   .support-profile { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 767px) {
-  /* The masthead keeps to what must be seen: whose account, how long, the way out. */
+  /* The bar keeps to what must be seen: whose account, how long, the way out. */
   .support .mast__lead { display: none; }
-  .support .mast .page-header__title { font-size: 22px; }
-  .support .mast .page-header__actions { inline-size: 100%; }
-  .support .mast .page-header__actions > .btn { min-block-size: 44px; }
-  .support .mast .page-header__actions > .btn--primary { flex: 1; }
-  .support-left { flex: 1 1 100%; margin-inline-end: 0; }
+  .support .mast .page-header__title { font-size: var(--fs-xl); }
+  .support-bar { gap: 8px; padding: 10px var(--space-3); margin-block-end: var(--space-3); }
+  .support-bar__what { flex: 1 1 auto; }
   .support-left > span { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 8px; }
+  .support-left__until { display: none; }
+  .support-bar__actions { flex: 1 1 100%; }
+  .support-bar__actions > .btn { flex: 1; justify-content: center; min-block-size: 44px; }
   .support-tabs .seg__item { min-block-size: 44px; }
   .support-panel { padding-block-end: var(--space-3); }
   /* One pane at a time: the list, then the open thread with a way back. */

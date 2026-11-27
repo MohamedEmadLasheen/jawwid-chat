@@ -34,15 +34,16 @@
 /* A long list names its devices once, as filters with their counts: an unfamiliar one stands out. */
 .dev-kinds { padding: 10px var(--space-4); border-block-end: 1px solid var(--line-2); }
 .dev-table { inline-size: 100%; border-collapse: collapse; font-size: var(--fs-md); }
-/* The columns are named once, quietly: the times compare down the list. */
-.dev-table thead th { padding: 8px var(--space-3); border-block-end: 1px solid var(--line-2); font-size: var(--fs-xs); font-weight: 500; color: var(--ink-muted); text-align: start; white-space: nowrap; }
+/* The column names are said, not drawn: a row reads by itself. */
+.dev-table > thead { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); }
 .dev-table td { padding: 9px var(--space-3); border-block-end: 1px solid var(--line-2); text-align: start; vertical-align: middle; }
 .dev-table :is(th, td):first-child { padding-inline-start: var(--space-4); }
 .dev-table :is(th, td):last-child { padding-inline-end: var(--space-4); }
 .dev-table > tbody > tr:last-child > td { border-block-end: 0; }
 .dev-table td.cell-actions { inline-size: 1%; }
-.dev-cell-time { inline-size: 18%; font-size: var(--fs-sm); white-space: nowrap; font-variant-numeric: tabular-nums; }
-.dev-cell-time--quiet { color: var(--ink-muted); }
+.dev-cell-time { inline-size: 26%; font-size: var(--fs-sm); white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* The sign-in, said only when it was another moment than the last activity. */
+.dev-signed-in { display: block; font-size: var(--fs-xs); color: var(--ink-muted); }
 .dev-none { color: var(--ink-muted); }
 
 /* A row is one line: the device, its kind after it, the times, one quiet action. */
@@ -56,21 +57,20 @@
 .dev-kind > :not(:last-child)::after { content: ','; }
 html[lang='ar'] .dev-kind > :not(:last-child)::after { content: '،'; }
 
-/* The device in use leads the list: tinted, its icon in the accent, its name a step larger. */
-.dev-row--current > td { background: var(--teal-tint); padding-block: 14px; }
-.dev-row--current .dev-icon { color: var(--teal); }
-.dev-row--current .dev-name strong { font-size: var(--fs-lg); }
+/* The device in use leads the list, tinted and tagged; nothing more marks it. */
+.dev-row--current > td { background: var(--teal-tint); }
+/* A device that names neither itself nor its kind is the one to look at: its mark is amber. */
+.dev-row--unknown .dev-icon { color: var(--waiting); }
 
 /* Signing a device out is the row's one action: quiet at rest, red only under the pointer. */
-.dev-row:not(.dev-row--current) .dev-signout.btn:not(:hover):not(:focus-visible) { border-color: transparent; background: none; color: var(--ink-muted); }
-.dev-row:not(.dev-row--current):hover .dev-signout.btn:not(:hover) { border-color: var(--line-strong); color: var(--ink); }
+.dev-row .dev-signout.btn:not(:hover):not(:focus-visible) { border-color: transparent; background: none; color: var(--ink-muted); }
+.dev-row:hover .dev-signout.btn:not(:hover) { border-color: var(--line-strong); color: var(--ink); }
 :is(.dev-signout, .dev-signout-others).btn:hover:not(:disabled), :is(.dev-signout, .dev-signout-others).btn:focus-visible { border-color: var(--urgent); background: var(--surface); color: var(--urgent); }
 
 .dev-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-3); margin: 0; padding: 8px var(--space-4); border-block-start: 1px solid var(--line-2); font-size: var(--fs-sm); color: var(--ink-muted); font-variant-numeric: tabular-nums; }
 
 /* In a side panel the times sit under the device, so the action keeps its place at the end. */
 .dev-list--compact .dev-table, .dev-list--compact .dev-table > tbody { display: block; }
-.dev-list--compact .dev-table > thead { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); }
 .dev-list--compact .dev-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 2px var(--space-3); padding: 12px var(--space-4); border-block-end: 1px solid var(--line-2); }
 .dev-list--compact .dev-row:last-child { border-block-end: 0; }
 .dev-list--compact .dev-row > td { display: block; inline-size: auto; padding: 0; border: 0; background: none; }
@@ -80,10 +80,9 @@ html[lang='ar'] .dev-kind > :not(:last-child)::after { content: '،'; }
 .dev-list--compact .dev-row > .dev-cell-time::before { content: attr(data-label) ': '; }
 .dev-list--compact .dev-row .dev-signout.btn:not(:hover):not(:focus-visible) { border-color: var(--line-strong); color: var(--ink); }
 
-/* On a phone every list reads that way. */
+/* On a phone every list reads that way: two short lines and a way out. */
 @media (max-width: 767px) {
   .dev-table, .dev-table > tbody { display: block; }
-  .dev-table > thead { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); }
   .dev-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 2px var(--space-3); padding: 12px var(--space-4); border-block-end: 1px solid var(--line-2); }
   .dev-row:last-child { border-block-end: 0; }
   .dev-row--current { background: var(--teal-tint); }
@@ -92,8 +91,8 @@ html[lang='ar'] .dev-kind > :not(:last-child)::after { content: '،'; }
   .dev-table .dev-row > td.cell-actions { grid-column: 2; grid-row: 1 / span 3; }
   .dev-table .dev-row > .dev-cell-time { grid-column: 1; padding-inline-start: 28px; font-size: var(--fs-xs); white-space: normal; }
   .dev-table .dev-row > .dev-cell-time::before { content: attr(data-label) ': '; }
-  .dev-row .dev-signout.btn, .dev-row:not(.dev-row--current) .dev-signout.btn:not(:hover):not(:focus-visible) { min-block-size: 44px; border-color: var(--line-strong); color: var(--ink); }
-  .dev-sheet > .sheet__head > .btn { flex: 1 1 100%; min-block-size: 44px; justify-content: center; }
+  .dev-row .dev-signout.btn { min-block-size: 44px; }
+  .dev-sheet > .sheet__head > .btn { min-block-size: 44px; }
   .dev-kinds { padding-inline: 0; }
   .dev-kinds .chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-inline: var(--space-4); }
   .dev-kinds .chips::-webkit-scrollbar { display: none; }

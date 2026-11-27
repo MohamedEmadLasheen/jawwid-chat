@@ -89,6 +89,11 @@ export function AssignSupervisorDialog({
         />
       }
     >
+      {/* Who has the child now, so the change is not made blind. */}
+      <p className="org-dialog-now">
+        {tx(T.currentSupervisor)}:{' '}
+        {learner.supervisor ? <strong><bdi>{learner.supervisor.name}</bdi></strong> : <span className="org-muted">{tx(T.unassigned)}</span>}
+      </p>
       <div className="field">
         <label className="field__label" htmlFor={selectId}>{tx(T.assignTo)}</label>
         <SearchableSelect

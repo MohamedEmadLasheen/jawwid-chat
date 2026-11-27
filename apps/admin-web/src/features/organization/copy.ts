@@ -107,11 +107,15 @@ export const T = {
   childrenCount: { en: 'Children', ar: 'الأطفال' },
   backups: { en: 'Backup supervisors', ar: 'المشرفون البدلاء' },
   backupsHint: {
-    en: 'A backup sees and answers a supervisor’s conversations ONLY while the link is active. A link starts dormant.',
+    en: 'A backup sees and answers a supervisor’s conversations only while the link is active. A link starts dormant.',
     ar: 'يرى البديل محادثات المشرف ويرد عليها فقط أثناء تفعيل الربط. يبدأ الربط غير مفعّل.',
   },
   noBackups: { en: 'No backup links yet.', ar: 'لا توجد روابط بدلاء بعد.' },
   covers: { en: '{backup} covers {primary}', ar: '{backup} ينوب عن {primary}' },
+  /** On a team member's row: who backs them up, and whom they back up. */
+  backupIs: { en: 'Backup: {name}', ar: 'البديل: {name}' },
+  backupFor: { en: 'Backup for {names}', ar: 'بديل عن {names}' },
+  allChildrenAssigned: { en: 'Every child has a supervisor.', ar: 'لكل طفل مشرف.' },
   until: { en: 'until {date}', ar: 'حتى {date}' },
   addBackup: { en: 'Add backup link', ar: 'إضافة رابط بديل' },
   activate: { en: 'Activate', ar: 'تفعيل' },

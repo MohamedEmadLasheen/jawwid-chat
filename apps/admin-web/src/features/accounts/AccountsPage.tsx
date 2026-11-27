@@ -21,7 +21,8 @@ import type { AccountSummary, IssuedReset } from './api'
 import { A, ACCOUNTS_COUNT, KIND, STATUS, describeError, useCopy } from './copy'
 import { useAccounts, useIssueReset, useReactivate, useSuspend } from './hooks'
 import { supportAdminApi, supportKeys, supportTokens, type SupportSession } from '@/features/support/api'
-import { S, SESSIONS_COUNT, describeError as describeSupportError } from '@/features/support/copy'
+import { ACTIONS_RECORDED, MINUTES, S, SESSIONS_COUNT, describeError as describeSupportError } from '@/features/support/copy'
+import { fill } from '@/features/profiles/RecordHead'
 import { accountSessionsApi, sessionKeys, type SessionDto } from '@/features/devices/api'
 import { D, isSessionGone } from '@/features/devices/copy'
 import { SessionList, useDeviceName } from '@/features/devices/SessionList'
@@ -109,7 +110,6 @@ export function AccountsPage({ eyebrow }: { eyebrow?: string }) {
               <thead>
                 <tr>
                   <th scope="col">{tx(A.person)}</th>
-                  <th scope="col">{tx(A.status)}</th>
                   <th scope="col">{tx(A.lastLogin)}</th>
                   <th scope="col" className="cell-actions">
                     <span className="sr-only">{tx(A.actions)}</span>
@@ -123,27 +123,29 @@ export function AccountsPage({ eyebrow }: { eyebrow?: string }) {
                       <span className="dir-who">
                         <Avatar name={a.name} seed={a.accountId} />
                         <span className="dir-who__text">
-                          <strong className="dir-name">
-                            <bdi>{a.name}</bdi>
-                          </strong>
-                          <span className="acct-sub">
+                          {/* Where the account stands is said beside the name, and only when it is not the usual. */}
+                          <span className="acct-name-line">
+                            <strong className="dir-name">
+                              <bdi>{a.name}</bdi>
+                            </strong>
+                            <AccountState account={a} />
+                          </span>
+                          {/* One line: who the account is, then the children by name (a search may have found the family by one). */}
+                          <span className="acct-sub" title={a.children.length > 0 ? a.children.join(locale === 'ar' ? '، ' : ', ') : undefined}>
                             <span>{tx(KIND[a.kind])}</span>
                             {a.familyName && (
                               <span>
                                 <bdi>{a.familyName}</bdi>
                               </span>
                             )}
+                            {a.children.length > 0 && (
+                              <span>
+                                {tx(A.childrenLabel)} <bdi>{a.children.join(locale === 'ar' ? '، ' : ', ')}</bdi>
+                              </span>
+                            )}
                           </span>
-                          {a.children.length > 0 && (
-                            <span className="acct-children">
-                              {tx(A.childrenLabel)} <bdi>{a.children.join(locale === 'ar' ? '، ' : ', ')}</bdi>
-                            </span>
-                          )}
                         </span>
                       </span>
-                    </td>
-                    <td className="dir-cell-state">
-                      <AccountState account={a} />
                     </td>
                     <td className={a.lastLoginAt ? 'dir-cell-quiet' : 'dir-cell-quiet dir-cell-quiet--none'} data-label={tx(A.lastLogin)}>
                       {a.lastLoginAt ? <time dateTime={a.lastLoginAt} title={dateTime(a.lastLoginAt)}>{when(a.lastLoginAt, { start: true })}</time> : <span className="dir-none">{tx(A.never)}</span>}
@@ -186,23 +188,19 @@ function needFirst(accounts: AccountSummary[]): AccountSummary[] {
 }
 
 /**
- * Where an account stands, as tags. What stops a person signing in is said
- * loudest: a lock is the urgent tag, a missing password an amber word; an
- * account set inactive is a quiet word, and so is an active one: a list of
- * thirty green dots would hide the two that need someone.
+ * Where an account stands, as tags, and only when it is not the usual: an
+ * active account that signs in says nothing, so the few that need someone are
+ * the only marks in the list. A lock is the urgent tag, a missing password an
+ * amber word, an account set inactive or deactivated a quiet word.
  */
 export function AccountState({ account: a }: { account: AccountSummary }) {
   const tx = useCopy()
+  if (a.status === 'active' && !a.lockedUntil && a.hasLogin) return null
   return (
     <span className="acct-state">
       {a.lockedUntil && <Badge tone="danger">{tx(A.locked)}</Badge>}
       {!a.hasLogin && <Badge tone="waiting">{tx(A.noLogin)}</Badge>}
-      {a.status === 'active' ? (
-        // An active account that cannot sign in is told by its other tag alone.
-        !a.lockedUntil && a.hasLogin && <Badge tone="neutral">{tx(STATUS.active)}</Badge>
-      ) : (
-        <Badge tone={a.status === 'suspended' ? 'neutral' : 'outline'}>{tx(STATUS[a.status])}</Badge>
-      )}
+      {a.status !== 'active' && <Badge tone={a.status === 'suspended' ? 'neutral' : 'outline'}>{tx(STATUS[a.status])}</Badge>}
     </span>
   )
 }
@@ -428,7 +426,7 @@ function DevicesDialog({
   return (
     <Dialog title={tx(D.devicesOf, { name: account.name })} onClose={onClose} variant="sheet">
       <section className="dev-section" aria-label={tx(D.devicesOf, { name: account.name })}>
-        <p className="field__hint">{tx(D.devicesExplain, { name: account.name })}</p>
+        {sessions.length > 0 && <p className="field__hint">{tx(D.devicesExplain, { name: account.name })}</p>}
         {notice && (
           <p className="field__hint" role="status">
             {notice}
@@ -438,7 +436,7 @@ function DevicesDialog({
           isLoading={list.isLoading}
           error={list.error}
           isEmpty={sessions.length === 0}
-          emptyTitle={tx(D.empty)}
+          emptyTitle={tx(D.emptyOf, { name: account.name })}
           onRetry={() => void list.refetch()}
           compact
         >
@@ -552,13 +550,17 @@ function SupportRecord() {
   // Read once a render: a session past its time is no longer one to go back into.
   const now = Date.now()
   const live = (s: SupportSession) => !s.endedAt && Date.parse(s.expiresAt) > now
+  // The live ones first, then the record in the server's order; the most recent few until asked for the rest.
+  const [all, setAll] = useState(false)
+  const ordered = [...sessions].sort((a, b) => Number(live(b)) - Number(live(a)))
+  const shown = all ? ordered : ordered.slice(0, RECORD_FIRST)
   return (
     <Sheet id="acct-record-title" title={tx(S.recordTitle)} count={sessions.length > 0 ? countWords(sessions.length, SESSIONS_COUNT, locale) : undefined}>
       {record.data && sessions.length === 0 ? (
         <p className="rec-empty">{tx(S.noRecord)}</p>
       ) : (
         <ul className="rec-list acct-sessions">
-          {sessions.map((s) => (
+          {shown.map((s) => (
             <li key={s.id} className={live(s) ? 'rec-attn acct-session acct-session--live' : 'rec-attn acct-session'}>
               <div className="rec-attn__what">
                 <span className="rec-attn__line">
@@ -570,21 +572,15 @@ function SupportRecord() {
                 <span className="acct-session__why">
                   <bdi>{s.reason}</bdi>
                 </span>
+                {/* One line: who opened it and when, how long it lasted, what it did. */}
                 <span className="rec-attn__sub">
-                  <span>
-                    {tx(S.recordBy)} <bdi>{s.staff.name}</bdi>
-                  </span>
-                  <span>
-                    {tx(S.recordStarted)} <time dateTime={s.startedAt} title={dateTime(s.startedAt)}>{when(s.startedAt)}</time>
-                  </span>
+                  <span title={dateTime(s.startedAt)}>{fill(tx(S.recordOpened), { by: <bdi>{s.staff.name}</bdi>, when: when(s.startedAt) })}</span>
                   {s.endedAt && (
-                    <span>
-                      {tx(S.recordEnded)} <time dateTime={s.endedAt} title={dateTime(s.endedAt)}>{when(s.endedAt)}</time>
+                    <span title={dateTime(s.endedAt)}>
+                      {tx(S.recordLasted, { time: countWords(Math.max(1, Math.round((Date.parse(s.endedAt) - Date.parse(s.startedAt)) / 60_000)), MINUTES, locale) })}
                     </span>
                   )}
-                  <span>
-                    {tx(S.recordActions)} <span className="ltr">{number(s.actions)}</span>
-                  </span>
+                  {s.actions > 0 && <span>{countWords(s.actions, ACTIONS_RECORDED, locale)}</span>}
                 </span>
               </div>
               <div className="rec-attn__act">
@@ -603,9 +599,20 @@ function SupportRecord() {
           ))}
         </ul>
       )}
+      {shown.length < ordered.length && (
+        <p className="dir-foot">
+          <span />
+          <button type="button" className="btn btn--sm btn--ghost" onClick={() => setAll(true)}>
+            {tx(S.recordShowAll, { n: number(ordered.length) })}
+          </button>
+        </p>
+      )}
     </Sheet>
   )
 }
+
+/** How many support sessions the record shows before it asks to show the rest. */
+const RECORD_FIRST = 5
 
 /** ReasonDialog shows an ApiError in the reader's language; this one carries PD-21's own wording. */
 function localized(error: unknown): ApiError | undefined {

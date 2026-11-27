@@ -43,6 +43,10 @@
    waits, its first words say how many, after an amber dot; no edge, no stripe. */
 .org-rule { flex: 1 1 320px; margin: 0; max-inline-size: 96ch; font-size: var(--fs-sm); line-height: 1.5; color: var(--ink-muted); }
 .org-rule > strong { font-weight: 600; color: var(--ink); }
+/* Said alone, the answer takes the bar's first line. */
+.org-rule--line { flex: 1 1 100%; }
+.org-dialog-now { margin: 0 0 var(--space-3); font-size: var(--fs-sm); color: var(--ink-muted); }
+.org-dialog-now strong { color: var(--ink); font-weight: 600; }
 .org-rule--waiting > strong::before { content: ''; display: inline-block; inline-size: 8px; block-size: 8px; margin-inline-end: 8px; border-radius: 50%; background: var(--waiting); vertical-align: 0.1em; }
 .org-error { margin: 0; padding: 8px var(--space-4); }
 
@@ -54,6 +58,14 @@
 .org-table .dir-cell-who { inline-size: 44%; }
 .org-name { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; }
 .org-sub { font-size: var(--fs-xs); line-height: 1.55; color: var(--ink-muted); overflow-wrap: anywhere; }
+/* A team member's facts (place, backup, whom they back up) read as one phrase, parted by commas. */
+.org-sub--facts { display: flex; flex-wrap: wrap; gap: 0 5px; font-size: var(--fs-sm); }
+.org-sub--facts > :not(:last-child)::after { content: ','; }
+html[lang='ar'] .org-sub--facts > :not(:last-child)::after { content: '،'; }
+/* A row's stated action is a quiet word until the row is under the pointer or holds focus. */
+@media (min-width: 768px) {
+  .org-table .dir-row:not(:hover):not(:focus-within) .row-actions2 > .btn { border-color: transparent; background: none; }
+}
 .org-person { font-weight: 600; color: var(--ink); text-decoration: none; }
 .org-person:hover { color: var(--teal); text-decoration: underline; text-underline-offset: 3px; }
 .org-cell-pick { inline-size: 36%; min-inline-size: 13rem; }
@@ -108,7 +120,7 @@
   .org-table--team .dir-row .row-actions2 { display: flex; flex: 1; }
   .org-table--team .dir-row .row-actions2 > .btn { flex: 1; justify-content: center; }
   .org-table--team .org-control { display: flex; }
-  .org-table--team.dir-table .dir-row > td.org-cell-num::after { content: ' ' attr(data-label); font-size: var(--fs-xs); color: var(--ink-muted); }
+  .org-table--team.dir-table .dir-row > td.org-cell-num::before { content: attr(data-label) ': '; font-size: var(--fs-xs); color: var(--ink-muted); }
   /* The supervisor's picker takes the row's width under the teacher. */
   .org-table.dir-table .dir-row > td.org-cell-pick { grid-column: 1 / -1; inline-size: auto; min-inline-size: 0; padding-block-start: 8px; }
   .org-cell-pick .ss { max-inline-size: none; }

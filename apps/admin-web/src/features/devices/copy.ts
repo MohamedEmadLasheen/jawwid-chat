@@ -18,8 +18,10 @@ export const D = {
   thisBrowser: { en: 'This browser', ar: 'هذا المتصفح' },
   kept: { en: 'Kept signed in', ar: 'يبقى مسجلاً' },
   app: { en: 'App {version}', ar: 'التطبيق {version}' },
-  unknownDevice: { en: 'Unknown device', ar: 'جهاز غير معروف' },
+  unknownDevice: { en: 'Unrecognised device', ar: 'جهاز لم يُتعرّف عليه' },
   notYet: { en: '—', ar: '—' },
+  notActiveYet: { en: 'Not active yet', ar: 'لم ينشط بعد' },
+  signedInOn: { en: 'Signed in {when}', ar: 'سُجّل الدخول {when}' },
   empty: { en: 'No device is signed in.', ar: 'لا يوجد جهاز مسجَّل الدخول.' },
   devicesFilter: { en: 'Show the sessions of one device', ar: 'عرض جلسات جهاز واحد' },
   allDevices: { en: 'All devices', ar: 'كل الأجهزة' },
@@ -46,6 +48,10 @@ export const D = {
   // Accounts page (administrator)
   devicesOf: { en: 'Active devices of {name}', ar: 'الأجهزة النشطة لـ {name}' },
   devicesButton: { en: 'Devices', ar: 'الأجهزة' },
+  emptyOf: {
+    en: '{name} is not signed in on any device. A device appears here once they sign in.',
+    ar: '{name} غير مسجَّل الدخول على أي جهاز. يظهر الجهاز هنا بعد تسجيل الدخول.',
+  },
   devicesExplain: {
     en: 'Signing a device out ends that session at once; {name} can sign in again with their password.',
     ar: 'تسجيل خروج جهاز يُنهي تلك الجلسة فورًا، ويمكن لـ {name} تسجيل الدخول مجددًا بكلمة المرور.',

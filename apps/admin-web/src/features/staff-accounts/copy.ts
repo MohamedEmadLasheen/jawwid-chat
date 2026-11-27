@@ -165,6 +165,11 @@ export const SA = {
   maxTier: { ar: 'أعلى مستوى', en: 'Highest tier' },
   permissions: { ar: 'الصلاحيات', en: 'Permissions' },
   members: { ar: 'الأعضاء', en: 'Members' },
+  noHolders: { ar: 'لا أحد بعد', en: 'No one yet' },
+  noHoldersYet: {
+    ar: 'لا يحمل أحد هذا الدور بعد. يُمنح الدور من حسابات الموظفين.',
+    en: 'No one holds this role yet. A role is granted from Staff accounts.',
+  },
   actions: { ar: 'الإجراءات', en: 'Actions' },
   template: { ar: 'قالب', en: 'Template' },
   templateHint: {

@@ -23,8 +23,14 @@ export function readableDeviceName(name: string | null): string {
 
 export function useDeviceName() {
   const tx = useCopy()
-  return (s: SessionDto) => readableDeviceName(s.deviceName) || tx(PLATFORM[s.platform ?? 'unknown']) || tx(D.unknownDevice)
+  return (s: SessionDto) => readableDeviceName(s.deviceName) || (s.platform ? tx(PLATFORM[s.platform]) : '') || tx(D.unknownDevice)
 }
+
+/** A session that names neither its device nor its kind: the one a person cannot recognise. */
+const unrecognised = (s: SessionDto) => !readableDeviceName(s.deviceName) && !s.platform
+
+/** Two times closer than this are one moment: the sign-in is not said apart from the last activity. */
+const SAME_MOMENT_MS = 60 * 60_000
 
 /**
  * PD-23: the sessions of one account, one row a session -- the staff member's
@@ -67,8 +73,8 @@ export function SessionList({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ordered, locale])
   const showKinds = ordered.length >= KINDS_FROM && kinds.length > 1
-  // A filter narrows the other sessions; the device in use always stays first.
-  const narrowed = device === 'all' || !showKinds ? ordered : ordered.filter((s) => s.current || name(s) === device)
+  // A filter narrows the list to one device, the one in use included only when it is that device, so the count holds.
+  const narrowed = device === 'all' || !showKinds ? ordered : ordered.filter((s) => name(s) === device)
   const shown = all ? narrowed : narrowed.slice(0, FIRST_ROWS)
   const hidden = narrowed.length - shown.length
 
@@ -90,7 +96,6 @@ export function SessionList({
           <tr>
             <th scope="col">{tx(D.device)}</th>
             <th scope="col">{tx(D.lastActive)}</th>
-            <th scope="col">{tx(D.signedIn)}</th>
             {onSignOut && (
               <th scope="col" className="cell-actions">
                 <span className="sr-only">{tx(D.actions)}</span>
@@ -99,32 +104,42 @@ export function SessionList({
           </tr>
         </thead>
         <tbody>
-          {shown.map((s) => (
-            <tr key={s.id} data-session={s.id} className={s.current ? 'dev-row dev-row--current' : 'dev-row'}>
-              <td className="dev-cell-what">
-                <span className="dev-what">
-                  <span className="dev-icon" aria-hidden="true">
-                    <Icon name={s.platform === 'ios' || s.platform === 'android' ? 'device' : 'screen'} size={18} />
-                  </span>
-                  <span className="dev-what__text">
-                    <span className="dev-name">
-                      <strong dir="auto">{name(s)}</strong>
-                      {s.current && <Badge tone="info">{tx(D.thisBrowser)}</Badge>}
-                      {s.remembered && <Badge tone="outline">{tx(D.kept)}</Badge>}
+          {shown.map((s) => {
+            const app = s.platform === 'ios' || s.platform === 'android'
+            const unknown = unrecognised(s)
+            // The sign-in is said apart only when it was not the same moment as the last activity.
+            const signedInApart = !s.lastSeenAt || Math.abs(Date.parse(s.lastSeenAt) - Date.parse(s.signedInAt)) > SAME_MOMENT_MS
+            return (
+              <tr key={s.id} data-session={s.id} className={['dev-row', s.current ? 'dev-row--current' : '', unknown ? 'dev-row--unknown' : ''].filter(Boolean).join(' ')}>
+                <td className="dev-cell-what">
+                  <span className="dev-what">
+                    <span className="dev-icon" aria-hidden="true">
+                      <Icon name={unknown ? 'question' : app ? 'device' : 'screen'} size={18} />
                     </span>
-                    <span className="dev-kind">
-                      <span>{tx(PLATFORM[s.platform ?? 'unknown'])}</span>
-                      {s.appVersion && <span dir="auto">{tx(D.app, { version: s.appVersion })}</span>}
+                    <span className="dev-what__text">
+                      <span className="dev-name">
+                        <strong dir="auto">{name(s)}</strong>
+                        {s.current && <Badge tone="info">{tx(D.thisBrowser)}</Badge>}
+                        {s.remembered && <Badge tone="outline">{tx(D.kept)}</Badge>}
+                      </span>
+                      {/* The kind is said where the name does not say it already: an app, and its version. */}
+                      {(app || s.appVersion) && (
+                        <span className="dev-kind">
+                          {app && <span>{tx(PLATFORM[s.platform!])}</span>}
+                          {s.appVersion && <span dir="auto">{tx(D.app, { version: s.appVersion })}</span>}
+                        </span>
+                      )}
                     </span>
                   </span>
-                </span>
-              </td>
-              <td className="dev-cell-time" data-label={tx(D.lastActive)}>
-                {s.lastSeenAt ? <time dateTime={s.lastSeenAt}>{when(s.lastSeenAt, { start: true })}</time> : <span className="dev-none">{tx(D.notYet)}</span>}
-              </td>
-              <td className="dev-cell-time dev-cell-time--quiet" data-label={tx(D.signedIn)}>
-                <time dateTime={s.signedInAt}>{when(s.signedInAt, { start: true })}</time>
-              </td>
+                </td>
+                <td className="dev-cell-time" data-label={tx(D.lastActive)}>
+                  {s.lastSeenAt ? <time dateTime={s.lastSeenAt}>{when(s.lastSeenAt, { start: true })}</time> : <span className="dev-none">{tx(D.notActiveYet)}</span>}
+                  {signedInApart && (
+                    <span className="dev-signed-in">
+                      {tx(D.signedInOn, { when: when(s.signedInAt) })}
+                    </span>
+                  )}
+                </td>
               {onSignOut && (
                 <td className="cell-actions">
                   <RowActions
@@ -137,8 +152,9 @@ export function SessionList({
                   />
                 </td>
               )}
-            </tr>
-          ))}
+              </tr>
+            )
+          })}
         </tbody>
       </table>
       {hidden > 0 && (
