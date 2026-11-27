@@ -260,8 +260,6 @@ export const T = {
   joinedLine: { en: 'Joined {date}', ar: 'انضم {date}' },
   lastActiveLine: { en: 'Last active {when}', ar: 'آخر نشاط {when}' },
   chat: { en: 'Chat', ar: 'محادثة' },
-  tabs: { en: 'Profile sections', ar: 'أقسام الملف' },
-  tabProfile: { en: 'Profile', ar: 'الملف' },
   otherChange: { en: 'Profile changed', ar: 'تغيير في الملف' },
 
   // The record: its masthead and tabs
@@ -271,15 +269,12 @@ export const T = {
   recPrivacy: { en: 'Privacy', ar: 'الخصوصية' },
   more: { en: 'More actions: {name}', ar: 'إجراءات أخرى: {name}' },
   awaitingNote: { en: '{n} awaiting our reply', ar: '{n} بانتظار ردّنا' },
-  numbersRest: { en: 'Also counted', ar: 'يُحسب كذلك' },
-  nothingToRead: { en: 'Nothing recorded here is yours to read.', ar: 'لا يوجد هنا سجل يحق لك الاطلاع عليه.' },
   openProfile: { en: 'Open profile', ar: 'فتح الملف' },
   teachersNote: { en: 'Teachers: {n}', ar: 'المعلمون: {n}' },
   inactiveNote: { en: 'Inactive: {n}', ar: 'غير نشط: {n}' },
   staffAccounts: { en: 'Staff accounts', ar: 'حسابات الموظفين' },
   loadColumn: { en: 'Load', ar: 'العبء' },
   loadColumnHint: { en: 'Assigned families against the heaviest load in the team. No capacity is recorded.', ar: 'الأسر المسندة مقارنةً بأعلى عبء في الفريق. لا تُسجَّل طاقة استيعابية.' },
-  sections: { en: 'Sections', ar: 'الأقسام' },
 
   // The Team page
   teamTitle: { en: 'Team', ar: 'الفريق' },

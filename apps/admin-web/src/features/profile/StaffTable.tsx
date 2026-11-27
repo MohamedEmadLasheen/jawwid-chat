@@ -103,6 +103,13 @@ export function StaffTable({ rows, showManager, note }: { rows: StaffSummary[]; 
   const narrowed = [status !== 'all', role !== '', manager !== '', category !== ''].filter(Boolean).length
   const groups = showManager ? byManager(visible, locale) : [{ key: TEAM, kind: 'plain' as const, manager: null, rows: visible }]
   const columns = 6
+  // A bar only where there is a team to read it against (two or more active people), and a load in it.
+  const shareOf = (r: StaffSummary): number | null => {
+    const team = teamOf(r, showManager)
+    const scale = team ? heaviest.get(team) : undefined
+    return r.isActive && scale && scale.active >= 2 && scale.top > 0 ? Math.round((r.workload.assignedFamilies / scale.top) * 100) : null
+  }
+  const anyBar = visible.some((r) => shareOf(r) !== null)
 
   return (
     <div className="sp-roster">
@@ -204,10 +211,7 @@ export function StaffTable({ rows, showManager, note }: { rows: StaffSummary[]; 
                 const roleText = tx(ROLE_LABEL[r.role] ?? { en: r.role, ar: r.role })
                 const to = `/profile/${r.staffId}`
                 const missing = r.completeness.missing.map((m) => tx(MISSING_LABEL[m])).join(' · ')
-                const team = teamOf(r, showManager)
-                const scale = team ? heaviest.get(team) : undefined
-                // A bar only where there is a team to read it against, and a load in it.
-                const share = r.isActive && scale && scale.active >= 2 && scale.top > 0 ? Math.round((r.workload.assignedFamilies / scale.top) * 100) : null
+                const share = shareOf(r)
                 const awaiting = r.workload.awaitingReply
                 return (
                   <tr
@@ -234,6 +238,8 @@ export function StaffTable({ rows, showManager, note }: { rows: StaffSummary[]; 
                           <span className="dir-sub">
                             <span>{roleText}</span>
                             {r.jobTitle && <bdi>{r.jobTitle}</bdi>}
+                            {/* What the server lets this viewer do with the profile: said on every row, at every width. */}
+                            <span>{r.access.canEditProfessional || r.access.canManageResponsibilities ? tx(T.canEditBadge) : tx(T.viewOnlyBadge)}</span>
                           </span>
                         </span>
                       </span>
@@ -252,12 +258,7 @@ export function StaffTable({ rows, showManager, note }: { rows: StaffSummary[]; 
                       )}
                     </td>
                     <td className="dir-cell-quiet sp-cell-file" data-label={tx(T.colProfile)} title={missing || undefined}>
-                      <span className="sp-cell-file__in">
-                        <bdi dir="ltr" className="sp-cell-file__n">{tx(T.completeOf, { done: r.completeness.complete, total: r.completeness.total })}</bdi>
-                        <span className="sp-cell-file__right">
-                          {r.access.canEditProfessional || r.access.canManageResponsibilities ? tx(T.canEditBadge) : tx(T.viewOnlyBadge)}
-                        </span>
-                      </span>
+                      <bdi dir="ltr" className="sp-cell-file__n">{tx(T.completeOf, { done: r.completeness.complete, total: r.completeness.total })}</bdi>
                     </td>
                     <td className="cell-actions">
                       <RowActions
@@ -277,7 +278,13 @@ export function StaffTable({ rows, showManager, note }: { rows: StaffSummary[]; 
           ))}
         </table>
       )}
-      {note && <p className="dir-foot dir-foot--note">{note}</p>}
+      {(note || anyBar) && (
+        <p className="dir-foot dir-foot--note sp-roster__foot">
+          {/* The bar's rule is said in words wherever a bar is drawn: a tooltip alone would not reach a phone. */}
+          {anyBar && <span>{tx(T.loadColumnHint)}</span>}
+          {note && <span>{note}</span>}
+        </p>
+      )}
     </div>
   )
 }

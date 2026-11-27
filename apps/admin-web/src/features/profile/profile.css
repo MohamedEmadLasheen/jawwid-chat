@@ -102,7 +102,7 @@
 .sp-period .ss__input { min-block-size: var(--control-h-sm); block-size: var(--control-h-sm); padding-block: 0; font-size: var(--fs-sm); }
 .sp-log { margin: 0; padding: 16px var(--space-4) 6px; }
 /* On a sheet the open dots are the sheet's white. */
-.rec-sheet .pp-tl > li:not(:first-child)::after { background: var(--surface); }
+.sp-page .rec-sheet .pp-tl > li:not(:first-child)::after { background: var(--surface); }
 /* Signing in is the background of a day: said, not stressed, so what they did stands out. */
 .sp-log__line--session strong { font-weight: 500; color: var(--ink-muted); }
 /* The same act several times in a row is one line and a count. */
@@ -118,7 +118,7 @@
 /* The counts the masthead does not carry: small figures, two to a line. */
 .rec-facts.sp-numbers { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px var(--space-4); }
 .sp-numbers__n { font-family: var(--display); font-size: var(--fs-lg); font-weight: 600; font-variant-numeric: tabular-nums lining-nums; }
-.rec-rule strong { font-weight: 600; color: var(--ink); }
+.sp-page .rec-rule strong { font-weight: 600; color: var(--ink); }
 .sp-defs { margin-block-start: 8px; font-size: var(--fs-xs); color: var(--ink-muted); }
 .sp-defs summary { display: inline-flex; align-items: center; min-block-size: 32px; cursor: pointer; color: var(--teal); font-weight: 500; }
 .sp-defs summary:hover { color: var(--teal-dark); }
@@ -204,13 +204,16 @@
 /* Its full length is the heaviest load among the people who report to the same manager. */
 .sp-bar { display: block; inline-size: 100%; max-inline-size: 172px; block-size: 6px; border-radius: 2px; background: var(--surface-sunken); overflow: hidden; }
 .sp-bar > span { display: block; block-size: 100%; border-radius: 2px; background: var(--teal); }
-.sp-roster__table td.sp-cell-file { white-space: nowrap; }
-.sp-cell-file__in { display: inline-flex; align-items: baseline; gap: 8px; }
-.sp-cell-file__n { color: var(--ink); font-variant-numeric: tabular-nums; }
-.sp-cell-file__right { font-size: var(--fs-xs); }
+.sp-roster__table td.sp-cell-file { inline-size: 88px; white-space: nowrap; }
+.sp-cell-file__n { font-variant-numeric: tabular-nums; }
+/* What the bar measures, and what the sums are: said once, under the list. */
+.dir-foot.sp-roster__foot { display: grid; gap: 2px; justify-content: start; }
 @media (max-width: 1199px) {
-  /* Less room: how complete the profile is, and whether it can be edited, are on the profile. */
+  /* Less room: how complete the profile is stays on the profile, and the bar is shorter. */
   .sp-roster__table :is(th, td):nth-child(5) { display: none; }
+  .sp-roster__table td.sp-cell-load, .sp-roster__table th:nth-child(4) { inline-size: 132px; }
+  .sp-roster__table :is(th, td).sp-cell-num { inline-size: 84px; }
+  .sp-roster__table :is(th, td).sp-cell-await { inline-size: 112px; }
 }
 @media (max-width: 1499px) {
   /* Beside the team's sums the sheet is narrower still. */
@@ -228,6 +231,8 @@
   .sp-filters .sp-roster__count { flex-basis: 100%; margin-inline-start: 0; }
   .sp-roster__table .dir-row > td.sp-cell-await { grid-column: 2; grid-row: 1; inline-size: auto; text-align: end; }
   .sp-roster__table .dir-row > td.sp-cell-await--none { display: none; }
+  /* With no count beside it, the person has the row's width. */
+  .sp-roster__table .dir-row:has(> .sp-cell-await--none) > .dir-cell-who { grid-column: 1 / -1; }
   .sp-roster__table .dir-row > td.sp-cell-num { grid-column: 1; grid-row: 2; inline-size: auto; padding-inline-start: 48px; text-align: start; font-size: var(--fs-xs); color: var(--ink-muted); }
   .sp-roster__table .dir-row > td.sp-cell-num::before { content: attr(data-label) ': '; }
   .sp-roster__table .sp-cell-num__n { font-family: var(--font); font-size: var(--fs-sm); color: var(--ink); }

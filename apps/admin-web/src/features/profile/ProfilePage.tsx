@@ -219,7 +219,8 @@ function StaffFile({ profile, refKey }: { profile: StaffProfile; refKey: string 
           (conversation || showEdit || more.length > 0) && (
             <>
               {conversation && (
-                <Link className="btn btn--primary" to={`/chat/${encodeURIComponent(conversation.id)}`}>
+                // The view's one solid action; while the form is open that is its Save.
+                <Link className={editing ? 'btn' : 'btn btn--primary'} to={`/chat/${encodeURIComponent(conversation.id)}`}>
                   <Icon name="conversations" size={16} />
                   {tx(T.chat)}
                 </Link>
