@@ -39,7 +39,7 @@ export const S = {
   // Filters
   filters: { en: 'Filters', ar: 'عوامل التصفية' },
   railFold: { en: 'Fold the filters to icons', ar: 'طيّ عوامل التصفية إلى أيقونات' },
-  railOpen: { en: 'Show the filters’ names', ar: 'إظهار أسماء عوامل التصفية' },
+  railOpen: { en: 'Expand the filter rail', ar: 'توسيع شريط عوامل التصفية' },
   clearAll: { en: 'Clear all', ar: 'مسح الكل' },
   search: { en: 'Search', ar: 'بحث' },
   noOptions: { en: 'Nothing to choose', ar: 'لا خيارات' },
