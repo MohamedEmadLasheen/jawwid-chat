@@ -108,7 +108,9 @@ export function ConversationList({
     : active
   // PD-36: a chat that has asked the viewer in, not yet opened, leads -- above
   // pinned. Then pinned; otherwise the server's order (most recent activity first).
-  const rank = (c: ChatConversation) => (isUnseenSummons(c) ? 2 : c.viewerState?.pinned ? 1 : 0)
+  // Within "Needs a reply" a family owed an answer comes first (longest wait
+  // first), then a summons -- the same order as the empty pane's queue.
+  const rank = (c: ChatConversation) => (c.needsReply ? 3 : isUnseenSummons(c) ? 2 : c.viewerState?.pinned ? 1 : 0)
   // A work queue, not a flat inbox: owed an answer (longest wait first), then
   // unread, then the rest by recency. The tabs filter within this grouping.
   // A summons asks this viewer to act, so it sits with what is owed an answer.
@@ -361,7 +363,7 @@ function ConversationRow({
             </span>
             {/* Asked in (someone wants this viewer to act), else what is unread. */}
             {summoned ? (
-              <Badge tone="waiting">{copy.mentionedBadge}</Badge>
+              <Badge tone="info">{copy.mentionedBadge}</Badge>
             ) : (
               unread > 0 && (
                 <span className="cw-unread" aria-label={copy.unread(unread)}>

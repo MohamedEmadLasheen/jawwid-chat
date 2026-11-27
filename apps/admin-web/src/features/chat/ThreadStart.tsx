@@ -78,7 +78,7 @@ export function ThreadStart({ conversations, onOpen }: { conversations: ChatConv
                     </p>
                   </div>
                   {isUnseenSummons(c) && !c.needsReply ? (
-                    <Badge tone="waiting">{copy.mentionedBadge}</Badge>
+                    <Badge tone="info">{copy.mentionedBadge}</Badge>
                   ) : c.needsReply ? (
                     <span className={`cw-queue__waited cw-wait--${waitTone(c.lastActivityAt)}`} title={dateTime(c.lastActivityAt)} aria-label={copy.waitedLabel(age)}>
                       <Icon name="hourglass" size={16} />

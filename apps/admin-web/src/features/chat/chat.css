@@ -132,10 +132,10 @@
 .cw .conv-row__time { flex: none; font-size: var(--fs-xs); color: var(--ink-muted); font-variant-numeric: tabular-nums; }
 .cw .conv-row__sub { font-size: var(--fs-sm); line-height: 1.5; color: var(--ink-muted); }
 .cw .conv-row__bottom { gap: 8px; min-block-size: 22px; }
-.cw .conv-row .badge { flex: none; font-size: var(--fs-xs); white-space: nowrap; }
+.cw .conv-row .badge { flex: none; margin-inline-start: 4px; font-size: var(--fs-xs); white-space: nowrap; }
 /* Unread is weight and a teal count: what was said reads in ink. */
 .cw-row__main--unread .conv-row__sub { color: var(--ink-2); }
-.cw-row__main--unread .conv-row__time { color: var(--teal-dark); font-weight: 600; }
+.cw-row__main--unread .conv-row__time { color: var(--teal-dark); }
 .cw-unread {
   display: inline-grid;
   place-items: center;
@@ -144,9 +144,9 @@
   block-size: 20px;
   padding: 0 6px;
   border-radius: 10px;
-  background: var(--teal);
-  color: #fff;
-  font-size: 12px;
+  background: var(--teal-tint-2);
+  color: var(--teal-deep);
+  font-size: var(--fs-xs);
   font-weight: 600;
   line-height: 1;
   font-variant-numeric: tabular-nums;
@@ -279,11 +279,17 @@ button.cw-head__fact:hover { background: var(--surface-hover); }
 .cw .thread-head .cw-head__call { color: var(--teal-dark); }
 .cw .thread-head .cw-head__call .icon { color: var(--teal); }
 /* A narrow thread keeps the name readable: Call becomes its icon, the fact stays. */
-@container thread (max-width: 640px) {
+/* A thread narrower than its header's row: the family's fact takes its own line under the name. */
+@container thread (max-width: 760px) {
+  .cw .thread-head { flex-wrap: wrap; row-gap: 0; }
+  .cw-head__fact { order: 9; flex: 1 1 100%; padding: 0 0 4px; padding-inline-start: 64px; }
+  .cw-head__fact .badge, .cw-head__due { padding-block: 2px; }
+}
+@container thread (max-width: 480px) {
   .cw-head__call { inline-size: 40px; padding: 0; }
   .cw-head__call-word { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); }
 }
-@container thread (max-width: 480px) {
+@container thread (max-width: 420px) {
   .cw .thread-head__kind { display: none; }
 }
 
@@ -405,6 +411,8 @@ button.cw-head__fact:hover { background: var(--surface-hover); }
    said by its glyph's colour, never a stripe: teal for what is simply so,
    amber for what asks someone to act, red only for a problem. */
 .cw .bubble-row.cw-msg.cw-msg--card { max-inline-size: min(460px, 88%); margin-block: 8px; }
+/* A notice Jawwid posted about the family (lessons paused, a teacher away) is nobody's message: centred in the thread. */
+.cw .bubble-row.cw-msg.cw-msg--notice { align-self: center; align-items: center; max-inline-size: min(540px, 92%); margin-block: 12px; }
 .cw .bubble-row.cw-msg.cw-msg--card .bubble {
   min-inline-size: min(300px, 100%);
   padding: 12px 16px 8px;
@@ -742,8 +750,8 @@ button.cw-head__fact:hover { background: var(--surface-hover); }
 .cw-queue__title .count { min-inline-size: 26px; block-size: 24px; border-radius: 7px; font-size: 13px; }
 .cw-queue__title--calm { font-size: var(--fs-xl); }
 .cw-queue__sub { display: flex; align-items: center; gap: 8px; margin: 6px 0 0; color: var(--ink-muted); font-size: var(--fs-sm); }
-.cw-queue__list { list-style: none; margin: 0; padding: 4px; overflow: hidden; }
-.cw-queue__row { display: flex; align-items: center; gap: 14px; min-block-size: 76px; padding: 12px 14px; border-radius: 8px; }
+.cw-queue__list { list-style: none; margin: 0; padding: 0; overflow: hidden; }
+.cw-queue__row { display: flex; align-items: center; gap: 14px; min-block-size: 76px; padding: 12px 18px; }
 .cw-queue__row + .cw-queue__row { box-shadow: 0 -1px 0 var(--line-2); }
 .cw-queue__row:hover { background: var(--surface-hover); }
 .cw-queue__row .avatar { inline-size: 44px; block-size: 44px; border-radius: 11px; font-size: 15px; }
@@ -762,8 +770,8 @@ button.cw-head__fact:hover { background: var(--surface-hover); }
   gap: 6px 22px;
   inline-size: 100%;
   max-inline-size: 760px;
-  margin: auto auto 0;
-  padding-block-start: 14px;
+  margin: 20px auto 0;
+  padding-block-start: 0;
   font-size: var(--fs-xs);
   color: var(--ink-muted);
 }
@@ -789,12 +797,12 @@ button.cw-head__fact:hover { background: var(--surface-hover); }
 .cw-fam__sum { display: grid; gap: 2px; }
 .cw-fam__sum + .cw-fam__sum { margin-block-start: 10px; }
 .cw-fam__figure { display: flex; align-items: baseline; gap: 6px; }
-.cw-fam__figure .numeral { font-family: var(--font-head); font-size: 28px; font-weight: 700; line-height: 1.2; color: var(--ink); }
+.cw-fam__figure .numeral { font-family: var(--font-head); font-size: 26px; font-weight: 700; line-height: 1.2; color: var(--ink); }
 .cw-fam__unit { font-size: var(--fs-sm); color: var(--ink-muted); }
 .cw-fam__note { display: flex; align-items: center; flex-wrap: wrap; gap: 0 6px; min-block-size: 1.2em; font-size: var(--fs-sm); color: var(--ink-2); }
 /* The total is not itself late: it stays ink. Red goes only on the line that
    says how much of it is overdue and since when -- the breached value. */
-.cw-fam__sum--late .cw-fam__note { color: var(--urgent); font-weight: 600; }
+.cw-fam__sum--late .cw-fam__note { color: var(--urgent); font-size: var(--fs-md); font-weight: 600; }
 .cw-fam__settled { font-family: var(--font-head); font-size: var(--fs-lg); font-weight: 600; color: var(--ink); }
 .cw-fam__rows { margin: 0; }
 .cw-fam__row {
@@ -810,7 +818,9 @@ button.cw-head__fact:hover { background: var(--surface-hover); }
 .cw-fam__meta, .cw-fam__teacher { font-size: var(--fs-xs); font-weight: 400; color: var(--ink-muted); }
 .cw-money__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding-block-start: 14px; border-block-start: 1px solid var(--line-2); }
 .cw-money__actions .btn--primary { flex: 1 1 100%; margin-block-end: 4px; min-block-size: 42px; }
-.cw-money__actions .btn--ghost { padding-inline: 8px; color: var(--teal-dark); text-decoration: none; }
+.cw-money__actions { justify-content: flex-start; }
+.cw-money__actions .btn--ghost { padding-inline: 8px; color: var(--teal-dark); text-decoration: underline; text-decoration-color: var(--teal-tint-2); text-underline-offset: 4px; }
+.cw-money__actions .btn--ghost:first-of-type { margin-inline-start: -8px; }
 .cw-fam .aside-group { margin-block-start: 24px; }
 .cw-fam .aside-group__title { margin-block-end: 6px; }
 .cw-fam__children { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
@@ -1091,7 +1101,8 @@ mark.cw-hit { background: var(--teal-tint-2); color: inherit; border-radius: 3px
 /* The list's bar: search and order on one line, the kinds of conversation under them. */
 .cw-admin .workspace__head { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'search sort' 'bar bar'; gap: 10px 8px; padding-block: 14px 0; }
 .cw-admin .workspace__head > .search { grid-area: search; }
-.cw-admin__sort { grid-area: sort; max-inline-size: 148px; }
+.cw-admin__sort { grid-area: sort; inline-size: 148px; min-inline-size: 0; }
+.cw-admin__sort > * { inline-size: 100%; max-inline-size: 100%; }
 .cw-admin__sort .select { min-block-size: 38px; }
 .cw-admin__bar { grid-area: bar; display: flex; min-inline-size: 0; }
 .cw-admin__bar .cw-filters { flex: 1; }

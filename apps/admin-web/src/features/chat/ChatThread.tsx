@@ -433,6 +433,8 @@ export function ChatThread({
     const keep = new ResizeObserver(() => {
       if (atBottom.current) el.scrollTop = el.scrollHeight
     })
+    // The thread itself shrinks when the composer grows (a second line, a reply, a file).
+    keep.observe(el)
     for (const child of Array.from(el.children)) keep.observe(child)
     return () => keep.disconnect()
   }, [hasThread, messages.length === 0])
@@ -612,6 +614,19 @@ export function ChatThread({
         {conv?.familyId && <FamilyFact familyId={conv.familyId} onOpen={infoShown ? undefined : onToggleInfo} />}
         <div className="cw-head__actions">
           {conv && <CallButton conversationId={conversationId} peerLabel={name} isGroup={group} />}
+          {/* The context panel (the family's money, the conversation's details), shown or hidden: visible at every width. */}
+          {conv && (
+            <button
+              type="button"
+              className="btn btn--ghost btn--icon cw-head__panel"
+              onClick={onToggleInfo}
+              aria-pressed={infoShown}
+              aria-label={copy.panelTabs}
+              title={copy.panelTabs}
+            >
+              <Icon name="panel" size={20} />
+            </button>
+          )}
           {conv && (
             <Menu
               label={copy.chatActions}
@@ -1095,7 +1110,7 @@ function MessageItem({
 
   return (
     <li
-      className={`bubble-row ${SIDE_CLASS[side]} cw-msg${mine ? ' cw-msg--mine' : ''}${runStart ? ' cw-msg--run-start' : ''}${identity !== 'none' ? ' cw-msg--with-sender' : ''}${selectable ? ' cw-msg--selectable' : ''}${isSelected ? ' cw-msg--selected' : ''}${m.mentionsViewer && !m.deletedForAll ? ' cw-msg--mentions-me' : ''}${isCard ? ` cw-msg--card cw-msg--card-${edge}` : ''}`}
+      className={`bubble-row ${SIDE_CLASS[side]} cw-msg${mine ? ' cw-msg--mine' : ''}${runStart ? ' cw-msg--run-start' : ''}${identity !== 'none' ? ' cw-msg--with-sender' : ''}${selectable ? ' cw-msg--selectable' : ''}${isSelected ? ' cw-msg--selected' : ''}${m.mentionsViewer && !m.deletedForAll ? ' cw-msg--mentions-me' : ''}${isCard ? ` cw-msg--card cw-msg--card-${edge}` : ''}${notice ? ' cw-msg--notice' : ''}`}
       data-seq={m.seq ?? undefined}
       data-msg-id={m.id}
       onClick={selectable ? onToggleSelect : undefined}
@@ -1217,7 +1232,8 @@ function MessageItem({
               </span>
             )}
             <time dateTime={m.createdAt}>{time(m.createdAt)}</time>
-            {mine && <Ticks status={m.status} />}
+            {/* Delivery ticks tell the family's side; a note or a card has none to tell. */}
+            {mine && side !== 'internal' && !isCard && <Ticks status={m.status} />}
           </span>
         </div>
         {!selectMode && !notice && <Menu
