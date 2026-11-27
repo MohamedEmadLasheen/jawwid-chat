@@ -1169,12 +1169,12 @@ html[lang='ar'] .auth .login__title { font-weight: 700; line-height: 1.4; }
 .mast .page-header__title { font-size: var(--fs-title); gap: 8px 14px; }
 .mast .page-header__subtitle { margin-block-start: 4px; max-inline-size: 68ch; }
 .mast .page-header__actions { flex: none; gap: 8px; }
-.mast--tabs { padding-block-end: 0; }
+.page-header.mast.mast--tabs { padding-block-end: 0; }
 .mast__tabs { margin-block-start: var(--space-4); }
 .mast__tabs .seg, .mast__tabs .ts-tabs { border-block-end: 0; }
 @media (max-width: 767px) {
   .page-header.mast { margin-block: calc(-1 * var(--space-4)) var(--space-4); padding-block: var(--space-4); }
-  .mast--tabs { padding-block-end: 0; }
+  .page-header.mast.mast--tabs { padding-block-end: 0; }
   .mast .page-header__subtitle { display: none; }
 }
 
