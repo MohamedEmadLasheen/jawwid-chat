@@ -4,6 +4,8 @@ import type { Bilingual } from '@/features/admin/copy'
 export const D = {
   oldest: { ar: 'أقدمها {age}', en: 'Oldest {age}' },
   allClear: { ar: 'لا شيء ينتظر في هذا القسم', en: 'Nothing waiting in this section' },
+  // The section's other figures at zero, folded into one quiet line.
+  zeros: { ar: '{n} أخرى عند الصفر', en: '{n} more at zero' },
   failed: { ar: 'تعذّر تحميل هذا القسم', en: 'This section could not be loaded' },
   needs: { ar: 'بانتظارك الآن', en: 'Needs you now' },
   needsClear: { ar: 'لا شيء ينتظر فريقك الآن. ما يتأخر أو ينتظر ردًّا يظهر هنا أولًا.', en: 'Nothing is waiting on your team. What is late or waiting for an answer appears here first.' },

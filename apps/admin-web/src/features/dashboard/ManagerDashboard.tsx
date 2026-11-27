@@ -137,14 +137,16 @@ const SECTION_ICON: Record<SectionSpec['key'], IconName> = {
 
 function Section({ spec, query, variant }: { spec: SectionSpec; query: SectionQuery; variant: 'needs' | 'calm' }) {
   const tx = useText()
-  const { t, time } = useI18n()
+  const { t, time, number } = useI18n()
   const titleId = `dash-section-${spec.key}`
   const tiles = tilesOf(query.data)
   const present = new Set(tiles.map((x) => x.key))
   // What wants doing is a row to open, ranked by need; the section's other figures are plain lines.
   const waiting = tiles.filter(isWaiting).sort(byNeed)
-  // The other figures: anything above zero first, the zeros after.
-  const rest = tiles.filter((tile) => !isWaiting(tile)).sort((x, y) => Number(y.count > 0) - Number(x.count > 0))
+  // The other figures above zero are lines; the zeros fold into one quiet line a reader may open.
+  const others = tiles.filter((tile) => !isWaiting(tile))
+  const rest = others.filter((tile) => tile.count > 0)
+  const zeros = others.filter((tile) => tile.count === 0)
 
   return (
     <section className={variant === 'needs' ? 'dash-group dash-group--needs' : 'dash-group dash-group--calm'} aria-labelledby={titleId}>
@@ -196,6 +198,16 @@ function Section({ spec, query, variant }: { spec: SectionSpec; query: SectionQu
                     <Figure key={tile.key} tile={tile} present={present} />
                   ))}
                 </ul>
+              )}
+              {zeros.length > 0 && (
+                <details className="dash-zeros">
+                  <summary className="dash-zeros__head">{fill(tx(D.zeros), { n: number(zeros.length) })}</summary>
+                  <ul className="dash-lines dash-lines--zeros">
+                    {zeros.map((tile) => (
+                      <Figure key={tile.key} tile={tile} present={present} />
+                    ))}
+                  </ul>
+                </details>
               )}
             </>
           )}

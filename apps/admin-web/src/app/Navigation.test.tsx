@@ -76,7 +76,7 @@ describe('The navigation registry', () => {
   it('gives each of the twenty-one sections exactly one destination, in the nine sections of the rail', () => {
     const destinations = destinationsFor('super_admin')
     expect(destinations.map((d) => d.key)).toEqual([
-      'conversations', 'dashboard', 'people', 'sales', 'scheduling', 'operations', 'certificates', 'materials', 'finance', 'communication', 'admin',
+      'conversations', 'dashboard', 'people', 'sales', 'scheduling', 'certificates', 'finance', 'communication', 'admin',
     ])
     const keys = destinations.flatMap((d) => entriesOf(d).map((e) => e.key))
     // The twenty-one sections, plus Chat (PD-8: where the super admin replies),
@@ -214,15 +214,15 @@ describe('The nine sections', () => {
     expect(pathsIn('people', 'admin', { billingReader: true })).toContain('/parents')
   })
 
-  it('Operations holds the supervisors\' queue, escalations and lesson audio; Certificates and Educational materials have destinations of their own', () => {
+  it('Schedule & lessons holds the lesson follow-up (once Operations); Certificates & materials holds both (once two icons)', () => {
     const access = { lessonManager: true, certificates: true, lessonAudio: true, materialsWorkspace: true }
-    expect(pathsIn('operations', 'manager', access)).toEqual([
+    const lessons = destinationsFor('manager', access).find((d) => d.key === 'scheduling')!.groups.find((g) => g.key === 'lessons')!
+    expect(lessons.entries.map((e) => e.path)).toEqual([
       // The Teachers department's Trial lessons page is listed here, not under Sales (PD-59 owner decision).
-      '/teachers/needs-action', '/trials', '/lesson-audio',
+      '/teachers/needs-action', '/lesson-audio', '/trials',
     ])
-    expect(pathsIn('certificates', 'manager', access)).toEqual(['/certificates'])
-    expect(pathsIn('materials', 'manager', access)).toEqual(['/materials'])
-    expect(pathsIn('operations', 'admin', {})).toEqual([])
+    expect(pathsIn('certificates', 'manager', access)).toEqual(['/certificates', '/materials'])
+    expect(pathsIn('scheduling', 'admin', {})).not.toContain('/teachers/needs-action')
     // Escalations is a tab of Tasks: reached from there, never listed in the rail.
     for (const role of ['admin', 'manager', 'super_admin'] as const) expect(destinationsFor(role, access).flatMap((d) => entriesOf(d).map((e) => e.key)), role).not.toContain('cases')
     // The Marketing designer's whole workspace is one rail item, and nothing else is listed for them but their tasks.
@@ -232,7 +232,7 @@ describe('The nine sections', () => {
     // Nobody is offered either page without the server's word.
     for (const role of ['manager', 'admin', 'coverage', 'specialist'] as const) {
       expect(destinationsFor(role, {}).map((d) => d.key), role).not.toContain('certificates')
-      expect(destinationsFor(role, {}).map((d) => d.key), role).not.toContain('materials')
+      expect(destinationsFor(role, {}).flatMap((d) => entriesOf(d).map((e) => e.path)), role).not.toContain('/materials')
     }
   })
 
@@ -448,7 +448,7 @@ describe('The desktop rail', () => {
     const nav = await screen.findByRole('navigation', { name: 'Admin Portal' })
     const items = [...nav.querySelectorAll('[data-destination]')]
     expect(items.map((el) => el.getAttribute('data-destination'))).toEqual([
-      'conversations', 'dashboard', 'people', 'sales', 'scheduling', 'operations', 'certificates', 'materials', 'finance', 'communication', 'admin',
+      'conversations', 'dashboard', 'people', 'sales', 'scheduling', 'certificates', 'finance', 'communication', 'admin',
     ])
     // Conversations is a menu now -- Chat and All conversations -- and it is
     // where the super admin lands.
@@ -674,7 +674,7 @@ describe('The drawer, below desktop width', () => {
     expect(within(nav).getByRole('group', { name: 'الأشخاص والهيكل التنظيمي' })).toBeInTheDocument()
     const dashboard = within(nav).getByRole('group', { name: 'لوحة المتابعة' })
     expect(within(dashboard).getByRole('link', { name: 'لوحة المتابعة' })).toBeInTheDocument()
-    // A destination with one page is that page: a direct link, not a menu.
+    // Certificates and Educational materials share one place now; each page is still one tap away.
     expect(within(nav).getByRole('link', { name: 'المواد التعليمية' })).toHaveAttribute('href', '/materials')
     expect(within(nav).getByRole('link', { name: 'الشهادات' })).toHaveAttribute('href', '/certificates')
     expect(within(nav).queryByRole('link', { name: 'التصعيدات' })).not.toBeInTheDocument()

@@ -337,8 +337,9 @@ describe('a lead\'s panel', () => {
 describe('who gets the Sales icon, per the server\'s answers (PD-59 owner decision)', () => {
   const salesPaths = (role: Parameters<typeof destinationsFor>[0], access: Parameters<typeof destinationsFor>[1]) =>
     destinationsFor(role, access).find((d) => d.key === 'sales')?.groups.flatMap((g) => g.entries.map((e) => e.path)) ?? null
+  // The follow-up of lessons (once the Operations icon) is now the "lessons" group of Schedule & lessons.
   const opsPaths = (role: Parameters<typeof destinationsFor>[0], access: Parameters<typeof destinationsFor>[1]) =>
-    destinationsFor(role, access).find((d) => d.key === 'operations')?.groups.flatMap((g) => g.entries.map((e) => e.path)) ?? []
+    destinationsFor(role, access).find((d) => d.key === 'scheduling')?.groups.filter((g) => g.key === 'lessons' || g.label === null).flatMap((g) => g.entries.map((e) => e.path)).filter((p) => !['/schedule', '/teachers/schedules', '/schedule/students'].includes(p)) ?? []
 
   it('the super admin: the whole Sales workspace', () => {
     expect(salesPaths('super_admin', {})).toEqual(['/sales/pipeline', '/trials', '/trials/new-students'])
@@ -354,7 +355,7 @@ describe('who gets the Sales icon, per the server\'s answers (PD-59 owner decisi
     expect(salesPaths('admin', { operations: true })).toEqual(['/trials', '/trials/new-students'])
   })
 
-  it('the Teachers department (lessonManager only): NO Sales icon; Trial lessons stays reachable, listed under Operations', () => {
+  it('the Teachers department (lessonManager only): NO Sales icon; Trial lessons stays reachable, listed with the lessons', () => {
     for (const role of ['admin', 'manager'] as const) {
       expect(salesPaths(role, { lessonManager: true }), role).toBeNull()
       expect(opsPaths(role, { lessonManager: true }), role).toContain('/trials')

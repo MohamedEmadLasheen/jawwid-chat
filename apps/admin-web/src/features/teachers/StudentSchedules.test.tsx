@@ -82,8 +82,11 @@ describe('Student schedules page', () => {
 
 describe('Scheduling navigation', () => {
   it('holds the academy calendar, the Teachers\' and the Student schedules, and only for the Teachers department', () => {
+    // The calendars: Schedule & lessons also holds the follow-up of lessons (once the Operations icon), in its own group.
     const paths = (role: 'super_admin' | 'admin' | 'manager', access = {}) =>
-      entriesOf(destinationsFor(role, access).find((d) => d.key === 'scheduling') ?? { key: 'scheduling', icon: 'calendar', label: { en: '', ar: '' }, groups: [] }).map((e) => e.path)
+      entriesOf(destinationsFor(role, access).find((d) => d.key === 'scheduling') ?? { key: 'scheduling', icon: 'calendar', label: { en: '', ar: '' }, groups: [] })
+        .map((e) => e.path)
+        .filter((p) => ['/schedule', '/teachers/schedules', '/schedule/students'].includes(p))
     expect(paths('super_admin')).toEqual(['/schedule', '/teachers/schedules', '/schedule/students'])
     expect(paths('admin', { calendar: true, lessonManager: true })).toEqual(['/schedule', '/teachers/schedules', '/schedule/students'])
     // Operations has the calendar only; the desks wait for the Teachers department.
@@ -100,9 +103,9 @@ describe('Scheduling navigation', () => {
     expect(sales({ sales: true })).toEqual(['/sales/pipeline', '/trials', '/trials/new-students'])
     expect(sales({ operations: true })).toEqual(['/trials', '/trials/new-students'])
     // The Teachers department sees the teachers' trials, not the new-student set-up.
-    // ...nor a Sales icon: its Trial lessons page is listed under Operations (PD-59 owner decision).
+    // ...nor a Sales icon: its Trial lessons page is listed with the lessons, under Schedule & lessons (PD-59 owner decision).
     expect(sales({ lessonManager: true })).toEqual([])
-    const ops = destinationsFor('admin', { lessonManager: true }).find((x) => x.key === 'operations')
+    const ops = destinationsFor('admin', { lessonManager: true }).find((x) => x.key === 'scheduling')
     expect(ops ? entriesOf(ops).map((e) => e.path) : []).toContain('/trials')
     expect(sales({})).toEqual([])
   })

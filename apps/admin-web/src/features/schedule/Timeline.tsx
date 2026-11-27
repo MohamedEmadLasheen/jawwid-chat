@@ -261,7 +261,10 @@ export function TeacherHead({
         ) : outsideDays > 0 ? null : shift ? (
           tx(CATEGORY_LABEL[t.category])
         ) : (
-          joinList([tx(CATEGORY_LABEL[t.category]), tx(S.hourlyBooked, { h: hoursOf(t.totals.bookedMinutes, locale) })], locale)
+          // "0 h booked" on every idle row is noise: the hours are said only when there are some.
+          t.totals.bookedMinutes > 0
+            ? joinList([tx(CATEGORY_LABEL[t.category]), tx(S.hourlyBooked, { h: hoursOf(t.totals.bookedMinutes, locale) })], locale)
+            : tx(CATEGORY_LABEL[t.category])
         )}
         {uncovered > 0 && (
           <span className="count count--urgent" title={tx(S.withoutTeacher, { n: number(uncovered) })}>

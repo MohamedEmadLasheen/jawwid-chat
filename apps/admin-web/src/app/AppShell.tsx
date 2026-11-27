@@ -188,7 +188,9 @@ const SHORT_LABEL: Partial<Record<DestinationKey, { en: string; ar: string }>> =
 }
 
 /** A hairline is drawn above these destinations: the rail's sections. */
-const RAIL_RULE_BEFORE: ReadonlySet<DestinationKey> = new Set<DestinationKey>(['people', 'certificates', 'finance'])
+// Four sections: the day's work (Today, Conversations, Dashboard); the academy (People, Sales, Schedule
+// & lessons); what it hands out and takes in (Certificates & materials, Finance, Communication); then Admin.
+const RAIL_RULE_BEFORE: ReadonlySet<DestinationKey> = new Set<DestinationKey>(['people', 'certificates'])
 
 /**
  * Unread conversations, for the rail's badge. It only reads what the chat
@@ -865,7 +867,7 @@ function Tabbar({ destinations, onMore }: { destinations: Destination[]; onMore:
   const unread = useUnreadChats()
   const current = destinationForPath(destinations, pathname)
   // Four places and More: the everyday ones first, in the rail's own order of use.
-  const order: DestinationKey[] = ['conversations', 'dashboard', 'finance', 'people', 'sales', 'scheduling', 'operations', 'certificates', 'materials', 'communication']
+  const order: DestinationKey[] = ['conversations', 'dashboard', 'finance', 'people', 'sales', 'scheduling', 'certificates', 'communication']
   const picked = order.map((k) => destinations.find((d) => d.key === k)).filter((d): d is Destination => !!d).slice(0, 3)
   return (
     <nav className="tabbar" aria-label={tx({ en: 'Quick navigation', ar: 'تنقّل سريع' })}>

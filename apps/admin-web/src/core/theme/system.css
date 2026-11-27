@@ -27,7 +27,7 @@
   /* Ink and surfaces */
   --ink: #12333b;
   --ink-2: #2f4950;
-  --ink-muted: #5a6b6f;
+  --ink-muted: #4c5e62; /* secondary text: 6.9:1 on white, read comfortably (owner, 2026-11-28) */
   --canvas: #fbf8f1;
   --surface: #ffffff;
   --surface-2: #f7f4ec;
@@ -137,8 +137,8 @@
   --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 
   /* English sizes; Arabic is one step larger below. */
-  --fs-xs: 13px; /* the floor for anything a person reads */
-  --fs-sm: 13.5px;
+  --fs-xs: 13.5px; /* the floor for anything a person reads */
+  --fs-sm: 14px;
   --fs-md: 15px;
   --fs-lg: 16.5px;
   --fs-xl: 20px;
@@ -190,8 +190,8 @@
 }
 
 html[lang='ar'] {
-  --fs-xs: 13px;
-  --fs-sm: 14px;
+  --fs-xs: 14px;
+  --fs-sm: 14.5px;
   --fs-md: 16px;
   --fs-lg: 17.5px;
   --fs-xl: 22px;
@@ -205,7 +205,7 @@ html[lang='ar'] {
   :root:not([data-theme='light']) {
     --ink: #e7eeee;
     --ink-2: #c9d6d7;
-    --ink-muted: #9fb0b2;
+    --ink-muted: #b2c1c3;
     --canvas: #0f191b;
     --surface: #152225;
     --surface-2: #1a2a2d;
@@ -1210,3 +1210,33 @@ button.side__item.is-current::before { content: none; }
   .sidebar button.side__item.is-current.is-alone { background: var(--sidebar-active); box-shadow: 0 0 0 1px var(--sidebar-line); }
   .sidebar button.side__item.is-current.is-alone::before { content: ''; }
 }
+
+/* The folded rail's icons: larger, with a firmer line, so each reads at a glance (owner, 2026-11-28). */
+@media (min-width: 1024px) {
+  .sidebar[data-rail='collapsed'] :is(.side__item, .side__search, .nc-bell) > svg.icon { inline-size: 22px; block-size: 22px; stroke-width: 2; }
+  .sidebar[data-rail='collapsed'] .side__item { color: var(--ink-2); }
+  .sidebar[data-rail='collapsed'] .side__item .icon { color: var(--ink-2); }
+  .sidebar[data-rail='expanded'] :is(.side__item, .side__search, .nc-bell) > svg.icon { stroke-width: 1.85; }
+  /* Four sections, each set off by a quiet rule: tools, the day's work, the academy, what it hands out
+     and takes in, then Admin. */
+  .sidebar[data-rail='collapsed'] .side__searchrow { padding-block-end: 8px; border-block-end: 1px solid var(--sidebar-line); margin-block-end: 8px; }
+  .side__entry--end { margin-block-start: 10px; padding-block-start: 10px; }
+  .side__entry--end::after { content: ''; position: absolute; inset-block-start: 0; inset-inline: 10px; border-block-start: 1px solid var(--sidebar-line); }
+  .sidebar[data-rail='collapsed'] :is(.side__entry--rule, .side__entry--end)::after { inset-inline: 8px; }
+  .sidebar[data-rail='collapsed'] :is(.side__entry--rule, .side__entry--end) { margin-block-start: 8px; padding-block-start: 8px; }
+}
+
+/* The line under a name in a row (family, supervisor, plan, what was said) is read, not glanced at:
+   one step up from the floor, in the secondary ink (owner, 2026-11-28). */
+:is(.rw-sub, .entity__sub, .conv-row__sub, .cw-queue__said, .in-sub, .rw-meta, .sc-row__sub, .tsx-reason, .plan__left, .dash-tile__sub) { font-size: var(--fs-sm); color: var(--ink-muted); }
+.rw-fact__label { font-size: var(--fs-xs); color: var(--ink-muted); }
+
+/* A row's "Open" (a link to the row's own page) is not repeated down the list: it appears on the row's
+   hover and keyboard focus, and the whole row opens it (its hit area covers the row). Touch screens,
+   which have no hover, keep it visible. The row's own other controls sit above that hit area. */
+:is(tr, li, .rowx):has(> * .row-actions2--reveal, > .row-actions2--reveal) { position: relative; cursor: pointer; }
+.row-actions2__open { display: inline-flex; opacity: 0; transition: opacity var(--dur-fast) var(--ease); }
+.row-actions2__open > a::after { content: ''; position: absolute; inset: 0; z-index: 0; }
+:is(tr, li, .rowx):is(:hover, :focus-within) .row-actions2__open, .row-actions2__open:focus-within { opacity: 1; }
+:is(tr, li, .rowx):has(.row-actions2--reveal) :is(a, button, input, select, textarea, label, summary, .menu):not(.row-actions2__open > a) { position: relative; z-index: 1; }
+@media (hover: none) { .row-actions2__open { opacity: 1; } }

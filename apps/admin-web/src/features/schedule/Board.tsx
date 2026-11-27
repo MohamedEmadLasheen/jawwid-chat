@@ -118,24 +118,31 @@ export function WeekBoard({
               locale,
             )
             const load = base > 0 ? Math.min(1, booked / base) : 0
+            // Nothing booked and nothing to flag: a quiet blank, not a column of "0 h" (owner, 2026-11-28).
+            // It still opens the day, and its facts stay in its name and tooltip.
+            const empty = booked === 0 && !mark && !fullLeave
             return (
               <div key={d} role="cell" className="sc-cellwrap">
                 <button
                   type="button"
-                  className={`sc-cell${fullLeave ? ' sc-cell--leave' : ''}${d === today ? ' sc-cell--today' : ''}`}
+                  className={`sc-cell${fullLeave ? ' sc-cell--leave' : ''}${d === today ? ' sc-cell--today' : ''}${empty ? ' sc-cell--empty' : ''}`}
                   aria-label={`${tx(S.openDay, { teacher: t.name, day })}: ${facts}`}
                   title={facts}
                   data-nav=""
                   data-row={row}
                   onClick={() => onOpenDay(d, t.id)}
                 >
-                  <span className="sc-cell__figure">
-                    <span className="sc-cell__n">{h(booked)}</span>
-                    <span className="sc-cell__of">{tx(S.hours, { h: '' }).trim()}</span>
-                  </span>
-                  <span className="sc-cell__bar" aria-hidden="true">
-                    {base > 0 && <span style={{ inlineSize: `${load * 100}%` }} />}
-                  </span>
+                  {!empty && (
+                    <>
+                      <span className="sc-cell__figure">
+                        <span className="sc-cell__n">{h(booked)}</span>
+                        <span className="sc-cell__of">{tx(S.hours, { h: '' }).trim()}</span>
+                      </span>
+                      <span className="sc-cell__bar" aria-hidden="true">
+                        {base > 0 && <span style={{ inlineSize: `${load * 100}%` }} />}
+                      </span>
+                    </>
+                  )}
                   {mark && <span className={`sc-mark sc-mark--${mark}`}>{tx(MARK[mark])}</span>}
                 </button>
               </div>

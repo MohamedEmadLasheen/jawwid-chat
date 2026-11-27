@@ -169,3 +169,18 @@
   .dash-group--needs .dash-group__title, .dash-group--needs .dash-lines { padding-inline: var(--space-4); }
   .dash .btn { min-block-size: 44px; }
 }
+
+/* A section's figures at zero fold into one quiet line (owner, 2026-11-28): the numbers that matter
+   are not lost among zeros. Open, they read as before, a step quieter. */
+.dash-zeros { margin: 0; padding: 2px var(--space-5) 10px; }
+.dash-group--calm .dash-zeros { padding-inline: 0; }
+.dash-zeros__head { display: inline-flex; align-items: center; gap: 6px; padding: 4px 0; color: var(--ink-muted); font-size: var(--fs-sm); cursor: pointer; list-style: none; }
+.dash-zeros__head::-webkit-details-marker { display: none; }
+.dash-zeros__head::before { content: ''; inline-size: 6px; block-size: 6px; border-inline-end: 1.5px solid currentColor; border-block-end: 1.5px solid currentColor; transform: rotate(-45deg); transition: transform var(--dur-fast) var(--ease); }
+/* Closed it points along the line (to the reading end); open, down. */
+[dir='rtl'] .dash-zeros__head::before { transform: rotate(45deg); }
+.dash-zeros[open] > .dash-zeros__head::before { transform: rotate(45deg); }
+[dir='rtl'] .dash-zeros[open] > .dash-zeros__head::before { transform: rotate(-45deg); }
+.dash-zeros__head:hover { color: var(--ink); }
+.dash-group--needs .dash-zeros .dash-lines { padding-inline: 0; border-block-start: 0; }
+.dash-lines--zeros .dash-tile__value, .dash-lines--zeros .dash-tile__label { color: var(--ink-muted); }
