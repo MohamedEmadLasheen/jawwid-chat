@@ -71,6 +71,8 @@ export const S = {
   heldSoFar: { en: '{h} held', ar: '{h} منعقدة' },
   students: { en: 'Students', ar: 'الطلاب' },
   studentsHint: { en: '+{trial} trial · {paused} paused', ar: '+{trial} تجريبي · {paused} متوقف' },
+  trialCount: { en: '+{n} trial', ar: '+{n} تجريبي' },
+  pausedCount: { en: '{n} paused', ar: '{n} متوقف' },
   utilization: { en: 'Shift used', ar: 'إشغال الشيفت' },
   utilizationHint: { en: '{booked} of {base} shift hours', ar: '{booked} من {base} ساعة شيفت' },
   emptyHours: { en: 'Empty in shift', ar: 'فارغ داخل الشيفت' },
@@ -104,6 +106,7 @@ export const S = {
   // Legend
   legend: { en: 'Legend', ar: 'دليل الألوان' },
   supervisorsLegend: { en: 'Supervisors', ar: 'المشرفون' },
+  supervisorsFilter: { en: 'Show one supervisor’s lessons:', ar: 'عرض حصص مشرف بعينه:' },
   statusLegend: { en: 'Status', ar: 'الحالة' },
   noColor: { en: 'No color yet', ar: 'بلا لون بعد' },
   emptySlot: { en: 'Available time without a student', ar: 'وقت متاح بدون طالب' },

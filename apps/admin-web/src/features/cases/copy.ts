@@ -10,7 +10,8 @@ export const C = {
     en: 'What a supervisor could not settle alone, escalated to the Teachers or the Operations department.',
     ar: 'ما لم يستطع المشرف حله وحده، مُصعَّدًا إلى قسم المعلمين أو قسم العمليات.',
   },
-  empty: { en: 'No cases here.', ar: 'لا توجد حالات هنا.' },
+  empty: { en: 'No open escalations in this list', ar: 'لا تصعيدات مفتوحة في هذه القائمة' },
+  emptyAll: { en: 'No escalations in this list', ar: 'لا تصعيدات في هذه القائمة' },
   emptyHint: {
     en: 'A case appears here when a supervisor escalates one from a teacher, a student or a family.',
     ar: 'تظهر الحالة هنا حين يصعّدها مشرف من صفحة معلم أو طالب أو عائلة.',

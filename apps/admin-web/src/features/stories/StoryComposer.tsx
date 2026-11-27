@@ -254,7 +254,7 @@ export function StoryComposer({ basePath }: { basePath: string }) {
             {/* 2 · Button */}
             <Step n={2} title={tx(S.stepButton)}>
               <div className="cta-choices" role="radiogroup" aria-label={tx(S.stepButton)}>
-                <CtaChoice selected={ctaKind === null} onSelect={() => setCtaKind(null)} icon="close" label={tx(S.ctaNone)} />
+                <CtaChoice selected={ctaKind === null} onSelect={() => setCtaKind(null)} label={tx(S.ctaNone)} />
                 {(Object.keys(CTA_LABEL) as CtaKind[]).map((k) => (
                   <CtaChoice key={k} selected={ctaKind === k} onSelect={() => setCtaKind(k)} icon={CTA_ICON[k]} label={tx(CTA_LABEL[k])} />
                 ))}
@@ -410,13 +410,14 @@ function CtaChoice({
 }: {
   selected: boolean
   onSelect: () => void
-  icon: IconName
+  /** None for "No button": a cross there read as "remove". */
+  icon?: IconName
   label: string
 }) {
   return (
     <label className={`cta-choice${selected ? ' is-selected' : ''}`}>
       <input type="radio" name="story-cta" className="sr-only" checked={selected} onChange={onSelect} />
-      <Icon name={icon} size={16} />
+      {icon && <Icon name={icon} size={16} />}
       <span>{label}</span>
     </label>
   )

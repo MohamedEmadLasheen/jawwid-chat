@@ -67,7 +67,15 @@ export function StatsBar({ stats, loading }: { stats: CalendarStats | undefined;
         <Figure
           label={tx(S.students)}
           value={String(stats.students.distinct)}
-          note={tx(S.studentsHint, { trial: stats.students.trial, paused: stats.students.paused })}
+          // Only what there is: a zero is not an addend.
+          note={
+            [
+              stats.students.trial > 0 && tx(S.trialCount, { n: stats.students.trial }),
+              stats.students.paused > 0 && tx(S.pausedCount, { n: stats.students.paused }),
+            ]
+              .filter(Boolean)
+              .join(' · ') || undefined
+          }
         />
         <Figure
           label={tx(S.utilization)}
@@ -156,6 +164,7 @@ export function Legend({
       </ul>
       {supervisors.length > 0 && (
         <div className="sc-legend__group sc-legend__group--people" role="group" aria-label={tx(S.supervisorsLegend)}>
+          <span className="sc-legend__label">{tx(S.supervisorsFilter)}</span>
           {supervisors.map((s) => (
             <button
               key={s.id}

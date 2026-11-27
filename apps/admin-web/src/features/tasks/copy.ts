@@ -10,7 +10,9 @@ export const C = {
     en: 'Everything someone must do, until it is done. A task leaves a list only when it is completed, removed or handed on.',
     ar: 'كل ما يجب على أحد إنجازه، حتى يُنجَز. لا تغادر المهمة القائمة إلا إذا أُنجزت أو أُزيلت أو أُسندت لغيره.',
   },
-  empty: { en: 'Nothing here.', ar: 'لا شيء هنا.' },
+  empty: { en: 'No open tasks in this list', ar: 'لا مهام مفتوحة في هذه القائمة' },
+  emptyClosed: { en: 'No closed tasks yet', ar: 'لا مهام مغلقة بعد' },
+  emptyAction: { en: 'Give someone a task', ar: 'إسناد مهمة لأحد' },
   emptyHint: {
     en: 'A task appears here when someone gives you one, or when a payment, lesson or request needs you.',
     ar: 'تظهر المهمة هنا حين يسندها أحد إليك، أو حين يحتاج دفع أو حصة أو طلب إلى إجراء منك.',

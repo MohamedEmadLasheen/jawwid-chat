@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom'
+import { NavLink, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { useSession } from '@/core/auth/SessionProvider'
@@ -40,17 +40,25 @@ export function TasksAreaTabs() {
   const { staff } = useSession()
   const hasCases = holdsAny(staff, CASES_ACCESS_KEYS)
   const count = useOpenCaseCount(hasCases)
+  const here = useLocation().pathname
   if (!hasCases) return null
   const ar = locale === 'ar'
+  // The Admin Portal hosts the same page at /admin/tasks: the strip marks it there too, and stays there.
+  const tasksPath = here !== '/tasks' && /\/tasks$/.test(here) ? here : '/tasks'
   return (
     <nav className="ts-tabs" aria-label={ar ? 'المهام والتصعيدات' : 'Tasks and escalations'}>
-      <NavLink to="/tasks" end className={({ isActive }) => `ts-tab${isActive ? ' ts-tab--active' : ''}`}>
+      <NavLink to={tasksPath} end className={({ isActive }) => `ts-tab${isActive ? ' ts-tab--active' : ''}`}>
         {ar ? 'المهام' : 'Tasks'}
       </NavLink>
       <NavLink to="/cases" className={({ isActive }) => `ts-tab${isActive ? ' ts-tab--active' : ''}`}>
         {ar ? 'التصعيدات' : 'Escalations'}
         {count !== null && count > 0 && (
-          <span className="ts-tab__count" aria-label={ar ? `${count} مفتوحة` : `${count} open`}> ({count})</span>
+          <span className="ts-tab__count" aria-label={ar ? `${count} مفتوحة` : `${count} open`}>
+            {/* Drawn as a bare numeral, like every other tab count; the brackets are for a reader of the text alone. */}
+            <span className="sr-only"> (</span>
+            {count}
+            <span className="sr-only">)</span>
+          </span>
         )}
       </NavLink>
     </nav>

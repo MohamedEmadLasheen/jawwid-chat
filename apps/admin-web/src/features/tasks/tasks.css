@@ -2,7 +2,8 @@
    The level pairs are the app's own (tokens.css, light and dark), measured in
    TasksPage.test.tsx: text 4.5:1, icon 3:1. Gold carries text only as gold-700
    on gold-50 (the gold rule). On the Tasks page a level is a word in its colour
-   on the paper (measured there too); the fill stays for the chip anywhere else. */
+   on the paper (measured there too); the fill stays for the chip anywhere else.
+   Three tones only: terracotta is high, gold text is medium, low is plain muted ink. */
 .task-level,
 .task-finance {
   display: inline-flex;
@@ -15,46 +16,42 @@
 }
 .task-level--high { color: var(--danger); background: var(--danger-soft); }
 .task-level--medium { color: var(--gold-700); background: var(--gold-50); }
-.task-level--low { color: var(--ok); background: var(--ok-soft); }
+.task-level--low { color: var(--text-muted); background: var(--surface-sunken); }
 .task-level__reason { font-weight: 400; }
 .task-finance { color: var(--text-muted); background: var(--surface-sunken); font-weight: 500; }
 /* A level is a word, not a pill. */
 .tasks :is(.task-level, .task-finance) { background: none; }
 .task-level .icon, .task-finance .icon { flex: none; }
 
-/* Tasks | Escalations: two pages of one place. Gold marks the one you are on. */
-:is(.tasks, .cases) > .ts-tabs {
+/* Tasks | Escalations: two pages of one place. The same words-with-a-teal-underline
+   as every other tab strip (.seg): gold marks where you are only in the rail. */
+:is(.tasks, .cases) .page__inner > .ts-tabs {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-5);
-  margin: 0 0 var(--space-4);
+  margin: 0 0 var(--space-5);
   border: 0;
+  border-block-end: 1px solid var(--hairline);
 }
-:is(.tasks, .cases) > .ts-tabs .ts-tab {
-  position: relative;
+:is(.tasks, .cases) .page__inner > .ts-tabs .ts-tab {
   display: inline-flex;
   align-items: center;
-  min-block-size: 32px;
-  padding: 0;
+  margin-block-end: -1px;
+  padding: 8px 0 9px;
   border: 0;
+  border-block-end: 2px solid transparent;
   color: var(--ink-muted);
   font-size: var(--fs-sm);
   font-weight: 500;
-  transition: color var(--dur-fast) var(--ease-out);
+  transition: color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
 }
-:is(.tasks, .cases) > .ts-tabs .ts-tab:hover { color: var(--ink); }
-:is(.tasks, .cases) > .ts-tabs .ts-tab--active { color: var(--ink); font-weight: 600; }
-:is(.tasks, .cases) > .ts-tabs .ts-tab--active::after {
-  content: '';
-  position: absolute;
-  inset-inline: 0;
-  inset-block-end: 2px;
-  block-size: 2px;
-  background: var(--gold);
-}
-.ts-tab__count { margin-inline-start: 4px; color: var(--terracotta); font-variant-numeric: tabular-nums; font-weight: 600; }
+:is(.tasks, .cases) .page__inner > .ts-tabs .ts-tab:hover { color: var(--ink); }
+:is(.tasks, .cases) .page__inner > .ts-tabs .ts-tab--active { color: var(--text-link); border-block-end-color: var(--accent); font-weight: 600; }
+/* The count is a bare figure, as in .seg__count. */
+.ts-tab__count { margin-inline-start: 6px; color: var(--ink-muted); font-size: var(--fs-xs); font-weight: 500; font-variant-numeric: tabular-nums; }
+.ts-tab--active .ts-tab__count { color: var(--teal); }
 @media (max-width: 767px) {
-  :is(.tasks, .cases) > .ts-tabs .ts-tab { min-block-size: 44px; }
+  :is(.tasks, .cases) .page__inner > .ts-tabs .ts-tab { min-block-size: 44px; padding-block: 0; }
 }
 
 :is(.tasks, .cases) .page-header { margin-block-end: var(--space-5); }
@@ -414,3 +411,9 @@ html[lang='ar'] :is(.tasks__panel-title, .cases__panel-title) { font-weight: 700
 .tasks__history-by,
 .cases__history-by { color: var(--ink-muted); font-size: var(--fs-xs); }
 :is(.tasks__history, .cases__history) :is(.tasks__text, .cases__text) { margin: 4px 0 0; }
+
+/* Narrow screens: every button on these pages is a full touch target. */
+@media (max-width: 767px) {
+  :is(.tasks, .cases) :is(.btn, .btn--sm) { min-block-size: 44px; }
+  :is(.tasks, .cases) .state .btn { margin-block-start: var(--space-2); }
+}

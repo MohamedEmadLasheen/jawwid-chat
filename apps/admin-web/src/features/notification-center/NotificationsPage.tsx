@@ -5,7 +5,7 @@ import { useI18n } from '@/core/i18n/I18nProvider'
 import { FilterChips } from '@/shared/components/FilterChips'
 import { Icon } from '@/shared/components/Icon'
 import { PageHeader } from '@/shared/components/PageHeader'
-import { QueryBoundary } from '@/shared/components/States'
+import { EmptyState, QueryBoundary } from '@/shared/components/States'
 import { inboxApi, inboxKeys, routeFor, type InboxEntryDto, type InboxTab, type NotificationSettingsDto } from './api'
 import { CATEGORIES, N, SYSTEM, TABS, useCopy } from './copy'
 import './notification-center.css'
@@ -35,14 +35,14 @@ export function NotificationsPage() {
             options={tabs.map((t) => ({ value: t, label: tx(TABS[t]), count: t === 'all' ? undefined : counts.data?.perTab[t] }))}
           />
         </div>
-        <TabList key={tab} tab={tab} />
+        <TabList key={tab} tab={tab} onShowAll={() => setTab('all')} />
         <SettingsPanel />
       </div>
     </div>
   )
 }
 
-function TabList({ tab }: { tab: InboxTab }) {
+function TabList({ tab, onShowAll }: { tab: InboxTab; onShowAll: () => void }) {
   const tx = useCopy()
   const { dateTime } = useI18n()
   const navigate = useNavigate()
@@ -68,14 +68,20 @@ function TabList({ tab }: { tab: InboxTab }) {
   }
 
   return (
-    <QueryBoundary
-      isLoading={list.isLoading}
-      error={list.error}
-      isEmpty={entries.length === 0}
-      emptyTitle={tx(N.empty)}
-      emptyHint={tx(tab === 'all' ? N.emptyHint : N.emptyTabHint)}
-      onRetry={() => void list.refetch()}
-    >
+    <QueryBoundary isLoading={list.isLoading} error={list.error} onRetry={() => void list.refetch()}>
+      {entries.length === 0 && (
+        <EmptyState
+          title={tx(tab === 'all' ? N.empty : N.emptyTab)}
+          hint={tx(tab === 'all' ? N.emptyHint : N.emptyTabHint)}
+          action={
+            tab === 'all' ? undefined : (
+              <button type="button" className="btn btn--sm" onClick={onShowAll}>
+                {tx(N.showAll)}
+              </button>
+            )
+          }
+        />
+      )}
       {entries.some((e) => !e.read) && (
         <div className="nc-bar">
           <button type="button" className="btn btn--sm btn--ghost" onClick={() => readAll.mutate()} disabled={readAll.isPending}>
@@ -102,7 +108,7 @@ function TabList({ tab }: { tab: InboxTab }) {
               </div>
               <div className="nc-item__actions">
                 {to && (
-                  <button type="button" className="btn btn--sm btn--ghost nc-item__open" onClick={() => void open(entry, to)}>
+                  <button type="button" className="btn btn--sm btn--ghost nc-item__open" title={tx(N.open)} onClick={() => void open(entry, to)}>
                     {tx(N.open)}
                     <Icon name="chevronForward" size={16} />
                   </button>
@@ -181,11 +187,12 @@ function SettingsForm({
         <div className="nc-hours">
           <div className="field">
             <label className="field__label" htmlFor={`${ids}-from`}>{tx(N.from)}</label>
-            <input id={`${ids}-from`} className="input" type="time" value={from} onChange={(e) => setFrom(e.target.value)} />
+            {/* A native time control: left to right in both languages, under its label. */}
+            <input id={`${ids}-from`} className="input" type="time" dir="ltr" value={from} onChange={(e) => setFrom(e.target.value)} />
           </div>
           <div className="field">
             <label className="field__label" htmlFor={`${ids}-until`}>{tx(N.until)}</label>
-            <input id={`${ids}-until`} className="input" type="time" value={until} onChange={(e) => setUntil(e.target.value)} />
+            <input id={`${ids}-until`} className="input" type="time" dir="ltr" value={until} onChange={(e) => setUntil(e.target.value)} />
           </div>
         </div>
         <div className="nc-settings__actions">

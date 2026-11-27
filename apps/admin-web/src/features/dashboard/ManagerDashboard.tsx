@@ -146,7 +146,9 @@ function Figure({ tile, present, large = false }: { tile: DashboardTile; present
   const spec = TILES[tile.key]!
   const alert = spec.backlog && tile.count > 0
   const shape = large ? 'dash-tile dash-tile--large' : 'dash-tile dash-tile--line'
-  const tone = alert ? ' dash-tile--alert' : tile.count === 0 ? ' dash-tile--zero' : ''
+  // A late figure above zero is terracotta, here as on Today (overdue instalments, tasks, cases).
+  const late = tile.count > 0 && /overdue$/.test(tile.key)
+  const tone = (alert ? ' dash-tile--alert' : tile.count === 0 ? ' dash-tile--zero' : '') + (late ? ' dash-tile--late' : '')
   return (
     <li>
       <Link to={spec.href(present)} className={shape + tone}>
