@@ -177,6 +177,14 @@ export function DetailFoot({ primary, more, label }: { primary?: ReactNode; more
   )
 }
 
+/**
+ * The inspector's foot when a decision has two stated sides (approve and
+ * reject a receipt): both are shown, the first one solid.
+ */
+export function DetailActions({ children }: { children: ReactNode }) {
+  return <div className="rq-foot rq-foot--pair">{children}</div>
+}
+
 /* ---------------------------------------------------------- groups & rows */
 
 /** Rows that belong together (a day, a wait), on their own headed sheet. An urgent group's count is solid terracotta. */

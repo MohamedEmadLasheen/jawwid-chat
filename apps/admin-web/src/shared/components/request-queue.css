@@ -280,3 +280,6 @@ html[lang='ar'] .rq-step::before { inset-block-start: 22px; }
 
 /* A page or a filter with nothing in it: one sheet that says so. */
 .rq-blank { padding: var(--space-5); }
+
+/* Two stated sides of one decision: the first is the solid one and takes the room. */
+.rq-foot--pair > .btn:not(.btn--primary) { flex: 0 0 auto; }
