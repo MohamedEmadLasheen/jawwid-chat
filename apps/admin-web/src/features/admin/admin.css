@@ -82,10 +82,10 @@
 /* -------------------------------------------------------- unbuilt sections */
 
 /* One sheet says what the section will hold; the sections open today are a quiet list beside it. */
-.adm-soon__line { margin: 0; max-inline-size: 40ch; font-family: var(--font-head); font-size: var(--fs-2xl); font-weight: 600; line-height: 1.35; color: var(--ink); }
+.adm-soon__line { margin: 0; max-inline-size: 48ch; font-family: var(--font-head); font-size: var(--fs-lg); font-weight: 600; line-height: 1.35; color: var(--ink); }
 html[lang='ar'] .adm-soon__line { font-weight: 700; line-height: 1.6; }
 .adm-soon__note { margin: var(--space-4) 0 0; font-size: var(--fs-sm); color: var(--ink-muted); }
-.adm-soon__status { color: var(--waiting); font-weight: 600; }
+.adm-soon__status { color: var(--ink); font-weight: 600; }
 .adm-soon__legacy { margin-block-start: var(--space-3); font-size: var(--fs-sm); color: var(--ink-muted); }
 .adm-soon__legacy summary { display: flex; align-items: center; min-block-size: 32px; color: var(--teal); cursor: pointer; }
 .adm-soon__list { list-style: none; margin: 0; padding: 0; }
@@ -95,3 +95,5 @@ html[lang='ar'] .adm-soon__line { font-weight: 700; line-height: 1.6; }
 .adm-soon__link > .icon:last-child { color: var(--ink-muted); }
 .adm-soon__name { font-weight: 600; }
 @media (max-width: 767px) { .adm-soon__line { font-size: var(--fs-xl); } }
+
+.adm-soon__go { margin-block-start: var(--space-3); }

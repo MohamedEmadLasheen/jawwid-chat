@@ -1,13 +1,13 @@
 /* PD-48: the Lesson audio review page. The words set large on the paper, their clips as ruled lines. */
-.lesson-audio__note { margin: 0 0 var(--space-4); padding-inline-start: var(--space-3); border-inline-start: 2px solid var(--line-strong); color: var(--ink-2); font-size: var(--fs-sm); }
+.lesson-audio__note { margin: 0 0 var(--space-4); padding: 10px var(--space-3); border-radius: 8px; background: var(--teal-tint); color: var(--teal-dark); font-size: var(--fs-sm); }
 /* The unit index on the start side, the unit's words as a sheet beside it. */
 .lesson-audio__split { display: grid; grid-template-columns: 232px minmax(0, 1fr); gap: var(--space-5); align-items: start; }
 .lesson-audio__units { position: sticky; inset-block-start: 0; display: grid; max-block-size: calc(100vh - 220px); overflow-y: auto; scrollbar-width: thin; }
 .lesson-audio__unit-tab { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 0 var(--space-2); min-block-size: 40px; padding: 7px var(--space-3); border: 0; border-block-end: 1px solid var(--hairline-soft); border-radius: 0; background: none; color: var(--ink-muted); font: inherit; text-align: start; cursor: pointer; transition: background var(--dur-fast) var(--ease-out); }
 .lesson-audio__unit-tab:last-child { border-block-end: 0; }
 .lesson-audio__unit-tab:hover { background: var(--surface-hover); }
-.lesson-audio__unit-tab[aria-pressed='true'] { background: var(--teal-tint); box-shadow: inset 3px 0 0 var(--teal); color: var(--teal-dark); }
-[dir='rtl'] .lesson-audio__unit-tab[aria-pressed='true'] { box-shadow: inset -3px 0 0 var(--teal); }
+.lesson-audio__unit-tab[aria-pressed='true'] { background: var(--teal-tint); color: var(--teal-dark); font-weight: 600; }
+
 .lesson-audio__unit-tab:focus-visible { outline-offset: -2px; }
 .lesson-audio__unit-name { font-size: var(--fs-sm); font-weight: 600; color: var(--ink); direction: ltr; unicode-bidi: isolate; overflow-wrap: anywhere; }
 .lesson-audio__count { font-size: var(--fs-xs); font-variant-numeric: tabular-nums; direction: ltr; unicode-bidi: isolate; }

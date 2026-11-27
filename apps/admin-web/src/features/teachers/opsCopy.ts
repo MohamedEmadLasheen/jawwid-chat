@@ -31,10 +31,10 @@ export const O = {
   requests: { en: 'Regular-time requests', ar: 'طلبات تغيير المواعيد' },
   returning: { en: 'Returning soon', ar: 'يعودون قريبًا' },
   // Why a row is in the inbox, as a sentence ({teacher}, {when} and {reason} are set in by the page).
-  whyOverdue: { en: 'No report from {teacher} for the lesson of {when}.', ar: 'لم يسجّل {teacher} ما حدث في حصة {when}.' },
-  whyAwaiting: { en: '{teacher}’s lesson of {when} has ended; the report is not in yet.', ar: 'انتهت حصة {teacher} يوم {when} ولم يصل التقرير بعد.' },
+  whyOverdue: { en: 'No report from {teacher} for the lesson of {when}', ar: 'لم يسجّل {teacher} ما حدث في حصة {when}' },
+  whyAwaiting: { en: '{teacher}’s lesson of {when} has ended; the report is not in yet', ar: 'انتهت حصة {teacher} يوم {when} ولم يصل التقرير بعد' },
   whyRuling: { en: 'The family apologised after the start of the lesson of {when}: “{reason}”', ar: 'اعتذرت الأسرة بعد بدء حصة {when}: «{reason}»' },
-  whyMakeup: { en: '{teacher} did not give the lesson of {when}, and no make-up was booked within a week.', ar: 'لم يقدّم {teacher} حصة {when}، ولم تُحجز حصة تعويضية خلال أسبوع.' },
+  whyMakeup: { en: '{teacher} did not give the lesson of {when}, and no make-up was booked within a week', ar: 'لم يقدّم {teacher} حصة {when}، ولم تُحجز حصة تعويضية خلال أسبوع' },
   whyReturning: { en: 'The pause ends on {date}; lessons start again then.', ar: 'ينتهي الإيقاف في {date} وتعود الحصص بعده.' },
   withTeacher: { en: 'with {teacher}', ar: 'مع {teacher}' },
   inboxShow: { en: 'Show', ar: 'عرض' },
@@ -334,7 +334,7 @@ export function fill(template: string, params: Record<string, string | number>):
   return template.replace(/\{(\w+)\}/g, (m, k: string) => (k in params ? String(params[k]) : m))
 }
 
-/** A lesson length, "30 min" / "٣٠ دقيقة". */
+/** A lesson length, "30 min" / "30 دقيقة". */
 export function formatMinutes(n: number, locale: 'ar' | 'en'): string {
   return locale === 'ar' ? `${new Intl.NumberFormat('ar-EG-u-nu-latn').format(n)} دقيقة` : `${n} min`
 }

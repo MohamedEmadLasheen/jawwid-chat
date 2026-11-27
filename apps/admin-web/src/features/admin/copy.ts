@@ -222,7 +222,7 @@ export const TEXT = {
 
 /**
  * A count with its noun, by the locale's plural rules. Arabic has six forms
- * (zero, one, two, few, many, other); "1 members" and "٣ عضو" are both wrong.
+ * (zero, one, two, few, many, other); "1 members" and "3 عضو" are both wrong.
  */
 export type Plural = {
   en: { one: string; other: string }

@@ -57,9 +57,10 @@ export function ReportsPage() {
   }
 
   const all = list.data ?? []
-  const figures: MastFigure[] = list.data
+  // The counts only once there is something to count; an empty queue says so in the list.
+  const figures: MastFigure[] = list.data && all.length > 0
     ? [
-        { key: 'open', label: tx(STATUS.open), value: number(all.filter((r) => r.status === 'open').length), tone: 'key' },
+        { key: 'open', label: tx(STATUS.open), value: number(all.filter((r) => r.status === 'open').length) },
         { key: 'review', label: tx(STATUS.in_review), value: number(all.filter((r) => r.status === 'in_review').length) },
         { key: 'urgent', label: tx(MOD.childSafetyBadge), value: number(all.filter((r) => r.priority === 'urgent' || r.reason === 'child_safety').length), tone: all.some((r) => r.priority === 'urgent' || r.reason === 'child_safety') ? 'urgent' : 'quiet' },
       ]

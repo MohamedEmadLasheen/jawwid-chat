@@ -107,7 +107,7 @@ export function TeacherAttendancePage({ basePath, eyebrow }: { basePath: string;
         </div>
         )}
         <div className="th-body">
-          {section === 'leave' && <LeaveSection basePath={basePath} />}
+          {section === 'leave' && <LeaveSection basePath={basePath} teacherId={teacher || undefined} />}
           {section === 'lateness' && <LatenessSection {...rights} trialsOnly={sales} />}
           {section === 'excuses' && <ExcusesSection {...rights} />}
           {section === 'complaints' && (

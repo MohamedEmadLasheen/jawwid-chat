@@ -296,6 +296,7 @@ export function NeedsActionPage() {
   )
 }
 
+const NOTE_FROM: Pair = { en: 'Their note:', ar: 'ملاحظتهم:' }
 const MORE: Pair = { en: 'More actions: {name}', ar: 'إجراءات أخرى: {name}' }
 
 /** The kind of the lesson that blocked a weekly one, inside a sentence. */
@@ -365,8 +366,8 @@ function ScheduleRequestRow({ r, label, onApprove, onReject }: { r: ScheduleRequ
           </span>
         )}
         {r.note && (
-          <span className="ts-note" dir="auto">
-            {r.note}
+          <span className="ts-note">
+            {tx(NOTE_FROM)} <bdi>“{r.note}”</bdi>
           </span>
         )}
         {stale && (
@@ -478,8 +479,8 @@ function LessonRow({ lesson: l, why, reason, late, primary, more, label }: { les
               teacher: <bdi>{l.teacher.name}</bdi>,
               when: <bdi>{whenIn(l.startsAt, ACADEMY_ZONE, locale)}</bdi>,
               reason: <bdi>{reason ?? ''}</bdi>,
-            })}{' '}
-            <span className="rw-sub">({formatMinutes(l.durationMinutes, locale)})</span>
+            })}
+            <span className="rw-sub"> ({formatMinutes(l.durationMinutes, locale)})</span>.
           </span>
         </span>
       </div>
