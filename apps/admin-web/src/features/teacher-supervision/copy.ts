@@ -140,9 +140,10 @@ export const H = {
  * sees says so, and a complaint is never "resolved" from here.
  */
 export const F = {
+  title: { en: 'From parents', ar: 'من أولياء الأمور' },
   hint: {
-    en: 'What parents send from the app about their child’s teacher: praise, suggestions and complaints. Take one so the parent sees it is in review, then reply. A complaint is also listed under Complaints, and is resolved there.',
-    ar: 'ما يرسله أولياء الأمور من التطبيق عن معلم طفلهم: شكر وثناء واقتراحات وشكاوى. تولَّ المتابعة ليرى ولي الأمر أنها قيد المراجعة، ثم اكتب الرد. وتظهر الشكوى أيضًا في قسم الشكاوى، وتُعالَج من هناك.',
+    en: 'Take one so the parent sees it is in review, then reply. A complaint is resolved under Complaints.',
+    ar: 'تولَّ المتابعة ليرى ولي الأمر أنها قيد المراجعة، ثم اكتب الرد. والشكوى تُعالَج من قسم الشكاوى.',
   },
   category: { en: 'Type', ar: 'النوع' },
   allCategories: { en: 'All types', ar: 'كل الأنواع' },

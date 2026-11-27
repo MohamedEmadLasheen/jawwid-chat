@@ -1,9 +1,12 @@
-import { useCallback, useState, type ReactNode } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useCallback, useRef, useState, type ReactNode } from 'react'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { STEPS, countLabel } from '@/core/i18n/counts'
 import { Badge } from '@/shared/components/Badge'
-import { PageHeader } from '@/shared/components/PageHeader'
+import { Avatar } from '@/shared/components/Avatar'
+import { FilterChips } from '@/shared/components/FilterChips'
+import { Menu, type MenuItem } from '@/shared/components/Menu'
+import { PageHeader, type MastFigure } from '@/shared/components/PageHeader'
 import { QueryBoundary } from '@/shared/components/States'
 import type { Complaint, EntryBrief, TeacherFile, TeacherHistoryEvent } from './api'
 import { HISTORY_ACTION, T, useCopy } from './copy'
@@ -21,106 +24,187 @@ import { ShiftSection } from '@/features/schedule/ShiftSection'
 import './teacher-files.css'
 import '@/features/teachers/stack-table.css'
 import { MonthPicker } from '@/features/teachers/MonthPicker'
-import { Icon } from '@/shared/components/Icon'
 import { studentPath } from '@/features/profiles/api'
 import { OpenSupervisionButton, TeacherLeaveSection } from '@/features/supervision/TeacherLeaveSection'
+import { S, useCopy as useSupervisionCopy } from '@/features/supervision/copy'
 import { OpenCaseButton } from '@/features/cases/OpenCaseDialog'
 import { OffboardButton, ReactivateButton } from './Offboarding'
 import { DeletionRequestBanner } from './DeletionRequest'
 import { ChangeSignInButton } from './ChangeSignIn'
 import { LessonReports } from './LessonReports'
 
+type FileTab = 'overview' | 'students' | 'schedule' | 'pay' | 'leave' | 'evaluations' | 'records'
+const FILE_TABS: readonly FileTab[] = ['overview', 'students', 'schedule', 'pay', 'leave', 'evaluations', 'records']
+
 /**
- * PD-10: one teacher's file. Sections in the order the owner listed them;
- * the ones that wait on PD-9 or on Jawwid Core say so instead of showing a
- * plausible zero. Which controls appear comes from the server's `access`.
+ * PD-10: one teacher's file, as a record. The masthead says who this is, what
+ * stands open about them and the one thing to do next; the rest of the file
+ * is behind its tabs (`?tab=`), each a short page, instead of one long scroll.
+ * Which controls appear comes from the server's `access`.
  */
 export function TeacherFilePage({ basePath, eyebrow }: { basePath: string; eyebrow?: string }) {
   const { teacherId = '' } = useParams<{ teacherId: string }>()
   const tx = useCopy()
+  const sx = useSupervisionCopy()
+  const { number } = useI18n()
   const file = useTeacherFile(teacherId)
   const [editing, setEditing] = useState(false)
   const [intent, setIntent] = useState<EntryIntent | null>(null)
+  const [params, setParams] = useSearchParams()
+  const asked = params.get('tab') as FileTab | null
+  const tab: FileTab = asked && FILE_TABS.includes(asked) ? asked : 'overview'
+  const setTab = (next: FileTab) => {
+    const p = new URLSearchParams(params)
+    if (next === 'overview') p.delete('tab')
+    else p.set('tab', next)
+    setParams(p, { replace: true })
+  }
+  // The header's quieter actions keep their own dialogs; the "⋯" menu presses them.
+  const proxies = useRef<HTMLDivElement>(null)
+  const press = (act: string) => proxies.current?.querySelector<HTMLButtonElement>(`[data-act="${act}"] > button`)?.click()
   const data = file.data
   const links = teacherAreaLinks(basePath)
+  const label: Record<FileTab, string> = {
+    overview: tx(T.tabOverview),
+    students: tx(T.tabStudents),
+    schedule: tx(T.schedule),
+    pay: tx(T.tabPay),
+    leave: tx(T.tabLeave),
+    evaluations: tx(T.tabEvaluations),
+    records: tx(T.tabRecords),
+  }
+
+  if (isTeacherFileRefusal(file.error) || !data) {
+    return (
+      <div className="page">
+        <div className="page__inner">
+          <PageHeader back={{ to: basePath, label: tx(T.back) }} eyebrow={eyebrow} title={tx(T.filesTitle)} />
+          {isTeacherFileRefusal(file.error) ? (
+            <Refusal error={file.error} />
+          ) : (
+            <QueryBoundary isLoading={file.isLoading} error={file.error} onRetry={() => void file.refetch()}>
+              {null}
+            </QueryBoundary>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  const canWrite = data.access.canWriteSupervision
+  const stepsLeft = data.teacher.isActive ? (data.setup?.missing ?? 0) : 0
+  const signIn = data.signIn
+  const more: MenuItem[] = canWrite
+    ? [
+        ...(stepsLeft > 0 && data.teacher.isActive ? [{ key: 'chat', label: sx(S.openChat), icon: 'conversations' as const, onSelect: () => press('chat') }] : []),
+        ...(signIn?.canGive ? [{ key: 'give', label: tx(T.giveSignIn), icon: 'password' as const, onSelect: () => press('give') }] : []),
+        ...(signIn?.canSendCode ? [{ key: 'code', label: tx(T.sendNewCode), icon: 'send' as const, onSelect: () => press('code') }] : []),
+        ...(signIn?.canChange ? [{ key: 'signin', label: tx(T.changeSignIn), icon: 'mail' as const, onSelect: () => press('signin') }] : []),
+        { key: 'case', label: tx(T.escalate), icon: 'alert' as const, onSelect: () => press('case') },
+        ...(data.onboarding?.canReactivate && !data.teacher.isActive ? [{ key: 'reactivate', label: tx(T.reactivate), icon: 'undo' as const, onSelect: () => press('reactivate') }] : []),
+        ...(data.onboarding?.canOffboard && data.teacher.isActive ? [{ key: 'offboard', label: tx(T.offboard), icon: 'userMinus' as const, danger: true, onSelect: () => press('offboard') }] : []),
+      ]
+    : []
+  const figures: MastFigure[] = [
+    { key: 'students', label: tx(T.students), value: number(data.assignedStudents.length), tone: 'key', onClick: () => setTab('students'), pressed: tab === 'students' },
+    ...(data.setup && data.teacher.isActive
+      ? [{ key: 'setup', label: tx(T.stepsLeftLabel), value: number(stepsLeft), tone: stepsLeft > 0 ? ('urgent' as const) : ('quiet' as const), onClick: () => setTab('overview') }]
+      : []),
+  ]
 
   return (
     <div className="page">
       <div className="page__inner">
-        <p className="tf-back">
-          <Link to={basePath}>
-            <Icon name="arrowBack" size={16} />
-            {tx(T.back)}
-          </Link>
-        </p>
-        {isTeacherFileRefusal(file.error) ? (
-          <Refusal error={file.error} />
-        ) : (
-          <QueryBoundary isLoading={file.isLoading} error={file.error} onRetry={() => void file.refetch()}>
-            {data && (
+        <PageHeader
+          back={{ to: basePath, label: tx(T.back) }}
+          lead={<Avatar name={data.teacher.name} seed={data.teacher.id} size="lg" />}
+          title={data.teacher.name}
+          status={
+            <>
+              <Badge tone={data.teacher.isActive ? 'ok' : 'outline'} dot>
+                {tx(data.teacher.isActive ? T.active : T.inactive)}
+              </Badge>
+              <AwayBadge away={data.teacher.away} />
+              <SignInBadge status={signIn?.status} />
+            </>
+          }
+          figures={figures}
+          actions={
+            canWrite ? (
               <>
-                <PageHeader
-                  eyebrow={eyebrow}
-                  title={data.teacher.name}
-                  status={
-                    <>
-                      <Badge tone={data.teacher.isActive ? 'ok' : 'outline'} dot>
-                        {tx(data.teacher.isActive ? T.active : T.inactive)}
-                      </Badge>
-                      <AwayBadge away={data.teacher.away} />
-                      <SignInBadge status={data.signIn?.status} />
-                    </>
-                  }
-                  actions={
-                    data.access.canWriteSupervision ? (
-                      <>
-                        {/* Mounted whatever the file says: a code shown once must outlive the reload. */}
-                        <GiveSignInButton show={!!data.signIn?.canGive} teacherId={data.teacher.id} basePath={basePath} />
-                        {data.signIn?.canSendCode && <SendCodeButton teacherId={data.teacher.id} />}
-                        <ChangeSignInButton
-                          show={!!data.signIn?.canChange}
-                          teacherId={data.teacher.id}
-                          signedIn={data.signIn?.status === 'active'}
-                        />
-                        {data.teacher.isActive && <OpenSupervisionButton teacherId={data.teacher.id} />}
-                        {/* PD-35 B5: escalate about this teacher (the server checks the scope). */}
-                        <OpenCaseButton subject={{ kind: 'teacher', id: data.teacher.id }} target="teachers" />
-                        {/* PD-43 PR-1b: the server says who may (the routes re-check). */}
-                        <ReactivateButton
-                          show={!!data.onboarding?.canReactivate && !data.teacher.isActive}
-                          teacherId={data.teacher.id}
-                          name={data.teacher.name}
-                        />
-                        <OffboardButton
-                          show={!!data.onboarding?.canOffboard && data.teacher.isActive}
-                          teacherId={data.teacher.id}
-                          name={data.teacher.name}
-                        />
-                      </>
-                    ) : undefined
-                  }
-                />
-                {/* PD-56 O-3: the teacher asked to delete their account (shown only while pending), offboarded or not. */}
-                <DeletionRequestBanner teacherId={data.teacher.id} name={data.teacher.name} />
-                <FileSections file={data} links={links} onEdit={() => setEditing(true)} onAdd={setIntent} />
-                {editing && <EditPersonalDialog file={data} onClose={() => setEditing(false)} />}
-                {intent && <AddEntryDialog teacherId={data.teacher.id} intent={intent} onClose={() => setIntent(null)} />}
+                {/* One thing to do next, by the file's state; everything else is behind "⋯". */}
+                {stepsLeft > 0 ? (
+                  <button
+                    type="button"
+                    className="btn btn--primary"
+                    onClick={() => {
+                      setTab('overview')
+                      // The checklist is the first sheet of Overview: bring it into view.
+                      requestAnimationFrame(() => document.getElementById('tf-setup')?.scrollIntoView?.({ block: 'center' }))
+                    }}
+                  >
+                    {tx(T.finishSetup)}
+                  </button>
+                ) : (
+                  data.teacher.isActive && <OpenSupervisionButton teacherId={data.teacher.id} className="btn btn--primary" />
+                )}
+                {more.length > 0 && <Menu label={tx(T.moreFor, { name: data.teacher.name })} items={more} />}
               </>
-            )}
-          </QueryBoundary>
+            ) : undefined
+          }
+          tabs={
+            <FilterChips<FileTab>
+              variant="tabs"
+              label={tx(T.fileSections)}
+              value={tab}
+              onChange={setTab}
+              options={FILE_TABS.map((t) => ({ value: t, label: label[t] }))}
+            />
+          }
+        />
+        {canWrite && (
+          <div className="tf-proxy" ref={proxies}>
+            {/* Mounted whatever the file says: a code shown once must outlive the reload. */}
+            <span data-act="give">
+              <GiveSignInButton show={!!signIn?.canGive} teacherId={data.teacher.id} basePath={basePath} />
+            </span>
+            <span data-act="code">{signIn?.canSendCode && <SendCodeButton teacherId={data.teacher.id} />}</span>
+            <span data-act="signin">
+              <ChangeSignInButton show={!!signIn?.canChange} teacherId={data.teacher.id} signedIn={signIn?.status === 'active'} />
+            </span>
+            <span data-act="chat">{stepsLeft > 0 && data.teacher.isActive && <OpenSupervisionButton teacherId={data.teacher.id} />}</span>
+            {/* PD-35 B5: escalate about this teacher (the server checks the scope). */}
+            <span data-act="case">
+              <OpenCaseButton subject={{ kind: 'teacher', id: data.teacher.id }} target="teachers" />
+            </span>
+            {/* PD-43 PR-1b: the server says who may (the routes re-check). */}
+            <span data-act="reactivate">
+              <ReactivateButton show={!!data.onboarding?.canReactivate && !data.teacher.isActive} teacherId={data.teacher.id} name={data.teacher.name} />
+            </span>
+            <span data-act="offboard">
+              <OffboardButton show={!!data.onboarding?.canOffboard && data.teacher.isActive} teacherId={data.teacher.id} name={data.teacher.name} />
+            </span>
+          </div>
         )}
+        {/* PD-56 O-3: the teacher asked to delete their account (shown only while pending), offboarded or not. */}
+        <DeletionRequestBanner teacherId={data.teacher.id} name={data.teacher.name} />
+        <FileSections tab={tab} file={data} links={links} onEdit={() => setEditing(true)} onAdd={setIntent} />
+        {editing && <EditPersonalDialog file={data} onClose={() => setEditing(false)} />}
+        {intent && <AddEntryDialog teacherId={data.teacher.id} intent={intent} onClose={() => setIntent(null)} />}
       </div>
     </div>
   )
 }
 
-/** The sections in the order the owner listed them (2026-10-21); the timeline closes the file. */
+/** One tab of the file at a time. The work sits on sheets; who the teacher is sits beside it, on the canvas. */
 function FileSections({
+  tab,
   file,
   links,
   onEdit,
   onAdd,
 }: {
+  tab: FileTab
   file: TeacherFile
   links?: TeacherWorkLinks
   onEdit: () => void
@@ -130,38 +214,59 @@ function FileSections({
   // RQA-F1: one month for the monthly figures and the lesson reports they count.
   const [month, setMonth] = useState(currentMonth)
   return (
-    <div className="tf-file">
-      {/* Who the teacher is, beside the work: the record a manager reads first. */}
-      <div className="tf-file__side">
-        <SetupChecklist file={file} />
-        <Personal file={file} onEdit={onEdit} />
-        <EmploymentSection file={file} payroll={payroll} onEdit={onEdit} />
-      </div>
-      <div className="tf-file__main">
-      <Students file={file} />
-      {/* PD-38: category and shift, effective-dated. */}
-      <ShiftSection teacherId={file.teacher.id} />
-      <TeacherScheduleSection teacherId={file.teacher.id} links={links} />
-      <Monthly file={file} onAdd={onAdd} links={links} month={month} onMonth={setMonth} />
-      {/* RQA-F1: the reports behind the on-time figure, for the same month. */}
-      <LessonReports teacherId={file.teacher.id} month={month} />
-      <Complaints file={file} onAdd={onAdd} />
+    <>
+      {tab === 'overview' && (
+        <div className="split split--wide-aside tf-file">
+          <div className="tf-file__main">
+            <SetupChecklist file={file} />
+            <Monthly file={file} onAdd={onAdd} links={links} month={month} onMonth={setMonth} />
+          </div>
+          <aside className="tf-file__side">
+            <Personal file={file} onEdit={onEdit} />
+            <EmploymentSection file={file} payroll={payroll} onEdit={onEdit} />
+          </aside>
+        </div>
+      )}
+      {tab === 'students' && <Students file={file} />}
+      {tab === 'schedule' && (
+        <>
+          <TeacherScheduleSection teacherId={file.teacher.id} links={links} />
+          {/* PD-38: category and shift, effective-dated. */}
+          <ShiftSection teacherId={file.teacher.id} />
+        </>
+      )}
+      {tab === 'pay' && (
+        <>
+          {/* PD-18: the super admin and the Teachers manager (PD-43); the server re-checks every route. */}
+          <FinancialSummarySection payroll={payroll} />
+          <HistorySection kind="bonus" file={file} payroll={payroll} />
+          <HistorySection kind="deduction" file={file} payroll={payroll} />
+        </>
+      )}
+      {tab === 'leave' && (
+        <>
+          {/* PD-12: the manager (and super admin) edit the record; the same two set the allowance. */}
+          <TeacherLeaveSection teacherId={file.teacher.id} canSetAllowance={file.access.canEditPersonal} />
+          <DaysOff file={file} onAdd={onAdd} />
+        </>
+      )}
       {/* PD-35: evaluations and improvement plans; the teacher sees them once shared. */}
-      <EvaluationsSection teacherId={file.teacher.id} canWrite={file.access.canWriteSupervision} canEditCriteria={file.access.canEditPersonal} />
-      {/* PD-18: the super admin and the Teachers manager (PD-43); the server re-checks every route. */}
-      <FinancialSummarySection payroll={payroll} />
-      <HistorySection kind="bonus" file={file} payroll={payroll} />
-      <HistorySection kind="deduction" file={file} payroll={payroll} />
-      <DaysOff file={file} onAdd={onAdd} />
-      {/* PD-12: the manager (and super admin) edit the record; the same two set the allowance. */}
-      <TeacherLeaveSection teacherId={file.teacher.id} canSetAllowance={file.access.canEditPersonal} />
-      {/* PD-43: the teacher's and their login's lifecycle. */}
-      <LifecycleHistory teacherId={file.teacher.id} />
-      {/* PD-11's timeline: every record about the teacher in one line, plus notes and the bonus ticket. */}
-      <SupervisionTimeline teacherId={file.teacher.id} canWrite={file.access.canWriteSupervision} />
-      </div>
+      {tab === 'evaluations' && (
+        <EvaluationsSection teacherId={file.teacher.id} canWrite={file.access.canWriteSupervision} canEditCriteria={file.access.canEditPersonal} />
+      )}
+      {tab === 'records' && (
+        <>
+          <Complaints file={file} onAdd={onAdd} />
+          {/* PD-11's timeline: every record about the teacher in one line, plus notes and the bonus ticket. */}
+          <SupervisionTimeline teacherId={file.teacher.id} canWrite={file.access.canWriteSupervision} />
+          {/* RQA-F1: the reports behind the on-time figure, for the month chosen on Overview. */}
+          <LessonReports teacherId={file.teacher.id} month={month} />
+          {/* PD-43: the teacher's and their login's lifecycle. */}
+          <LifecycleHistory teacherId={file.teacher.id} />
+        </>
+      )}
       {payroll.dialogs}
-    </div>
+    </>
   )
 }
 

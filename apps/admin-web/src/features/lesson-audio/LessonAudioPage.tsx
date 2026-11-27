@@ -50,6 +50,10 @@ const C = {
   attempt: { en: 'Attempt {n}', ar: 'المحاولة {n}' },
   noClip: { en: 'No clip yet.', ar: 'لا يوجد تسجيل بعد.' },
   noUnits: { en: 'No clips to review yet.', ar: 'لا تسجيلات للمراجعة بعد.' },
+  figPlays: { en: 'Words that play', ar: 'كلمات تُشغَّل' },
+  figOf: { en: 'of {n}', ar: 'من {n}' },
+  figWaiting: { en: 'Waiting for review', ar: 'بانتظار المراجعة' },
+  figDecide: { en: 'Need a decision', ar: 'بحاجة إلى قرار' },
   noUnitsHint: { en: 'Each unit appears here once its clips are made.', ar: 'تظهر كل وحدة هنا عند صنع تسجيلاتها.' },
   unitApproved: { en: '{n} of {of} play', ar: 'يُشغَّل {n} من {of}' },
   unitWaiting: { en: '{n} waiting', ar: 'بانتظار: {n}' },
@@ -109,11 +113,24 @@ export function LessonAudioPage({ player: given }: { player?: ClipPlayer } = {})
   return (
     <div className="page lesson-audio">
       <div className="page__inner">
-      <PageHeader title={tx(C.title)} subtitle={tx(C.subtitle)} />
+      <PageHeader
+        title={tx(C.title)}
+        subtitle={tx(C.subtitle)}
+        figures={
+          units.length > 0
+            ? [
+                { key: 'plays', label: tx(C.figPlays), value: units.reduce((n, u) => n + u.approved, 0), unit: tx(C.figOf, { n: units.reduce((n, u) => n + u.strings, 0) }), tone: 'key' },
+                { key: 'waiting', label: tx(C.figWaiting), value: units.reduce((n, u) => n + (u.pending ?? 0), 0) },
+                { key: 'decide', label: tx(C.figDecide), value: units.reduce((n, u) => n + (u.needsDecision ?? 0), 0), tone: units.some((u) => u.needsDecision) ? 'urgent' : 'quiet' },
+              ]
+            : undefined
+        }
+      />
       <QueryBoundary isLoading={access.isLoading || summary.isLoading} error={access.error ?? summary.error} isEmpty={units.length === 0} emptyTitle={tx(C.noUnits)} emptyHint={tx(C.noUnitsHint)}>
         {summary.data && !summary.data.lessonApproved ? <p className="lesson-audio__note">{tx(C.pendingFile)}</p> : null}
-        {/* The units as a ruled index: how many of each unit's words play, and a mark where something waits. */}
-        <nav className="lesson-audio__units" aria-label={tx(C.unit)}>
+        <div className="lesson-audio__split">
+        {/* The unit index on the start side: how many of each unit's words play, and a mark where something waits. */}
+        <nav className="sheet lesson-audio__units" aria-label={tx(C.unit)}>
           {units.map((u) => (
             <button
               key={u.unit}
@@ -143,15 +160,19 @@ export function LessonAudioPage({ player: given }: { player?: ClipPlayer } = {})
             required={view.data.approvalsRequired}
             canReview={access.data?.review === true}
             player={player}
+            title={current ?? ''}
           />
-        ) : null}
+        ) : (
+          <div />
+        )}
+        </div>
       </QueryBoundary>
       </div>
     </div>
   )
 }
 
-function Unit({ lesson, strings, required, canReview, player }: { lesson: string; strings: StringView[]; required: number; canReview: boolean; player: ClipPlayer }) {
+function Unit({ lesson, strings, required, canReview, player, title }: { lesson: string; strings: StringView[]; required: number; canReview: boolean; player: ClipPlayer; title: string }) {
   const tx = useCopy()
   const [playingAll, setPlayingAll] = useState(false)
   const [heard, setHeard] = useState<Record<string, string>>({})
@@ -191,8 +212,12 @@ function Unit({ lesson, strings, required, canReview, player }: { lesson: string
   }
 
   return (
-    <section className="lesson-audio__unit">
-      <div className="lesson-audio__bar">
+    <section className="sheet lesson-audio__unit">
+      <div className="sheet__head">
+        <h2 className="sheet__title">
+          <span className="ltr">{title}</span>
+          <span className="sheet__count">{strings.length}</span>
+        </h2>
         {playingAll ? (
           <button
             type="button"

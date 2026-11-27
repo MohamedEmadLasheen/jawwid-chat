@@ -49,8 +49,10 @@ export function RewardsSection({
   const rows = list.data?.rewards ?? []
   return (
     <>
-      {/* With nothing recorded yet, the one action sits with the empty line; with rows, beside the rule. */}
+      <section className="sheet" aria-label={tx(H.rewards)}>
+      {/* With nothing recorded yet, the one action sits with the empty line; with rows, in the sheet's head. */}
       <SectionIntro
+        title={tx(H.rewards)}
         hint={tx(H.rewardsHint)}
         actions={
           canRecord &&
@@ -109,6 +111,7 @@ export function RewardsSection({
           )}
         </QueryBoundary>
       )}
+      </section>
       {canViewAmounts && <DeductionDefaults />}
       {recording && <RewardDialog withAmount={canViewAmounts && !requireAbout} requireAbout={requireAbout} onClose={() => setRecording(false)} />}
     </>
@@ -225,11 +228,16 @@ function DeductionDefaults() {
     defaults.data?.defaults.find((d) => d.kind === kind && d.currency === currency) ?? null
 
   return (
-    <section className="th-defaults" aria-labelledby="th-defaults">
-      <h2 id="th-defaults" className="section-label th-subtitle">
-        {tx(H.defaultsTitle)}
-      </h2>
-      <p className="th-rule">{tx(H.defaultsHint)}</p>
+    <section className="sheet th-defaults" aria-labelledby="th-defaults">
+      <header className="sheet__head">
+        <div className="sheet__heading">
+          <h2 id="th-defaults" className="sheet__title">
+            {tx(H.defaultsTitle)}
+          </h2>
+          <p className="sheet__hint">{tx(H.defaultsHint)}</p>
+        </div>
+      </header>
+      <div className="sheet__body th-defaults__body">
       {currencies.length === 0 && <p className="th-muted">{tx(H.noCurrencies)}</p>}
       {currencies.length > 0 && (
         <div className="table-wrap">
@@ -312,6 +320,7 @@ function DeductionDefaults() {
           {describeError(save.error, locale)}
         </div>
       ) : null}
+      </div>
     </section>
   )
 }
@@ -343,7 +352,9 @@ export function ComplaintsSection({ canDecide = true, requireAbout = false }: { 
 
   return (
     <>
+      <section className="sheet" aria-label={tx(H.complaints)}>
       <SectionIntro
+        title={tx(H.complaints)}
         hint={tx(H.complaintsHint)}
         actions={
           canWrite && (
@@ -360,7 +371,7 @@ export function ComplaintsSection({ canDecide = true, requireAbout = false }: { 
           )
         }
       />
-      <div className="toolbar">
+      <div className="sheet-bar">
         <FilterChips<Source>
           label={tx(H.complaints)}
           value={source}
@@ -398,6 +409,7 @@ export function ComplaintsSection({ canDecide = true, requireAbout = false }: { 
           )}
         </QueryBoundary>
       )}
+      </section>
       {intent && <AddEntryDialog teacherId={intent.teacherId} intent={intent.intent} requireAbout={requireAbout} onClose={() => setIntent(null)} />}
       {upholding && <UpholdDialog complaint={upholding} onClose={() => setUpholding(null)} />}
       {deciding && violation && <DecideDialog violation={violation} onClose={() => setDeciding(null)} />}

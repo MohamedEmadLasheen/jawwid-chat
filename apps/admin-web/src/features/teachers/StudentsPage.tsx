@@ -9,7 +9,9 @@ import { opsApi, type SuspensionDto } from './opsApi'
 import { O, SUSPENSION_REASON, describeOpsError, formatDay } from './opsCopy'
 import { useOp, useSuspensions } from './opsHooks'
 import './teachers.css'
-import './stack-table.css'
+import './rows.css'
+import { Avatar } from '@/shared/components/Avatar'
+import { RowActions } from '@/shared/components/RowActions'
 
 type Kind = 'temporary' | 'permanent'
 
@@ -21,7 +23,7 @@ type Kind = 'temporary' | 'permanent'
  */
 export function StudentsPage() {
   const tx = useTx()
-  const { locale } = useI18n()
+  const { locale, number } = useI18n()
   const [kind, setKind] = useState<Kind>('temporary')
   const q = useSuspensions(kind, 'active')
   const end = useOp((id: string) => opsApi.endSuspension(id))
@@ -32,62 +34,93 @@ export function StudentsPage() {
   return (
     <div className="page">
       <div className="page__inner">
-        <TeachersAreaTabs />
-        <PageHeader title={tx(O.studentsTitle)} subtitle={tx(O.studentsSubtitle)} />
-        <div className="org-tabs" role="tablist" aria-label={tx(O.studentsTitle)}>
-          {(['temporary', 'permanent'] as const).map((k) => (
-            <button key={k} type="button" role="tab" aria-selected={kind === k} className="org-tab" onClick={() => setKind(k)}>
-              {tx(k === 'temporary' ? O.pausedList : O.stoppedList)}
-            </button>
-          ))}
-        </div>
-        <QueryBoundary isLoading={q.isLoading} error={q.error} onRetry={() => void q.refetch()}>
-          {rows.length === 0 ? (
-            <EmptyState title={tx(kind === 'temporary' ? O.nonePaused : O.noneStopped)} hint={tx(kind === 'temporary' ? O.nonePausedHint : O.noneStoppedHint)} />
-          ) : (
-            <div className="table-wrap">
-                <table className="table ts-plain-rows stack-table">
-                  <thead>
-                    <tr>
-                      <th scope="col">{tx(O.learner)}</th>
-                      <th scope="col">{tx(O.family)}</th>
-                      <th scope="col">{tx(O.teacher)}</th>
-                      <th scope="col">{tx(O.reason)}</th>
-                      <th scope="col">{tx(O.since)}</th>
-                      {kind === 'temporary' && <th scope="col">{tx(O.returnOn)}</th>}
-                      <th scope="col">{tx(O.package)}</th>
-                      <th scope="col">{tx(O.actions)}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((s) => (
-                      <tr key={s.id}>
-                        <th scope="row">{s.learner.name}</th>
-                        <td data-label={tx(O.family)}>{s.family?.displayName ?? '—'}</td>
-                        <td data-label={tx(O.teacher)}>{s.teacher?.name ?? '—'}</td>
-                        <td className="stack-wide" data-label={tx(O.reason)}>
-                          {tx(SUSPENSION_REASON[s.reason] ?? { en: s.reason, ar: s.reason })}
-                          {s.note && <div className="ts-muted" dir="auto">{s.note}</div>}
-                        </td>
-                        <td data-label={tx(O.since)}>{formatDay(s.startsOn, locale)}</td>
-                        {kind === 'temporary' && <td data-label={tx(O.returnOn)}>{s.returnOn ? formatDay(s.returnOn, locale) : '—'}</td>}
-                        <td className="ts-muted" data-label={tx(O.package)}>{s.packageBalance ?? tx(O.packageUnknown)}</td>
-                        <td className="ts-actions-cell stack-actions">
-                          {kind === 'temporary' && (
-                            <button type="button" className="btn btn--sm" onClick={() => setExtending(s)}>{tx(O.extend)}</button>
-                          )}
-                          <button type="button" className="btn btn--sm" disabled={end.isPending} onClick={() => end.mutate(s.id)}>
-                            {tx(O.endPause)}
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+        <PageHeader
+          title={tx(O.studentsTitle)}
+          subtitle={tx(O.studentsSubtitle)}
+          figures={q.data ? [{ key: 'n', label: tx(kind === 'temporary' ? O.pausedList : O.stoppedList), value: number(rows.length), tone: 'key' }] : undefined}
+          tabs={<TeachersAreaTabs />}
+        />
+        <section className="sheet" aria-label={tx(O.studentsTitle)}>
+          <div className="sheet-bar">
+            <div className="chips" role="tablist" aria-label={tx(O.studentsTitle)}>
+              {(['temporary', 'permanent'] as const).map((k) => (
+                <button key={k} type="button" role="tab" aria-selected={kind === k} className="chip" onClick={() => setKind(k)}>
+                  {tx(k === 'temporary' ? O.pausedList : O.stoppedList)}
+                </button>
+              ))}
             </div>
-          )}
-          {end.error && <div className="banner banner--danger" role="alert">{describeOpsError(end.error, locale)}</div>}
-        </QueryBoundary>
+          </div>
+          <QueryBoundary isLoading={q.isLoading} error={q.error} onRetry={() => void q.refetch()}>
+            {rows.length === 0 ? (
+              <EmptyState title={tx(kind === 'temporary' ? O.nonePaused : O.noneStopped)} hint={tx(kind === 'temporary' ? O.nonePausedHint : O.noneStoppedHint)} />
+            ) : (
+              <table className="rowlist">
+                <thead>
+                  <tr>
+                    <th scope="col">{tx(O.learner)}</th>
+                    <th scope="col">{tx(O.reason)}</th>
+                    <th scope="col">{tx(kind === 'temporary' ? O.returnOn : O.since)}</th>
+                    <th scope="col">{tx(O.package)}</th>
+                    <th scope="col">{tx(O.actions)}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((s) => (
+                    <tr key={s.id}>
+                      <th scope="row" className="rw-who">
+                        <Avatar name={s.learner.name} seed={s.learner.id} />
+                        <span className="rw-who__text">
+                          <span className="rw-name">
+                            <bdi>{s.learner.name}</bdi>
+                          </span>
+                          <span className="rw-sub">
+                            <bdi>{s.family?.displayName ?? '—'}</bdi> · {tx(O.teacher)}: <bdi>{s.teacher?.name ?? '—'}</bdi>
+                          </span>
+                        </span>
+                      </th>
+                      <td className="rw-meta">
+                        <strong>{tx(SUSPENSION_REASON[s.reason] ?? { en: s.reason, ar: s.reason })}</strong>
+                        {s.note && (
+                          <div className="rw-sub" dir="auto">
+                            {s.note}
+                          </div>
+                        )}
+                      </td>
+                      <td className="rw-dates">
+                        {kind === 'temporary' && (
+                          <span className="rw-date">
+                            <span className="rw-fact__label">{tx(O.returnOn)}</span>
+                            <span className="rw-date__v">{s.returnOn ? formatDay(s.returnOn, locale) : '—'}</span>
+                          </span>
+                        )}
+                        <span className="rw-date">
+                          <span className="rw-fact__label">{tx(O.since)}</span>
+                          <span className="rw-date__v">{formatDay(s.startsOn, locale)}</span>
+                        </span>
+                      </td>
+                      <td className="rw-meta">
+                        <span className="rw-fact__label">{tx(O.package)}</span>
+                        <div>{s.packageBalance ?? tx(O.packageUnknown)}</div>
+                      </td>
+                      <td className="cell-actions">
+                        <RowActions
+                          primary={
+                            <button type="button" className="btn btn--sm" disabled={end.isPending} onClick={() => end.mutate(s.id)}>
+                              {tx(O.endPause)}
+                            </button>
+                          }
+                          more={kind === 'temporary' ? [{ key: 'extend', label: tx(O.extend), icon: 'calendar', onSelect: () => setExtending(s) }] : []}
+                          label={`${tx(O.actions)}: ${s.learner.name}`}
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            {end.error && <div className="banner banner--danger" role="alert">{describeOpsError(end.error, locale)}</div>}
+          </QueryBoundary>
+        </section>
         {extending && (
           <ActionDialog
             title={`${tx(O.extend)} — ${extending.learner.name}`}

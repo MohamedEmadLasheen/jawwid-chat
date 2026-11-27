@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { AppRoutes } from '@/app/AppRoutes'
 import { tokenStore } from '@/core/auth/tokens'
 import { destinationsFor, entriesOf } from '@/app/navigation'
@@ -48,13 +49,15 @@ describe('Student schedules page', () => {
     renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/schedule/students' })
     const students = await screen.findByRole('region', { name: 'Students' })
     const alpha = within(students).getByText('Child Alpha').closest('tr')!
-    expect(within(alpha).getByText('Teacher One')).toBeInTheDocument()
+    expect(within(within(students).getByRole('group', { name: 'Teacher One' })).getByText('Child Alpha')).toBeInTheDocument()
     expect(within(alpha).getByText('Monday 17:00 (30 min)')).toBeInTheDocument()
     expect(within(students).getByText('Child Beta')).toBeInTheDocument()
     // A student with no teacher is shown, not dropped.
     expect(within(students).getByText('Child Gamma')).toBeInTheDocument()
     // The same actions as the Teachers' schedules desk.
-    expect(within(alpha).getByRole('button', { name: 'Change teacher' })).toBeInTheDocument()
+    // The row states one action; Change teacher is behind its menu.
+    await userEvent.click(within(alpha).getByRole('button', { name: /^More actions/ }))
+    expect(within(alpha).getByRole('menuitem', { name: 'Change teacher' })).toBeInTheDocument()
   })
 
   it('narrows to one student, to one teacher, or to students with no teacher, by link', async () => {

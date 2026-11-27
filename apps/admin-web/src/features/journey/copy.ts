@@ -93,6 +93,7 @@ export const J = {
     ar: 'تُحذف البطاقة من المحادثة وتُزال هذه الحصة من كل الإحصائيات. لا يمكن التراجع عن ذلك.',
   },
   history: { en: 'History', ar: 'السجل' },
+  moreActions: { en: 'More actions', ar: 'إجراءات أخرى' },
   noHistory: { en: 'No changes recorded.', ar: 'لا توجد تغييرات مسجلة.' },
   back: { en: 'Back', ar: 'رجوع' },
   version: { en: 'Version', ar: 'النسخة' },

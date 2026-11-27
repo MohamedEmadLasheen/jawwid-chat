@@ -1,6 +1,9 @@
 /* WP-1C (PD-57): the moderation queue. A hairline table, its filters on one line, the report in a sheet. */
 .mod-note { margin: 0 0 var(--space-4); padding-inline-start: var(--space-3); border-inline-start: 2px solid var(--gold-line); color: var(--ink-muted); font-size: var(--fs-sm); max-inline-size: 90ch; }
-.mod-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-3) var(--space-4); margin-block-end: var(--space-4); }
+.mod-filters { align-items: flex-end; gap: var(--space-3) var(--space-4); }
+.mod-draft { max-inline-size: 22rem; color: var(--ink-muted); font-size: var(--fs-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mod-error { margin: 0; padding: 8px var(--space-4); }
+.sheet > .mod-note { margin: 0; padding: 8px var(--space-4); border-inline-start: 0; border-block-end: 1px solid var(--hairline-soft); }
 .mod-filters .field { margin: 0; inline-size: min(100%, 15rem); }
 .mod-check { display: inline-flex; align-items: center; gap: 8px; min-block-size: var(--control-h); font-size: var(--fs-sm); cursor: pointer; }
 .mod-check input { inline-size: 16px; block-size: 16px; accent-color: var(--teal); flex: none; }

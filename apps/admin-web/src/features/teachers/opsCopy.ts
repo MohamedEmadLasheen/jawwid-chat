@@ -78,6 +78,7 @@ export const O = {
   noDaysOff: { en: 'No days off ahead.', ar: 'لا توجد إجازات قادمة.' },
   students: { en: 'Students', ar: 'الطلاب' },
   noStudents: { en: 'No students with this teacher.', ar: 'لا يوجد طلاب مع هذا المعلم.' },
+  noTimesYet: { en: 'No regular times yet', ar: 'لا مواعيد ثابتة بعد' },
   regularTimes: { en: 'Regular times', ar: 'المواعيد الثابتة' },
   none: { en: 'None', ar: 'لا يوجد' },
   editTimes: { en: 'Edit times', ar: 'تعديل المواعيد' },

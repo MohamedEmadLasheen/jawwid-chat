@@ -11,6 +11,7 @@ export { useCopy, type Pair } from '@/features/organization/copy'
 export const S = {
   // Tabs of the Teachers area
   tabTeachers: { en: 'Teachers', ar: 'المعلمون' },
+  moreFor: { en: 'More actions: {name}', ar: 'إجراءات أخرى: {name}' },
   tabCertificates: { en: 'Certificates', ar: 'الشهادات' },
   tabLeave: { en: 'Leave requests', ar: 'طلبات الإجازة' },
   tabDiscipline: { en: 'Discipline', ar: 'الانضباط' },

@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { ApiError } from '@/core/api/errors'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { useSession } from '@/core/auth/SessionProvider'
@@ -9,7 +9,6 @@ import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
 import { PageHeader } from '@/shared/components/PageHeader'
 import { SearchableSelect } from '@/shared/components/SearchableSelect'
 import { EmptyState, ErrorState, QueryBoundary } from '@/shared/components/States'
-import { TeachersTabs } from '@/features/supervision/TeachersTabs'
 import type { Pair } from '@/features/organization/copy'
 import { newIdempotencyKey } from '@/core/api/client'
 import { RETENTION_KEYS, type BoardDetail } from './api'
@@ -40,8 +39,7 @@ export function BoardViewerPage({ basePath }: { basePath: string }) {
           <Viewer board={board.data} basePath={basePath} />
         ) : (
           <>
-            <TeachersTabs basePath={basePath} />
-            <PageHeader title={tx(B.title)} />
+            <PageHeader back={{ to: `${basePath}/boards`, label: tx(B.allBoards) }} title={tx(B.title)} />
             {missing ? (
               <EmptyState title={tx(B.boardNotFound)} hint={tx(B.notYoursHint)} />
             ) : (
@@ -98,23 +96,17 @@ function Viewer({ board, basePath }: { board: BoardDetail; basePath: string }) {
 
   return (
     <>
-      <TeachersTabs basePath={basePath} />
       <PageHeader
-        eyebrow={teacherName}
+        back={{ to: `${basePath}/boards?teacher=${encodeURIComponent(board.teacherId)}`, label: teacherName ? `${tx(B.allBoards)}: ${teacherName}` : tx(B.allBoards) }}
         title={board.title}
         status={<Badge tone="outline">{tx(B.readOnly)}</Badge>}
         subtitle={tx(B.subtitle)}
         actions={
-          <>
-            <Link className="btn btn--ghost btn--sm" to={`${basePath}/boards?teacher=${encodeURIComponent(board.teacherId)}`}>
-              {tx(B.allBoards)}
-            </Link>
-            {retained && retention && (
-              <button type="button" className="btn btn--primary btn--sm" onClick={() => setCopying(true)}>
-                {tx(B.copy)}
-              </button>
-            )}
-          </>
+          retained && retention ? (
+            <button type="button" className="btn btn--primary" onClick={() => setCopying(true)}>
+              {tx(B.copy)}
+            </button>
+          ) : undefined
         }
       />
       {retained && (
@@ -126,7 +118,7 @@ function Viewer({ board, basePath }: { board: BoardDetail; basePath: string }) {
         </p>
       )}
       {page ? (
-        <section className="tb-viewer">
+        <section className="sheet tb-viewer">
           <BoardCanvas page={page} verse={verse} image={image} label={label} ariaLabel={tx(B.canvasLabel, { n: index + 1, title: board.title })} />
           <PageText page={page} />
           <div className="tb-pager">
@@ -161,9 +153,9 @@ function AccessHistory({ boardId }: { boardId: string }) {
   // A value this build has no words for is shown as it came, never hidden.
   const named = (pair: Pair | undefined, raw: string) => (pair ? tx(pair) : raw)
   return (
-    <section className="tb-history">
-      <div className="tb-history__head">
-        <h2 className="section-label">{tx(B.history)}</h2>
+    <section className="sheet tb-history">
+      <div className="sheet__head tb-history__head">
+        <h2 className="sheet__title">{tx(B.history)}</h2>
       </div>
       {!open ? (
         <p>

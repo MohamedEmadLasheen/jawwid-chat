@@ -92,6 +92,12 @@ async function rows() {
   return els
 }
 
+/** A row states one action (View); Take and Resolve are behind its "⋯" menu: open it, then choose. */
+async function viaMenu(user: ReturnType<typeof userEvent.setup>, row: HTMLElement, name: string) {
+  await user.click(within(row).getByRole('button', { name: new RegExp(`^(${MOD.colActions.en}|${MOD.colActions.ar})`) }))
+  await user.click(await within(row).findByRole('menuitem', { name }))
+}
+
 describe.each([['en'], ['ar']] as const)('The moderation queue (%s)', (locale) => {
   const L = (p: { ar: string; en: string }) => p[locale]
   const L2 = (p: { ar: string; en: string }, v: Record<string, number>) => L(p).replace(/\{(\w+)\}/g, (_, k: string) => String(v[k]))
@@ -156,7 +162,7 @@ describe.each([['en'], ['ar']] as const)('The moderation queue (%s)', (locale) =
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     renderWithProviders(<ReportsPage />, { locale, staff: MANAGER })
     const els = await rows()
-    await user.click(within(els[0]!).getByRole('button', { name: L(MOD.take) }))
+    await viaMenu(user, els[0]!, L(MOD.take))
     await waitFor(() => expect(calls('POST', /\/moderation\/reports\/cs\/take$/)).toHaveLength(1))
     const init = calls('POST', /\/take$/)[0]![1] as RequestInit
     expect(headerOf(init, 'Idempotency-Key')).toBeTruthy()
@@ -172,7 +178,7 @@ describe.each([['en'], ['ar']] as const)('The moderation queue (%s)', (locale) =
     fetchMock.mockImplementation(async (i: RequestInfo | URL, init?: RequestInit) =>
       String(i).endsWith('/take') ? json({ error: { code: 'COMM.REPORT_ALREADY_TAKEN', message: 'x', messageAr: 'x' } }, 409) : inner(i, init),
     )
-    await user.click(within(els[0]!).getByRole('button', { name: L(MOD.take) }))
+    await viaMenu(user, els[0]!, L(MOD.take))
     expect(await screen.findByText(L(MOD.alreadyTaken))).toBeInTheDocument()
   })
 
@@ -231,7 +237,7 @@ describe.each([['en'], ['ar']] as const)('The moderation queue (%s)', (locale) =
     renderWithProviders(<ReportsPage />, { locale, staff: MANAGER })
     const els = await rows()
     gone.add('cs')
-    await user.click(within(els[0]!).getByRole('button', { name: L(MOD.take) }))
+    await viaMenu(user, els[0]!, L(MOD.take))
     expect(await screen.findByText(L(MOD.notAvailable))).toBeInTheDocument()
     await waitFor(() => expect(screen.getAllByTestId('report-row')).toHaveLength(3))
   })
@@ -240,7 +246,7 @@ describe.each([['en'], ['ar']] as const)('The moderation queue (%s)', (locale) =
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     renderWithProviders(<ReportsPage />, { locale, staff: MANAGER })
     const els = await rows()
-    await user.click(within(els[0]!).getByRole('button', { name: L(MOD.resolve) }))
+    await viaMenu(user, els[0]!, L(MOD.resolve))
     const form = await screen.findByRole('form', { name: L(MOD.resolve) })
     await user.click(within(form).getByRole('button', { name: L(MOD.submitResolve) }))
     expect(await within(form).findByText(L(MOD.answerRequired))).toBeInTheDocument()

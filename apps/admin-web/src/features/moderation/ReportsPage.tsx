@@ -4,16 +4,18 @@ import { useSession } from '@/core/auth/SessionProvider'
 import { holdsAny } from '@/core/permissions/capabilities'
 import { ApiError } from '@/core/api/errors'
 import { Badge, type Tone } from '@/shared/components/Badge'
-import { PageHeader } from '@/shared/components/PageHeader'
+import { PageHeader, type MastFigure } from '@/shared/components/PageHeader'
+import { RequestQueue } from '@/shared/components/RequestQueue'
+import { RowActions } from '@/shared/components/RowActions'
 import { QueryBoundary } from '@/shared/components/States'
 import { SearchableSelect } from '@/shared/components/SearchableSelect'
 import { REASONS, STATUSES, type QueueFilters, type ReportReason, type ReportStatus } from './api'
 import { MOD, REASON, STATUS, useCopy } from './copy'
 import { DueClockView } from './DueClockView'
 import { isNotAvailable, useForgetReport, useNow, useReports, useTake } from './hooks'
-import { ReportDetail, SubjectView } from './ReportDetail'
+import { ReportDetailBody, SubjectView } from './ReportDetail'
 import './moderation.css'
-import '@/features/teachers/stack-table.css'
+import '@/features/teachers/rows.css'
 
 /** A report's status as a dot and a word: waiting is gold, in hand is teal, closed is quiet. */
 const STATUS_TONE: Partial<Record<ReportStatus, Tone>> = { open: 'warn', in_review: 'info', actioned: 'ok' }
@@ -32,7 +34,7 @@ const ACT_KEYS = ['moderation.act'] as const
  */
 export function ReportsPage() {
   const tx = useCopy()
-  const { locale, dateTime } = useI18n()
+  const { locale, dateTime, number } = useI18n()
   const { staff } = useSession()
   const canAct = holdsAny(staff, ACT_KEYS)
   const [status, setStatus] = useState<'' | ReportStatus>('')
@@ -54,12 +56,25 @@ export function ReportsPage() {
     setGoneNotice(true)
   }
 
+  const all = list.data ?? []
+  const figures: MastFigure[] = list.data
+    ? [
+        { key: 'open', label: tx(STATUS.open), value: number(all.filter((r) => r.status === 'open').length), tone: 'key' },
+        { key: 'review', label: tx(STATUS.in_review), value: number(all.filter((r) => r.status === 'in_review').length) },
+        { key: 'urgent', label: tx(MOD.childSafetyBadge), value: number(all.filter((r) => r.priority === 'urgent' || r.reason === 'child_safety').length), tone: all.some((r) => r.priority === 'urgent' || r.reason === 'child_safety') ? 'urgent' : 'quiet' },
+      ]
+    : []
+
   return (
     <div className="page">
       <div className="page__inner">
-      <PageHeader title={tx(MOD.title)} subtitle={tx(MOD.subtitle)} />
-      <p className="mod-note">{tx(MOD.draftNote)}</p>
-      <div className="mod-filters">
+      <PageHeader title={tx(MOD.title)} subtitle={tx(MOD.subtitle)} figures={figures} />
+      <RequestQueue
+        label={tx(MOD.detailTitle)}
+        detail={openId ? { id: openId, title: tx(MOD.detailTitle), body: <ReportDetailBody id={openId} canAct={canAct} onClose={() => setOpenId(null)} onGone={gone} />, onClose: () => setOpenId(null) } : null}
+      >
+      <section className="sheet" aria-label={tx(MOD.title)}>
+      <div className="sheet-bar mod-filters">
         <label className="field">
           <span className="field__label">{tx(MOD.filterStatus)}</span>
           <SearchableSelect
@@ -88,6 +103,9 @@ export function ReportsPage() {
           <input type="checkbox" checked={overdue} onChange={(e) => setOverdue(e.target.checked)} />
           {tx(MOD.overdueOnly)}
         </label>
+        <span className="sheet-bar__end mod-draft" title={tx(MOD.draftNote)}>
+          {tx(MOD.draftNote)}
+        </span>
       </div>
       {goneNotice && (
         <div className="mod-note" role="status">
@@ -95,13 +113,12 @@ export function ReportsPage() {
         </div>
       )}
       {takeError && (
-        <div className="field__error" role="alert">
+        <div className="field__error mod-error" role="alert">
           {takeError.code === 'COMM.REPORT_ALREADY_TAKEN' ? tx(MOD.alreadyTaken) : takeError.localized(locale)}
         </div>
       )}
       <QueryBoundary isLoading={list.isLoading} error={list.error} isEmpty={rows.length === 0} emptyTitle={tx(MOD.empty)} onRetry={() => void list.refetch()}>
-        <div className="table-wrap">
-          <table className="table stack-table">
+          <table className="rowlist">
             <thead>
               <tr>
                 <th>{tx(MOD.colReason)}</th>
@@ -117,18 +134,23 @@ export function ReportsPage() {
                 const open = r.status === 'open' || r.status === 'in_review'
                 return (
                   <tr key={r.id} data-testid="report-row" data-priority={r.priority}>
-                    <td>
-                      {tx(REASON[r.reason] ?? { ar: r.reason, en: r.reason })}{' '}
-                      {(r.priority === 'urgent' || r.reason === 'child_safety') && (
-                        <Badge tone="danger" dot>
-                          {tx(MOD.childSafetyBadge)}
-                        </Badge>
-                      )}
+                    <td className="rw-who">
+                      <span className="rw-who__text">
+                        <span className="rw-name">
+                          {tx(REASON[r.reason] ?? { ar: r.reason, en: r.reason })}{' '}
+                          {(r.priority === 'urgent' || r.reason === 'child_safety') && (
+                            <Badge tone="danger" dot>
+                              {tx(MOD.childSafetyBadge)}
+                            </Badge>
+                          )}
+                        </span>
+                        <span className="rw-sub">{dateTime(r.createdAt)}</span>
+                      </span>
                     </td>
-                    <td className="stack-wide" data-label={tx(MOD.colTarget)}>
+                    <td className="rw-meta">
                       <SubjectView subject={r.subject} targetKind={r.targetKind} testId="row-subject" />
                     </td>
-                    <td data-label={tx(MOD.colStatus)}>
+                    <td className="rw-tags">
                       <span className="mod-status">
                         <Badge tone={STATUS_TONE[r.status] ?? 'neutral'} dot>
                           {tx(STATUS[r.status] ?? { ar: r.status, en: r.status })}
@@ -136,33 +158,32 @@ export function ReportsPage() {
                         {r.reporterAnsweredAt ? <span className="mod-answered">{tx(MOD.answered)}</span> : null}
                       </span>
                     </td>
-                    <td data-label={tx(MOD.colDue)}>
+                    <td className="rw-age">
                       <DueClockView dueAt={r.dueAt} status={r.status} nowMs={nowMs} overdueAt={r.overdueAt} />
                     </td>
-                    <td className="mod-when" data-label={tx(MOD.colFiled)}>{dateTime(r.createdAt)}</td>
-                    <td className="mod-actions stack-actions">
-                      <button type="button" className="btn btn--sm btn--ghost" onClick={() => { setGoneNotice(false); setOpenId(r.id) }}>
-                        {tx(MOD.view)}
-                      </button>
-                      {canAct && r.status === 'open' && (
-                        <button type="button" className="btn btn--sm" disabled={take.isPending} onClick={() => take.mutate(r.id, { onError: (e) => isNotAvailable(e) && gone(r.id) })}>
-                          {tx(MOD.take)}
-                        </button>
-                      )}
-                      {canAct && open && (
-                        <button type="button" className="btn btn--sm btn--primary" onClick={() => setOpenId(r.id)}>
-                          {tx(MOD.resolve)}
-                        </button>
-                      )}
+                    <td className="cell-actions">
+                      {/* One stated action opens the report beside the list; the others are behind the menu. */}
+                      <RowActions
+                        primary={
+                          <button type="button" className={openId === r.id ? 'btn btn--sm btn--primary' : 'btn btn--sm'} onClick={() => { setGoneNotice(false); setOpenId(r.id) }}>
+                            {tx(MOD.view)}
+                          </button>
+                        }
+                        more={[
+                          ...(canAct && r.status === 'open' && !take.isPending ? [{ key: 'take', label: tx(MOD.take), icon: 'userCheck' as const, onSelect: () => take.mutate(r.id, { onError: (e) => isNotAvailable(e) && gone(r.id) }) }] : []),
+                          ...(canAct && open ? [{ key: 'resolve', label: tx(MOD.resolve), icon: 'checkCircle' as const, onSelect: () => setOpenId(r.id) }] : []),
+                        ]}
+                        label={`${tx(MOD.colActions)}: ${tx(REASON[r.reason] ?? { ar: r.reason, en: r.reason })}`}
+                      />
                     </td>
                   </tr>
                 )
               })}
             </tbody>
           </table>
-        </div>
       </QueryBoundary>
-      {openId && <ReportDetail id={openId} canAct={canAct} onClose={() => setOpenId(null)} onGone={gone} />}
+      </section>
+      </RequestQueue>
       </div>
     </div>
   )

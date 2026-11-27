@@ -20,7 +20,17 @@ import { isNotAvailable, useOpenAttachment, useReport, useResolve, useTake } fro
  * `canAct` is the staff member's moderation.act; the detail's own `canAct`
  * (per report) must also be true. UX only: the server decides each request.
  */
-export function ReportDetail({ id, canAct, onClose, onGone }: { id: string; canAct: boolean; onClose: () => void; onGone: (id: string) => void }) {
+export function ReportDetail(props: { id: string; canAct: boolean; onClose: () => void; onGone: (id: string) => void }) {
+  const tx = useCopy()
+  return (
+    <Dialog title={tx(MOD.detailTitle)} onClose={props.onClose} variant="sheet">
+      <ReportDetailBody {...props} />
+    </Dialog>
+  )
+}
+
+/** The report itself, without a frame: the queue page shows it in its inspector beside the list. */
+export function ReportDetailBody({ id, canAct, onClose, onGone }: { id: string; canAct: boolean; onClose: () => void; onGone: (id: string) => void }) {
   const tx = useCopy()
   const { locale, dateTime } = useI18n()
   const q = useReport(id)
@@ -34,7 +44,7 @@ export function ReportDetail({ id, canAct, onClose, onGone }: { id: string; canA
   const open = r !== undefined && (r.status === 'open' || r.status === 'in_review')
   const mayAct = canAct && r?.canAct === true && open
   return (
-    <Dialog title={tx(MOD.detailTitle)} onClose={onClose} variant="sheet">
+    <>
       {notAvailable ? (
         <p role="status">{tx(MOD.notAvailable)}</p>
       ) : (
@@ -82,7 +92,7 @@ export function ReportDetail({ id, canAct, onClose, onGone }: { id: string; canA
           )}
         </QueryBoundary>
       )}
-    </Dialog>
+    </>
   )
 }
 

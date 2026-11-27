@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { useI18n } from '@/core/i18n/I18nProvider'
 import { PageHeader } from '@/shared/components/PageHeader'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
 import { SearchableSelect } from '@/shared/components/SearchableSelect'
@@ -37,7 +38,9 @@ export function StudentSchedulesPage() {
   const studentId = params.get('student') ?? ''
   const teacherId = params.get('teacher') ?? ''
 
+  const { number } = useI18n()
   const learners = roster.data?.learners ?? []
+  const unassigned = learners.filter((l) => l.teacherId === null).length
   const teachers = roster.data?.teachers ?? []
   const shown = useMemo(
     () =>
@@ -57,10 +60,22 @@ export function StudentSchedulesPage() {
   return (
     <div className="page">
       <div className="page__inner">
-        <PageHeader title={tx(COPY.title)} subtitle={tx(COPY.subtitle)} />
+        <PageHeader
+          title={tx(COPY.title)}
+          subtitle={tx(COPY.subtitle)}
+          figures={
+            roster.data
+              ? [
+                  { key: 'students', label: tx(O.students), value: number(learners.length), tone: 'key' },
+                  { key: 'none', label: tx(COPY.noTeacher), value: number(unassigned), tone: unassigned > 0 ? 'urgent' : 'quiet', onClick: () => set('teacher', teacherId === NONE ? '' : NONE), pressed: teacherId === NONE },
+                ]
+              : undefined
+          }
+        />
         <QueryBoundary isLoading={roster.isLoading} error={roster.error} onRetry={() => void roster.refetch()}>
-          <div className="ts-month">
-            <label>
+          <div className="sheet ts-pick">
+            <div className="sheet-bar">
+            <label className="ts-pick__field">
               <span className="field__label">{tx(COPY.chooseStudent)}</span>
               <SearchableSelect className="select" value={studentId} onValueChange={(v) => set('student', v)} aria-label={tx(COPY.chooseStudent)}>
                 <option value="">{tx(COPY.allStudents)}</option>
@@ -69,7 +84,7 @@ export function StudentSchedulesPage() {
                 ))}
               </SearchableSelect>
             </label>
-            <label>
+            <label className="ts-pick__field">
               <span className="field__label">{tx(COPY.chooseTeacher)}</span>
               <SearchableSelect className="select" value={teacherId} onValueChange={(v) => set('teacher', v)} aria-label={tx(COPY.chooseTeacher)}>
                 <option value="">{tx(COPY.allTeachers)}</option>
@@ -79,6 +94,7 @@ export function StudentSchedulesPage() {
                 ))}
               </SearchableSelect>
             </label>
+            </div>
           </div>
           {learners.length === 0 ? <EmptyState title={tx(O.noStudents)} /> : <StudentScheduleDesk students={shown} teachers={teachers} />}
         </QueryBoundary>

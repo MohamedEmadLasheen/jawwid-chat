@@ -16,6 +16,7 @@ import { AwayBadge } from '@/features/teacher-files/Complaint'
 import { H, useCopy } from './copy'
 import { useLeaveOverview } from './hooks'
 import { SectionIntro } from './SectionIntro'
+import { Avatar } from '@/shared/components/Avatar'
 import { MonthPicker } from '@/features/teachers/MonthPicker'
 import './teacher-supervision.css'
 import '@/features/teachers/stack-table.css'
@@ -55,7 +56,8 @@ export function LeaveSection({ basePath }: { basePath: string }) {
   const balances = rows.some((t) => t.used !== undefined)
   return (
     <>
-      <SectionIntro hint={tx(H.leaveHint)} />
+      <section className="sheet" aria-label={tx(H.leave)}>
+      <SectionIntro title={tx(H.leave)} hint={tx(H.leaveHint)} />
       {overview.error ? (
         <EmptyState icon="lock" title={describeError(overview.error, locale)} />
       ) : (
@@ -64,7 +66,7 @@ export function LeaveSection({ basePath }: { basePath: string }) {
             <EmptyState title={tx(H.emptyLeave)} hint={tx(H.emptyLeaveHint)} />
           ) : (
             <div className="table-wrap">
-              <table className="table stack-table">
+              <table className="rowlist">
                 <thead>
                   <tr>
                     <th scope="col">{tx(H.teacher)}</th>
@@ -76,11 +78,16 @@ export function LeaveSection({ basePath }: { basePath: string }) {
                 <tbody>
                   {rows.map((t) => (
                     <tr key={t.id}>
-                      <td>
-                        <TeacherName basePath={basePath} teacher={t} />
+                      <td className="rw-who">
+                        <Avatar name={t.name ?? ''} seed={t.id} />
+                        <span className="rw-who__text">
+                          <span className="rw-name">
+                            <TeacherName basePath={basePath} teacher={t} />
+                          </span>
+                        </span>
                       </td>
                       {balances && (
-                        <td className="th-nowrap" data-label={tx(H.balance)}>
+                        <td className="rw-meta" data-label={tx(H.balance)}>
                           {t.used === undefined ? (
                             <span className="th-muted">—</span>
                           ) : t.allowance === null || t.allowance === undefined ? (
@@ -92,7 +99,7 @@ export function LeaveSection({ basePath }: { basePath: string }) {
                           )}
                         </td>
                       )}
-                      <td data-label={tx(H.status)}>
+                      <td className="rw-tags" data-label={tx(H.status)}>
                         {t.away ? (
                           <AwayBadge away={t.away} />
                         ) : (
@@ -101,7 +108,7 @@ export function LeaveSection({ basePath }: { basePath: string }) {
                           </Badge>
                         )}
                       </td>
-                      <td data-label={tx(H.requests)}>
+                      <td className="rw-tags" data-label={tx(H.requests)}>
                         {t.pendingRequests > 0 ? (
                           <Badge tone="warn" dot>
                             {tx(H.pending, { n: number(t.pendingRequests) })}
@@ -118,8 +125,11 @@ export function LeaveSection({ basePath }: { basePath: string }) {
           )}
         </QueryBoundary>
       )}
-      <h2 className="section-label th-subtitle">{tx(H.leaveRequests)}</h2>
-      <LeaveRequestsList basePath={basePath} />
+      </section>
+      <section className="sheet" aria-label={tx(H.leaveRequests)}>
+        <SectionIntro title={tx(H.leaveRequests)} />
+        <LeaveRequestsList basePath={basePath} />
+      </section>
     </>
   )
 }
@@ -139,7 +149,7 @@ function useWindow() {
 function WindowFilter({ w }: { w: ReturnType<typeof useWindow> }) {
   const tx = useCopy()
   return (
-    <div className="toolbar dc-toolbar">
+    <div className="sheet-bar dc-toolbar">
       <FilterChips<Window>
         label={tx(H.month)}
         value={w.window}
@@ -213,7 +223,9 @@ export function ExcusesSection({ canRecord, canDecide }: AttendanceRights) {
   const query: ViolationQuery = w.window === 'open' ? { state: 'open', kind: 'absences' } : { state: 'all', month: w.month, kind: 'absences' }
   return (
     <>
+      <section className="sheet" aria-label={tx(H.absences)}>
       <SectionIntro
+        title={tx(H.absences)}
         hint={tx(H.absencesHint)}
         actions={
           canRecord && (
@@ -234,6 +246,7 @@ export function ExcusesSection({ canRecord, canDecide }: AttendanceRights) {
           return <td data-label={tx(H.excuseCategory)}>{label ? tx(label) : <span className="th-muted">—</span>}</td>
         }}
       />
+      </section>
       {recording && <AbsenceDialog onClose={() => setRecording(false)} />}
     </>
   )
@@ -249,7 +262,9 @@ export function LatenessSection({ canRecord, canDecide, trialsOnly = false }: At
   const query: ViolationQuery = w.window === 'open' ? { state: 'open', kind: 'late' } : { state: 'all', month: w.month, kind: 'late' }
   return (
     <>
+      <section className="sheet" aria-label={tx(H.lateness)}>
       <SectionIntro
+        title={tx(H.lateness)}
         hint={tx(H.latenessHint)}
         actions={
           canRecord && (
@@ -262,7 +277,7 @@ export function LatenessSection({ canRecord, canDecide, trialsOnly = false }: At
       {/* The two subsections: trial lessons and regular lessons (PD-26). */}
       {!trialsOnly && (
         <FilterChips<'regular' | 'trial'>
-          variant="tabs"
+          variant="chips"
           label={tx(H.lessonType)}
           value={type}
           onChange={setType}
@@ -292,6 +307,7 @@ export function LatenessSection({ canRecord, canDecide, trialsOnly = false }: At
           </>
         )}
       />
+      </section>
       {recording && <LatenessDialog lessonType={type} onClose={() => setRecording(false)} />}
     </>
   )

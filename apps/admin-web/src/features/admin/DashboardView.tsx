@@ -26,6 +26,7 @@ import {
 import { adminSectionPath, type AdminSection } from './sections'
 import { DashboardSections, useDashboardSections } from '@/features/dashboard/ManagerDashboard'
 import './admin.css'
+import '@/features/teachers/rows.css'
 
 const RECENT = 8
 const STATE_ORDER = ['waiting_on_jawwid', 'waiting_on_customer', 'open', 'resolved'] as const
@@ -95,17 +96,19 @@ export function DashboardView({ section }: { section: AdminSection }) {
           <ErrorState error={overview.error} onRetry={refresh} />
         ) : (
           <>
-            <div className="adm-top">
-              <Attention o={o} query={conversations} />
-              <Kpis o={o} />
-            </div>
-            <div className="dash-main">
-              <RecentActivity query={conversations} />
-              <div className="dash-side">
+            {/* The board: what waits and what just happened are the work; the academy's totals and
+                breakdowns are context, on the canvas beside it. */}
+            <div className="split split--wide-aside adm-board">
+              <div className="adm-board__main">
+                <Attention o={o} query={conversations} />
+                <RecentActivity query={conversations} />
+              </div>
+              <aside className="adm-board__side">
+                <Kpis o={o} />
                 <StatusBreakdown query={conversations} />
                 <StoriesSummary o={o} />
                 <TeamAccess o={o} />
-              </div>
+              </aside>
             </div>
           </>
         )}
@@ -168,13 +171,18 @@ function Attention({ o, query }: { o: AdminOverview; query: ConversationsQuery }
   ].filter((x): x is Exclude<typeof x, false> => Boolean(x))
 
   return (
-    <section className="adm-attn" aria-labelledby="dash-attention">
-      <h2 className="section-label adm-label" id="dash-attention">
-        {tx(TEXT.needsAttention)}
-      </h2>
+    <section className="sheet adm-attn" aria-labelledby="dash-attention">
+      <header className="sheet__head">
+        <div className="adm-attn__head">
+          <h2 className="sheet__title" id="dash-attention">
+            {tx(TEXT.needsAttention)}
+          </h2>
+          {items.length > 0 && <span className="count count--urgent">{items.length}</span>}
+        </div>
+      </header>
       {query.isLoading ? (
-        <div aria-hidden="true">
-          <Skeleton height={86} radius={6} />
+        <div className="sheet__body" aria-hidden="true">
+          <Skeleton height={60} radius={6} />
         </div>
       ) : query.error ? (
         // A failed read is a failure, never "all clear" -- and counts kept from
@@ -182,17 +190,21 @@ function Attention({ o, query }: { o: AdminOverview; query: ConversationsQuery }
         <ErrorState compact error={query.error} onRetry={() => void query.refetch()} />
       ) : items.length === 0 ? (
         <p className="adm-clear">
-          <Icon name="check" size={16} />
+          <Icon name="checkCircle" size={18} />
           {tx(TEXT.nothingNeedsAttention)}
         </p>
       ) : (
-        <div className="ledger adm-ledger adm-ledger--attn">
+        <div className="adm-attn__rows">
           {items.map((item) => (
-            <Link key={item.key} to={item.to} className="ledger__cell adm-cell">
-              <span className="ledger__label adm-cell__label">{item.text}</span>
-              <span className="ledger__value">{item.count}</span>
-              {item.meta && <span className="ledger__note">{item.meta}</span>}
-              <span className="adm-cell__go">
+            <Link key={item.key} to={item.to} className="rowx adm-attn__row">
+              <span className="adm-attn__n">{item.count}</span>
+              <span className="rw-who">
+                <span className="rw-who__text">
+                  <span className="rw-name">{item.text}</span>
+                  {item.meta && <span className="rw-sub">{item.meta}</span>}
+                </span>
+              </span>
+              <span className="adm-attn__go">
                 {item.cta}
                 <Icon name="chevronForward" size={14} />
               </span>
@@ -239,19 +251,21 @@ function Kpis({ o }: { o: AdminOverview }) {
     },
   ]
   return (
-    <section className="adm-totals" aria-labelledby="dash-totals">
-      <h2 className="section-label adm-label" id="dash-totals">
+    <section className="aside-group adm-totals" aria-labelledby="dash-totals">
+      <h2 className="aside-group__title" id="dash-totals">
         {tx(TEXT.totals)}
       </h2>
-      <div className="ledger adm-ledger">
+      <ul className="adm-totals__list">
         {items.map((k) => (
-          <Link key={k.key} to={k.to} className="ledger__cell adm-cell">
-            <span className="ledger__label">{k.label}</span>
-            <span className="ledger__value">{number(k.value)}</span>
-            {k.sub && <span className="ledger__note">{k.sub}</span>}
-          </Link>
+          <li key={k.key}>
+            <Link to={k.to} className="adm-total">
+              <span className="adm-total__label">{k.label}</span>
+              <span className="adm-total__n">{number(k.value)}</span>
+              {k.sub && <span className="adm-total__sub">{k.sub}</span>}
+            </Link>
+          </li>
         ))}
-      </div>
+      </ul>
     </section>
   )
 }
@@ -266,9 +280,9 @@ function RecentActivity({ query }: { query: ConversationsQuery }) {
   const list = (query.data?.conversations ?? []).slice(0, RECENT)
 
   return (
-    <section className="adm-block" aria-labelledby="dash-recent">
-      <div className="adm-block__head">
-        <h2 className="section-label" id="dash-recent">
+    <section className="sheet adm-recent" aria-labelledby="dash-recent">
+      <div className="sheet__head">
+        <h2 className="sheet__title" id="dash-recent">
           {tx(TEXT.recentActivity)}
         </h2>
         {list.length > 0 && (
@@ -390,8 +404,8 @@ function StatusBreakdown({ query }: { query: ConversationsQuery }) {
     tone: STATE_TONE[s] ?? 'neutral',
   }))
   return (
-    <section className="adm-block" aria-labelledby="dash-status">
-      <h2 className="section-label adm-block__head" id="dash-status">
+    <section className="aside-group adm-block" aria-labelledby="dash-status">
+      <h2 className="aside-group__title" id="dash-status">
         {tx(TEXT.conversationStatus)}
       </h2>
       {query.isLoading ? (
@@ -423,9 +437,9 @@ function StoriesSummary({ o }: { o: AdminOverview }) {
     tone: STORY_TONE[s] ?? 'neutral',
   }))
   return (
-    <section className="adm-block" aria-labelledby="dash-stories">
+    <section className="aside-group adm-block" aria-labelledby="dash-stories">
       <div className="adm-block__head">
-        <h2 className="section-label" id="dash-stories">
+        <h2 className="aside-group__title" id="dash-stories">
           {tx(TEXT.storiesByState)}
         </h2>
         <Link to={adminSectionPath('stories')} className="card__link">
@@ -446,8 +460,8 @@ function TeamAccess({ o }: { o: AdminOverview }) {
   const roles = Object.entries(o.staffByRole).sort((a, b) => b[1] - a[1])
   const kinds = Object.entries(o.accounts)
   return (
-    <section className="adm-block" aria-labelledby="dash-team">
-      <h2 className="section-label adm-block__head" id="dash-team">
+    <section className="aside-group adm-block" aria-labelledby="dash-team">
+      <h2 className="aside-group__title" id="dash-team">
         {tx(TEXT.teamAndAccess)}
       </h2>
       {roles.length === 0 && kinds.length === 0 ? (

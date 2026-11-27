@@ -256,14 +256,14 @@ describe('Users summary and sort', () => {
       user('b', 'Bob', { principalKind: 'contact', staffRole: null, familyId: 'f', hasLogin: false, accountStatus: null, createdAt: ago(HOUR) }),
     ],
   }
-  const names = () => [...document.querySelectorAll('.table .entity__name')].map((n) => n.textContent)
+  const names = () => [...document.querySelectorAll('.rowlist .rw-name')].map((n) => n.textContent)
 
   it('counts the whole directory, whatever the filters, and deep-links the sort order', async () => {
     vi.stubGlobal('fetch', routeFetch({ '/admin/users': USERS }))
     renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/admin/users?sort=newest&kind=staff' })
     await screen.findByRole('button', { name: 'Zed' })
 
-    const strip = document.querySelector('.summary-strip') as HTMLElement
+    const strip = document.querySelector('.figures') as HTMLElement
     const figure = (label: string) => within(strip).getByText(label).nextElementSibling?.textContent
     expect([figure('People'), figure('Active'), figure('Inactive'), figure('No login')]).toEqual(['3', '2', '1', '1'])
 

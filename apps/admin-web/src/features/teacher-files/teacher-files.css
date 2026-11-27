@@ -24,25 +24,31 @@
 .tf-num--zero { color: var(--ink-muted); }
 .tf-num:not(.tf-num--zero) { font-weight: 500; }
 
-/* The file: the person in a narrow column, the work in a wide one. */
-.tf-file { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 var(--space-7); align-items: start; }
-@media (min-width: 1180px) {
-  .tf-file { grid-template-columns: minmax(0, 1fr) minmax(300px, 0.42fr); }
-  .tf-file__side { grid-column: 2; grid-row: 1; position: sticky; inset-block-start: var(--space-4); max-block-size: calc(100vh - var(--topbar-h) - var(--space-6)); overflow-y: auto; scrollbar-width: thin; }
-  .tf-file__main { grid-column: 1; grid-row: 1; }
-  .tf-file__side .tf-kv { grid-template-columns: minmax(6.5rem, max-content) 1fr; }
-}
-.tf-file__side, .tf-file__main { min-inline-size: 0; }
+/* The file is a record: each tab is a short page of sheets; who the teacher is sits beside the work, on the canvas. */
+.tf-file__main { min-inline-size: 0; }
+.tf-file__side { min-inline-size: 0; }
+/* The header's quieter actions live in "⋯"; their own buttons stay out of sight and keep their dialogs. */
+.tf-proxy { display: contents; }
+.tf-proxy [data-act] > button, .tf-proxy [data-act] > .btn { display: none; }
 
-.tf-section { margin-block-end: var(--space-6); min-inline-size: 0; }
-.tf-section__head { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; justify-content: space-between; min-block-size: 34px; padding-block-end: 6px; border-block-end: 1px solid var(--hairline); }
-.tf-section__title { margin: 0; font-size: 12.5px; font-weight: 500; color: var(--ink-muted); line-height: 1.5; }
-.tf-section > .field__hint { margin: 8px 0 0; }
-.tf-section > .tf-muted, .tf-section > p.tf-byline { margin: 8px 0 0; font-size: var(--fs-sm); }
-.tf-section .tf-section__head ~ .tf-section__head { margin-block-start: var(--space-4); border-block-end-color: var(--hairline-soft); }
-.tf-subtitle { margin: var(--space-4) 0 0; padding-block-end: 4px; font-size: 12.5px; font-weight: 500; color: var(--ink-muted); }
-/* Sections other features bring into the file sit on the same rules. */
-.tf-file section.card { padding: 0; margin-block-end: var(--space-6); border-block-start: 0; }
+/* A section of the file is a sheet with its name and its one action in the head. */
+.tf-section { min-inline-size: 0; margin-block-end: var(--space-5); padding: 0 var(--space-4) var(--space-4); background: var(--surface); border: 1px solid var(--hairline); border-radius: var(--radius-lg); }
+.tf-section__head { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; justify-content: space-between; min-block-size: 48px; margin-inline: calc(-1 * var(--space-4)); margin-block-end: var(--space-3); padding: 8px var(--space-4); border-block-end: 1px solid var(--hairline-soft); }
+.tf-section__title { margin: 0; font-size: var(--fs-md); font-weight: 600; color: var(--ink); line-height: 1.4; }
+.tf-section > .field__hint { margin: 0 0 var(--space-3); }
+.tf-section > .tf-muted, .tf-section > p.tf-byline { margin: 0 0 var(--space-2); font-size: var(--fs-sm); }
+.tf-section .tf-section__head ~ .tf-section__head { margin-block-start: var(--space-4); border-block-start: 1px solid var(--hairline-soft); }
+.tf-section .table-wrap { margin-inline: calc(-1 * var(--space-4)); border: 0; border-radius: 0; border-block-start: 1px solid var(--hairline-soft); }
+.tf-section > .table-wrap:last-child { margin-block-end: calc(-1 * var(--space-4)); border-end-start-radius: var(--radius-lg); border-end-end-radius: var(--radius-lg); overflow: hidden; }
+.tf-subtitle { margin: var(--space-4) 0 var(--space-2); font-size: 12.5px; font-weight: 600; color: var(--ink-muted); }
+/* Who the teacher is: labelled facts on the canvas, no surface of their own. */
+.tf-file__side .tf-section { padding: 0; background: none; border: 0; border-radius: 0; }
+.tf-file__side .tf-section + .tf-section { margin-block-start: var(--space-5); padding-block-start: var(--space-5); border-block-start: 1px solid var(--hairline); }
+.tf-file__side .tf-section__head { margin-inline: 0; margin-block-end: var(--space-1); padding: 0; min-block-size: 32px; border-block-end: 0; }
+.tf-file__side .tf-section__title { font-size: 12.5px; font-weight: 600; color: var(--ink-muted); }
+.tf-file__side .tf-kv { grid-template-columns: minmax(6.5rem, max-content) 1fr; }
+/* Sections other features bring into the file are sheets like the rest. */
+.page section.card.panel { margin-block-end: var(--space-5); }
 
 /* A label and its value on one continuous hairline: the gap is the label's own padding. */
 .tf-kv { display: grid; grid-template-columns: minmax(8rem, max-content) 1fr; gap: 0; margin: 0; font-size: var(--fs-sm); }
@@ -62,6 +68,7 @@
 .tf-entry__head { display: flex; flex-wrap: wrap; gap: 2px var(--space-3); align-items: baseline; }
 .tf-entry__head > strong { font-size: var(--fs-md); font-weight: 600; }
 .tf-entry__actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-block-start: 4px; }
+.tf-entry:last-child { border-block-end: 0; }
 .tf-entry__body { margin: 0; max-inline-size: 76ch; font-size: var(--fs-md); white-space: pre-wrap; overflow-wrap: anywhere; }
 .tf-followup { padding-inline-start: var(--space-3); border-inline-start: 2px solid var(--hairline); display: grid; gap: 2px; }
 .tf-followup .tf-entry__body { font-size: var(--fs-sm); }

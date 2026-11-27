@@ -63,6 +63,7 @@ export const M = {
   empty: { en: 'No item matches.', ar: 'لا مادة تطابق.' },
   emptyHint: { en: 'Clear the search or the filters to see the subject’s items.', ar: 'امسح البحث أو عوامل التصفية لعرض مواد هذه المادة.' },
   emptyLibrary: { en: 'The library is empty.', ar: 'المكتبة فارغة.' },
+  moreFor: { en: 'More actions: {name}', ar: 'إجراءات أخرى: {name}' },
   emptyLibraryHint: { en: 'Add an item or import a manifest.', ar: 'أضف مادة أو استورد قائمة.' },
   edit: { en: 'Edit', ar: 'تعديل' },
   preview: { en: 'Preview', ar: 'معاينة' },

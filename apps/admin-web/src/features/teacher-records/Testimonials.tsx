@@ -58,7 +58,9 @@ export function TestimonialsSection({
 
   return (
     <>
+      <section className="sheet" aria-label={tx(R.testimonials)}>
       <SectionIntro
+        title={tx(R.testimonials)}
         hint={tx(R.testimonialsHint)}
         actions={
           canRecord && (
@@ -68,7 +70,7 @@ export function TestimonialsSection({
           )
         }
       />
-      <div className="toolbar th-filters">
+      <div className="sheet-bar th-filters">
         <FilterChips<Origin>
           label={tx(R.origin)}
           value={origin}
@@ -153,6 +155,7 @@ export function TestimonialsSection({
           )}
         </QueryBoundary>
       )}
+      </section>
       {recording && <RecordTestimonialDialog initialTeacher={teacher ?? ''} requireAbout={requireAbout} onClose={() => setRecording(false)} />}
       {replying && replying.parent && (
         <ReplyDialog

@@ -151,10 +151,11 @@ describe('the statistics', () => {
     expect(within(two).getByText(/Inactive/)).toBeInTheDocument()
     expect(within(two).getAllByText('—')).toHaveLength(2)
     // Trials this month, and how many subscribed; then (PD-31) lessons the teacher moved, a plain figure.
-    const cells = within(one).getAllByRole('cell').map((c) => c.textContent)
-    expect(cells.slice(-3)).toEqual(['7', '3', '4'])
-    expect(within(table).getByRole('columnheader', { name: 'Moved by teacher' })).toBeInTheDocument()
-    expect(within(one).getAllByRole('cell').at(-1)).not.toHaveClass('ts-attention')
+    // One Trials cell: subscribed / all, with the moves under it (the last cell is the row's Open action).
+    expect(within(one).getByText('3 / 7')).toBeInTheDocument()
+    expect(within(table).getByRole('columnheader', { name: /^Trials/ })).toBeInTheDocument()
+    const moved = within(one).getByText('Moved by teacher: 4')
+    expect(moved).not.toHaveClass('ts-attention')
     expect(calls(/\/stats\/teachers\?month=2026-10$/)).toBeGreaterThan(0)
   })
 

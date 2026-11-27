@@ -247,6 +247,9 @@ describe('PD-52 page B: testimonials', () => {
   })
 })
 
+/** One of the chosen teacher's figures in the masthead, by its label. */
+const fact = (label: string) => screen.getByText(label).closest('.figure') as HTMLElement
+
 describe('PD-52: one teacher\'s strip', () => {
   const summary: TeacherSummary = {
     teacher: { id: 't-1', name: 'Teacher One', isActive: true },
@@ -263,39 +266,42 @@ describe('PD-52: one teacher\'s strip', () => {
     on('GET', /\/teacher-records\/teachers\/t-1\/summary$/, () => json(summary))
     on('GET', /\/teacher-records\/testimonials\?teacher=t-1$/, () => json({ canRecord: true, testimonials: [] }))
     const b = renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/teacher-grants?section=testimonials&teacher=t-1' })
-    const strip = await screen.findByRole('region', { name: 'Teacher One' })
-    expect(within(strip).getByText('This month: 2 counted, next step First deduction')).toBeInTheDocument()
-    expect(within(strip).getByText('1 open complaints')).toBeInTheDocument()
-    expect(within(strip).getByText('3 grants in 2026')).toBeInTheDocument()
-    expect(within(strip).getByText('4 testimonials in 2026')).toBeInTheDocument()
-    expect(within(strip).getByRole('link', { name: 'Open the Teacher File' })).toHaveAttribute('href', '/teachers/files/t-1')
+    // The chosen teacher is named beside the title; their counts are the masthead's figures.
+    await screen.findByRole('group', { name: 'Teacher One' })
+    expect(fact('Counted this month')).toHaveTextContent('2')
+    expect(fact('Counted this month')).toHaveTextContent('next step: First deduction')
+    expect(fact('Open complaints')).toHaveTextContent('1')
+    expect(fact('Grants in 2026')).toHaveTextContent('3')
+    expect(fact('Testimonials in 2026')).toHaveTextContent('4')
+    expect(screen.getByRole('link', { name: 'Open the Teacher File' })).toHaveAttribute('href', '/teachers/files/t-1')
     b.unmount()
 
     on('GET', /\/teacher-leave-overview$/, () => json({ year: 2026, teachers: [] }))
     on('GET', /\/teacher-leave-requests\?state=requested$/, () => json({ requests: [] }))
     on('GET', /\/teacher-records\/teachers\/t-1\/summary$/, () => json({ ...summary, opensFile: false }))
     renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/teacher-attendance?teacher=t-1' })
-    const a = await screen.findByRole('region', { name: 'Teacher One' })
-    expect(within(a).queryByRole('link', { name: 'Open the Teacher File' })).not.toBeInTheDocument()
+    await screen.findByRole('group', { name: 'Teacher One' })
+    expect(screen.queryByRole('link', { name: 'Open the Teacher File' })).not.toBeInTheDocument()
   })
 
   it('leaves out the sections the server returns null (a grants-only reader: no ladder, leave or complaints)', async () => {
     on('GET', /\/teacher-records\/teachers\/t-1\/summary$/, () => json({ ...summary, ladder: null, away: null, openComplaints: null }))
     on('GET', /\/teacher-records\/testimonials\?teacher=t-1$/, () => json({ canRecord: true, testimonials: [] }))
     renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/teacher-grants?section=testimonials&teacher=t-1' })
-    const strip = await screen.findByRole('region', { name: 'Teacher One' })
-    expect(within(strip).getByText('4 testimonials in 2026')).toBeInTheDocument()
-    expect(within(strip).queryByText(/This month/)).not.toBeInTheDocument()
-    expect(within(strip).queryByText(/open complaints/)).not.toBeInTheDocument()
-    expect(within(strip).queryByText('Available')).not.toBeInTheDocument()
+    await screen.findByRole('group', { name: 'Teacher One' })
+    expect(fact('Testimonials in 2026')).toHaveTextContent('4')
+    expect(screen.queryByText('Counted this month')).not.toBeInTheDocument()
+    expect(screen.queryByText('Open complaints')).not.toBeInTheDocument()
+    expect(screen.queryByText('Available')).not.toBeInTheDocument()
   })
 
   it('reads in Arabic', async () => {
     on('GET', /\/teacher-records\/teachers\/t-1\/summary$/, () => json(summary))
     on('GET', /\/teacher-records\/testimonials\?teacher=t-1$/, () => json({ canRecord: true, testimonials: [praise] }))
     renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/teacher-grants?section=testimonials&teacher=t-1', locale: 'ar' })
-    expect(await screen.findByRole('heading', { name: 'المنح والشهادات الطيبة' })).toBeInTheDocument()
-    expect(await screen.findByText('المنح في 2026: 3')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: /^المنح والشهادات الطيبة/ })).toBeInTheDocument()
+    await screen.findByText('المنح في 2026')
+    expect(fact('المنح في 2026')).toHaveTextContent('3')
     expect(screen.getByText('ولي الأمر (التطبيق)')).toBeInTheDocument()
   })
 })

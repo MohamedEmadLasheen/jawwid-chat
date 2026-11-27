@@ -3,7 +3,8 @@ import { useSearchParams } from 'react-router-dom'
 import { ApiError } from '@/core/api/errors'
 import { LOCALE_TAG, useI18n } from '@/core/i18n/I18nProvider'
 import { HOURS, LESSONS, countLabel, durationLabel } from '@/core/i18n/counts'
-import { PageHeader } from '@/shared/components/PageHeader'
+import { Avatar } from '@/shared/components/Avatar'
+import { PageHeader, type MastFigure } from '@/shared/components/PageHeader'
 import { SearchField } from '@/shared/components/SearchField'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
 import type { Bucket, CategoryStats, TeacherDetail, TeacherRow } from './api'
@@ -19,11 +20,11 @@ import './stack-table.css'
 
 /**
  * PD-11 T5: teacher statistics, for the Teachers department and the super
- * admin. A list of every teacher for the month, and -- `?teacher=<id>` -- one
- * teacher's month laid out as category cards broken down by lesson length, the
- * way the Core dashboard did, plus what only Chat can know (reports on time,
- * replies to families). Every number comes from the server; this page counts
- * nothing itself.
+ * admin. The list is a ledger to compare teachers down the page: six columns,
+ * each a figure with what qualifies it under it. `?teacher=<id>` is one
+ * teacher's month as a record: the key figures in the masthead, every outcome
+ * as a sheet with one tick a lesson, and what only Chat can know beside them.
+ * Every number comes from the server; this page counts nothing itself.
  */
 export function TeacherStatsPage({ inTeachersArea = false }: { inTeachersArea?: boolean } = {}) {
   const tx = useCopy()
@@ -48,13 +49,12 @@ export function TeacherStatsPage({ inTeachersArea = false }: { inTeachersArea?: 
   return (
     <div className="page">
       <div className="page__inner">
-        {/* The operators' Teachers area shows its tabs; the super admin's Reports section is one page. */}
-        {inTeachersArea && <TeachersAreaTabs />}
         {teacherId ? (
-          <TeacherDetailView id={teacherId} month={month} monthPicker={monthPicker} onBack={() => set({ teacher: null })} />
+          <TeacherDetailView id={teacherId} month={month} monthPicker={monthPicker} />
         ) : (
           <>
-            <PageHeader title={tx(T.title)} subtitle={tx(T.subtitle)} actions={monthPicker} />
+            {/* The operators' Teachers area shows its tabs; the super admin's Reports section is one page. */}
+            <PageHeader title={tx(T.title)} subtitle={tx(T.subtitle)} actions={monthPicker} tabs={inTeachersArea ? <TeachersAreaTabs /> : undefined} />
             <TeacherList month={month} onOpen={(id) => set({ teacher: id })} />
           </>
         )}
@@ -95,34 +95,38 @@ function TeacherList({ month, onOpen }: { month: string; onOpen: (id: string) =>
   if (isForbidden(q.error)) return <Denied />
   return (
     <QueryBoundary isLoading={q.isLoading} error={q.error} onRetry={() => void q.refetch()}>
-      <div className="ts-toolbar">
-        <SearchField value={query} onChange={setQuery} label={tx(T.search)} clearLabel={tx(T.search)} />
-      </div>
-      {(q.data?.teachers.length ?? 0) > 0 && (
-        <p className="ts-key">
-          {tx(T.keyMakeups)} {tx(T.keyExcuses)}
-        </p>
-      )}
-      {(q.data?.teachers.length ?? 0) === 0 ? (
-        <EmptyState title={tx(T.noTeachers)} />
-      ) : (
-        <div className="table-wrap ts-table-wrap">
-          <table className="table ts-table stack-table">
+      <section className="sheet" aria-label={tx(T.title)}>
+        <div className="sheet-bar">
+          <SearchField value={query} onChange={setQuery} label={tx(T.search)} clearLabel={tx(T.search)} />
+        </div>
+        {(q.data?.teachers.length ?? 0) === 0 ? (
+          <EmptyState title={tx(T.noTeachers)} />
+        ) : (
+          <div className="table-wrap ts-table-wrap">
+            <table className="table ts-table stack-table">
               <thead>
                 <tr>
                   <th scope="col">{tx(T.colTeacher)}</th>
-                  <th scope="col" className="num">{tx(T.colHeld)}</th>
-                  <th scope="col" className="num">{tx(T.colScheduled)}</th>
-                  <th scope="col" className="num">{tx(T.colNotHeld)}</th>
-                  <th scope="col" className="num">{tx(T.colUnreported)}</th>
-                  <th scope="col" className="num">{tx(T.colAttendance)}</th>
-                  <th scope="col" className="num">{tx(T.colOnTime)}</th>
-                  <th scope="col" className="num" title={tx(T.keyMakeups)}>{jx(S.makeups)}</th>
-                  <th scope="col" className="num" title={tx(T.keyExcuses)}>{jx(S.studentExcuses)}</th>
-                  <th scope="col" className="num">{jx(S.teacherExcuses)}</th>
-                  <th scope="col" className="num">{tx(T.colTrials)}</th>
-                  <th scope="col" className="num">{tx(T.colTrialsSubscribed)}</th>
-                  <th scope="col" className="num" title={tx(T.movesHint)}>{tx(T.colMoves)}</th>
+                  <th scope="col">
+                    {tx(T.colHeld)}
+                    <span className="ts-th-key">{tx(T.keyHeld)}</span>
+                  </th>
+                  <th scope="col">{tx(T.colAttendance)}</th>
+                  <th scope="col">
+                    {tx(T.colOnTime)}
+                    <span className="ts-th-key">{tx(T.colUnreported)}</span>
+                  </th>
+                  <th scope="col">
+                    {tx(T.colExcuses)}
+                    <span className="ts-th-key">{tx(T.keyExcuses)}</span>
+                  </th>
+                  <th scope="col">
+                    {tx(T.colTrials)}
+                    <span className="ts-th-key">{tx(T.keyTrials)}</span>
+                  </th>
+                  <th scope="col" className="cell-actions">
+                    <span className="sr-only">{tx(T.open)}</span>
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -134,26 +138,58 @@ function TeacherList({ month, onOpen }: { month: string; onOpen: (id: string) =>
                       </button>
                       {!r.teacher.isActive && <span className="ts-muted"> · {tx(T.inactive)}</span>}
                     </th>
-                    <td className={quiet(r.held.lessons)} data-label={tx(T.colHeld)}>{fmt.lessonsHours(r.held)}</td>
-                    <td className={quiet(r.scheduled.lessons)} data-label={tx(T.colScheduled)}>{fmt.lessonsHours(r.scheduled)}</td>
-                    <td className={quiet(r.notHeld.lessons)} data-label={tx(T.colNotHeld)}>{fmt.number(r.notHeld.lessons)}</td>
-                    <td className={r.unreported.lessons > 0 ? 'num ts-attention' : quiet(0)} data-label={tx(T.colUnreported)}>{fmt.number(r.unreported.lessons)}</td>
-                    <td className={quiet(r.attendanceRate)} data-label={tx(T.colAttendance)}>{fmt.percent(r.attendanceRate)}</td>
-                    <td className={quiet(r.reportsOnTimeRate)} data-label={tx(T.colOnTime)}>{fmt.percent(r.reportsOnTimeRate)}</td>
-                    <td className={quiet(r.summary?.makeups.total)} data-label={jx(S.makeups)} title={tx(T.keyMakeups)}>{r.summary ? <span className="ltr">{`${fmt.number(r.summary.makeups.completed)} / ${fmt.number(r.summary.makeups.total)}`}</span> : '—'}</td>
-                    <td className={quiet(r.summary ? r.summary.studentExcuses.beforeStart + r.summary.studentExcuses.afterStart : undefined)} data-label={jx(S.studentExcuses)} title={tx(T.keyExcuses)}>
-                      {r.summary ? <span className="ltr">{`${fmt.number(r.summary.studentExcuses.beforeStart)} + ${fmt.number(r.summary.studentExcuses.afterStart)}`}</span> : '—'}
+                    <td className={quiet(r.held.lessons)} data-label={tx(T.colHeld)}>
+                      <span className="ts-fig">{fmt.lessonsHours(r.held)}</span>
+                      <span className="ts-sub">
+                        {tx(T.colScheduled)}: {fmt.number(r.scheduled.lessons)} · {tx(T.colNotHeld)}: {fmt.number(r.notHeld.lessons)}
+                      </span>
                     </td>
-                    <td className={quiet(r.summary?.teacherExcuses)} data-label={jx(S.teacherExcuses)}>{r.summary ? fmt.number(r.summary.teacherExcuses) : '—'}</td>
-                    <td className={quiet(r.trials?.total ?? 0)} data-label={tx(T.colTrials)}>{fmt.number(r.trials?.total ?? 0)}</td>
-                    <td className={quiet(r.trials?.subscribed ?? 0)} data-label={tx(T.colTrialsSubscribed)}>{fmt.number(r.trials?.subscribed ?? 0)}</td>
-                    <td className={quiet(r.movesByTeacher)} data-label={tx(T.colMoves)}>{r.movesByTeacher === undefined ? '—' : fmt.number(r.movesByTeacher)}</td>
+                    <td className={quiet(r.attendanceRate)} data-label={tx(T.colAttendance)}>
+                      <span className="ts-fig">{fmt.percent(r.attendanceRate)}</span>
+                    </td>
+                    <td className={quiet(r.reportsOnTimeRate)} data-label={tx(T.colOnTime)}>
+                      <span className="ts-fig">{fmt.percent(r.reportsOnTimeRate)}</span>
+                      <span className={r.unreported.lessons > 0 ? 'ts-sub ts-attention' : 'ts-sub'}>
+                        {tx(T.colUnreported)}: {fmt.number(r.unreported.lessons)}
+                      </span>
+                    </td>
+                    <td className={quiet(r.summary ? r.summary.studentExcuses.total + r.summary.teacherExcuses : undefined)} data-label={tx(T.colExcuses)}>
+                      {r.summary ? (
+                        <>
+                          <span className="ts-fig">
+                            <span className="ltr">{`${fmt.number(r.summary.studentExcuses.beforeStart)} + ${fmt.number(r.summary.studentExcuses.afterStart)}`}</span>
+                            <span className="ts-fig__and"> · {jx(S.teacherExcuses)}: {fmt.number(r.summary.teacherExcuses)}</span>
+                          </span>
+                          <span className="ts-sub">
+                            {jx(S.makeups)}: <span className="ltr">{`${fmt.number(r.summary.makeups.completed)} / ${fmt.number(r.summary.makeups.total)}`}</span>
+                          </span>
+                        </>
+                      ) : (
+                        <span className="ts-fig">—</span>
+                      )}
+                    </td>
+                    <td className={quiet(r.trials?.total ?? 0)} data-label={tx(T.colTrials)}>
+                      <span className="ts-fig">
+                        <span className="ltr">{`${fmt.number(r.trials?.subscribed ?? 0)} / ${fmt.number(r.trials?.total ?? 0)}`}</span>
+                      </span>
+                      {r.movesByTeacher !== undefined && (
+                        <span className="ts-sub" title={tx(T.movesHint)}>
+                          {tx(T.colMoves)}: {fmt.number(r.movesByTeacher)}
+                        </span>
+                      )}
+                    </td>
+                    <td className="cell-actions stack-actions">
+                      <button type="button" className="btn btn--sm" onClick={() => onOpen(r.teacher.id)} aria-label={`${tx(T.open)}: ${r.teacher.name}`}>
+                        {tx(T.open)}
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
-          </table>
-        </div>
-      )}
+            </table>
+          </div>
+        )}
+      </section>
     </QueryBoundary>
   )
 }
@@ -166,25 +202,39 @@ function TeacherDetailView({
   id,
   month,
   monthPicker,
-  onBack,
 }: {
   id: string
   month: string
   monthPicker: React.ReactNode
-  onBack: () => void
 }) {
   const tx = useCopy()
   const fmt = useFormat()
+  const [params] = useSearchParams()
   const q = useTeacherDetail(id, month)
   const d = q.data
+  // The way back keeps the month: the list this record belongs to.
+  const back = new URLSearchParams(params)
+  back.delete('teacher')
+  const held = d?.categories.find((c) => c.key === 'held')
+  const figures: MastFigure[] = d
+    ? [
+        { key: 'counted', label: tx(T.totalCounted), value: fmt.number(d.totals.counted.lessons), note: held ? tx(T.heldOf, { n: fmt.number(held.lessons) }) : undefined },
+        { key: 'attendance', label: tx(T.attendance), value: fmt.percent(d.rates.attendance), note: tx(T.attendanceHint), tone: 'key' },
+        { key: 'completion', label: tx(T.completion), value: fmt.percent(d.rates.completion), note: tx(T.completionHint) },
+        { key: 'reliability', label: tx(T.reliability), value: fmt.percent(d.rates.teacherReliability), note: tx(T.reliabilityHint) },
+      ]
+    : []
 
   return (
     <>
-      <button type="button" className="ts-back" onClick={onBack}>
-        <Icon name="arrowBack" size={16} />
-        {tx(T.back)}
-      </button>
-      <PageHeader title={d?.teacher.name ?? tx(T.title)} subtitle={tx(T.detailSubtitle, { month: fmt.month(month) })} actions={monthPicker} />
+      <PageHeader
+        back={{ to: `?${back.toString()}`, label: tx(T.back) }}
+        lead={d ? <Avatar name={d.teacher.name} seed={d.teacher.id} size="lg" /> : undefined}
+        title={d?.teacher.name ?? tx(T.title)}
+        subtitle={tx(T.detailSubtitle, { month: fmt.month(month) })}
+        figures={figures}
+        actions={monthPicker}
+      />
       {isForbidden(q.error) ? (
         <Denied />
       ) : (
@@ -196,37 +246,6 @@ function TeacherDetailView({
   )
 }
 
-/** The month in one ruled line: what counted, and the three rates the server derives from it. */
-function MonthLedger({ detail: d }: { detail: TeacherDetail }) {
-  const tx = useCopy()
-  const fmt = useFormat()
-  const held = d.categories.find((c) => c.key === 'held')
-  return (
-    <div className="ledger ts-ledger">
-      <div className="ledger__cell">
-        <span className="ledger__label">{tx(T.totalCounted)}</span>
-        <span className="ledger__value">{fmt.number(d.totals.counted.lessons)}</span>
-        {held && <span className="ledger__note">{tx(T.heldOf, { n: fmt.number(held.lessons) })}</span>}
-      </div>
-      <div className="ledger__cell">
-        <span className="ledger__label">{tx(T.attendance)}</span>
-        <span className="ledger__value">{fmt.percent(d.rates.attendance)}</span>
-        <span className="ledger__note">{tx(T.attendanceHint)}</span>
-      </div>
-      <div className="ledger__cell">
-        <span className="ledger__label">{tx(T.completion)}</span>
-        <span className="ledger__value">{fmt.percent(d.rates.completion)}</span>
-        <span className="ledger__note">{tx(T.completionHint)}</span>
-      </div>
-      <div className="ledger__cell">
-        <span className="ledger__label">{tx(T.reliability)}</span>
-        <span className="ledger__value">{fmt.percent(d.rates.teacherReliability)}</span>
-        <span className="ledger__note">{tx(T.reliabilityHint)}</span>
-      </div>
-    </div>
-  )
-}
-
 function DetailBody({ detail: d }: { detail: TeacherDetail }) {
   const tx = useCopy()
   const fmt = useFormat()
@@ -235,17 +254,24 @@ function DetailBody({ detail: d }: { detail: TeacherDetail }) {
   const cards = d.categories.filter((c) => c.counted || c.key === 'upcoming' || c.lessons > 0)
 
   return (
-    <>
-      <MonthLedger detail={d} />
-      {d.summary && <MonthSummaryPanel summary={d.summary} />}
-      <h2 className="section-label ts-label">{tx(T.byOutcome)}</h2>
-      <section className="ts-cats" aria-label={tx(T.title)}>
-        {cards.map((c) => (
-          <CategoryCard key={c.key} category={c} />
-        ))}
-      </section>
+    <div className="split split--wide-aside">
+      <div className="ts-detail">
+        {d.summary && (
+          <section className="sheet ts-glance">
+            <MonthSummaryPanel summary={d.summary} />
+          </section>
+        )}
+        <section className="ts-cats" aria-label={tx(T.title)}>
+          {cards.map((c) => (
+            <CategoryCard key={c.key} category={c} />
+          ))}
+        </section>
+        <p className="ts-muted ts-previous">
+          {tx(T.previous, { hours: fmt.hours(d.previous.held.minutes), month: fmt.month(d.previous.month) })}
+        </p>
+      </div>
 
-      <section className="ts-facts">
+      <aside className="ts-facts">
         <Fact title={tx(T.reports)}>
           <Metric label={tx(T.onTime)} value={`${fmt.percent(d.reports.onTimeRate)} · ${fmt.number(d.reports.onTime)}/${fmt.number(d.reports.reports)}`} />
           <Metric label={tx(T.medianDelay)} value={fmt.duration(d.reports.medianDelayMinutes)} />
@@ -278,7 +304,7 @@ function DetailBody({ detail: d }: { detail: TeacherDetail }) {
             <Metric label={tx(T.moves)} value={fmt.number(d.movesByTeacher)} hint={tx(T.movesHint)} />
           </Fact>
         )}
-        {/* RQA-F8: the month summary above already counts make-ups (completed, scheduled, total);
+        {/* RQA-F8: the month summary already counts make-ups (completed, scheduled, total);
             a second, closed-only count beside it read as a contradiction ("2" vs "0 of 0"). */}
         {!d.summary && (
           <Fact title={tx(T.makeups)}>
@@ -297,12 +323,8 @@ function DetailBody({ detail: d }: { detail: TeacherDetail }) {
             <p className="ts-muted ts-card__note">{tx(T.trialsOutside, { u: fmt.number(d.trials.upcoming), c: fmt.number(d.trials.cancelled) })}</p>
           )}
         </Fact>
-      </section>
-
-      <p className="ts-muted ts-previous">
-        {tx(T.previous, { hours: fmt.hours(d.previous.held.minutes), month: fmt.month(d.previous.month) })}
-      </p>
-    </>
+      </aside>
+    </div>
   )
 }
 
@@ -314,7 +336,7 @@ function CategoryCard({ category: c }: { category: CategoryStats }) {
   const fmt = useFormat()
   const label = tx(CATEGORY_LABEL[c.key])
   return (
-    <article className={`ts-cat ts-cat--${CATEGORY_TONE[c.key]}${c.lessons === 0 ? ' ts-cat--none' : ''}`} aria-label={label}>
+    <article className={`sheet ts-cat ts-cat--${CATEGORY_TONE[c.key]}${c.lessons === 0 ? ' ts-cat--none' : ''}`} aria-label={label}>
       <header className="ts-cat__head">
         <h3 className="ts-cat__title">{label}</h3>
         <span className="ts-cat__count">{fmt.number(c.lessons)}</span>
@@ -350,8 +372,8 @@ function CategoryCard({ category: c }: { category: CategoryStats }) {
 
 function Fact({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <article className="ts-fact" aria-label={title}>
-      <h2 className="section-label ts-fact__title">{title}</h2>
+    <article className="aside-group ts-fact" aria-label={title}>
+      <h2 className="aside-group__title">{title}</h2>
       <dl className="ts-fact__list">{children}</dl>
     </article>
   )

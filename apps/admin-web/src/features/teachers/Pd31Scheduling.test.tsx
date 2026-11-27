@@ -113,10 +113,18 @@ afterEach(() => {
   tokenStore.clear()
 })
 
+/** A row states one action; the others are behind its "⋯" menu: open it, then choose. */
+async function viaMenu(scope: HTMLElement, name: string) {
+  await userEvent.click(within(scope).getByRole('button', { name: /^More actions/ }))
+  await userEvent.click(await within(scope).findByRole('menuitem', { name }))
+}
+
+/** "Edit times" is the row's stated action; every other one is in its menu. */
 async function openRow(button: string) {
   renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/teachers/schedules?teacher=t-1' })
   const row = (await screen.findByText('Child Alpha')).closest('tr')!
-  await userEvent.click(within(row).getByRole('button', { name: button }))
+  if (button === 'Edit times') await userEvent.click(within(row).getByRole('button', { name: button }))
+  else await viaMenu(row, button)
   return screen.findByRole('dialog')
 }
 
@@ -441,7 +449,7 @@ describe('Needs action (PD-31)', () => {
     expect(within(stale).getByText('3 Nov')).toBeInTheDocument()
     expect(within(stale).getByRole('note')).toHaveTextContent('No longer free')
     expect(within(stale).getByRole('button', { name: 'Approve' })).toBeDisabled()
-    await userEvent.click(within(stale).getByRole('button', { name: 'Reject' }))
+    await viaMenu(stale, 'Reject')
     const dialog = await screen.findByRole('dialog')
     await userEvent.type(within(dialog).getByLabelText('Note'), 'that time is gone')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
@@ -470,7 +478,7 @@ describe('Needs action (PD-31)', () => {
     await waitFor(() => expect(sent('POST', /blocked\/b-1\/schedule$/)).toEqual([{ startsAt: '2026-11-10T07:00:00Z' }]))
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
 
-    await userEvent.click(within(section).getByRole('button', { name: 'Dismiss' }))
+    await viaMenu(section, 'Dismiss')
     await userEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(sent('POST', /blocked\/b-1\/dismiss$/)).toEqual([{}]))
   })

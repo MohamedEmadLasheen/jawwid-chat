@@ -1,8 +1,11 @@
 /* PD-26 / PD-52: the teacher-records sections. Tokens only; the tables and chips are the shared ones. */
-.th-body { display: flex; flex-direction: column; gap: var(--space-3); margin-block-start: var(--space-4); }
-/* A section's rule in one line, with the one thing to record at its end. */
-.th-intro { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-4); }
-.th-rule { flex: 1 1 24rem; margin: 0; padding-inline-start: var(--space-3); border-inline-start: 2px solid var(--gold-line); color: var(--ink-muted); font-size: var(--fs-sm); line-height: 1.5; }
+.th-body { display: grid; gap: var(--space-5); min-inline-size: 0; }
+.th-body .sheet + .sheet { margin-block-start: 0; }
+.th-intro { flex-wrap: wrap; }
+.th-body .table-wrap { border: 0; border-radius: 0; }
+.th-body .sheet > .table-wrap:last-child, .th-body .sheet > .rowlist:last-child { border-end-start-radius: var(--radius-lg); border-end-end-radius: var(--radius-lg); overflow: hidden; }
+.th-defaults__body { display: grid; gap: var(--space-3); }
+.th-defaults__body .table-wrap { border: 1px solid var(--hairline); border-radius: var(--radius); }
 .th-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .th-muted { color: var(--ink-muted); }
 .th-subtitle { margin: var(--space-6) 0 0; padding-block-end: 8px; border-block-end: 1px solid var(--hairline); }
@@ -20,7 +23,7 @@
 .th-currency__row { display: flex; align-items: center; gap: var(--space-2); }
 .th-currency__row .input { inline-size: 6.5rem; }
 .th-currency .field__hint { margin: 0; }
-.th-complaints { margin: 0; border-block-start: 1px solid var(--hairline); }
+.th-complaints { margin: 0; padding-inline: var(--space-4); }
 /* PD-32 parent feedback (ParentFeedback.tsx). Logical properties only: the page is Arabic-first. */
 .th-filters { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); }
 .th-check { display: flex; align-items: flex-start; gap: var(--space-2); margin-block-start: var(--space-2); font-size: var(--fs-sm); }
