@@ -12,10 +12,6 @@ export { useCopy, type Pair } from '@/features/organization/copy'
  */
 export const A = {
   title: { en: 'Accounts', ar: 'الحسابات' },
-  subtitle: {
-    en: 'Reset a password or set an account inactive. Every action needs a reason and is recorded.',
-    ar: 'أعد تعيين كلمة المرور أو أوقف حسابًا. يتطلب كل إجراء سببًا ويُسجَّل.',
-  },
   search: { en: 'Search a person, a family or a student', ar: 'ابحث عن شخص أو أسرة أو طالب' },
   show: { en: 'Show', ar: 'عرض' },
   all: { en: 'All', ar: 'الكل' },
@@ -27,7 +23,9 @@ export const A = {
   never: { en: 'Never', ar: 'لم يسجّل الدخول' },
   noLogin: { en: 'No password yet', ar: 'لا توجد كلمة مرور بعد' },
   locked: { en: 'Locked', ar: 'مقفل مؤقتًا' },
-  children: { en: 'Children: {names}', ar: 'الأطفال: {names}' },
+  childrenLabel: { en: 'Children:', ar: 'الأطفال:' },
+  noneNeedHand: { en: 'No sign-in here needs a hand right now.', ar: 'لا يحتاج أي حساب هنا إلى مساعدة الآن.' },
+  liveSession: { en: 'Your support session in {name}’s account is still open.', ar: 'جلسة الدعم التي فتحتها في حساب {name} ما زالت مفتوحة.' },
   empty: { en: 'No accounts to show.', ar: 'لا توجد حسابات لعرضها.' },
   noneAdministered: {
     en: 'Your department does not administer accounts. Ask the Operations or Teachers department.',
@@ -86,6 +84,18 @@ export const A = {
 } satisfies Record<string, Pair>
 
 export const ACCOUNTS_COUNT: CountForms = { en: ['{n} account', '{n} accounts'], ar: ['حساب واحد', 'حسابان', '{n} حسابات', '{n} حسابًا'] }
+
+/** The children past the first few named on a row. */
+export const MORE_CHILDREN: CountForms = {
+  en: ['and {n} more', 'and {n} more'],
+  ar: ['وطفل آخر', 'وطفلان آخران', 'و{n} أطفال آخرين', 'و{n} طفلًا آخر'],
+}
+
+/** How many sign-ins in the list need a hand (locked, no password yet, set inactive): they lead the list. */
+export const NEED_HAND: CountForms = {
+  en: ['{n} account needs a hand: it leads the list.', '{n} accounts need a hand: they lead the list.'],
+  ar: ['حساب واحد يحتاج إلى مساعدة، وهو في أول القائمة.', 'حسابان يحتاجان إلى مساعدة، وهما في أول القائمة.', '{n} حسابات تحتاج إلى مساعدة، وهي في أول القائمة.', '{n} حسابًا يحتاج إلى مساعدة، وهي في أول القائمة.'],
+}
 
 export const KIND: Record<AccountKind, Pair> = {
   family: { en: 'Parent', ar: 'ولي أمر' },

@@ -61,6 +61,8 @@ export function RolesPage() {
   // Stable: the Dialog re-focuses whenever onClose changes.
   const closeAll = useCallback(() => setPending(null), [])
   const list = roles.data?.roles ?? []
+  // "Template" tells roles apart only where some are not: when every role is one, it is not said on each.
+  const allTemplates = list.length > 0 && list.every((r) => r.template)
   const members = useMemo(() => countMembers(staffList.data?.accounts), [staffList.data])
   const [openId, open] = useOpenItem('role')
   const shown = useShown(list, (r) => r.id, openId)
@@ -71,7 +73,6 @@ export function RolesPage() {
       <div className="page__inner">
         <PageHeader
           title={tx(SA.rolesTitle)}
-          subtitle={tx(SA.rolesSubtitle)}
           tabs={tabs ?? undefined}
           actions={
             canDefine && (
@@ -116,16 +117,11 @@ export function RolesPage() {
                                   <button type="button" className="sa-name md__open" aria-current={current ? 'true' : undefined} onClick={() => open(r.id)}>
                                     <strong>{roleName(r)}</strong>
                                   </button>
-                                  {r.template && <Badge tone="info">{tx(SA.template)}</Badge>}
+                                  {r.template && !allTemplates && <Badge tone="neutral">{tx(SA.template)}</Badge>}
                                   {r.archived && <Badge tone="neutral">{tx(SA.archived)}</Badge>}
                                   {!canDefine && r.grantable && <Badge tone="ok" dot>{tx(SA.youCanGrant)}</Badge>}
                                 </span>
-                                <span className="sa-role__key">
-                                  {/* The role's key, as the server names it: a small code tag for whoever administers roles. */}
-                                  <code className="sa-key" dir="ltr">
-                                    {r.key}
-                                  </code>
-                                </span>
+                                {/* The role's key is said on its own sheet, not down the list. */}
                               </span>
                             </td>
                             {members && (
@@ -153,7 +149,7 @@ export function RolesPage() {
                   name={roleName(shown)}
                   catalogue={catalogue.data?.permissions ?? []}
                   holders={members ? (staffList.data?.accounts ?? []).filter((a) => a.roles.some((r) => r.id === shown.id)) : null}
-                  holdersLabel={members ? plural(PLURAL.members, members.get(shown.id) ?? 0) : null}
+                  holdersLabel={members ? ((members.get(shown.id) ?? 0) > 0 ? plural(PLURAL.members, members.get(shown.id) ?? 0) : tx(SA.noHolders)) : null}
                   canDefine={canDefine}
                   onEdit={() => setPending({ act: 'edit', role: shown })}
                   onArchive={() => setPending({ act: 'archive', role: shown })}
@@ -214,10 +210,13 @@ function RolePane({
             {name}
           </h2>
           <span className="acct-state">
-            <code className="sa-key" dir="ltr">
-              {r.key}
-            </code>
-            {r.template && <Badge tone="info">{tx(SA.template)}</Badge>}
+            {/* The role's key is for whoever defines roles; a manager who grants them reads its name. */}
+            {canDefine && (
+              <code className="sa-key" dir="ltr">
+                {r.key}
+              </code>
+            )}
+            {r.template && <Badge tone="neutral">{tx(SA.template)}</Badge>}
             {r.archived && <Badge tone="neutral">{tx(SA.archived)}</Badge>}
             {!canDefine && r.grantable && <Badge tone="ok" dot>{tx(SA.youCanGrant)}</Badge>}
           </span>
@@ -283,6 +282,11 @@ function RolePane({
         </ul>
       </Part>
 
+      {holders && holders.length === 0 && (
+        <Part id={`${id}-holders`} title={tx(SA.members)}>
+          <p className="md-part__none">{tx(SA.noHoldersYet)}</p>
+        </Part>
+      )}
       {holders && holders.length > 0 && (
         <Part id={`${id}-holders`} title={tx(SA.members)} count={number(holders.length)}>
           <ul className="md-checks md-people">

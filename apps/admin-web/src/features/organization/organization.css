@@ -5,6 +5,7 @@
  * record's (.rec-sheet); what is here is what the structure adds to them.
  *
  *   .org-tabs / .org-tab     the three views, set on the masthead; a solid count where someone still waits
+ *   .org-rule                the line a view works under; an amber dot while someone waits
  *   .org-sheet / .org-table  a sheet of grouped rows that act where they stand
  *   .org-group               a group's head: who it belongs to, how many, what applies to them
  *   .org-dept / .org-part    a department's sheet and its parts (team, backup links, schedule colors)
@@ -13,7 +14,7 @@
 @import '../profiles/record.css';
 @import '../profiles/directory.css';
 
-.org-tabs { display: flex; gap: var(--space-5); flex-wrap: wrap; border-block-end: 1px solid var(--hairline); margin-block: 0 var(--space-4); }
+.org-tabs { display: flex; gap: var(--space-5); flex-wrap: wrap; border-block-end: 1px solid var(--line); margin-block: 0 var(--space-4); }
 .org-tab { font: inherit; font-size: var(--fs-sm); font-weight: 500; min-block-size: 40px; background: transparent; border: none; border-block-end: 2px solid transparent; margin-block-end: -1px; padding: 0; color: var(--ink-muted); cursor: pointer; }
 .org-tab:hover { color: var(--ink); }
 /* The label in --text-link and the underline in --accent: the pair the theme tests hold to 4.5:1 and 3:1. */
@@ -22,7 +23,7 @@
 .mast__tabs .org-tabs { margin-block: 0; border-block-end: 0; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
 .mast__tabs .org-tabs::-webkit-scrollbar { display: none; }
 .mast__tabs .org-tab { flex: none; display: inline-flex; align-items: center; gap: 7px; margin-block-end: 0; white-space: nowrap; }
-.mast__tabs .org-tab .count { min-inline-size: 18px; block-size: 18px; padding-inline: 5px; font-size: 11px; }
+.mast__tabs .org-tab .count { min-inline-size: 20px; block-size: 20px; padding-inline: 6px; font-size: var(--fs-xs); }
 @media (max-width: 767px) {
   .mast__tabs .org-tabs { margin-inline: calc(-1 * var(--space-4)); padding-inline: var(--space-4); gap: var(--space-4); }
   .mast__tabs .org-tab { min-block-size: 44px; }
@@ -38,9 +39,18 @@
 .org-filter { display: flex; align-items: center; gap: var(--space-2); }
 .org-filter .field__label { margin: 0; white-space: nowrap; font-size: var(--fs-sm); color: var(--ink-muted); }
 .org-filter .ss { inline-size: auto; min-inline-size: 13rem; }
-/* The rule a view works under: one quiet line at the head of its sheet, gold while someone still waits. */
-.org-rule { flex: 1 1 320px; margin: 0; padding-inline-start: var(--space-3); border-inline-start: 3px solid var(--teal); max-inline-size: 96ch; font-size: var(--fs-sm); line-height: 1.5; color: var(--ink-muted); }
-.org-rule--waiting { border-inline-start-color: var(--gold-line); color: var(--ink); }
+/* The rule a view works under: one quiet line at the head of its sheet, its answer in bold
+   first (how many still wait, or that none does); no dot, no edge, no stripe: the tab's red
+   count is the one mark for "someone waits". */
+.org-rule { flex: 1 1 320px; margin: 0; max-inline-size: 96ch; font-size: var(--fs-sm); line-height: 1.5; color: var(--ink-muted); }
+.org-rule > strong { font-weight: 600; color: var(--ink); }
+/* The view's answer: the sheet's first line, at the start edge, in the reading size (as on Accounts). */
+.org-answer { margin: 0; padding: 14px var(--space-4) 0; font-size: var(--fs-md); font-weight: 600; line-height: 1.5; color: var(--ink); }
+/* A supervisor's backup: who, and where the link stands, on a line of its own under their place. */
+.org-backup-line { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; font-size: var(--fs-sm); color: var(--ink-muted); }
+.org-group__count { font-weight: 400; }
+.org-dialog-now { margin: 0 0 var(--space-3); font-size: var(--fs-sm); color: var(--ink-muted); }
+.org-dialog-now strong { color: var(--ink); font-weight: 600; }
 .org-error { margin: 0; padding: 8px var(--space-4); }
 
 /* A row here opens nothing by itself: the name is a link and the action is its end. */
@@ -51,13 +61,18 @@
 .org-table .dir-cell-who { inline-size: 44%; }
 .org-name { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; }
 .org-sub { font-size: var(--fs-xs); line-height: 1.55; color: var(--ink-muted); overflow-wrap: anywhere; }
+/* A team member's facts (place, backup, whom they back up) read as one phrase, parted by commas. */
+/* A row's stated action is a quiet word until the row is under the pointer or holds focus. */
+@media (min-width: 768px) {
+  .org-table .dir-row:not(:hover):not(:focus-within) .row-actions2 > .btn { border-color: transparent; background: none; color: var(--ink-muted); font-weight: 500; }
+}
 .org-person { font-weight: 600; color: var(--ink); text-decoration: none; }
 .org-person:hover { color: var(--teal); text-decoration: underline; text-underline-offset: 3px; }
 .org-cell-pick { inline-size: 36%; min-inline-size: 13rem; }
 .org-cell-pick .ss { max-inline-size: 22rem; }
 .org-cell-num { inline-size: 1%; text-align: end; white-space: nowrap; }
 .org-table th.org-cell-num, .org-table td.org-cell-num { text-align: end; }
-.org-num { font-family: var(--display); font-size: var(--fs-lg); font-weight: 600; font-variant-numeric: tabular-nums lining-nums; color: var(--ink); }
+.org-num { font-family: var(--font-head); font-size: var(--fs-lg); font-weight: 600; font-variant-numeric: tabular-nums lining-nums; color: var(--ink); }
 .org-num--none { color: var(--border-control); }
 .org-control { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 4px 8px; }
 
@@ -73,13 +88,13 @@
 .org-dept__manager { font-size: var(--fs-sm); color: var(--ink-muted); }
 .org-table--team .dir-cell-who { inline-size: 38%; }
 .org-cell-cover { min-inline-size: 0; }
-.org-part { padding: var(--space-4) var(--space-4) var(--space-5); border-block-start: 1px solid var(--hairline-soft); }
+.org-part { padding: var(--space-4) var(--space-4) var(--space-5); border-block-start: 1px solid var(--line-2); }
 .org-part__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); min-block-size: 32px; }
 .org-part__title { margin: 0; font-size: var(--fs-md); font-weight: 600; line-height: 1.5; }
 .org-part__rule, .org-part__none { margin: 2px 0 0; max-inline-size: 78ch; font-size: var(--fs-xs); line-height: 1.5; color: var(--ink-muted); }
 .org-part__none { margin-block-start: var(--space-3); font-size: var(--fs-sm); }
-.org-backups { list-style: none; margin: var(--space-3) 0 0; padding: 0; display: block; border-block-start: 1px solid var(--hairline-soft); }
-.org-backup { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px var(--space-3); min-block-size: 52px; padding-block: 9px; border-block-end: 1px solid var(--hairline-soft); }
+.org-backups { list-style: none; margin: var(--space-3) 0 0; padding: 0; display: block; border-block-start: 1px solid var(--line-2); }
+.org-backup { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px var(--space-3); min-block-size: 52px; padding-block: 9px; border-block-end: 1px solid var(--line-2); }
 .org-backup:last-child { border-block-end: 0; padding-block-end: 0; }
 .org-backup__what { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; min-inline-size: 0; }
 .org-backup__who { font-weight: 600; overflow-wrap: anywhere; }
@@ -105,7 +120,7 @@
   .org-table--team .dir-row .row-actions2 { display: flex; flex: 1; }
   .org-table--team .dir-row .row-actions2 > .btn { flex: 1; justify-content: center; }
   .org-table--team .org-control { display: flex; }
-  .org-table--team.dir-table .dir-row > td.org-cell-num::after { content: ' ' attr(data-label); font-size: var(--fs-xs); color: var(--ink-muted); }
+  .org-table--team.dir-table .dir-row > td.org-cell-num::before { content: attr(data-label) ': '; font-size: var(--fs-xs); color: var(--ink-muted); }
   /* The supervisor's picker takes the row's width under the teacher. */
   .org-table.dir-table .dir-row > td.org-cell-pick { grid-column: 1 / -1; inline-size: auto; min-inline-size: 0; padding-block-start: 8px; }
   .org-cell-pick .ss { max-inline-size: none; }
@@ -127,4 +142,4 @@
 .handover__choice { display: inline-flex; gap: 6px; align-items: center; font-size: var(--fs-sm); }
 .handover__choice input { accent-color: var(--teal); }
 .handover__date { inline-size: auto; }
-.handover__summary { font-family: var(--display); font-size: var(--fs-lg); font-weight: 600; margin: 0; }
+.handover__summary { font-family: var(--font-head); font-size: var(--fs-lg); font-weight: 600; margin: 0; }

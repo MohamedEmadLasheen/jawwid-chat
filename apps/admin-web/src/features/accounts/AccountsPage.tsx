@@ -1,4 +1,4 @@
-import { useDeferredValue, useState } from 'react'
+import { Fragment, useDeferredValue, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useI18n } from '@/core/i18n/I18nProvider'
@@ -8,6 +8,7 @@ import { Avatar } from '@/shared/components/Avatar'
 import { Badge } from '@/shared/components/Badge'
 import { Dialog } from '@/shared/components/Dialog'
 import { FilterChips } from '@/shared/components/FilterChips'
+import { Icon } from '@/shared/components/Icon'
 import type { MenuItem } from '@/shared/components/Menu'
 import { PageHeader } from '@/shared/components/PageHeader'
 import { RowActions } from '@/shared/components/RowActions'
@@ -18,13 +19,15 @@ import { ApiError } from '@/core/api/errors'
 import { countWords } from '@/features/instalments/copy'
 import { Sheet } from '@/features/profiles/RecordParts'
 import type { AccountSummary, IssuedReset } from './api'
-import { A, ACCOUNTS_COUNT, KIND, STATUS, describeError, useCopy } from './copy'
+import { A, ACCOUNTS_COUNT, KIND, MORE_CHILDREN, NEED_HAND, STATUS, describeError, useCopy } from './copy'
 import { useAccounts, useIssueReset, useReactivate, useSuspend } from './hooks'
 import { supportAdminApi, supportKeys, supportTokens, type SupportSession } from '@/features/support/api'
-import { S, SESSIONS_COUNT, describeError as describeSupportError } from '@/features/support/copy'
+import { ACTIONS_RECORDED, MINUTES, S, describeError as describeSupportError } from '@/features/support/copy'
+import { fill } from '@/features/profiles/RecordHead'
 import { accountSessionsApi, sessionKeys, type SessionDto } from '@/features/devices/api'
 import { D, isSessionGone } from '@/features/devices/copy'
 import { SessionList, useDeviceName } from '@/features/devices/SessionList'
+import { useWhen } from '@/features/devices/when'
 import '@/features/devices/devices.css'
 import { useAccountsTabs } from '@/features/staff-accounts/AccountsTabs'
 import { FamilyAccessRecord, GrantFamilyAccessDialog, useFamilyAccess } from './FamilyAccess'
@@ -71,19 +74,30 @@ export function AccountsPage({ eyebrow }: { eyebrow?: string }) {
   const grantees = access.data?.canGrant === true ? (access.data.grantees ?? []) : null
   const deferred = useDeferredValue(q.trim())
   const list = useAccounts(deferred, kind)
-  const accounts = list.data?.accounts ?? []
+  const accounts = needFirst(list.data?.accounts ?? [])
   const actionsOf = useAccountActions()
+  const when = useWhen()
 
   const administers = list.data?.administers
   const fallback: Kind[] = staff && isSuperAdmin(staff.role) ? ['family', 'teacher', 'staff'] : ['family', 'teacher']
   const kinds: Kind[] = ['all', ...(administers ?? fallback)]
   const noneAdministered = administers !== undefined && administers.length === 0
+  // One kind in the list (an Operations desk sees parents only): the kind is not said on every row.
+  const oneKind = kinds.length <= 2 || kind !== 'all'
+  const needing = accounts.filter(needsHand).length
 
   return (
     <div className="page dir acct-page">
       <div className="page__inner">
-        <PageHeader eyebrow={eyebrow} title={tx(A.title)} subtitle={tx(A.subtitle)} tabs={tabs ?? undefined} />
+        <PageHeader eyebrow={eyebrow} title={tx(A.title)} tabs={tabs ?? undefined} />
+        <LiveSupportStrip />
         <section className="sheet dir-sheet acct-sheet" aria-label={tx(A.title)}>
+          {/* The answer first: how many sign-ins need a hand in this list, or that none does. */}
+          {list.data && accounts.length > 0 && (
+            <p className={needing > 0 ? 'acct-answer acct-answer--need' : 'acct-answer'}>
+              {needing > 0 ? countWords(needing, NEED_HAND, locale) : tx(A.noneNeedHand)}
+            </p>
+          )}
           <div className="sheet-bar">
             <SearchField value={q} onChange={setQ} label={tx(A.search)} clearLabel={t('common.cancel')} />
             <FilterChips
@@ -93,7 +107,7 @@ export function AccountsPage({ eyebrow }: { eyebrow?: string }) {
               options={kinds.map((k) => ({ value: k, label: k === 'all' ? tx(A.all) : tx(KIND[k]) }))}
             />
             {list.data && accounts.length > 0 && !list.data.truncated && (
-              <span className="sheet-bar__end dir-total">{countWords(accounts.length, ACCOUNTS_COUNT, locale)}</span>
+              <span className="dir-count">{countWords(accounts.length, ACCOUNTS_COUNT, locale)}</span>
             )}
           </div>
           <QueryBoundary
@@ -107,7 +121,6 @@ export function AccountsPage({ eyebrow }: { eyebrow?: string }) {
               <thead>
                 <tr>
                   <th scope="col">{tx(A.person)}</th>
-                  <th scope="col">{tx(A.status)}</th>
                   <th scope="col">{tx(A.lastLogin)}</th>
                   <th scope="col" className="cell-actions">
                     <span className="sr-only">{tx(A.actions)}</span>
@@ -121,26 +134,29 @@ export function AccountsPage({ eyebrow }: { eyebrow?: string }) {
                       <span className="dir-who">
                         <Avatar name={a.name} seed={a.accountId} />
                         <span className="dir-who__text">
-                          <strong className="dir-name">
-                            <bdi>{a.name}</bdi>
-                          </strong>
-                          <span className="acct-sub">
-                            <span>{tx(KIND[a.kind])}</span>
+                          {/* Where the account stands is said beside the name, and only when it is not the usual. */}
+                          <span className="acct-name-line">
+                            <strong className="dir-name">
+                              <bdi>{a.name}</bdi>
+                            </strong>
+                            <AccountState account={a} />
+                          </span>
+                          {/* One line: who the account is, then the children by name (a search may have found the family by one). */}
+                          <span className="acct-sub" title={a.children.length > 0 ? a.children.join(locale === 'ar' ? '، ' : ', ') : undefined}>
+                            {/* The kind is said only where the list holds more than one kind. */}
+                            {!oneKind && <span>{tx(KIND[a.kind])}</span>}
                             {a.familyName && (
                               <span>
                                 <bdi>{a.familyName}</bdi>
                               </span>
                             )}
-                            {a.children.length > 0 && <span>{tx(A.children, { names: a.children.join('، ') })}</span>}
+                            {a.children.length > 0 && <ChildNames names={a.children} />}
                           </span>
                         </span>
                       </span>
                     </td>
-                    <td className="dir-cell-state">
-                      <AccountState account={a} />
-                    </td>
                     <td className={a.lastLoginAt ? 'dir-cell-quiet' : 'dir-cell-quiet dir-cell-quiet--none'} data-label={tx(A.lastLogin)}>
-                      {a.lastLoginAt ? <time dateTime={a.lastLoginAt}>{dateTime(a.lastLoginAt)}</time> : <span className="dir-none">{tx(A.never)}</span>}
+                      {a.lastLoginAt ? <time dateTime={a.lastLoginAt} title={dateTime(a.lastLoginAt)}>{when(a.lastLoginAt, { start: true })}</time> : <span className="dir-none" title={tx(A.never)}><span aria-hidden="true">—</span><span className="sr-only">{tx(A.never)}</span></span>}
                     </td>
                     <td className="cell-actions">
                       <OneActionAndMore
@@ -167,23 +183,63 @@ export function AccountsPage({ eyebrow }: { eyebrow?: string }) {
   )
 }
 
+/** How many children a row names before it says how many more. */
+const CHILDREN_NAMED = 3
+
 /**
- * Where an account stands, as tags. What stops a person signing in is said
- * loudest: a lock is a solid tag, a missing password a gold one; an account
- * set inactive is a quiet word, and an active one a green dot.
+ * A family's children by name: each name isolated in its own direction, parted
+ * by the reader's comma, so an Arabic reader meets them in order; past the
+ * first few, how many more (the whole list is the row's title).
+ */
+function ChildNames({ names }: { names: string[] }) {
+  const tx = useCopy()
+  const { locale } = useI18n()
+  const comma = locale === 'ar' ? '، ' : ', '
+  // Four fit on the line; past that, the first three and how many more.
+  const shown = names.length <= CHILDREN_NAMED + 1 ? names : names.slice(0, CHILDREN_NAMED)
+  return (
+    <span className="acct-children">
+      {tx(A.childrenLabel)}{' '}
+      {shown.map((n, i) => (
+        <Fragment key={i}>
+          {i > 0 && comma}
+          <bdi className="acct-child">{n}</bdi>
+        </Fragment>
+      ))}
+      {names.length > shown.length && <> {countWords(names.length - shown.length, MORE_CHILDREN, locale)}</>}
+    </span>
+  )
+}
+
+/** Whether any account in the list needs a hand: locked out, no password yet, or set inactive. */
+const needsHand = (a: AccountSummary) => !!a.lockedUntil || !a.hasLogin || a.status !== 'active'
+
+/**
+ * The accounts whose sign-in needs a hand come first, in the server's order
+ * within each: locked out, then no password yet; the rest keep their place.
+ */
+function needFirst(accounts: AccountSummary[]): AccountSummary[] {
+  const need = (a: AccountSummary) => (a.lockedUntil ? 0 : !a.hasLogin ? 1 : 2)
+  return accounts
+    .map((a, i) => [a, i] as const)
+    .sort(([a, i], [b, j]) => need(a) - need(b) || i - j)
+    .map(([a]) => a)
+}
+
+/**
+ * Where an account stands, as tags, and only when it is not the usual: an
+ * active account that signs in says nothing, so the few that need someone are
+ * the only marks in the list. A lock is the urgent tag, a missing password an
+ * amber word, an account set inactive or deactivated a quiet word.
  */
 export function AccountState({ account: a }: { account: AccountSummary }) {
   const tx = useCopy()
+  if (a.status === 'active' && !a.lockedUntil && a.hasLogin) return null
   return (
     <span className="acct-state">
       {a.lockedUntil && <Badge tone="danger">{tx(A.locked)}</Badge>}
-      {!a.hasLogin && <Badge tone="gold">{tx(A.noLogin)}</Badge>}
-      {a.status === 'active' ? (
-        // An active account that cannot sign in is told by its other tag alone.
-        !a.lockedUntil && a.hasLogin && <Badge tone="ok" dot>{tx(STATUS.active)}</Badge>
-      ) : (
-        <Badge tone={a.status === 'suspended' ? 'neutral' : 'outline'}>{tx(STATUS[a.status])}</Badge>
-      )}
+      {!a.hasLogin && <Badge tone="waiting">{tx(A.noLogin)}</Badge>}
+      {a.status !== 'active' && <Badge tone={a.status === 'suspended' ? 'neutral' : 'outline'}>{tx(STATUS[a.status])}</Badge>}
     </span>
   )
 }
@@ -409,7 +465,7 @@ function DevicesDialog({
   return (
     <Dialog title={tx(D.devicesOf, { name: account.name })} onClose={onClose} variant="sheet">
       <section className="dev-section" aria-label={tx(D.devicesOf, { name: account.name })}>
-        <p className="field__hint">{tx(D.devicesExplain, { name: account.name })}</p>
+        {sessions.length > 0 && <p className="field__hint">{tx(D.devicesExplain, { name: account.name })}</p>}
         {notice && (
           <p className="field__hint" role="status">
             {notice}
@@ -419,7 +475,7 @@ function DevicesDialog({
           isLoading={list.isLoading}
           error={list.error}
           isEmpty={sessions.length === 0}
-          emptyTitle={tx(D.empty)}
+          emptyTitle={tx(D.emptyOf, { name: account.name })}
           onRetry={() => void list.refetch()}
           compact
         >
@@ -527,44 +583,43 @@ function SupportRecord() {
   const tx = useCopy()
   const { dateTime, number, locale } = useI18n()
   const { staff } = useSession()
+  const when = useWhen()
   const record = useQuery({ queryKey: supportKeys.record(), queryFn: () => supportAdminApi.list() })
   const sessions = record.data ?? []
   // Read once a render: a session past its time is no longer one to go back into.
   const now = Date.now()
   const live = (s: SupportSession) => !s.endedAt && Date.parse(s.expiresAt) > now
+  // The live ones first, then the record in the server's order; the most recent few until asked for the rest.
+  const [all, setAll] = useState(false)
+  const ordered = [...sessions].sort((a, b) => Number(live(b)) - Number(live(a)))
+  const shown = all ? ordered : ordered.slice(0, RECORD_FIRST)
   return (
-    <Sheet id="acct-record-title" title={tx(S.recordTitle)} count={sessions.length > 0 ? countWords(sessions.length, SESSIONS_COUNT, locale) : undefined}>
+    <Sheet id="acct-record-title" title={tx(S.recordTitle)} count={sessions.length > 0 ? number(sessions.length) : undefined}>
       {record.data && sessions.length === 0 ? (
         <p className="rec-empty">{tx(S.noRecord)}</p>
       ) : (
         <ul className="rec-list acct-sessions">
-          {sessions.map((s) => (
+          {shown.map((s) => (
             <li key={s.id} className={live(s) ? 'rec-attn acct-session acct-session--live' : 'rec-attn acct-session'}>
               <div className="rec-attn__what">
                 <span className="rec-attn__line">
                   <strong className="rec-attn__title">
                     <bdi>{s.target.name}</bdi>
                   </strong>
-                  {live(s) ? <Badge tone="now">{tx(S.recordLive)}</Badge> : !s.endedAt && <Badge tone="outline">{tx(S.recordTimedOut)}</Badge>}
+                  {live(s) ? <Badge tone="info">{tx(S.recordLive)}</Badge> : !s.endedAt && <Badge tone="outline">{tx(S.recordTimedOut)}</Badge>}
                 </span>
                 <span className="acct-session__why">
                   <bdi>{s.reason}</bdi>
                 </span>
+                {/* One line: who opened it and when, how long it lasted, what it did. */}
                 <span className="rec-attn__sub">
-                  <span>
-                    {tx(S.recordBy)} <bdi>{s.staff.name}</bdi>
-                  </span>
-                  <span>
-                    {tx(S.recordStarted)} <time dateTime={s.startedAt}>{dateTime(s.startedAt)}</time>
-                  </span>
+                  <span title={dateTime(s.startedAt)}>{fill(tx(S.recordOpened), { by: <bdi>{s.staff.name}</bdi>, when: when(s.startedAt) })}</span>
                   {s.endedAt && (
-                    <span>
-                      {tx(S.recordEnded)} <time dateTime={s.endedAt}>{dateTime(s.endedAt)}</time>
+                    <span title={dateTime(s.endedAt)}>
+                      {tx(S.recordLasted, { time: countWords(Math.max(1, Math.round((Date.parse(s.endedAt) - Date.parse(s.startedAt)) / 60_000)), MINUTES, locale) })}
                     </span>
                   )}
-                  <span>
-                    {tx(S.recordActions)} <span className="ltr">{number(s.actions)}</span>
-                  </span>
+                  {s.actions > 0 && <span>{countWords(s.actions, ACTIONS_RECORDED, locale)}</span>}
                 </span>
               </div>
               <div className="rec-attn__act">
@@ -583,7 +638,41 @@ function SupportRecord() {
           ))}
         </ul>
       )}
+      {shown.length < ordered.length && (
+        <p className="dir-foot">
+          <span />
+          <button type="button" className="btn btn--sm btn--ghost" onClick={() => setAll(true)}>
+            {tx(S.recordShowAll, { n: number(ordered.length) })}
+          </button>
+        </p>
+      )}
     </Sheet>
+  )
+}
+
+/** How many support sessions the record shows before it asks to show the rest. */
+const RECORD_FIRST = 5
+
+/**
+ * A support session this administrator opened and has not ended is the most
+ * "right now" thing in this area: said at the top, with the way back in, not
+ * only in the record at the foot of the page.
+ */
+function LiveSupportStrip() {
+  const tx = useCopy()
+  const { staff } = useSession()
+  const record = useQuery({ queryKey: supportKeys.record(), queryFn: () => supportAdminApi.list() })
+  const now = Date.now()
+  const mine = (record.data ?? []).find((s) => !s.endedAt && Date.parse(s.expiresAt) > now && s.staff.id === staff?.id)
+  if (!mine) return null
+  return (
+    <p className="notice notice--info acct-live">
+      <Icon name="headset" size={18} />
+      <span>{fill(tx(A.liveSession), { name: <bdi>{mine.target.name}</bdi> })}</span>
+      <Link to={`/support/${encodeURIComponent(mine.id)}`} className="btn btn--sm">
+        {tx(S.openSession)}
+      </Link>
+    </p>
   )
 }
 

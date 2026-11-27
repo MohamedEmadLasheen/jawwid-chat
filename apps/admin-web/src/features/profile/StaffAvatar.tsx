@@ -37,7 +37,8 @@ export function StaffAvatar({
   }
   return (
     <span
-      className={lead ? 'sp-avatar sp-avatar--initials sp-avatar--lead' : 'sp-avatar sp-avatar--initials'}
+      // The shared avatar's one neutral tint, the same for everyone.
+      className={lead ? 'sp-avatar sp-avatar--initials sp-avatar--lead avatar avatar--t1' : 'sp-avatar sp-avatar--initials avatar avatar--t1'}
       style={style}
       role="img"
       aria-label={tx(T.avatarOf, { name })}

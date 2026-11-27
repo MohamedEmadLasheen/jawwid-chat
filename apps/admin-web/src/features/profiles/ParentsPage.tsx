@@ -4,7 +4,7 @@ import { useI18n } from '@/core/i18n/I18nProvider'
 import { Avatar } from '@/shared/components/Avatar'
 import { Badge } from '@/shared/components/Badge'
 import { Icon } from '@/shared/components/Icon'
-import { PageHeader, type MastFigure } from '@/shared/components/PageHeader'
+import { PageHeader } from '@/shared/components/PageHeader'
 import { RowActions } from '@/shared/components/RowActions'
 import { SearchField } from '@/shared/components/SearchField'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
@@ -13,6 +13,7 @@ import { parentPath, type ParentAccessFilter, type ParentLocationFilter } from '
 import { LocationText } from '@/shared/location/LocationPicker'
 import { CHILDREN_COUNT, P, describeError, isProfileRefusal, useCopy } from './copy'
 import { useParents } from './hooks'
+import { fill, useRememberWalk } from './RecordHead'
 import { IntakeDialog } from '@/features/intake/IntakeDialog'
 import { I } from '@/features/intake/copy'
 import { useIntakeOptions } from '@/features/intake/hooks'
@@ -65,23 +66,16 @@ export function ParentsPage({ eyebrow }: { eyebrow?: string }) {
     }, { replace: true })
   const list = useParents(deferred, access, location)
   const items = list.data?.items ?? []
+  // A parent's file walks this list in the order it is shown.
+  useRememberWalk('parents', list.data?.items)
   // PD-42: offered when the server says this viewer enters families.
   const intake = useIntakeOptions()
   const [adding, setAdding] = useState(false)
   const navigate = useNavigate()
   const searching = deferred !== '' || access !== 'all' || location !== 'all'
 
-  // The list carries no totals per filter: the figure counts the list that is open.
-  const figures: MastFigure[] = list.data
-    ? [
-        {
-          key: 'count',
-          label: access === 'locked' ? tx(P.accessLocked) : access === 'grace' ? tx(P.accessGrace) : deferred !== '' || location !== 'all' ? tx(P.results) : tx(P.parentsTitle),
-          value: list.data.truncated && items.length >= LIST_LIMIT ? `${number(items.length)}+` : number(items.length),
-          tone: access === 'locked' && items.length > 0 ? 'urgent' : undefined,
-        },
-      ]
-    : []
+  // The list carries no totals per filter: the count is of the list that is open, said once in the sheet's bar.
+  const count = list.data ? (list.data.truncated && items.length >= LIST_LIMIT ? `${number(items.length)}+` : number(items.length)) : null
 
   return (
     <div className="page dir">
@@ -89,8 +83,6 @@ export function ParentsPage({ eyebrow }: { eyebrow?: string }) {
         <PageHeader
           eyebrow={eyebrow}
           title={tx(P.parentsTitle)}
-          subtitle={tx(P.parentsSubtitle)}
-          figures={figures}
           actions={
             intake.data?.ready && (
               <button
@@ -123,7 +115,7 @@ export function ParentsPage({ eyebrow }: { eyebrow?: string }) {
               ))}
             </div>
             {/* One filter, so one chip: pressed it narrows the list, pressed again it is removed. */}
-            <div className="chips sheet-bar__end" role="group" aria-label={tx(P.location)}>
+            <div className="chips" role="group" aria-label={tx(P.location)}>
               <button type="button" className="chip" aria-pressed={location === 'missing'} onClick={() => setLocation(location === 'missing' ? 'all' : 'missing')}>
                 <Icon name="mapPin" size={14} />
                 {tx(P.missingLocation)}
@@ -134,6 +126,11 @@ export function ParentsPage({ eyebrow }: { eyebrow?: string }) {
                 )}
               </button>
             </div>
+            {count !== null && (
+              <span className="dir-count" role="status">
+                {fill(tx(P.listCount), { n: <strong>{count}</strong> })}
+              </span>
+            )}
           </div>
           {isProfileRefusal(list.error) ? (
             <EmptyState icon="lock" title={describeError(list.error, locale)} />
@@ -173,7 +170,9 @@ export function ParentsPage({ eyebrow }: { eyebrow?: string }) {
                               <bdi>{p.name}</bdi>
                             </Link>
                             <span className="dir-sub">
-                              <bdi>{p.family.name}</bdi>
+                              <span>
+                                <bdi>{p.family.name}</bdi>
+                              </span>
                               <span>{countWords(p.childrenCount, CHILDREN_COUNT, locale)}</span>
                             </span>
                           </span>
@@ -186,7 +185,7 @@ export function ParentsPage({ eyebrow }: { eyebrow?: string }) {
                         </td>
                       )}
                       <td className={p.location?.countryCode ? 'dir-cell-quiet' : 'dir-cell-quiet dir-cell-quiet--none'} data-label={tx(P.location)}>
-                        {p.location ? <LocationText value={p.location} /> : '—'}
+                        {p.location?.countryCode ? <LocationText value={p.location} /> : <span className="dir-missing">{tx(P.notRecorded)}</span>}
                       </td>
                       <td className="cell-actions">
                         <RowActions

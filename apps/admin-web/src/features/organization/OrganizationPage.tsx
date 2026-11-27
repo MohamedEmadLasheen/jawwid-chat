@@ -15,6 +15,8 @@ import { countWords } from '@/features/instalments/copy'
 import { CHILDREN_COUNT } from '@/features/profiles/copy'
 import { studentPath } from '@/features/profiles/api'
 import { SupervisorColors } from '@/features/schedule/SupervisorColors'
+import { useDay } from '@/features/devices/when'
+import { fill } from '@/features/profiles/RecordHead'
 import type { BackupLink, BackupStatus, Cover, Department, DepartmentMember, LearnerAssignment, TeacherAssignment } from './api'
 import { CHILDREN_WAITING, DEPARTMENT_LABEL, POSITION_LABEL, STATUS_LABEL, T, TEACHERS_WAITING, describeError, useCopy } from './copy'
 import { useAssignTeacher, useCovers, useEndCover, useExtendCover, useLearners, useStructure, useTeacherAssignments } from './hooks'
@@ -86,7 +88,6 @@ export function OrganizationPage() {
       <div className="page__inner">
         <PageHeader
           title={tx(T.title)}
-          subtitle={tx(T.subtitle)}
           tabs={
             structure.data && (
               <div className="org-tabs" role="tablist" aria-label={tx(T.title)}>
@@ -132,16 +133,15 @@ export function OrganizationPage() {
   )
 }
 
-/** The head of a group of rows: who the group belongs to (or a gold tag when nobody), how many, and what applies to them. */
-function GroupHead({ columns, who, count, children }: { columns: number; who: ReactNode; count: number; children?: ReactNode }) {
-  const { number } = useI18n()
+/** The head of a group of rows: who the group belongs to (or the words "no supervisor", with the amber dot of a group nobody holds), how many, and what applies to them. */
+function GroupHead({ columns, who, count, children }: { columns: number; who: ReactNode; count: string; children?: ReactNode }) {
   return (
     <tr className="dir-group__head">
       <th colSpan={columns} scope="rowgroup">
         <span className="org-group">
           <span className="dir-group__title">
             {who}
-            <span className="count count--quiet">{number(count)}</span>
+            <span className="dir-group__label org-group__count">{count}</span>
           </span>
           {children}
         </span>
@@ -201,12 +201,13 @@ function TeachersTab() {
     <QueryBoundary isLoading={data.isLoading} error={data.error} onRetry={() => void data.refetch()}>
       {view && (
         <section className="sheet dir-sheet org-sheet" aria-label={tx(T.tabTeachers)}>
+          {/* The answer first, the sheet's first line; then the rule the supervisors work under, quietly. */}
+          <p className="org-answer" role="status">
+            {view.unassigned > 0 ? `${countWords(view.unassigned, TEACHERS_WAITING, locale)}.` : tx(T.teachersAllAssigned)}
+          </p>
           <div className="sheet-bar org-bar">
-            <p className={view.unassigned > 0 ? 'org-rule org-rule--waiting' : 'org-rule'} role="status">
-              <strong>{view.unassigned > 0 ? countWords(view.unassigned, TEACHERS_WAITING, locale) : tx(T.teachersAllAssigned)}</strong>{' '}
-              {tx(view.strictScope ? T.scopeOn : T.scopeOff)}
-            </p>
-            <span className="sheet-bar__end dir-total">{plural(PLURAL.teachers, view.teachers.length)}</span>
+            <p className="org-rule">{tx(view.strictScope ? T.scopeOn : T.scopeOff)}</p>
+            <span className="dir-count">{plural(PLURAL.teachers, view.teachers.length)}</span>
           </div>
           {assign.error && <p className="field__error org-error" role="alert">{describeError(assign.error, locale)}</p>}
           {view.teachers.length === 0 ? (
@@ -223,7 +224,7 @@ function TeachersTab() {
                 <tbody key={g.key} className={g.kind === 'unassigned' ? 'dir-group dir-group--unplaced' : 'dir-group'}>
                   <GroupHead
                     columns={2}
-                    count={g.rows.length}
+                    count={plural(PLURAL.teachers, g.rows.length)}
                     who={
                       g.supervisor ? (
                         <>
@@ -233,7 +234,7 @@ function TeachersTab() {
                           </Link>
                         </>
                       ) : g.kind === 'unassigned' ? (
-                        <Badge tone="gold">{tx(T.unassigned)}</Badge>
+                        <span>{tx(T.unassigned)}</span>
                       ) : (
                         <span className="dir-group__label">{tx(T.inactiveTeacher)}</span>
                       )
@@ -322,6 +323,8 @@ function ChildrenTab({ operations }: { operations: Department }) {
   const [handingOver, setHandingOver] = useState<DepartmentMember | null>(null)
   const supervisors = useMemo(() => operations.members.filter((m) => m.position === 'supervisor'), [operations.members])
 
+  const unplaced = (learners.data?.learners ?? []).filter((l) => !l.supervisor).length
+  const day = useDay()
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase()
     return (learners.data?.learners ?? []).filter((l) => {
@@ -361,6 +364,12 @@ function ChildrenTab({ operations }: { operations: Department }) {
   return (
     <QueryBoundary isLoading={learners.isLoading} error={learners.error} onRetry={() => void learners.refetch()}>
       <section className="sheet dir-sheet org-sheet" aria-label={tx(T.tabChildren)}>
+        {/* The answer first, the sheet's first line at the start edge (as on every page here): how many children
+            nobody supervises, or that every child has someone. Asked for those with none and there are none, the
+            empty sheet says it instead. */}
+        {learners.data && !(filter === 'unassigned' && rows.length === 0) && (
+          <p className="org-answer">{unplaced > 0 ? `${countWords(unplaced, CHILDREN_WAITING, locale)}.` : tx(T.allChildrenAssigned)}</p>
+        )}
         <div className="sheet-bar org-bar">
           <SearchField value={query} onChange={setQuery} label={tx(T.search)} clearLabel={t('common.cancel')} />
           <div className="org-filter">
@@ -373,10 +382,11 @@ function ChildrenTab({ operations }: { operations: Department }) {
               ))}
             </SearchableSelect>
           </div>
-          <span className="sheet-bar__end dir-total">{countWords(rows.length, CHILDREN_COUNT, locale)}</span>
+          {rows.length > 0 && <span className="dir-count">{countWords(rows.length, CHILDREN_COUNT, locale)}</span>}
         </div>
         {rows.length === 0 ? (
-          <EmptyState title={tx(T.noChildren)} />
+          // Asked for the children with no supervisor and there are none: that is the answer, said as one.
+          <EmptyState title={tx(filter === 'unassigned' && !query.trim() ? T.allChildrenAssigned : T.noChildren)} />
         ) : (
           <table className="dir-table dir-table--grouped org-table">
             <thead>
@@ -392,7 +402,7 @@ function ChildrenTab({ operations }: { operations: Department }) {
               <tbody key={g.key} className={g.supervisor ? 'dir-group' : 'dir-group dir-group--unplaced'}>
                 <GroupHead
                   columns={3}
-                  count={g.rows.length}
+                  count={g.rows.length > 0 ? countWords(g.rows.length, CHILDREN_COUNT, locale) : tx(T.noChildrenYet)}
                   who={
                     g.supervisor ? (
                       <>
@@ -402,12 +412,20 @@ function ChildrenTab({ operations }: { operations: Department }) {
                         </Link>
                       </>
                     ) : (
-                      <Badge tone="gold">{tx(T.unassigned)}</Badge>
+                      <span>{tx(T.unassigned)}</span>
                     )
                   }
                 >
                   {g.member && (
                     <span className="org-group__cover">
+                      {/* Who covers this supervisor through a backup link in force now, said where their children are. */}
+                      {operations.backups
+                        .filter((b) => b.status === 'active' && b.primary?.id === g.member!.id && b.backup)
+                        .map((b) => (
+                          <Badge key={b.id} tone="coverage">
+                            {b.activeUntil ? tx(T.coveringUntil, { name: b.backup!.name, date: day(b.activeUntil) }) : tx(T.coveredBy, { backup: b.backup!.name })}
+                          </Badge>
+                        ))}
                       <CoverTags member={g.member} covers={covers} />
                       <CoverControl member={g.member} covers={covers} canManage={canManage} onHandOver={() => setHandingOver(g.member)} menuOnly />
                     </span>
@@ -442,7 +460,7 @@ function ChildrenTab({ operations }: { operations: Department }) {
                             onClick={() => setEditing(l)}
                             aria-label={`${l.supervisor ? tx(T.change) : tx(T.assign)} — ${l.name}`}
                           >
-                            {l.supervisor ? tx(T.change) : tx(T.assign)}
+                            {l.supervisor ? tx(T.changeSupervisor) : tx(T.assign)}
                           </button>
                         }
                       />
@@ -468,7 +486,7 @@ function ChildrenTab({ operations }: { operations: Department }) {
 // Departments & backups
 // ---------------------------------------------------------------------------
 
-/** A link in force is where things stand (a teal tag); one that ran out waits on someone (gold); the rest is a quiet word. */
+/** A link in force is where things stand (a teal tag); one that ran out waits on someone (amber); the rest is a quiet word. */
 const STATUS_TONE: Record<BackupStatus, Tone> = {
   active: 'info',
   dormant: 'neutral',
@@ -490,6 +508,11 @@ function DepartmentSheet({ department }: { department: Department }) {
   // PD-33: who is away and who is covering, for the Operations team.
   const covers = useCovers(operations).data?.covers ?? []
   const headingId = `org-dept-${department.id}`
+  const date = useDay()
+  // The supervisors first (they hold the children), their backups after; each group keeps the server's order.
+  const team = [...department.members].sort((a, b) => Number(a.position !== 'supervisor') - Number(b.position !== 'supervisor'))
+  // The backup links that still stand (dormant, active or run out); those ended or switched off are history.
+  const inForce = department.backups.filter((l) => l.status !== 'ended' && l.status !== 'deactivated')
 
   return (
     <section className="sheet rec-sheet org-dept" aria-labelledby={headingId}>
@@ -531,7 +554,10 @@ function DepartmentSheet({ department }: { department: Department }) {
             </tr>
           </thead>
           <tbody>
-            {department.members.map((m: DepartmentMember) => (
+            {team.map((m: DepartmentMember) => {
+              // Who covers whom, said once, on the supervisor it concerns: their backup and where the link stands.
+              const backedBy = inForce.filter((l) => l.primary?.id === m.id && l.backup)
+              return (
               <tr key={m.id} className="dir-row">
                 <td className="dir-cell-who">
                   <span className="dir-who">
@@ -541,11 +567,27 @@ function DepartmentSheet({ department }: { department: Department }) {
                         <bdi>{m.name}</bdi>
                       </Link>
                       <span className="org-sub">{tx(POSITION_LABEL[m.position])}</span>
+                      {backedBy.map((l) => (
+                        <span key={l.id} className="org-backup-line">
+                          <span>{fill(tx(T.backupIs), { name: <bdi>{l.backup!.name}</bdi> })}</span>
+                          {/* Where the link stands is said only when it is not the usual (dormant): covering now, or run out. */}
+                          {l.status !== 'dormant' && (
+                            <Badge tone={l.status === 'active' ? 'coverage' : STATUS_TONE[l.status]}>
+                              {l.status === 'active' && l.activeUntil ? tx(T.coveringNowUntil, { date: date(l.activeUntil) }) : tx(STATUS_LABEL[l.status])}
+                            </Badge>
+                          )}
+                        </span>
+                      ))}
                     </span>
                   </span>
                 </td>
                 <td className="org-cell-num" data-label={tx(T.childrenCount)}>
-                  <span className={m.learnerCount > 0 ? 'org-num' : 'org-num org-num--none'}>{number(m.learnerCount)}</span>
+                  {/* A backup holds no children of their own: nothing is said, not a zero. */}
+                  {m.position === 'supervisor' || m.learnerCount > 0 ? (
+                    <span className={m.learnerCount > 0 ? 'org-num' : 'org-num org-num--none'}>{number(m.learnerCount)}</span>
+                  ) : (
+                    <span className="org-num org-num--none">—</span>
+                  )}
                 </td>
                 {operations && (
                   <td className="org-cell-cover">
@@ -558,7 +600,8 @@ function DepartmentSheet({ department }: { department: Department }) {
                   </td>
                 )}
               </tr>
-            ))}
+              )
+            })}
           </tbody>
         </table>
       )}
@@ -617,7 +660,7 @@ function coverOf(member: DepartmentMember, covers: Cover[]) {
  */
 function CoverTags({ member, covers }: { member: DepartmentMember; covers: Cover[] }) {
   const tx = useCopy()
-  const { date } = useI18n()
+  const date = useDay()
   const { away, covering } = coverOf(member, covers)
   if (away) {
     return (
@@ -705,7 +748,7 @@ function CoverControl({
 /** One backup link: who covers whom, where it stands, and its actions: activating or stopping it stated, ending it behind "more". */
 function BackupRow({ link, canManage, onAct }: { link: BackupLink; canManage: boolean; onAct: (a: BackupAction) => void }) {
   const tx = useCopy()
-  const { date } = useI18n()
+  const date = useDay()
   const names = { backup: link.backup?.name ?? '', primary: link.primary?.name ?? '' }
   const sentence = tx(T.covers, names)
   return (

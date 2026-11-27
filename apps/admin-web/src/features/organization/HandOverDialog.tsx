@@ -149,7 +149,7 @@ export function HandOverDialog({
               {data.eligibleBackups.map((b) => (
                 <option key={b.id} value={b.id} disabled={!!b.blocked}>
                   {b.name}
-                  {b.linked ? ` · ${tx(T.linkedBackup)}` : ''}
+                  {b.linked ? ` (${tx(T.linkedBackup)})` : ''}
                   {b.blocked ? ` — ${blockedText(b)}` : ''}
                 </option>
               ))}

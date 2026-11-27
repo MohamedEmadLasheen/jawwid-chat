@@ -156,10 +156,10 @@ describe('an admin\'s own profile', () => {
     expect(screen.getByText('Supervises 3 assigned families')).toBeInTheDocument()
     expect(screen.getByText('admin_a@example.test')).toBeInTheDocument()
 
-    // The counts that matter most are the masthead's figures; what waits for us makes its figure the key one.
+    // The counts that matter most are the head's highlights; chats waiting for a reply are flagged as waiting.
     expect(within(figure('Assigned families')).getByText('3')).toBeInTheDocument()
-    expect(within(figure('Open conversations')).getByText('2 awaiting our reply')).toBeInTheDocument()
-    expect(figure('Open conversations')).toHaveClass('figure--key')
+    expect(within(figure('Awaiting reply')).getByText('2')).toBeInTheDocument()
+    expect(figure('Awaiting reply')).toHaveClass('rec-hl__item--waiting')
     expect(screen.queryByText('Direct reports', { selector: '.figure__label' })).not.toBeInTheDocument()
     const workload = screen.getByRole('region', { name: 'My responsibilities at a glance' })
     // Untracked metrics are named, not shown as zeros.
@@ -423,7 +423,7 @@ describe('a manager', () => {
     // The record's heading is the person; the masthead's tabs say it is a staff profile.
     expect(await screen.findByRole('heading', { level: 1, name: /^Admin A/ })).toBeInTheDocument()
     expect(screen.getByRole('tablist', { name: 'Staff profile' })).toBeInTheDocument()
-    expect(screen.getByText('You are editing Admin A’s profile. This change is recorded with your name.')).toBeInTheDocument()
+    expect(screen.getByText('Changes to Admin A’s profile are recorded with your name.')).toBeInTheDocument()
     expect(screen.queryByLabelText('Choose a photo')).not.toBeInTheDocument()
     // The photo and the reporting line live in the file's menu: with neither offered, there is no menu.
     expect(screen.queryByRole('button', { name: /More actions/ })).not.toBeInTheDocument()

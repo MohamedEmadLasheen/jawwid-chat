@@ -34,7 +34,7 @@
   inline-size: 76px;
   block-size: 76px;
   border-radius: var(--radius-lg);
-  font-family: var(--display);
+  font-family: var(--font-head);
   font-size: 29px;
   font-weight: 600;
 }
@@ -51,7 +51,7 @@
 .pp-head__eyebrow { margin: 0 0 2px; font-family: var(--font); font-size: 12.5px; font-weight: 500; line-height: 1.4; color: var(--ink-muted); }
 .pp-head__name {
   margin: 0;
-  font-family: var(--display);
+  font-family: var(--font-head);
   font-size: var(--fs-title);
   font-weight: 600;
   line-height: 1.15;
@@ -90,7 +90,7 @@ html[lang='ar'] .pp-head__name { font-weight: 700; line-height: 1.4; }
 /* Presence: a ring is away, a filled dot is here. */
 .pp-presence { display: inline-flex; align-items: center; gap: 7px; }
 .pp-presence::before { content: ''; inline-size: 8px; block-size: 8px; border-radius: 50%; border: 1.5px solid var(--border-control); }
-.pp-presence--on::before { border-color: var(--success); background: var(--success); }
+.pp-presence--on::before { border-color: var(--done); background: var(--done); }
 
 @media (max-width: 767px) {
   .pp-head { grid-template-columns: auto minmax(0, 1fr); align-items: start; }
@@ -112,7 +112,7 @@ html[lang='ar'] .pp-head__name { font-weight: 700; line-height: 1.4; }
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   margin: 0;
   padding: 0;
-  border-block: 1px solid var(--hairline);
+  border-block: 1px solid var(--line);
 }
 .pp-strip > div {
   display: flex;
@@ -120,20 +120,20 @@ html[lang='ar'] .pp-head__name { font-weight: 700; line-height: 1.4; }
   gap: 2px;
   min-inline-size: 0;
   padding: 11px var(--space-4) 12px;
-  border-inline-start: 1px solid var(--hairline);
+  border-inline-start: 1px solid var(--line);
   margin-inline-start: -1px;
 }
 .pp-strip dt { font-size: 12.5px; color: var(--ink-muted); }
 .pp-strip dd { margin: 0; font-size: var(--fs-md); font-weight: 500; overflow-wrap: anywhere; }
 /* A fact nobody has recorded is said quietly: it must not weigh what a real value weighs. */
 .pp-strip dd .tf-muted, .pp-strip dd.tf-muted { font-size: var(--fs-sm); font-weight: 400; color: var(--ink-muted); }
-.pp-strip dd.pp-strip__num { font-family: var(--display); font-size: var(--fs-xl); font-weight: 600; line-height: 1.2; font-variant-numeric: tabular-nums lining-nums; }
+.pp-strip dd.pp-strip__num { font-family: var(--font-head); font-size: var(--fs-xl); font-weight: 600; line-height: 1.2; font-variant-numeric: tabular-nums lining-nums; }
 .pp-strip-wrap { overflow: hidden; }
 .pp-strip-wrap > .pp-strip { margin-inline-start: -1px; }
 .pp-strip > div:first-child { padding-inline-start: 3px; }
 @media (max-width: 767px) {
   .pp-strip { grid-template-columns: 1fr 1fr; }
-  .pp-strip > div { padding-inline: var(--space-3); border-block-start: 1px solid var(--hairline-soft); margin-block-start: -1px; }
+  .pp-strip > div { padding-inline: var(--space-3); border-block-start: 1px solid var(--line-2); margin-block-start: -1px; }
   .pp-strip > div:nth-child(odd) { padding-inline-start: 3px; }
 }
 
@@ -151,8 +151,8 @@ html[lang='ar'] .pp-head__name { font-weight: 700; line-height: 1.4; }
   min-block-size: var(--pp-bar-h);
   margin: 0 calc(-1 * var(--space-6)) var(--space-5);
   padding: 0 var(--space-6);
-  background: var(--paper);
-  border-block-end: 1px solid var(--hairline);
+  background: var(--canvas);
+  border-block-end: 1px solid var(--line);
 }
 .pp-bar__index { display: flex; gap: var(--space-5); min-inline-size: 0; flex: 1; overflow-x: auto; scrollbar-width: none; align-self: stretch; }
 .pp-bar__index::-webkit-scrollbar { display: none; }
@@ -171,10 +171,10 @@ html[lang='ar'] .pp-head__name { font-weight: 700; line-height: 1.4; }
   cursor: pointer;
   transition: color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
 }
-.pp-bar__jump:hover { color: var(--ink); border-block-end-color: var(--hairline); }
+.pp-bar__jump:hover { color: var(--ink); border-block-end-color: var(--line); }
 .pp-bar__jump:focus-visible { outline-offset: -2px; }
 .pp-bar__jump .pp-count { margin-inline-start: 6px; font-size: var(--fs-xs); font-variant-numeric: tabular-nums; color: var(--ink-muted); }
-.pp-bar__jump--late .pp-count { color: var(--terracotta); font-weight: 600; }
+.pp-bar__jump--late .pp-count { color: var(--urgent); font-weight: 600; }
 .pp-bar__actions { display: flex; align-items: center; gap: var(--space-2); flex: none; padding-block: 7px; }
 @media (max-width: 767px) {
   .pp-bar { inset-block-start: calc(-1 * var(--space-4)); margin-inline: calc(-1 * var(--space-4)); padding-inline: var(--space-4); flex-wrap: wrap; gap: 0 var(--space-3); }
@@ -186,7 +186,7 @@ html[lang='ar'] .pp-head__name { font-weight: 700; line-height: 1.4; }
 
 .pp-cols { display: grid; grid-template-columns: minmax(0, 1fr) var(--pp-side); gap: 0 var(--space-7); align-items: start; }
 .pp-main { min-inline-size: 0; }
-.pp-side { min-inline-size: 0; padding-inline-start: var(--space-6); border-inline-start: 1px solid var(--hairline); }
+.pp-side { min-inline-size: 0; padding-inline-start: var(--space-6); border-inline-start: 1px solid var(--line); }
 .pp-cols--even { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 @media (max-width: 1099px) {
   .pp-cols, .pp-cols--even { grid-template-columns: minmax(0, 1fr); }
@@ -212,11 +212,11 @@ html[lang='ar'] .pp-head__name { font-weight: 700; line-height: 1.4; }
   gap: var(--space-2) var(--space-3);
   min-block-size: 40px;
   padding-block-end: 6px;
-  border-block-end: 1px solid var(--hairline);
+  border-block-end: 1px solid var(--line);
 }
 .pp :is(.pp-sec__title, .tf-section__title) {
   margin: 0;
-  font-family: var(--display);
+  font-family: var(--font-head);
   font-size: var(--fs-xl);
   font-weight: 600;
   line-height: 1.3;
@@ -234,7 +234,7 @@ html[lang='ar'] .pp :is(.pp-sec__title, .tf-section__title) { font-weight: 700; 
   color: var(--ink-muted);
 }
 .pp :is(.pp-sec, .tf-section) > .tf-muted, .pp-empty { margin: 12px 0 0; font-size: var(--fs-sm); color: var(--ink-muted); }
-.pp .tf-subtitle { margin: var(--space-5) 0 0; padding-block-end: 6px; border-block-end: 1px solid var(--hairline-soft); font-size: 12.5px; font-weight: 500; color: var(--ink-muted); }
+.pp .tf-subtitle { margin: var(--space-5) 0 0; padding-block-end: 6px; border-block-end: 1px solid var(--line-2); font-size: 12.5px; font-weight: 500; color: var(--ink-muted); }
 .pp .tf-byline { margin: 8px 0 0; font-size: var(--fs-xs); color: var(--ink-muted); }
 
 /* In the margin, headings are labels, not titles: the main column speaks louder. */
@@ -245,7 +245,7 @@ html[lang='ar'] .pp-side :is(.pp-sec__title, .tf-section__title) { font-size: 13
 
 /* Label and value pairs as ruled lines. */
 .pp .tf-kv { display: grid; grid-template-columns: minmax(7.5rem, max-content) minmax(0, 1fr); gap: 0 var(--space-4); margin: 0; font-size: var(--fs-sm); }
-.pp .tf-kv > dt, .pp .tf-kv > dd { padding-block: 8px; border-block-end: 1px solid var(--hairline-soft); margin: 0; }
+.pp .tf-kv > dt, .pp .tf-kv > dd { padding-block: 8px; border-block-end: 1px solid var(--line-2); margin: 0; }
 .pp .tf-kv > dt { color: var(--ink-muted); }
 .pp .tf-kv > dd { font-weight: 500; overflow-wrap: anywhere; }
 .pp .tf-kv .tf-muted, .pp .tf-kv .field__hint { font-weight: 400; }
@@ -258,7 +258,7 @@ html[lang='ar'] .pp-side :is(.pp-sec__title, .tf-section__title) { font-size: 13
   .pp .tf-kv > dd { padding-block-start: 2px; }
 }
 .pp .banner { margin-block-start: var(--space-3); padding: 6px var(--space-3); border: 0; border-inline-start: 2px solid var(--teal); background: none; color: var(--ink-muted); }
-.pp .banner--danger { border-inline-start-color: var(--terracotta); color: var(--terracotta); }
+.pp .banner--danger { border-inline-start-color: var(--urgent); color: var(--urgent); }
 
 /* ------------------------------------------------------------- ruled rows */
 
@@ -269,7 +269,7 @@ html[lang='ar'] .pp-side :is(.pp-sec__title, .tf-section__title) { font-size: 13
   align-items: center;
   gap: 4px var(--space-3);
   padding: 10px 2px;
-  border-block-end: 1px solid var(--hairline-soft);
+  border-block-end: 1px solid var(--line-2);
 }
 .pp-row__name { font-weight: 600; color: var(--ink); text-decoration: none; }
 a.pp-row__name:hover { color: var(--teal-dark); text-decoration: underline; text-underline-offset: 3px; }
@@ -277,9 +277,9 @@ a.pp-row__name:hover { color: var(--teal-dark); text-decoration: underline; text
 .pp-row__end { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--space-3); font-size: var(--fs-sm); }
 
 /* A thin line for how much of something is used. */
-.pp-meter { display: block; inline-size: 100%; block-size: 3px; background: var(--hairline); overflow: hidden; }
+.pp-meter { display: block; inline-size: 100%; block-size: 3px; background: var(--line); overflow: hidden; }
 .pp-meter > span { display: block; block-size: 100%; background: var(--teal); }
-.pp-meter--late > span { background: var(--terracotta); }
+.pp-meter--late > span { background: var(--urgent); }
 .pp-meter--warn > span { background: var(--gold-line); }
 
 /* -------------------------------------------------------------- timeline */
@@ -299,7 +299,7 @@ a.pp-row__name:hover { color: var(--teal-dark); text-decoration: underline; text
   position: absolute;
   inset-block: 6px -6px;
   inset-inline-start: 3px;
-  border-inline-start: 1px solid var(--hairline);
+  border-inline-start: 1px solid var(--line);
 }
 .pp-tl > li:last-child::before { display: none; }
 .pp-tl > li::after {
@@ -311,7 +311,7 @@ a.pp-row__name:hover { color: var(--teal-dark); text-decoration: underline; text
   block-size: 7px;
   border-radius: 50%;
   border: 1.5px solid var(--border-control);
-  background: var(--paper);
+  background: var(--canvas);
 }
 .pp-tl--newest-first > li:first-child::after, .pp-tl--oldest-first > li:last-child::after { border-color: var(--teal); background: var(--teal); }
 .pp-tl strong, .pp-tl a { font-weight: 600; }
@@ -330,7 +330,7 @@ a.pp-row__name:hover { color: var(--teal-dark); text-decoration: underline; text
   gap: 6px;
   min-block-size: 26px;
   padding: 0 8px;
-  border: 1px solid var(--hairline);
+  border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   font-size: var(--fs-xs);
   font-weight: 500;
@@ -380,7 +380,7 @@ a.pp-row__name:hover { color: var(--teal-dark); text-decoration: underline; text
   .pp-list .table-wrap:has(> .pp-stack) { overflow: visible; }
   .pp-stack thead { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); }
   .pp-stack, .pp-stack tbody { display: block; }
-  .pp-stack tr { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); align-items: start; gap: 6px var(--space-3); padding: 12px 2px; border-block-end: 1px solid var(--hairline-soft); }
+  .pp-stack tr { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); align-items: start; gap: 6px var(--space-3); padding: 12px 2px; border-block-end: 1px solid var(--line-2); }
   .pp-stack td, .pp-stack tbody tr:last-child td { display: block; min-inline-size: 0; padding: 0; border: 0; white-space: normal; overflow-wrap: anywhere; }
   /* A date that keeps to one line in a wide table wraps here rather than run under its neighbour. */
   .table.pp-stack td.cell-nowrap { white-space: normal; }

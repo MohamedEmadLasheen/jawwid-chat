@@ -10,11 +10,11 @@ import { Avatar } from '@/shared/components/Avatar'
 import { Badge, type Tone } from '@/shared/components/Badge'
 import { Icon } from '@/shared/components/Icon'
 import { Menu, type MenuItem } from '@/shared/components/Menu'
-import { PageHeader, type MastFigure } from '@/shared/components/PageHeader'
+import { PageHeader } from '@/shared/components/PageHeader'
 import { RowActions } from '@/shared/components/RowActions'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
 import { preparePhoto, type PreparedPhoto } from '@/features/profile/photo'
-import { INSTALMENTS, countWords, formatDay, formatMoney, inDaysWords, lateWords } from '@/features/instalments/copy'
+import { INSTALMENTS, countWords, formatMoney, inDaysWords, lateWords } from '@/features/instalments/copy'
 import type { Payment, PaymentRequest } from '@/features/payments/api'
 import { METHOD, PAY, RECEIPT_STATUS, owed } from '@/features/payments/copy'
 import { InvoiceDownloadButton, InvoiceStatusBadge, PaymentList, ReceiptFile, ReceiptStatusBadge, RequestList } from '@/features/payments/PaymentParts'
@@ -29,11 +29,14 @@ import { zoneCity } from '@/core/time/academyTime'
 import { METHOD_LABEL, P, TIMELINE_STATUS, describeError, isProfileRefusal, moneyParts, planLabel, useCopy } from './copy'
 import { useFamilyBilling, useParent, useParentPhoto } from './hooks'
 import { FamilyFeedbackSection } from './FamilyFeedbackSection'
-import { Amount, AttentionRow, Calm, Fact, Sheet } from './RecordParts'
+import { Amount, AttentionRow, Calm, Fact, Sheet, longDay, plainLabel } from './RecordParts'
+import { RecordHead, fill, useWalk, type Callout, type Highlight } from './RecordHead'
+import './record.css'
 import { RecordPanel, RecordTabs, useRecordTab, type RecordTab } from './RecordTabs'
 import { IntakeDialog } from '@/features/intake/IntakeDialog'
 import { I } from '@/features/intake/copy'
 import { useFamilyHistory, useFamilyOwnership, useIntakeOptions } from '@/features/intake/hooks'
+import type { FamilyOwnership } from '@/features/intake/api'
 import { OwnershipSection } from '@/features/intake/OwnershipSection'
 import { FamilyHistorySection } from '@/features/intake/FamilyHistorySection'
 import {
@@ -181,7 +184,6 @@ function ParentFile({ profile, back }: { profile: ParentProfile; back: { to: str
   const canEdit = profile.access.canEdit
 
   const late = billing?.instalments.filter((i) => i.status === 'overdue') ?? []
-  const openRequests = billing?.requests.filter((r) => r.status === 'open') ?? []
 
   const tabKeys: TabKey[] = hasHistory ? ['overview', 'money', 'children', 'history'] : ['overview', 'money', 'children']
   const { tab, open: openTab } = useRecordTab<TabKey>(tabKeys, SECTION_TAB, !!billing)
@@ -197,36 +199,20 @@ function ParentFile({ profile, back }: { profile: ParentProfile; back: { to: str
     ...(hasHistory ? [{ key: 'history' as const, label: tx(P.tabHistory) }] : []),
   ]
 
-  const figures: MastFigure[] = []
-  if (billing) {
-    const main = billing.totals.find((t) => t.currency === billing.currency) ?? billing.totals[0]
-    if (main) {
-      const others = billing.totals.filter((t) => t !== main)
-      const anyLate = billing.totals.some((t) => t.overdueMinor > 0)
-      const out = moneyParts(main.outstandingMinor, main.currency, locale)
-      const paid = moneyParts(main.paidMinor, main.currency, locale)
-      const also = (pick: (t: FamilyBilling['totals'][number]) => number) => others.map((t) => formatMoney(pick(t), t.currency, locale)).join(' · ')
-      figures.push(
-        {
-          key: 'outstanding',
-          label: tx(P.outstanding),
-          value: <bdi dir="ltr">{out.amount}</bdi>,
-          unit: out.unit,
-          tone: anyLate ? 'urgent' : undefined,
-          note:
-            [main.overdueMinor > 0 ? tx(P.overdueOf, { amount: formatMoney(main.overdueMinor, main.currency, locale) }) : '', also((t) => t.outstandingMinor)]
-              .filter(Boolean)
-              .join(' · ') || undefined,
-          to: '#instalments',
-        },
-        { key: 'paid', label: tx(P.paid), value: <bdi dir="ltr">{paid.amount}</bdi>, unit: paid.unit, note: also((t) => t.paidMinor) || undefined, to: '#received' },
-      )
-    }
-  }
-  figures.push({ key: 'children', label: tx(P.children), value: number(profile.childrenCount), to: '#children' })
-  if (billing) {
-    figures.push({ key: 'requests', label: tx(P.openRequests), value: number(openRequests.length), tone: openRequests.length > 0 ? 'key' : 'quiet', to: '#requests' })
-  }
+  const highlights = useParentHighlights(profile, billing, chats.data, mayChat, ownership.data)
+  const walk = useWalk('parents', profile.id, parentPath)
+  const owner = ownership.data
+  const line = (
+    <>
+      {fill(tx(P.lineFamily), { family: <bdi>{profile.family.name}</bdi> })}
+      {owner && (owner.supervisor?.name ? fill(tx(P.lineFollowedBy), { name: <strong><bdi>{owner.supervisor.name}</bdi></strong> }) : tx(P.lineNoSupervisor))}
+      <span className="rec-lock">
+        <Icon name="lock" size={13} />
+        {tx(P.adminOnly)}
+      </span>
+    </>
+  )
+  const callout = parentCallout({ billing, access, ownership: owner, tx, locale, onOpen: setDialog })
 
   // Everything else that can be done to the file, in the order it is read; removing comes last.
   const menu = (call: (() => void) | null): MenuItem[] => [
@@ -240,8 +226,9 @@ function ParentFile({ profile, back }: { profile: ParentProfile; back: { to: str
 
   return (
     <>
-      <PageHeader
+      <RecordHead
         back={back}
+        walk={walk}
         lead={
           photo.prepared ? (
             <img className="rec-lead__img" src={photo.prepared.previewUrl} alt={tx(P.photoPreview)} />
@@ -249,36 +236,36 @@ function ParentFile({ profile, back }: { profile: ParentProfile; back: { to: str
             <Avatar name={profile.name} seed={profile.id} src={profile.avatarUrl} size="lg" />
           )
         }
-        title={profile.name}
+        name={profile.name}
         status={
           <>
-            {access && <Badge tone={ACCESS_TONE[access]}>{tx(access === 'locked' ? P.accessLocked : P.accessGrace)}</Badge>}
+            {access ? (
+              <Badge tone={ACCESS_TONE[access]}>{tx(access === 'locked' ? P.accessLocked : P.accessGrace)}</Badge>
+            ) : (
+              profile.isActive && <Badge tone="ok">{tx(P.subscriptionOpen)}</Badge>
+            )}
             {!profile.isActive && <Badge tone="outline">{tx(P.inactive)}</Badge>}
           </>
         }
-        subtitle={
-          <span className="rec-sub">
-            <bdi>{profile.family.name}</bdi>
-            <span className="rec-lock">
-              <Icon name="lock" size={13} />
-              {tx(P.adminOnly)}
-            </span>
-          </span>
-        }
-        figures={figures}
+        line={line}
+        highlights={highlights}
+        callout={callout}
         actions={
           <WithCall conversation={conversation}>
             {(call) => {
               const items = menu(call)
+              // With nothing owed, talking to the family is what is done here most; otherwise taking their payment.
+              const owes = !!billing && billing.totals.some((t) => t.outstandingMinor > 0)
+              const chatLeads = !!conversation && !owes
               return (
                 <>
                   {billing?.canRecord && (
-                    <button type="button" className="btn btn--primary" onClick={() => setDialog({ kind: 'cash' })}>
+                    <button type="button" className={chatLeads ? 'btn' : 'btn btn--primary'} onClick={() => setDialog({ kind: 'cash' })}>
                       {tx(PAY.recordReceived)}
                     </button>
                   )}
                   {conversation && (
-                    <Link className="btn" to={`/chat/${encodeURIComponent(conversation.id)}`}>
+                    <Link className={chatLeads ? 'btn btn--primary' : 'btn'} to={`/chat/${encodeURIComponent(conversation.id)}`}>
                       <Icon name="conversations" size={16} />
                       {tx(P.chat)}
                     </Link>
@@ -366,6 +353,183 @@ function WithCall({ conversation, children }: { conversation: ChatConversation |
 function CallReady({ conversation, children }: { conversation: ChatConversation; children: (call: (() => void) | null) => ReactNode }) {
   const calls = useCallActions()
   return <>{children(calls.available && !calls.busy ? () => void calls.startCall(conversation) : null)}</>
+}
+
+/* ----------------------------------------------------------- the head */
+
+/**
+ * A parent's six highlights: what the family owes, the next instalment, when
+ * someone last spoke with them, the children, the payment requests still
+ * open, and whether the parent can sign in. Each is drawn only when the
+ * server answers it for this viewer; nothing is shown as a nought it did not send.
+ */
+function useParentHighlights(
+  profile: ParentProfile,
+  billing: FamilyBilling | undefined,
+  chats: ChatConversation[] | undefined,
+  mayChat: boolean,
+  ownership: FamilyOwnership | undefined,
+): Highlight[] {
+  const tx = useCopy()
+  const { locale, number, duration } = useI18n()
+  const out: Highlight[] = []
+  const none = (text: string) => <span className="rec-hl__none">{text}</span>
+  if (billing) {
+    const main = billing.totals.find((t) => t.currency === billing.currency) ?? billing.totals[0]
+    if (main) {
+      const others = billing.totals.filter((t) => t !== main)
+      const anyLate = billing.totals.some((t) => t.overdueMinor > 0)
+      const m = moneyParts(main.outstandingMinor, main.currency, locale)
+      const notes = [
+        main.overdueMinor > 0 ? tx(P.overdueOf, { amount: amountText(main.overdueMinor, main.currency, locale) }) : '',
+        ...others.map((t) => amountText(t.outstandingMinor, t.currency, locale)),
+      ].filter(Boolean)
+      out.push({
+        key: 'outstanding',
+        icon: 'banknote',
+        label: tx(P.outstanding),
+        value:
+          main.outstandingMinor > 0 || anyLate ? (
+            <>
+              <bdi dir="ltr">{m.amount}</bdi>
+              <span className="rec-hl__unit">{m.unit}</span>
+            </>
+          ) : (
+            none(tx(P.hlNothingDue))
+          ),
+        // The balance is not the breach; only the overdue part under it is said in red.
+        note: notes.length > 0 ? <span className={anyLate ? 'rec-hl__late' : undefined}>{notes.join(locale === 'ar' ? '، ' : ', ')}</span> : undefined,
+        to: '#instalments',
+      })
+    } else {
+      out.push({ key: 'outstanding', icon: 'banknote', label: tx(P.outstanding), value: none(tx(P.hlNothingDue)), to: '#instalments' })
+    }
+    const next = billing.instalments
+      .filter((i) => i.status === 'due' || i.status === 'upcoming')
+      .sort((a, b) => a.dueDate.localeCompare(b.dueDate))[0]
+    const nm = next ? moneyParts(next.remainingMinor, next.currency, locale) : null
+    out.push({
+      key: 'next',
+      icon: 'calendar',
+      label: tx(P.hlNextInstalment),
+      value: next ? longDay(next.dueDate, locale) : none(tx(P.hlNoneScheduled)),
+      note:
+        next && nm ? (
+          <>
+            <bdi dir="ltr">{nm.amount}</bdi> {nm.unit}
+            {next.status === 'due' ? `${locale === 'ar' ? '، ' : ', '}${tx(TIMELINE_STATUS.due)}` : next.days > 0 ? `${locale === 'ar' ? '، ' : ', '}${inDaysWords(next.days, locale)}` : ''}
+          </>
+        ) : undefined,
+      tone: next?.status === 'due' ? 'waiting' : undefined,
+      to: '#instalments',
+    })
+  }
+  if (mayChat && chats) {
+    const mine = chats.filter(
+      (c) => !c.archivedAt && (c.familyId === profile.family.id || c.members?.some((x) => x.actorKind === 'contact' && x.actorId === profile.id)),
+    )
+    const last = mine.map((c) => c.lastActivityAt).filter(Boolean).sort().at(-1)
+    out.push({ key: 'contact', icon: 'conversations', label: tx(P.hlLastContact), value: last ? duration(last) : none(tx(P.hlNoChat)), text: true })
+  }
+  out.push({ key: 'children', icon: 'students', label: tx(P.children), value: number(profile.childrenCount), to: '#children' })
+  if (billing) {
+    const open = billing.requests.filter((r) => r.status === 'open').length
+    out.push({ key: 'requests', icon: 'link', label: tx(P.openRequests), value: number(open), tone: open > 0 ? undefined : 'quiet', to: '#requests' })
+  }
+  if (ownership) {
+    out.push({ key: 'signin', icon: 'userCheck', label: tx(P.hlSignIn), value: ownership.signIn ? tx(P.hlSignedIn) : none(tx(P.hlNoSignIn)), text: true })
+  }
+  return out
+}
+
+/**
+ * The one thing on this family that needs a person now, with the one action
+ * that answers it: money that is late first, then a locked or closing
+ * subscription, then receipts waiting to be checked, then a family nobody in
+ * Operations follows. Nothing pressing, no callout.
+ */
+function parentCallout({
+  billing,
+  access,
+  ownership,
+  tx,
+  locale,
+  onOpen,
+}: {
+  billing: FamilyBilling | undefined
+  access: AccessState | null
+  ownership: FamilyOwnership | undefined
+  tx: ReturnType<typeof useCopy>
+  locale: 'ar' | 'en'
+  onOpen: (d: Dialogs) => void
+}): Callout | null {
+  const late = (billing?.instalments ?? []).filter((i) => i.status === 'overdue').sort((a, b) => b.days - a.days)
+  if (billing && late.length > 0) {
+    const oldest = late[0]!
+    const owed = billing.totals.find((t) => t.overdueMinor > 0 && t.currency === oldest.currency) ?? billing.totals.find((t) => t.overdueMinor > 0)
+    const amount = <bdi>{amountText(owed?.overdueMinor ?? oldest.remainingMinor, owed?.currency ?? oldest.currency, locale)}</bdi>
+    const what = countWords(late.length, INSTALMENTS, locale)
+    return {
+      tone: 'urgent',
+      title: late.length === 1 ? fill(tx(P.calloutLateOne), { amount }) : fill(tx(P.calloutLate), { amount, what }),
+      body: fill(tx(late.length === 1 ? P.calloutOnly : P.calloutOldest), { label: <bdi>{plainLabel(oldest.label, locale)}</bdi>, late: lateWords(oldest.days, locale) }),
+      // Recording a payment is the head's action and each row's; what the callout adds is asking the family to pay.
+      action: billing.canRecord ? (
+        <button type="button" className="btn btn--sm" onClick={() => onOpen({ kind: 'link', instalment: oldest })}>
+          <Icon name="link" size={16} />
+          {tx(P.sendLink)}
+        </button>
+      ) : undefined,
+    }
+  }
+  if (access === 'locked' || access === 'grace') {
+    return {
+      tone: access === 'locked' ? 'urgent' : 'waiting',
+      title: tx(access === 'locked' ? P.calloutLocked : P.calloutGrace),
+      body: access === 'grace' ? tx(P.calloutGraceBody) : undefined,
+      action: billing?.canRecord ? (
+        <button type="button" className="btn btn--sm" onClick={() => onOpen({ kind: 'request' })}>
+          {tx(P.requestPayment)}
+        </button>
+      ) : undefined,
+    }
+  }
+  const receipts = (billing?.receipts ?? []).filter((r) => r.status === 'pending').length
+  if (receipts > 0) {
+    return {
+      tone: 'waiting',
+      title: receipts === 1 ? tx(P.calloutReceipts) : tx(P.calloutReceiptsMany, { n: receipts }),
+      action: (
+        <Link className="btn btn--sm" to="#receipts">
+          {tx(P.view)}
+        </Link>
+      ),
+    }
+  }
+  if (ownership?.needsOperationsSupervisor && !ownership.supervisor) {
+    return {
+      tone: 'waiting',
+      title: tx(P.calloutNoSupervisor),
+      action: ownership.can.assignOperationsSupervisor ? (
+        <Link className="btn btn--sm" to="#ownership">
+          {tx(P.assignSupervisor)}
+        </Link>
+      ) : undefined,
+    }
+  }
+  return null
+}
+
+/** An amount as every line of a record writes it: the figure, then its currency. */
+function amountText(minor: number, currency: string, locale: 'ar' | 'en'): string {
+  const m = moneyParts(minor, currency, locale)
+  return `${m.amount} ${m.unit}`
+}
+
+/** "Due 19 Dec 2026 for Hamza": when, and for whom, as one phrase. */
+function dueLine(i: TimelineInstalment, tx: ReturnType<typeof useCopy>, locale: 'ar' | 'en'): ReactNode {
+  const date = longDay(i.dueDate, locale)
+  return i.child ? fill(tx(P.dueForChild, { date }), { name: <bdi>{i.child.name}</bdi> }) : tx(P.dueForFamily, { date })
 }
 
 /* ------------------------------------------------------------------ photo */
@@ -510,7 +674,7 @@ function AttentionSheet({ billing: query, onOpen }: { billing: ReturnType<typeof
                   <AttentionRow
                     key={i.id}
                     tone={i.status === 'overdue' ? 'late' : 'waiting'}
-                    title={<bdi>{i.label}</bdi>}
+                    title={<bdi>{plainLabel(i.label, locale)}</bdi>}
                     tag={
                       <Badge tone={i.status === 'overdue' ? 'danger' : 'warn'}>
                         {i.status === 'overdue' && i.days > 0 ? lateWords(i.days, locale) : tx(TIMELINE_STATUS[i.status])}
@@ -518,8 +682,7 @@ function AttentionSheet({ billing: query, onOpen }: { billing: ReturnType<typeof
                     }
                     sub={
                       <>
-                        <span>{tx(P.dueOn, { date: formatDay(i.dueDate, locale) })}</span>
-                        <span>{i.child ? tx(P.forChild, { name: i.child.name }) : tx(P.forFamily)}</span>
+                        <span>{dueLine(i, tx, locale)}</span>
                       </>
                     }
                     amount={<Amount minor={i.remainingMinor} currency={i.currency} locale={locale} late={i.status === 'overdue'} />}
@@ -542,19 +705,28 @@ function AttentionSheet({ billing: query, onOpen }: { billing: ReturnType<typeof
                   <AttentionRow
                     key={r.id}
                     tone="waiting"
-                    title={<bdi>{r.label}</bdi>}
+                    title={<bdi>{plainLabel(r.label, locale)}</bdi>}
                     tag={<Badge tone="warn">{tx(P.openRequest)}</Badge>}
                     sub={
                       <>
-                        {r.child && <bdi>{r.child.name}</bdi>}
+                        {r.child && (
+                          <span>
+                            <bdi>{r.child.name}</bdi>
+                          </span>
+                        )}
                         <span>{tx(PAY.expires, { date: dateTime(r.expiresAt) })}</span>
                       </>
                     }
                     amount={<Amount minor={owed(r)} currency={r.currency} locale={locale} />}
                     action={
-                      <Link className="btn btn--sm" to="#requests">
-                        {tx(P.view)}
-                      </Link>
+                      <RowActions
+                        label={tx(P.more, { name: r.label })}
+                        primary={
+                          <Link className="btn btn--sm" to="#requests">
+                            {tx(P.view)}
+                          </Link>
+                        }
+                      />
                     }
                   />
                 ))}
@@ -562,18 +734,23 @@ function AttentionSheet({ billing: query, onOpen }: { billing: ReturnType<typeof
                   <AttentionRow
                     key={r.id}
                     tone="waiting"
-                    title={<bdi>{r.label}</bdi>}
+                    title={<bdi>{plainLabel(r.label, locale)}</bdi>}
                     tag={<Badge tone="warn">{tx(RECEIPT_STATUS.pending)}</Badge>}
                     sub={
                       <span>
-                        {tx(PAY.transferredOn)}: {formatDay(r.transferredOn, locale)}
+                        {tx(PAY.transferredOn)}: {longDay(r.transferredOn, locale)}
                       </span>
                     }
                     amount={<Amount minor={r.amountMinor} currency={r.currency} locale={locale} />}
                     action={
-                      <Link className="btn btn--sm" to="#receipts">
-                        {tx(P.view)}
-                      </Link>
+                      <RowActions
+                        label={tx(P.more, { name: r.label })}
+                        primary={
+                          <Link className="btn btn--sm" to="#receipts">
+                            {tx(P.view)}
+                          </Link>
+                        }
+                      />
                     }
                   />
                 ))}
@@ -609,12 +786,11 @@ function ComingUp({ billing }: { billing: FamilyBilling }) {
           <AttentionRow
             key={i.id}
             tone="plain"
-            title={<bdi>{i.label}</bdi>}
+            title={<bdi>{plainLabel(i.label, locale)}</bdi>}
             sub={
               <>
-                <span>{tx(P.dueOn, { date: formatDay(i.dueDate, locale) })}</span>
+                <span>{dueLine(i, tx, locale)}</span>
                 {i.days > 0 && <span>{inDaysWords(i.days, locale)}</span>}
-                <span>{i.child ? tx(P.forChild, { name: i.child.name }) : tx(P.forFamily)}</span>
               </>
             }
             amount={<Amount minor={i.remainingMinor} currency={i.currency} locale={locale} />}
@@ -656,6 +832,9 @@ function ContactGroup({ profile, onEdit }: { profile: ParentProfile; onEdit: () 
           </button>
         )}
       </div>
+      {!c.phone && !c.email && !c.location && !c.region ? (
+        <p className="rec-fact__quiet rec-contact-none">{tx(P.noContact)}</p>
+      ) : (
       <dl className="rec-facts">
         <Fact icon="phone" label={tx(P.phone)}>
           {c.phone ? <bdi dir="ltr">{c.phone}</bdi> : missing}
@@ -681,6 +860,7 @@ function ContactGroup({ profile, onEdit }: { profile: ParentProfile; onEdit: () 
           </Fact>
         )}
       </dl>
+      )}
       {(setByParent || profile.updatedAt) && (
         <p className="rec-by">
           {setByParent && <span>{tx(P.setByParent, { date: date(setByParent) })}</span>}
@@ -772,8 +952,8 @@ function MoneyTab({ billing, onOpen }: { billing: FamilyBilling; onOpen: (d: Dia
               {billing.currency ?? missing}
             </Fact>
           </dl>
-          {/* One currency's paid and outstanding are the masthead's figures; with more than one, each is set out here. */}
-          {billing.totals.length > 1 && (
+          {/* Paid, outstanding and late, per currency: what is owed now is also the head's first highlight. */}
+          {billing.totals.length > 0 && (
             <table className="rec-totals" aria-label={tx(P.totals)}>
               <tbody>
                 {billing.totals.map((t) => (
@@ -788,7 +968,7 @@ function MoneyTab({ billing, onOpen }: { billing: FamilyBilling; onOpen: (d: Dia
           {index.map((x) => (
             <Link key={x.to} to={x.to} className="rec-index__link">
               <span>{x.label}</span>
-              {x.count ? <span className={x.urgent ? 'count count--urgent' : 'count count--quiet'}>{number(x.count)}</span> : null}
+              {x.count ? <span className="count count--quiet">{number(x.count)}</span> : null}
             </Link>
           ))}
         </nav>
@@ -880,7 +1060,7 @@ function MoneyTab({ billing, onOpen }: { billing: FamilyBilling; onOpen: (d: Dia
                       <span>{tx(PAY.issued, { date: dateTime(inv.issuedAt) })}</span>
                       <span>{tx(METHOD[inv.method])}</span>
                       {inv.child && <span dir="auto">{inv.child.name}</span>}
-                      {inv.refundedMinor > 0 && <span>{tx(PAY.refunded, { amount: formatMoney(inv.refundedMinor, inv.currency, locale) })}</span>}
+                      {inv.refundedMinor > 0 && <span>{tx(PAY.refunded, { amount: amountText(inv.refundedMinor, inv.currency, locale) })}</span>}
                     </>
                   }
                   amount={<Amount minor={inv.amountMinor} currency={inv.currency} locale={locale} />}
@@ -913,12 +1093,12 @@ function MoneyTab({ billing, onOpen }: { billing: FamilyBilling; onOpen: (d: Dia
                 <AttentionRow
                   key={r.id}
                   tone={r.status === 'pending' ? 'waiting' : 'plain'}
-                  title={<bdi>{r.label}</bdi>}
+                  title={<bdi>{plainLabel(r.label, locale)}</bdi>}
                   tag={<ReceiptStatusBadge status={r.status} />}
                   sub={
                     <>
                       <span>
-                        {tx(PAY.transferredOn)}: {formatDay(r.transferredOn, locale)}
+                        {tx(PAY.transferredOn)}: {longDay(r.transferredOn, locale)}
                       </span>
                       <span>
                         {tx(PAY.uploadedAt)}: {dateTime(r.uploadedAt)}
@@ -963,10 +1143,9 @@ function TotalsRows({ totals, locale }: { totals: FamilyBilling['totals'][number
         <tr key={r.key} className={r.late ? 'rec-totals__late' : undefined}>
           <th scope="row">
             {r.label}
-            <span className="rec-totals__cur"> {totals.currency}</span>
           </th>
           <td>
-            <bdi dir="ltr">{formatMoney(r.minor, totals.currency, locale)}</bdi>
+            <Amount minor={r.minor} currency={totals.currency} locale={locale} />
           </td>
         </tr>
       ))}
@@ -990,7 +1169,7 @@ function TimelineRow({ item, canRecord, onOpen }: { item: TimelineInstalment; ca
   return (
     <AttentionRow
       tone={item.status === 'voided' ? 'struck' : item.status === 'overdue' ? 'late' : item.status === 'paid' ? 'muted' : 'plain'}
-      title={<bdi>{item.label}</bdi>}
+      title={<bdi>{plainLabel(item.label, locale)}</bdi>}
       tag={
         <>
           <Badge tone={STATUS_TONE[item.status]} dot>
@@ -1002,9 +1181,8 @@ function TimelineRow({ item, canRecord, onOpen }: { item: TimelineInstalment; ca
       }
       sub={
         <>
-          <span>{tx(P.dueOn, { date: formatDay(item.dueDate, locale) })}</span>
+          <span>{dueLine(item, tx, locale)}</span>
           {item.status === 'overdue' && item.days > 0 && <span className="rec-late">{lateWords(item.days, locale)}</span>}
-          <span dir="auto">{item.child ? tx(P.forChild, { name: item.child.name }) : tx(P.forFamily)}</span>
         </>
       }
       amount={<Amount minor={item.amountMinor} currency={item.currency} locale={locale} late={item.status === 'overdue'} />}
@@ -1037,14 +1215,14 @@ function TimelineRow({ item, canRecord, onOpen }: { item: TimelineInstalment; ca
         <span className="rec-attn__more">
           {item.payment.recordedBy
             ? tx(P.paidOnBy, {
-                date: formatDay(item.payment.paidOn, locale),
+                date: longDay(item.payment.paidOn, locale),
                 method: tx(METHOD[item.payment.method]),
                 name: item.payment.recordedBy.name,
               })
-            : tx(P.paidOnByStripe, { date: formatDay(item.payment.paidOn, locale), method: tx(METHOD[item.payment.method]) })}
+            : tx(P.paidOnByStripe, { date: longDay(item.payment.paidOn, locale), method: tx(METHOD[item.payment.method]) })}
           {item.payment.reference && (
             <>
-              {' · '}
+              {locale === 'ar' ? '، ' : ', '}
               {tx(P.reference)}: <bdi dir="ltr">{item.payment.reference}</bdi>
             </>
           )}

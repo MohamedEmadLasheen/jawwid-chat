@@ -1,4 +1,5 @@
 import { useId, useMemo, useState } from 'react'
+import { useRememberWalk } from '@/features/profiles/RecordHead'
 import { Link, useNavigate } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { PLURAL, usePlural } from '@/features/admin/copy'
@@ -102,6 +103,11 @@ export function StaffTable({ rows, showManager, note }: { rows: StaffSummary[]; 
   })
   const narrowed = [status !== 'all', role !== '', manager !== '', category !== ''].filter(Boolean).length
   const groups = showManager ? byManager(visible, locale) : [{ key: TEAM, kind: 'plain' as const, manager: null, rows: visible }]
+  // A profile opened from here walks the list in the order it is shown.
+  useRememberWalk(
+    'staff',
+    groups.flatMap((g) => g.rows.map((r) => ({ id: r.staffId, name: r.displayName }))),
+  )
   const columns = 6
   // A bar only where there is a team to read it against (two or more active people), and a load in it.
   const shareOf = (r: StaffSummary): number | null => {
@@ -237,7 +243,11 @@ export function StaffTable({ rows, showManager, note }: { rows: StaffSummary[]; 
                           </span>
                           <span className="dir-sub">
                             <span>{roleText}</span>
-                            {r.jobTitle && <bdi>{r.jobTitle}</bdi>}
+                            {r.jobTitle && (
+                              <span>
+                                <bdi>{r.jobTitle}</bdi>
+                              </span>
+                            )}
                             {/* What the server lets this viewer do with the profile: said on every row, at every width. */}
                             <span>{r.access.canEditProfessional || r.access.canManageResponsibilities ? tx(T.canEditBadge) : tx(T.viewOnlyBadge)}</span>
                           </span>
@@ -248,7 +258,7 @@ export function StaffTable({ rows, showManager, note }: { rows: StaffSummary[]; 
                       <span className="sp-cell-num__n">{number(r.workload.assignedFamilies)}</span>
                     </td>
                     <td className={awaiting > 0 ? 'sp-cell-await' : 'sp-cell-await sp-cell-await--none'} data-label={tx(T.colAwaiting)}>
-                      {awaiting > 0 ? <span className="count">{number(awaiting)}</span> : <span className="dir-none">{number(0)}</span>}
+                      {awaiting > 0 ? <span className="sp-await-n">{number(awaiting)}</span> : <span className="dir-none">{number(0)}</span>}
                     </td>
                     <td className="sp-cell-load">
                       {share !== null && (

@@ -1,5 +1,6 @@
 import { ApiError } from '@/core/api/errors'
 import type { Pair } from '@/features/organization/copy'
+import type { CountForms } from '@/features/instalments/copy'
 import type { SessionDto } from './api'
 
 export { useCopy, type Pair } from '@/features/organization/copy'
@@ -8,10 +9,6 @@ export { useCopy, type Pair } from '@/features/organization/copy'
 export const D = {
   title: { en: 'My devices & sessions', ar: 'أجهزتي وجلساتي' },
   open: { en: 'Devices & sessions', ar: 'الأجهزة والجلسات' },
-  subtitle: {
-    en: 'Where your account is signed in. Sign out of any device you do not recognise.',
-    ar: 'الأماكن التي سُجّل فيها الدخول إلى حسابك. سجّل الخروج من أي جهاز لا تعرفه.',
-  },
   back: { en: 'Back to my profile', ar: 'العودة إلى ملفي' },
   signedInDevices: { en: 'Signed-in devices', ar: 'الأجهزة المسجَّل دخولها' },
   device: { en: 'Device', ar: 'الجهاز' },
@@ -22,9 +19,17 @@ export const D = {
   thisBrowser: { en: 'This browser', ar: 'هذا المتصفح' },
   kept: { en: 'Kept signed in', ar: 'يبقى مسجلاً' },
   app: { en: 'App {version}', ar: 'التطبيق {version}' },
-  unknownDevice: { en: 'Unknown device', ar: 'جهاز غير معروف' },
+  unknownDevice: { en: 'Unrecognised device', ar: 'جهاز لم يُتعرّف عليه' },
   notYet: { en: '—', ar: '—' },
-  empty: { en: 'No active sessions.', ar: 'لا توجد جلسات نشطة.' },
+  notActiveYet: { en: 'Not active yet', ar: 'لم ينشط بعد' },
+  signedInOn: { en: 'signed in {when}', ar: 'سُجّل الدخول {when}' },
+  empty: { en: 'No device is signed in.', ar: 'لا يوجد جهاز مسجَّل الدخول.' },
+  activeWhen: { en: 'Active {when}', ar: 'آخر نشاط {when}' },
+  thisBrowserIsOne: { en: 'Includes this browser', ar: 'ومنها هذا المتصفح' },
+  summary: { en: 'Signed in on {devices}', ar: 'مسجَّل الدخول على {devices}' },
+  summaryUnknown: { en: 'Signed in on {devices}, one of them not recognised', ar: 'مسجَّل الدخول على {devices}، منها جهاز لم يُتعرّف عليه' },
+  showing: { en: 'Showing {shown} of {total} sessions.', ar: 'تُعرض {shown} من {total} جلسة.' },
+  showAll: { en: 'Show all {n}', ar: 'عرض الكل ({n})' },
   signOut: { en: 'Sign out', ar: 'تسجيل الخروج' },
   signOutOthers: { en: 'Sign out all other devices', ar: 'تسجيل الخروج من كل الأجهزة الأخرى' },
   confirmTitle: { en: 'Sign out of {device}?', ar: 'تسجيل الخروج من {device}؟' },
@@ -46,6 +51,10 @@ export const D = {
   // Accounts page (administrator)
   devicesOf: { en: 'Active devices of {name}', ar: 'الأجهزة النشطة لـ {name}' },
   devicesButton: { en: 'Devices', ar: 'الأجهزة' },
+  emptyOf: {
+    en: '{name} is not signed in on any device. A device appears here once they sign in.',
+    ar: '{name} غير مسجَّل الدخول على أي جهاز. يظهر الجهاز هنا بعد تسجيل الدخول.',
+  },
   devicesExplain: {
     en: 'Signing a device out ends that session at once; {name} can sign in again with their password.',
     ar: 'تسجيل خروج جهاز يُنهي تلك الجلسة فورًا، ويمكن لـ {name} تسجيل الدخول مجددًا بكلمة المرور.',
@@ -56,6 +65,9 @@ export const D = {
   reason: { en: 'Reason', ar: 'السبب' },
   revokedAll: { en: 'Signed out of {n} session(s).', ar: 'تم تسجيل الخروج من {n} جلسة.' },
 } satisfies Record<string, Pair>
+
+export const SESSIONS: CountForms = { en: ['{n} session', '{n} sessions'], ar: ['جلسة واحدة', 'جلستان', '{n} جلسات', '{n} جلسة'] }
+export const DEVICES: CountForms = { en: ['{n} device', '{n} devices'], ar: ['جهاز واحد', 'جهازين', '{n} أجهزة', '{n} جهازًا'] }
 
 export const PLATFORM: Record<NonNullable<SessionDto['platform']> | 'unknown', Pair> = {
   ios: { en: 'iPhone / iPad app', ar: 'تطبيق iPhone / iPad' },

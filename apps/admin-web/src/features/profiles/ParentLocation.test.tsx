@@ -267,7 +267,8 @@ describe('the Parents list', () => {
     const table = await screen.findByRole('table')
     expect(within(table).getByRole('columnheader', { name: 'Location' })).toBeInTheDocument()
     expect(await within(table).findByText('Egypt · Giza')).toBeInTheDocument()
-    expect(within(table).getByText('—')).toBeInTheDocument()
+    // A missing location is said in words, not a dash.
+    expect(within(table).getByText('Not recorded')).toBeInTheDocument()
     const first = new URL(String(calls('GET', /\/parent-profiles(\?|$)/)[0]![0]), 'http://x')
     expect(first.searchParams.get('with')).toBe('location')
     expect(first.searchParams.get('location')).toBeNull()

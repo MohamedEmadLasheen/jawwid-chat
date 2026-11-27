@@ -6,6 +6,7 @@ import { METRICS, T, useCopy, type Pair } from './copy'
 
 type Key = keyof StaffWorkload
 const LABEL = Object.fromEntries(METRICS.map((m) => [m.key, m.label])) as Record<Key, Pair>
+export const WORKLOAD_LABEL = LABEL
 
 /**
  * The verified counts the server sends, set in two places and never twice:
@@ -21,11 +22,11 @@ function split(showDirectReports: boolean): { mast: Key[]; rest: Key[] } {
   return showDirectReports
     ? {
         mast: ['directReports', 'assignedFamilies', 'openConversations', 'pendingApprovals'],
-        rest: ['studentsInAssignedFamilies', 'parentContacts', 'teachersOfAssignedStudents'],
+        rest: ['parentContacts', 'teachersOfAssignedStudents', 'pendingApprovals'],
       }
     : {
         mast: ['assignedFamilies', 'studentsInAssignedFamilies', 'openConversations', 'pendingApprovals'],
-        rest: ['parentContacts', 'teachersOfAssignedStudents'],
+        rest: ['parentContacts', 'teachersOfAssignedStudents', 'pendingApprovals'],
       }
 }
 
@@ -79,15 +80,14 @@ export function NumbersGroup({
           </Fact>
         ))}
       </dl>
-      <p className="rec-rule">
-        {tx(T.asOf, { when: dateTime(asOf) })}. {tx(T.workloadHint)}
-      </p>
-      <p className="rec-rule" role="note">
-        <strong>{tx(T.notTracked)}</strong>
-        <span>: {tx(T.notTrackedBody)}</span>
-      </p>
+      <p className="rec-rule">{tx(T.asOf, { when: dateTime(asOf) })}</p>
       <details className="sp-defs">
         <summary>{tx(T.whatCounts)}</summary>
+        <p className="rec-rule">{tx(T.workloadHint)}</p>
+        <p className="rec-rule" role="note">
+          <strong>{tx(T.notTracked)}</strong>
+          <span>: {tx(T.notTrackedBody)}</span>
+        </p>
         <ul>
           {metrics.map((m) => (
             <li key={m.key}>

@@ -18,8 +18,10 @@ import { accountKeys, accountsApi } from '@/features/accounts/api'
 import { AccountActionDialogs, OneActionAndMore, useAccountActions, type AccountPending } from '@/features/accounts/AccountsPage'
 import { A } from '@/features/accounts/copy'
 import { Fact } from '@/features/profiles/RecordParts'
+import { useWhen } from '@/features/devices/when'
 import { roleFitsTier, staffAccountKeys, type AccessRole, type StaffAccount, type StaffAccountRole, type StaffFirstLogin } from './api'
-import { SA, STATUS, TIER, localized, pageLabel, useCopy } from './copy'
+import { NOT_SET_UP, SA, STATUS, TIER, localized, pageLabel, useCopy } from './copy'
+import { countWords } from '@/features/instalments/copy'
 import type { Deny, HeldKey } from './api'
 import { useAccessPreview, useAccessRoles, useAccessView, useDeny, useDenies, useGrantRole, useLiftDeny, useRevokeRole, useSetupCode, useStaffAccount, useStaffAccounts } from './hooks'
 import { useAccountsTabs } from './AccountsTabs'
@@ -59,7 +61,7 @@ type Pending =
  */
 export function StaffAccountsPage() {
   const tx = useCopy()
-  const { locale, t } = useI18n()
+  const { locale, t, number } = useI18n()
   const { staff } = useSession()
   const client = useQueryClient()
   const tabs = useAccountsTabs()
@@ -82,13 +84,20 @@ export function StaffAccountsPage() {
   const departments = structure.data?.departments ?? []
   const departmentName = new Map(departments.map((d) => [d.id, d.displayName]))
   const q = query.trim().toLocaleLowerCase()
-  const listed = accounts.filter(
-    (a) =>
-      (!q || a.name.toLocaleLowerCase().includes(q)) &&
-      (status === 'all' || a.status === status) &&
-      (!roleFilter || a.roles.some((r) => r.id === roleFilter)) &&
-      (!departmentFilter || a.departmentId === departmentFilter),
-  )
+  // The accounts not set up yet lead the list (a code still waiting first); the rest keep the server's order.
+  const setupRank = (a: StaffAccount) => (a.setupPending ? 0 : a.status === 'provisioned' ? 1 : 2)
+  const notSetUp = accounts.filter((a) => setupRank(a) < 2).length
+  const listed = accounts
+    .map((a, i) => [a, i] as const)
+    .filter(
+      ([a]) =>
+        (!q || a.name.toLocaleLowerCase().includes(q)) &&
+        (status === 'all' || a.status === status) &&
+        (!roleFilter || a.roles.some((r) => r.id === roleFilter)) &&
+        (!departmentFilter || a.departmentId === departmentFilter),
+    )
+    .sort(([a, i], [b, j]) => setupRank(a) - setupRank(b) || i - j)
+    .map(([a]) => a)
   const roleName = (r: { nameEn: string; nameAr: string }) => (locale === 'ar' ? r.nameAr : r.nameEn)
   // The open account is read from the whole list: a filter narrows the rows, never what is open.
   const shown = useShown(openId ? accounts : listed, (a) => a.staffId, openId)
@@ -98,7 +107,6 @@ export function StaffAccountsPage() {
       <div className="page__inner">
         <PageHeader
           title={tx(SA.title)}
-          subtitle={tx(SA.subtitle)}
           tabs={tabs ?? undefined}
           actions={
             canCreate && (
@@ -117,15 +125,24 @@ export function StaffAccountsPage() {
             missing={tx(SA.notInList)}
             list={
               <section className="sheet dir-sheet md-sheet" aria-label={tx(SA.title)}>
+                {/* The answer first: how many accounts are not set up yet (they lead the list), or that all are. */}
+                {accounts.length > 0 && (
+                  <p className={notSetUp > 0 ? 'acct-answer acct-answer--need' : 'acct-answer'}>
+                    {notSetUp > 0 ? countWords(notSetUp, NOT_SET_UP, locale) : tx(SA.allSetUp)}
+                  </p>
+                )}
                 <div className="sheet-bar md-bar">
                   <SearchField value={query} onChange={setQuery} label={tx(SA.search)} clearLabel={t('common.cancel')} />
                   <FilterChips
                     label={tx(SA.show)}
                     value={status}
                     onChange={setStatus}
-                    options={(['all', 'active', 'provisioned', 'suspended'] as const).map((s) => ({
+                    formatCount={number}
+                    options={(['all', 'active', 'provisioned', 'suspended'] as const).filter((s) => s === 'all' || s === status || accounts.some((a) => a.status === s)).map((s) => ({
                       value: s,
                       label: s === 'all' ? tx(SA.all) : tx(STATUS[s]!),
+                      // How many each would show: a "Not set up" that is not empty is seen before it is chosen.
+                      count: s === 'all' ? accounts.length : accounts.filter((a) => a.status === s).length,
                     }))}
                   />
                   {((roles.data?.roles.length ?? 0) > 0 || (staff && isSuperAdmin(staff.role) && departments.length > 1)) && (
@@ -196,7 +213,7 @@ export function StaffAccountsPage() {
                               </span>
                             </td>
                             <td className="dir-cell-state">
-                              <StaffState account={a} />
+                              <StaffState account={a} inList />
                             </td>
                           </tr>
                         )
@@ -251,22 +268,23 @@ export function StaffAccountsPage() {
 
 /**
  * Where a staff account stands. A first sign-in code still waiting is the
- * one thing to see (a gold tag); an account not set up, suspended or
- * deactivated is a quiet word, an active one a green dot.
+ * one thing to see, and an account not set up waits on someone too (amber
+ * words); a suspended or deactivated one is a quiet word. An active one says
+ * nothing in the list (`inList`), so the accounts not set up are its only
+ * marks; its own sheet names it.
  */
-function StaffState({ account: a }: { account: StaffAccount }) {
+function StaffState({ account: a, inList = false }: { account: StaffAccount; inList?: boolean }) {
   const tx = useCopy()
   const status = tx(STATUS[a.status] ?? { ar: a.status, en: a.status })
+  if (inList && a.status === 'active' && !a.setupPending) return null
   return (
     <span className="acct-state">
-      {a.setupPending && <Badge tone="gold">{tx(SA.setupPending)}</Badge>}
+      {a.setupPending && <Badge tone="waiting">{tx(SA.setupPending)}</Badge>}
       {a.status === 'active' ? (
-        <Badge tone="ok" dot>
-          {status}
-        </Badge>
+        <Badge tone="neutral">{status}</Badge>
       ) : (
         // A code still waiting already says the account is not set up.
-        !(a.status === 'provisioned' && a.setupPending) && <Badge tone={a.status === 'suspended' ? 'neutral' : 'outline'}>{status}</Badge>
+        !(a.status === 'provisioned' && a.setupPending) && <Badge tone={a.status === 'provisioned' ? 'waiting' : a.status === 'suspended' ? 'neutral' : 'outline'}>{status}</Badge>
       )}
     </span>
   )
@@ -301,6 +319,7 @@ function StaffAccountPane({
   const id = useId()
   const pickerId = `${id}-pick`
   const actionsOf = useAccountActions()
+  const when = useWhen()
   const [choice, setChoice] = useState('')
   const one = useStaffAccount(initial.staffId)
   const account = one.data ?? initial
@@ -336,7 +355,7 @@ function StaffAccountPane({
           <h2 id={`${id}-name`} className="md-pane__title">
             <bdi>{account.name}</bdi>
           </h2>
-          <StaffState account={account} />
+          <StaffState account={account} inList />
         </div>
         <div className="md-pane__actions">
           <OneActionAndMore label={tx(A.more, { name: account.name })} actions={actions} />
@@ -352,7 +371,7 @@ function StaffAccountPane({
           {account.departmentId ? <bdi>{departmentName ?? '…'}</bdi> : <span className="rec-missing">{tx(SA.noDepartment)}</span>}
         </Fact>
         <Fact icon="clock" label={tx(SA.lastLogin)}>
-          {account.lastLoginAt ? <time dateTime={account.lastLoginAt}>{dateTime(account.lastLoginAt)}</time> : <span className="rec-missing">{tx(SA.never)}</span>}
+          {account.lastLoginAt ? <time dateTime={account.lastLoginAt} title={dateTime(account.lastLoginAt)}>{when(account.lastLoginAt, { start: true })}</time> : <span className="rec-missing">{tx(SA.never)}</span>}
         </Fact>
       </dl>
 
@@ -482,13 +501,22 @@ function AccessPanel({ staffId, accountName, previewRoleId, canManage }: { staff
   const [restricting, setRestricting] = useState<HeldKey | null>(null)
   const [lifting, setLifting] = useState<Deny | null>(null)
   const label = (l: { en: string; ar: string }) => (locale === 'ar' ? l.ar : l.en)
+  // Facts in one line are parted by the reader's comma, never by a dot; two sentences by a semicolon.
+  const comma = locale === 'ar' ? '، ' : ', '
+  const semicolon = locale === 'ar' ? '؛ ' : '; '
   const sourceText = (s: import('./api').KeySource): string => {
     if (s.type === 'super_admin') return tx(SA.srcSuperAdmin)
     if (s.type === 'tier_default') return tx(SA.srcTierDefault)
     const role = locale === 'ar' ? s.nameAr ?? s.roleKey ?? '' : s.nameEn ?? s.roleKey ?? ''
     const base = tx(SA.srcRole, { role })
-    return s.grantedBy && s.grantedAt ? `${base} · ${tx(SA.srcGranted, { by: s.grantedBy.name ?? '—', at: date(s.grantedAt) })}` : base
+    return s.grantedBy && s.grantedAt ? `${base}${comma}${tx(SA.srcGranted, { by: s.grantedBy.name ?? '—', at: date(s.grantedAt) })}` : base
   }
+  const sourcesOf = (k: HeldKey) => k.sources.map(sourceText)
+  const everyKey = view.data?.pages.flatMap((p) => p.keys) ?? []
+  const allSame =
+    everyKey.length > 1 && everyKey.every((k) => sourcesOf(k).join('\n') === sourcesOf(everyKey[0]!).join('\n'))
+      ? tx(SA.allFrom, { source: sourcesOf(everyKey[0]!).join(comma) })
+      : null
   return (
     <>
       <Part id={`${id}-access`} title={tx(SA.accessTitle)} hint={tx(SA.accessHint)}>
@@ -502,29 +530,47 @@ function AccessPanel({ staffId, accountName, previewRoleId, canManage }: { staff
                   preview.data.pagesGained.length ? tx(SA.previewPages, { items: preview.data.pagesGained.join(', ') }) : '',
                 ]
                   .filter(Boolean)
-                  .join(' · ')}
+                  .join(semicolon)}
           </div>
         )}
+        {allSame && <p className="md-part__source">{allSame}</p>}
         {view.isLoading ? null : view.error || !view.data ? null : view.data.pages.length === 0 ? (
           <p className="md-part__none">{tx(SA.accessNone)}</p>
         ) : (
           <ul className="md-groups" aria-label={tx(SA.accessTitle)}>
-            {view.data.pages.map((p) => (
+            {view.data.pages.map((p) => {
+              // Where the permissions came from is said once: for the whole account when every one came the same
+              // way (above the list), else under a page's name when its own all did, else on each permission.
+              const first = p.keys[0] ? sourcesOf(p.keys[0]).join('\n') : ''
+              const shared = allSame ? [] : p.keys.length > 0 && p.keys.every((k) => sourcesOf(k).join('\n') === first) ? sourcesOf(p.keys[0]!) : null
+              return (
               <li key={p.page} className="md-group">
-                <span className="md-group__title">{tx(pageLabel(p.page))}</span>
+                <span className="md-group__head">
+                  <span className="md-group__title">{tx(pageLabel(p.page))}</span>
+                  {shared?.map((s, i) => (
+                    <span key={i} className="md-check__src">
+                      {s}
+                    </span>
+                  ))}
+                </span>
                 <ul className="md-checks">
                   {p.keys.map((k) => (
                     <li key={k.key} className={k.denied ? 'md-check md-check--off' : 'md-check'}>
                       <Icon name={k.denied ? 'prohibit' : 'check'} size={16} />
                       <span className="md-check__text">
                         <span className="md-check__label">
-                          <span className={k.denied ? 'md-struck' : undefined}>{label(k.label)}</span>
-                          <code className="sa-key" dir="ltr">
-                            {k.key}
-                          </code>
+                          {/* The permission's key is for whoever needs it, on hover: the page reads in words. */}
+                          <span className={k.denied ? 'md-struck' : undefined} title={k.key}>
+                            {label(k.label)}
+                          </span>
                           {k.denied && <Badge tone="warn">{tx(SA.restricted)}</Badge>}
                         </span>
-                        <span className="md-check__src">{k.sources.map(sourceText).join(' · ')}</span>
+                        {!shared &&
+                          sourcesOf(k).map((s, i) => (
+                            <span key={i} className="md-check__src">
+                              {s}
+                            </span>
+                          ))}
                       </span>
                       {enforced && canManage && k.deniable && !k.denied && (
                         <button type="button" className="btn btn--sm btn--ghost md-check__act" aria-label={tx(SA.restrictTitle, { key: k.key, name: accountName })} onClick={() => setRestricting(k)}>
@@ -535,7 +581,8 @@ function AccessPanel({ staffId, accountName, previewRoleId, canManage }: { staff
                   ))}
                 </ul>
               </li>
-            ))}
+              )
+            })}
           </ul>
         )}
       </Part>
@@ -556,8 +603,11 @@ function AccessPanel({ staffId, accountName, previewRoleId, canManage }: { staff
                       <Badge tone={d.active ? 'warn' : 'neutral'}>{tx(d.liftedBy ? SA.restrictionLifted : d.active ? SA.restrictionActive : SA.restrictionExpired)}</Badge>
                     </span>
                     <span className="md-check__src">
-                      {d.reason} · {tx(SA.restrictionBy, { by: d.by.name ?? '—' })} ·{' '}
-                      {d.permanent ? tx(SA.restrictionPermanentText, { date: date(d.reviewBy ?? d.createdAt) }) : tx(SA.restrictionUntilText, { date: date(d.expiresAt ?? d.createdAt) })}
+                      {[
+                        d.reason,
+                        tx(SA.restrictionBy, { by: d.by.name ?? '—' }),
+                        d.permanent ? tx(SA.restrictionPermanentText, { date: date(d.reviewBy ?? d.createdAt) }) : tx(SA.restrictionUntilText, { date: date(d.expiresAt ?? d.createdAt) }),
+                      ].join(comma)}
                     </span>
                   </span>
                   {canManage && d.active && (

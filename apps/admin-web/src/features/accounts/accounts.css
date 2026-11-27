@@ -21,32 +21,46 @@
 .acct-table .dir-row { cursor: default; }
 .acct-table .dir-row:hover .dir-name { color: var(--ink); }
 .acct-table strong.dir-name:hover { text-decoration: none; }
-.acct-table .dir-cell-who { inline-size: 46%; }
-/* The line under the name runs as text, so a long list of children wraps inside itself
-   and never leaves the family alone on a line. The dot trails the fact before it and
-   carries the place a line may break. */
-.acct-sub { display: block; font-size: var(--fs-xs); line-height: 1.55; color: var(--ink-muted); overflow-wrap: anywhere; }
-.acct-sub > :not(:last-child)::after { content: '·\200B'; margin-inline: 8px; color: var(--border-control); }
+.acct-table .dir-cell-who { inline-size: 62%; }
+/* The name, and beside it where the account stands when that is not the usual. */
+.acct-name-line { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; min-inline-size: 0; }
+/* The line under the name: the kind, the family, the first children by name, parted by commas
+   (never by dots). Each name keeps its own direction and is never split across lines. */
+.acct-sub { display: flex; flex-wrap: wrap; gap: 0 5px; font-size: var(--fs-sm); line-height: 1.55; color: var(--ink-muted); }
+.acct-sub > :not(:last-child)::after { content: ','; }
+html[lang='ar'] .acct-sub > :not(:last-child)::after { content: '،'; }
+.acct-child { white-space: nowrap; }
+
+/* The page's answer: the sheet's first line, at the start edge, in the reading size; an amber dot when some need a hand. */
+.acct-answer { margin: 0; padding: 14px var(--space-4) 0; font-size: var(--fs-md); font-weight: 600; line-height: 1.5; color: var(--ink); }
+.acct-answer--need::before { content: ''; display: inline-block; inline-size: 8px; block-size: 8px; margin-inline-end: 8px; border-radius: 50%; background: var(--waiting); vertical-align: 0.1em; }
+/* A support session still open: said at the top, with the way back in. */
+.acct-live { display: flex; flex-wrap: wrap; align-items: center; gap: 8px var(--space-3); margin-block-end: var(--space-4); }
+.acct-live > span { flex: 1 1 260px; }
 .acct-state { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
 .acct-table time { font-variant-numeric: tabular-nums; }
-/* The stated action is plain until the row is under the pointer, as in every directory. */
+/* The stated action is a quiet word until the row is under the pointer (or it has focus), so thirty
+   rows do not read as thirty buttons; under the pointer it is the row's control, framed. */
 .acct-table .dir-row .row-actions2 > .btn { white-space: nowrap; }
+@media (min-width: 768px) {
+  .acct-table .dir-row:not(:hover):not(:focus-within) .row-actions2 > .btn { border-color: transparent; background: none; color: var(--ink-muted); font-weight: 500; }
+}
 
 /* A support session: whose account, why it was opened, then by whom and when. */
 .acct-session__why { font-size: var(--fs-sm); line-height: 1.5; color: var(--ink); overflow-wrap: anywhere; }
 .acct-session .rec-attn__sub time, .acct-session .rec-attn__sub .ltr { font-variant-numeric: tabular-nums; }
-/* A live session is the one to see first: a terracotta edge, as a problem row carries everywhere. */
-.acct-session--live::before { content: ''; position: absolute; inset-block: 0; inset-inline-start: 0; inline-size: 3px; background: var(--terracotta); }
-.acct-session--live:last-child::before { border-end-start-radius: var(--radius-lg); }
+/* A live session is said by its tag ("Live", a teal dot and the word), never by an edge. */
 .acct-session > .rec-attn__act { grid-column: 2 / -1; }
 
 /* Exceptional access: a grant that is over is said, not stressed. */
-.acct-grants { margin-block-start: 8px; border-block-start: 1px solid var(--hairline-soft); }
+.acct-grants { margin-block-start: 8px; border-block-start: 1px solid var(--line-2); }
+.acct-grants .dir-cell-who { inline-size: 34%; }
+.acct-grants .dir-cell-quiet { white-space: nowrap; }
 .acct-grant--over .dir-name { font-weight: 500; color: var(--ink-muted); }
-.acct-cell-person { color: var(--ink); font-weight: 500; }
-/* Ending someone's access is plain at rest and terracotta under the pointer. */
-.acct-revoke.btn:hover:not(:disabled), .acct-revoke.btn:focus-visible { border-color: var(--terracotta); background: var(--surface); color: var(--terracotta); }
-.acct-table .dir-row:hover .row-actions2 > .acct-revoke.btn { border-color: var(--terracotta); color: var(--terracotta); }
+.acct-cell-person { color: var(--ink); }
+/* Ending someone's access is plain at rest and red only under the pointer. */
+.acct-revoke.btn:hover:not(:disabled), .acct-revoke.btn:focus-visible { border-color: var(--urgent); background: var(--surface); color: var(--urgent); }
+.acct-table .dir-row:hover .row-actions2 > .acct-revoke.btn { border-color: var(--urgent); color: var(--urgent); }
 
 @media (max-width: 767px) {
   /* On a phone the row keeps its actions: the stated one takes the width, "more" its own square. */
@@ -55,7 +69,7 @@
   .acct-table.dir-table .dir-row > td.cell-actions:last-child:empty { display: none; }
   .acct-table .row-actions2 { display: flex; }
   .acct-table .row-actions2 > .btn { flex: 1; justify-content: center; border-color: var(--border-strong); color: var(--ink); }
-  .acct-state { justify-content: flex-end; }
+  .acct-sub { white-space: normal; }
   .acct-session > .rec-attn__act { grid-column: 1 / -1; }
   .acct-session .row-actions2, .acct-session .row-actions2 > .btn { inline-size: 100%; justify-content: center; }
 }
@@ -66,8 +80,8 @@
 .acct-code {
   margin: var(--space-4) 0;
   padding: var(--space-3) 0;
-  border-block: 1px solid var(--hairline);
-  font-family: var(--display);
+  border-block: 1px solid var(--line);
+  font-family: var(--font-head);
   font-size: var(--fs-2xl);
   font-weight: 600;
   font-variant-numeric: tabular-nums lining-nums;

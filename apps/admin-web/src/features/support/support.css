@@ -3,15 +3,15 @@
  *
  * The masthead says whose account this is and stays in view: the page does
  * not scroll, its workspace does. Under the masthead the person's chats are
- * written in the chat's own language: a ruled list with square monograms and
- * a gold edge on the open row, hairline bubbles (the person's own in soft
- * teal, at their side), one bar to write in.
+ * written in the chat's own language: a ruled list with monograms, the open
+ * row in the teal tint of a selection, hairline bubbles (the person's own in
+ * soft teal, at their side), one bar to write in.
  *
  *   .support              the page: a column that fills the screen
  *   .support-left         the time the session has left, beside its actions
  *   .support-work         the list beside the open thread (one at a time on a phone)
  *   .support-row          a chat in the list
- *   .support-msg / .support-bubble   a message; "Sent by support" is a gold line inside it
+ *   .support-msg / .support-bubble   a message; "Sent by support" is an amber line inside it
  *   .support-composer     the bar and the line that says how a message will be labelled
  *   .support-profile      the parent's own profile, on sheets
  */
@@ -21,17 +21,33 @@
 .support .page-header.mast { flex: none; }
 .support .mast__row { align-items: center; }
 .support .mast .page-header__title .badge { font-family: var(--font); }
-html[lang='ar'] .support .mast .page-header__title .badge { font-family: var(--font-ar); }
+html[lang='ar'] .support .mast .page-header__title .badge { font-family: var(--font); }
 .support .mast .page-header__actions { align-items: center; flex-wrap: wrap; gap: 8px; }
 .support-center { text-align: start; }
 .support-foot { flex: none; margin: 0; padding-block: 0 var(--space-4); font-size: var(--fs-xs); color: var(--ink-muted); }
 
-/* The time left: a quiet figure until the last minutes, then terracotta. */
-.support-left { display: inline-flex; align-items: center; gap: 8px; margin-inline-end: var(--space-2); font-size: var(--fs-sm); color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+/* The session's bar: deep teal across the top of the page, so acting as someone is never mistaken
+   for one's own desk. What it is and whose account, the time left, and the two ways on. */
+.support-bar { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px var(--space-4); margin-block-end: var(--space-4); padding: 10px var(--space-4); border-radius: var(--radius-lg); background: var(--teal-deep); color: var(--text-inverse); }
+.support-bar__what { flex: 1 1 320px; display: flex; align-items: center; gap: 10px; min-inline-size: 0; font-size: var(--fs-sm); line-height: 1.5; }
+.support-bar__what > .icon { flex: none; }
+.support-bar__what strong { font-weight: 600; }
+.support-bar__acting { opacity: 0.85; }
+.support-bar__actions { display: inline-flex; flex-wrap: wrap; gap: 8px; }
+.support-bar .btn { min-block-size: 34px; }
+.support-bar__btn.btn { border-color: color-mix(in srgb, var(--text-inverse) 35%, transparent); background: transparent; color: var(--text-inverse); }
+.support-bar__btn.btn:hover:not(:disabled) { border-color: var(--text-inverse); background: color-mix(in srgb, var(--text-inverse) 8%, transparent); }
+/* The way out is the strongest control on the page: white on the bar. */
+.support-bar__exit.btn { border-color: var(--surface); background: var(--surface); color: var(--teal-deep); font-weight: 600; }
+.support-bar__exit.btn:hover:not(:disabled) { background: var(--teal-tint); }
+.support-bar .btn:focus-visible { outline: 2px solid var(--text-inverse); outline-offset: 2px; }
+
+/* The time left: a quiet figure until the last minutes, then the urgent tag (a deadline about to pass). */
+.support-left { display: inline-flex; align-items: center; gap: 8px; font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
 .support-left > span { display: grid; line-height: 1.3; }
-.support-left strong { font-weight: 600; color: var(--ink); }
-.support-left__until { font-size: var(--fs-xs); }
-.support-left--last, .support-left--last strong { color: var(--terracotta); }
+.support-left strong { font-weight: 600; }
+.support-left__until { font-size: var(--fs-xs); opacity: 0.85; }
+.support-left--last strong { padding: 0 6px; border-radius: var(--radius); background: var(--urgent-tint); color: var(--urgent); }
 .support-tabs { overflow-x: auto; scrollbar-width: none; }
 .support-tabs::-webkit-scrollbar { display: none; }
 
@@ -44,18 +60,18 @@ html[lang='ar'] .support .mast .page-header__title .badge { font-family: var(--f
   min-block-size: 0;
   display: grid;
   grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
-  border: 1px solid var(--hairline);
+  border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   background: var(--surface);
   overflow: hidden;
 }
-.support-side { display: flex; flex-direction: column; min-inline-size: 0; min-block-size: 0; border-inline-end: 1px solid var(--hairline); }
-.support-side__head { flex: none; display: flex; align-items: baseline; gap: 8px; min-block-size: 52px; padding: 14px var(--space-4) 10px; border-block-end: 1px solid var(--hairline-soft); }
-.support-side__title { margin: 0; font-family: var(--display); font-size: var(--fs-xl); font-weight: 600; line-height: 1.3; }
+.support-side { display: flex; flex-direction: column; min-inline-size: 0; min-block-size: 0; border-inline-end: 1px solid var(--line); }
+.support-side__head { flex: none; display: flex; align-items: baseline; gap: 8px; min-block-size: 52px; padding: 14px var(--space-4) 10px; border-block-end: 1px solid var(--line-2); }
+.support-side__title { margin: 0; font-family: var(--font-head); font-size: var(--fs-md); font-weight: 600; line-height: 1.4; }
 .support-side__count { font-size: var(--fs-sm); color: var(--ink-muted); font-variant-numeric: tabular-nums; }
 .support-list { flex: 1; min-block-size: 0; overflow-y: auto; list-style: none; margin: 0; padding: 0; }
 .support-list__note { padding: var(--space-4); font-size: var(--fs-sm); color: var(--ink-muted); }
-.support-list__note--error { color: var(--terracotta); }
+.support-list__note--error { color: var(--urgent); }
 
 /* A chat in the list: a square monogram, the name and when, one line of what was last said. */
 .support-row {
@@ -67,7 +83,7 @@ html[lang='ar'] .support .mast .page-header__title .badge { font-family: var(--f
   min-block-size: 60px;
   padding: 10px var(--space-4);
   border: 0;
-  border-block-end: 1px solid var(--hairline-soft);
+  border-block-end: 1px solid var(--line-2);
   border-radius: 0;
   background: none;
   color: inherit;
@@ -79,9 +95,9 @@ html[lang='ar'] .support .mast .page-header__title .badge { font-family: var(--f
 .support-row > .avatar { flex: none; inline-size: 40px; block-size: 40px; }
 .support-row:hover { background: var(--surface-hover); }
 .support-row:focus-visible { outline: 2px solid var(--teal); outline-offset: -2px; }
-/* Where you are: pale teal, and the gold marker on the row's leading edge. */
-.support-row[aria-current='true'] { background: var(--teal-tint); }
-.support-row[aria-current='true']::before { content: ''; position: absolute; inset-block: 8px; inset-inline-start: 0; inline-size: 3px; border-start-end-radius: 2px; border-end-end-radius: 2px; background: var(--gold); }
+/* The open chat is the selection: the teal tint, its name at full weight. Gold is kept for "now". */
+.support-row[aria-current='true'], .support-row[aria-current='true']:hover { background: var(--teal-tint); }
+.support-row[aria-current='true'] .support-row__name { font-weight: 600; }
 .support-row__body { flex: 1; min-inline-size: 0; display: grid; gap: 2px; }
 .support-row__top, .support-row__bottom { display: flex; align-items: baseline; gap: var(--space-2); min-inline-size: 0; }
 /* A name or a preview may run the other way (a Latin name in the Arabic list). The row decides
@@ -91,7 +107,7 @@ html[lang='ar'] .support .mast .page-header__title .badge { font-family: var(--f
 .support-row__name { flex: 1; min-inline-size: 0; font-size: var(--fs-md); font-weight: 500; line-height: 1.4; color: var(--ink); }
 /* Unread is weight, not colour alone; the count is the teal figure. */
 .support-row__name--unread { font-weight: 700; }
-.support-row__time { flex: none; font-size: 12px; color: var(--ink-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.support-row__time { flex: none; font-size: var(--fs-xs); color: var(--ink-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .support-row__sub { flex: 1; min-inline-size: 0; font-size: var(--fs-sm); line-height: 1.5; color: var(--ink-muted); }
 .support-row__bottom > .count { flex: none; align-self: center; border-radius: var(--radius); }
 
@@ -100,10 +116,10 @@ html[lang='ar'] .support .mast .page-header__title .badge { font-family: var(--f
 .support-thread { display: flex; flex-direction: column; min-inline-size: 0; min-block-size: 0; }
 .support-thread__none { margin: auto; display: grid; justify-items: center; gap: 8px; padding: var(--space-6); font-size: var(--fs-sm); color: var(--ink-muted); text-align: center; }
 .support-thread__none .icon { color: var(--border-control); }
-.support-thread__head { flex: none; display: flex; align-items: center; gap: var(--space-2); min-block-size: 52px; padding: 8px var(--space-4); border-block-end: 1px solid var(--hairline); }
+.support-thread__head { flex: none; display: flex; align-items: center; gap: var(--space-2); min-block-size: 52px; padding: 8px var(--space-4); border-block-end: 1px solid var(--line); }
 .support-thread__back { display: none; }
-.support-thread__title { margin: 0; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--display); font-size: var(--fs-lg); font-weight: 600; line-height: 1.4; }
-.support-thread__body { flex: 1; min-block-size: 0; overflow-y: auto; padding: var(--space-3) var(--space-4) var(--space-4); background: var(--chat-bg, var(--paper)); }
+.support-thread__title { margin: 0; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-head); font-size: var(--fs-lg); font-weight: 600; line-height: 1.4; }
+.support-thread__body { flex: 1; min-block-size: 0; overflow-y: auto; padding: var(--space-3) var(--space-4) var(--space-4); background: var(--chat-bg, var(--canvas)); }
 /* What reading here does and does not do: one quiet line at the head of the thread. */
 .support-thread__note { margin: 0 auto var(--space-3); max-inline-size: 64ch; font-size: var(--fs-xs); line-height: 1.5; color: var(--ink-muted); text-align: center; }
 
@@ -119,25 +135,26 @@ html[lang='ar'] .support .mast .page-header__title .badge { font-family: var(--f
   gap: 3px;
   min-inline-size: 88px;
   padding: 7px 11px 5px;
-  border: 1px solid var(--hairline);
+  border: 1px solid var(--line);
   border-radius: 10px;
   border-start-start-radius: 3px;
   background: var(--bubble-in, var(--surface));
 }
-.support-msg--mine .support-bubble { border-start-start-radius: 10px; border-start-end-radius: 3px; background: var(--bubble-out, var(--teal-tint)); border-color: var(--cw-out-line, var(--hairline)); }
+.support-msg--mine .support-bubble { border-start-start-radius: 10px; border-start-end-radius: 3px; background: var(--bubble-out, var(--teal-tint)); border-color: var(--cw-out-line, var(--line)); }
 .support-bubble__text { white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--fs-md); line-height: 1.5; }
 .support-bubble__gone { color: var(--ink-muted); }
 .support-bubble__files { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-muted); font-size: var(--fs-sm); }
-.support-bubble__meta { align-self: flex-end; font-size: 11px; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
-/* A message the support desk wrote in the person's name says so, in gold, to everyone who reads it. */
-.support-bubble--support { border-color: var(--gold-line); }
-.support-bubble__flag { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; color: var(--gold-text); }
+.support-bubble__meta { align-self: flex-end; font-size: var(--fs-xs); color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+/* A message the support desk wrote in the person's name says so to everyone who reads it, in the
+   amber of something done on someone's behalf (the tone of an internal note), never in gold. */
+.support-bubble--support { border-color: var(--waiting); border-style: dashed; }
+.support-bubble__flag { display: inline-flex; align-items: center; gap: 5px; font-size: var(--fs-xs); font-weight: 600; color: var(--waiting); }
 
 /* ------------------------------------------------------------ the composer */
 
-.support-composer { flex: none; display: grid; gap: 6px; padding: 8px var(--space-4) 12px; border-block-start: 1px solid var(--hairline); background: var(--paper); }
+.support-composer { flex: none; display: grid; gap: 6px; padding: 8px var(--space-4) 12px; border-block-start: 1px solid var(--line); background: var(--canvas); }
 .support-composer > .field__error { margin: 0; }
-.support-composer__flag { margin: 0; display: flex; align-items: center; gap: 6px; font-size: var(--fs-xs); font-weight: 500; line-height: 1.5; color: var(--gold-text); }
+.support-composer__flag { margin: 0; display: flex; align-items: center; gap: 6px; font-size: var(--fs-xs); font-weight: 500; line-height: 1.5; color: var(--ink-muted); }
 .support-composer__flag .icon { flex: none; }
 .support-composer__bar { display: flex; align-items: flex-end; gap: 4px; padding: 3px; border: 1px solid var(--border-strong); border-radius: var(--radius-lg); background: var(--surface); transition: border-color var(--dur-fast) var(--ease-out); }
 .support-composer__bar:focus-within { border-color: var(--teal); outline: 2px solid var(--teal); outline-offset: -1px; }
@@ -156,7 +173,7 @@ html[lang='ar'] .support .mast .page-header__title .badge { font-family: var(--f
 .support-profile__save { display: flex; align-items: center; gap: var(--space-3); }
 .support-profile__saved { font-size: var(--fs-sm); color: var(--ink-muted); }
 .support-children { list-style: none; margin: 0; padding: 0; }
-.support-children > li { display: flex; align-items: center; gap: 10px; min-block-size: 48px; padding: 8px var(--space-4); border-block-end: 1px solid var(--hairline-soft); }
+.support-children > li { display: flex; align-items: center; gap: 10px; min-block-size: 48px; padding: 8px var(--space-4); border-block-end: 1px solid var(--line-2); }
 .support-children > li:last-child { border-block-end: 0; }
 .support-children__name { flex: 1; min-inline-size: 0; font-weight: 600; overflow-wrap: anywhere; }
 .support-children__level { font-size: var(--fs-sm); color: var(--ink-muted); }
@@ -165,14 +182,14 @@ html[lang='ar'] .support .mast .page-header__title .badge { font-family: var(--f
   .support-profile { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 767px) {
-  /* The masthead keeps to what must be seen: whose account, how long, the way out. */
+  /* The bar keeps to what must be seen: whose account, how long, the way out. */
   .support .mast__lead { display: none; }
-  .support .mast .page-header__title { font-size: 22px; }
-  .support .mast .page-header__actions { inline-size: 100%; }
-  .support .mast .page-header__actions > .btn { min-block-size: 44px; }
-  .support .mast .page-header__actions > .btn--primary { flex: 1; }
-  .support-left { flex: 1 1 100%; margin-inline-end: 0; }
+  .support .mast .page-header__title { font-size: var(--fs-xl); }
+  .support-bar { gap: 8px; padding: 10px var(--space-3); margin-block-end: var(--space-3); }
+  .support-bar__what { flex: 1 1 auto; }
   .support-left > span { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 8px; }
+  .support-bar__actions { flex: 1 1 100%; }
+  .support-bar__actions > .btn { flex: 1; justify-content: center; min-block-size: 44px; }
   .support-tabs .seg__item { min-block-size: 44px; }
   .support-panel { padding-block-end: var(--space-3); }
   /* One pane at a time: the list, then the open thread with a way back. */

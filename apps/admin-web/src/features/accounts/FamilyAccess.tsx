@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Avatar } from '@/shared/components/Avatar'
 import { Badge, type Tone } from '@/shared/components/Badge'
+import { useWhen } from '@/features/devices/when'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
 import { FilterChips } from '@/shared/components/FilterChips'
 import { ReasonDialog } from '@/shared/components/ReasonDialog'
@@ -16,7 +17,7 @@ import { ACTIVE_COUNT, F, describeAccessError } from './familyAccessCopy'
 import { GRANT_HOURS, familyAccessApi, familyAccessKeys, type FamilyAccessGrant, type FamilyAccessStatus } from './familyAccessApi'
 
 /** A live grant is where things stand (a teal tag); one that is over is a quiet word. */
-const STATUS_TONE: Record<FamilyAccessStatus, Tone> = { active: 'info', ended: 'neutral', revoked: 'outline' }
+const STATUS_TONE: Record<FamilyAccessStatus, Tone> = { active: 'info', ended: 'neutral', revoked: 'neutral' }
 
 export function useFamilyAccess() {
   return useQuery({ queryKey: familyAccessKeys.list(), queryFn: () => familyAccessApi.list() })
@@ -121,6 +122,7 @@ export function GrantFamilyAccessDialog({
 export function FamilyAccessRecord() {
   const tx = useCopy()
   const { dateTime, locale } = useI18n()
+  const when = useWhen()
   const list = useFamilyAccess()
   const [revoking, setRevoking] = useState<FamilyAccessGrant | null>(null)
   const grants = list.data?.grants ?? []
@@ -179,7 +181,7 @@ export function FamilyAccessRecord() {
                   <bdi>{g.grantedBy.name}</bdi>
                 </td>
                 <td className="dir-cell-quiet" data-label={tx(F.until)}>
-                  <time dateTime={g.revokedAt ?? g.endsAt}>{dateTime(g.revokedAt ?? g.endsAt)}</time>
+                  <time dateTime={g.revokedAt ?? g.endsAt} title={dateTime(g.revokedAt ?? g.endsAt)}>{when(g.revokedAt ?? g.endsAt, { start: true })}</time>
                 </td>
                 <td className="dir-cell-state">
                   <Badge tone={STATUS_TONE[g.status]}>{tx(F.status[g.status])}</Badge>

@@ -4,19 +4,20 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { newIdempotencyKey } from '@/core/api/client'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Avatar } from '@/shared/components/Avatar'
-import { Badge } from '@/shared/components/Badge'
 import { Icon } from '@/shared/components/Icon'
 import { PageHeader } from '@/shared/components/PageHeader'
 import { EmptyState, LoadingState } from '@/shared/components/States'
 import { countWords } from '@/features/instalments/copy'
 import { bySeq, type ChatConversation } from '@/features/chat/chatApi'
+import { useClock, useDay, useWhen } from '@/features/devices/when'
+import { plainLabel } from '@/features/profiles/RecordParts'
 import { supportAdminApi, supportClient, supportKeys, supportTokens, type SupportSession } from './api'
 import { KIND_LABEL, MINUTES, S, describeError, isEnded, useCopy } from './copy'
 import './support.css'
 
 type Tab = 'chats' | 'profile'
 
-/** The session's last minutes are said in terracotta, so the end is not a surprise. */
+/** The session's last minutes are said in red, so the end is not a surprise. */
 const LAST_MINUTES = 5
 
 /**
@@ -32,7 +33,7 @@ const LAST_MINUTES = 5
  * are sent), sending a message (labelled "Sent by support"), the person's own
  * profile. The rest is refused there whatever this page offers.
  *
- * The masthead says whose account this is and never leaves the screen: a gold
+ * The masthead says whose account this is and never leaves the screen: an amber
  * tag, the person's name, the time left, "Keep working" and the way out. Under
  * it the person's chats are a workspace in the chat's own language (the list,
  * the open thread, a composer), one pane at a time on a phone.
@@ -114,29 +115,34 @@ export function SupportSessionPage() {
   return (
     <div className="page support">
       <div className="page__inner">
+        {/* The session's own bar: whose account this is, on the record, the time left, and the way out. It never scrolls away. */}
+        <div className="support-bar" role="region" aria-label={tx(S.tag)}>
+          <span className="support-bar__what">
+            <Icon name="headset" size={18} />
+            <span>
+              <strong>{tx(S.tag)}</strong> <span className="support-bar__acting">{tx(S.acting, { name: session.target.name, kind })}</span>
+            </span>
+          </span>
+          <span className={minutes !== null && minutes <= LAST_MINUTES ? 'support-left support-left--last' : 'support-left'} role="timer">
+            <Icon name="timer" size={16} />
+            <span>
+              {minutes !== null && <strong>{tx(S.left, { time: countWords(minutes, MINUTES, locale) })}</strong>}
+              <span className="support-left__until">{tx(S.until, { time: time(session.expiresAt) })}</span>
+            </span>
+          </span>
+          <span className="support-bar__actions">
+            <button type="button" className="btn btn--sm support-bar__btn" disabled={refresh.isPending} onClick={() => refresh.mutate()}>
+              {tx(S.extend)}
+            </button>
+            <button type="button" className="btn btn--sm support-bar__exit" disabled={exit.isPending} onClick={() => exit.mutate()}>
+              <Icon name="signOut" size={16} />
+              {tx(S.exit)}
+            </button>
+          </span>
+        </div>
         <PageHeader
           lead={<Avatar name={session.target.name} seed={session.target.accountId} size="lg" />}
           title={session.target.name}
-          status={<Badge tone="gold">{tx(S.tag)}</Badge>}
-          subtitle={tx(S.acting, { name: session.target.name, kind })}
-          actions={
-            <>
-              <span className={minutes !== null && minutes <= LAST_MINUTES ? 'support-left support-left--last' : 'support-left'} role="timer">
-                <Icon name="timer" size={16} />
-                <span>
-                  {minutes !== null && <strong>{tx(S.left, { time: countWords(minutes, MINUTES, locale) })}</strong>}
-                  <span className="support-left__until">{tx(S.until, { time: time(session.expiresAt) })}</span>
-                </span>
-              </span>
-              <button type="button" className="btn" disabled={refresh.isPending} onClick={() => refresh.mutate()}>
-                {tx(S.extend)}
-              </button>
-              <button type="button" className="btn btn--primary" disabled={exit.isPending} onClick={() => exit.mutate()}>
-                <Icon name="signOut" size={16} />
-                {tx(S.exit)}
-              </button>
-            </>
-          }
           tabs={
             family && (
               <div className="seg support-tabs" role="tablist" aria-label={tx(S.tabsLabel, { name: session.target.name })}>
@@ -195,7 +201,7 @@ type Client = ReturnType<typeof supportClient>
 /** The person's chats: the list, and the open one beside it (after it on a phone). */
 function Chats({ id, client, session, onEnded }: { id: string; client: Client; session: SupportSession; onEnded: () => void }) {
   const tx = useCopy()
-  const { locale, time, date, number } = useI18n()
+  const { locale, date, number } = useI18n()
   const [open, setOpen] = useState<string | null>(null)
   const list = useQuery({ queryKey: supportKeys.conversations(id), queryFn: client.conversations, refetchInterval: 15_000 })
   useEffect(() => {
@@ -204,9 +210,10 @@ function Chats({ id, client, session, onEnded }: { id: string; client: Client; s
 
   const conversations = list.data ?? []
   const current = conversations.find((c) => c.id === open) ?? null
-  // Today's activity is a time; anything older is its day.
-  const today = date(new Date().toISOString())
-  const when = (iso: string) => (date(iso) === today ? time(iso) : date(iso))
+  // Today's activity is its clock time, anything older its day in words: the same clock as the thread's.
+  const clock = useClock()
+  const day = useDay()
+  const when = (iso: string) => (date(iso) === date(new Date().toISOString()) ? clock(iso) : day(iso))
   return (
     <div className={open ? 'support-work support-work--open' : 'support-work'}>
       <section className="support-side" aria-label={tx(S.tabChats)}>
@@ -218,12 +225,12 @@ function Chats({ id, client, session, onEnded }: { id: string; client: Client; s
           {list.error && !isEnded(list.error) && <li className="support-list__note support-list__note--error">{describeError(list.error, locale)}</li>}
           {list.data && conversations.length === 0 && <li className="support-list__note">{tx(S.noChats)}</li>}
           {conversations.map((c) => {
-            const title = titleOf(c, tx(S.untitled))
+            const title = titleOf(c, tx(S.untitled), locale)
             const last = c.lastMessage && !c.lastMessage.deleted && !c.lastMessage.systemKind ? c.lastMessage.text : null
             return (
               <li key={c.id}>
                 <button type="button" className="support-row" aria-current={c.id === open ? 'true' : undefined} onClick={() => setOpen(c.id)}>
-                  <Avatar name={title} seed={c.id} src={c.avatarUrl} />
+                  <Avatar name={counterpart(title, session.target.name)} seed={c.id} src={c.avatarUrl} />
                   <span className="support-row__body">
                     <span className="support-row__top">
                       <span className={c.unreadCount ? 'support-row__name support-row__name--unread' : 'support-row__name'}>
@@ -246,14 +253,14 @@ function Chats({ id, client, session, onEnded }: { id: string; client: Client; s
           })}
         </ul>
       </section>
-      <section className="support-thread" aria-label={current ? titleOf(current, tx(S.untitled)) : tx(S.pickChat)}>
+      <section className="support-thread" aria-label={current ? titleOf(current, tx(S.untitled), locale) : tx(S.pickChat)}>
         {open ? (
           <Thread
             key={open}
             id={id}
             client={client}
             conversationId={open}
-            title={current ? titleOf(current, tx(S.untitled)) : tx(S.untitled)}
+            title={current ? titleOf(current, tx(S.untitled), locale) : tx(S.untitled)}
             person={session.target}
             onBack={() => setOpen(null)}
             onEnded={onEnded}
@@ -288,6 +295,7 @@ function Thread({
 }) {
   const tx = useCopy()
   const { locale, dateTime, number } = useI18n()
+  const when = useWhen()
   const queryClient = useQueryClient()
   const [draft, setDraft] = useState('')
   const body = useRef<HTMLDivElement>(null)
@@ -358,8 +366,8 @@ function Thread({
                       <Icon name="paperclip" size={15} /> <span className="ltr">{number(m.attachments.length)}</span>
                     </span>
                   ) : null}
-                  <time className="support-bubble__meta" dateTime={m.createdAt}>
-                    {dateTime(m.createdAt)}
+                  <time className="support-bubble__meta" dateTime={m.createdAt} title={dateTime(m.createdAt)}>
+                    {when(m.createdAt, { start: true })}
                   </time>
                 </div>
               </li>
@@ -480,9 +488,20 @@ function ParentProfile({ id, client, onEnded }: { id: string; client: Client; on
   )
 }
 
-function titleOf(c: ChatConversation, fallback: string): string {
-  if (c.title) return c.title
+/**
+ * Whom a chat is with, for its monogram: the title without the person being
+ * acted as (whose name leads many of them), so the list does not show their
+ * initials on every row.
+ */
+function counterpart(title: string, person: string): string {
+  const rest = title.replace(person, '').replace(/^[\s,،—–-]+|[\s,،—–-]+$/g, '')
+  return rest || title
+}
+
+function titleOf(c: ChatConversation, fallback: string, locale: 'ar' | 'en'): string {
+  // A title the server composed with middle dots reads here as names parted by commas.
+  if (c.title) return plainLabel(c.title, locale)
   if (c.learner?.name) return c.learner.name
   const names = (c.members ?? []).map((m) => m.displayName).filter(Boolean)
-  return names.length ? names.join('، ') : fallback
+  return names.length ? names.join(locale === 'ar' ? '، ' : ', ') : fallback
 }

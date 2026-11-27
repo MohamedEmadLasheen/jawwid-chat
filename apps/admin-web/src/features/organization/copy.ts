@@ -31,10 +31,8 @@ export function useCopy() {
 
 export const T = {
   title: { en: 'Organization', ar: 'الهيكل التنظيمي' },
-  subtitle: {
-    en: 'Who supervises each child, and who covers whom. Every change is checked and recorded with its reason.',
-    ar: 'من يشرف على كل طفل، ومن ينوب عن من. يُراجَع كل تغيير ويُسجَّل مع سببه.',
-  },
+  /** Names in a sentence are parted by the reader's comma. */
+  listComma: { en: ', ', ar: '، ' },
   tabChildren: { en: 'Children & supervisors', ar: 'الأطفال والمشرفون' },
   tabStructure: { en: 'Departments & backups', ar: 'الأقسام والبدلاء' },
   // PD-35: teachers and their supervisors.
@@ -109,11 +107,17 @@ export const T = {
   childrenCount: { en: 'Children', ar: 'الأطفال' },
   backups: { en: 'Backup supervisors', ar: 'المشرفون البدلاء' },
   backupsHint: {
-    en: 'A backup sees and answers a supervisor’s conversations ONLY while the link is active. A link starts dormant.',
+    en: 'A backup sees and answers a supervisor’s conversations only while the link is active. A link starts dormant.',
     ar: 'يرى البديل محادثات المشرف ويرد عليها فقط أثناء تفعيل الربط. يبدأ الربط غير مفعّل.',
   },
   noBackups: { en: 'No backup links yet.', ar: 'لا توجد روابط بدلاء بعد.' },
   covers: { en: '{backup} covers {primary}', ar: '{backup} ينوب عن {primary}' },
+  /** On a team member's row: who backs them up, and whom they back up. */
+  backupIs: { en: 'Backup: {name}', ar: 'البديل: {name}' },
+  coveringNowUntil: { en: 'covering now, until {date}', ar: 'ينوب الآن حتى {date}' },
+  noChildrenYet: { en: 'no children yet', ar: 'لا أطفال بعد' },
+  coveringUntil: { en: '{name} covering until {date}', ar: '{name} ينوب حتى {date}' },
+  allChildrenAssigned: { en: 'Every child has a supervisor.', ar: 'لكل طفل مشرف.' },
   until: { en: 'until {date}', ar: 'حتى {date}' },
   addBackup: { en: 'Add backup link', ar: 'إضافة رابط بديل' },
   activate: { en: 'Activate', ar: 'تفعيل' },
@@ -151,11 +155,11 @@ export const T = {
   confirmTitle: { en: 'Confirm the hand-over', ar: 'تأكيد التسليم' },
   summary: {
     en: '{families} families, {groups} groups and {items} open items move to {backup} until {date}.',
-    ar: 'تنتقل إلى {backup} حتى {date}: الأسر {families} · المجموعات {groups} · المهام المفتوحة {items}.',
+    ar: 'تنتقل إلى {backup} حتى {date}: الأسر {families}، والمجموعات {groups}، والمهام المفتوحة {items}.',
   },
   summaryDetail: {
-    en: 'Parent chats: {directs} · Awaiting approval: {approvals} · Open instalments: {instalments} · New students: {newStudents}',
-    ar: 'محادثات أولياء الأمور: {directs} · بانتظار الموافقة: {approvals} · أقساط مفتوحة: {instalments} · طلاب جدد: {newStudents}',
+    en: 'Parent chats: {directs}, awaiting approval: {approvals}, open instalments: {instalments}, new students: {newStudents}.',
+    ar: 'محادثات أولياء الأمور: {directs}، بانتظار الموافقة: {approvals}، أقساط مفتوحة: {instalments}، طلاب جدد: {newStudents}.',
   },
   summaryKeep: {
     en: '{name} keeps every chat and can still reply; notifications go to {backup}. A line is posted in each group so families know who answers.',

@@ -26,7 +26,7 @@ export const S = {
   },
   left: { en: '{time} left', ar: 'المتبقي: {time}' },
   until: { en: 'Until {time}', ar: 'حتى {time}' },
-  extend: { en: 'Keep working', ar: 'متابعة العمل' },
+  extend: { en: 'Extend the session', ar: 'تمديد الجلسة' },
   exit: { en: 'Exit', ar: 'خروج' },
   ended: { en: 'This support session has ended.', ar: 'انتهت جلسة الدعم هذه.' },
   backToAccounts: { en: 'Back to Accounts', ar: 'العودة إلى الحسابات' },
@@ -62,10 +62,9 @@ export const S = {
   },
 
   recordTitle: { en: 'Support sessions', ar: 'جلسات الدعم' },
-  recordBy: { en: 'By', ar: 'بواسطة' },
-  recordStarted: { en: 'Started', ar: 'البداية' },
-  recordEnded: { en: 'Ended', ar: 'النهاية' },
-  recordActions: { en: 'Requests', ar: 'الطلبات' },
+  recordOpened: { en: 'Opened by {by} {when}', ar: 'فتحها {by} {when}' },
+  recordLasted: { en: 'lasted {time}', ar: 'استمرت {time}' },
+  recordShowAll: { en: 'Show all {n}', ar: 'عرض الكل ({n})' },
   recordLive: { en: 'Live', ar: 'جارية' },
   recordTimedOut: { en: 'Timed out', ar: 'انتهت مدتها' },
   openSession: { en: 'Open session', ar: 'فتح الجلسة' },
@@ -73,7 +72,12 @@ export const S = {
 } satisfies Record<string, Pair>
 
 /** The time a session has left, in whole minutes. */
-export const MINUTES: CountForms = { en: ['{n} minute', '{n} minutes'], ar: ['دقيقة واحدة', 'دقيقتان', '{n} دقائق', '{n} دقيقة'] }
+/** What a support session did, as the server counted it. */
+export const ACTIONS_RECORDED: CountForms = {
+  en: ['{n} action recorded', '{n} actions recorded'],
+  ar: ['إجراء واحد مسجَّل', 'إجراءان مسجَّلان', '{n} إجراءات مسجَّلة', '{n} إجراءً مسجَّلًا'],
+}
+export const MINUTES: CountForms ={ en: ['{n} minute', '{n} minutes'], ar: ['دقيقة واحدة', 'دقيقتان', '{n} دقائق', '{n} دقيقة'] }
 export const SESSIONS_COUNT: CountForms = { en: ['{n} session', '{n} sessions'], ar: ['جلسة واحدة', 'جلستان', '{n} جلسات', '{n} جلسة'] }
 
 export const KIND_LABEL: Record<'family' | 'teacher', Pair> = {
