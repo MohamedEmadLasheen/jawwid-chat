@@ -51,14 +51,25 @@ export function TeacherFilesPage({ basePath, eyebrow }: { basePath: string; eyeb
   return (
     <div className="page">
       <div className="page__inner">
-        <PageHeader eyebrow={eyebrow} title={tx(T.title)} subtitle={tx(T.subtitle)} />
         {/* A tab of the Teachers area for operators; of Admin › Teachers for the super admin. */}
         <TeachersTabs basePath={basePath} />
+        <PageHeader
+          eyebrow={eyebrow}
+          title={tx(T.title)}
+          subtitle={tx(T.subtitle)}
+          actions={
+            offer?.canAdd && (
+              <button type="button" className="btn btn--primary" onClick={() => setAdding(true)}>
+                {tx(T.addTeacher)}
+              </button>
+            )
+          }
+        />
         {isTeacherFileRefusal(list.error) ? (
           <Refusal error={list.error} />
         ) : (
           <QueryBoundary isLoading={list.isLoading} error={list.error} onRetry={() => void list.refetch()}>
-            <div className="toolbar">
+            <div className="toolbar tf-toolbar">
               <SearchField value={query} onChange={setQuery} label={tx(T.search)} clearLabel={t('common.cancel')} />
               <label className="tf-radio">
                 <input type="checkbox" checked={incompleteOnly} onChange={(e) => setIncompleteOnly(e.target.checked)} />
@@ -81,11 +92,6 @@ export function TeacherFilesPage({ basePath, eyebrow }: { basePath: string; eyeb
                   </Link>
                 </>
               )}
-              {offer?.canAdd && (
-                <button type="button" className="btn btn--primary" onClick={() => setAdding(true)}>
-                  {tx(T.addTeacher)}
-                </button>
-              )}
             </div>
             {rows.length === 0 ? (
               <EmptyState title={tx(T.noTeachers)} />
@@ -104,10 +110,10 @@ export function TeacherFilesPage({ basePath, eyebrow }: { basePath: string; eyeb
                     {rows.map((row) => (
                       <tr key={row.id}>
                         <td dir="auto">
-                          <Link to={`${basePath}/${encodeURIComponent(row.id)}`}>{row.name}</Link>
+                          <Link className="tf-name-link" to={`${basePath}/${encodeURIComponent(row.id)}`}>{row.name}</Link>
                         </td>
-                        <td>{number(row.studentCount)}</td>
-                        <td>
+                        <td className={row.studentCount > 0 ? 'tf-num' : 'tf-num tf-num--zero'}>{number(row.studentCount)}</td>
+                        <td className={row.openComplaints > 0 ? 'tf-num' : 'tf-num tf-num--zero'}>
                           {row.openComplaints > 0 ? (
                             <Badge tone="warn" dot>
                               {number(row.openComplaints)}

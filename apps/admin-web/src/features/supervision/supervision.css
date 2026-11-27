@@ -1,18 +1,27 @@
-/* PD-12 S1. Layout reuses .page / .card / .table / .toolbar from the design system. */
-.sv-tabs { display: flex; gap: var(--space-1); flex-wrap: wrap; border-block-end: 1px solid var(--border); margin-block: 0 var(--space-3); }
-.sv-tab { padding: var(--space-2) var(--space-3); color: var(--text-muted); text-decoration: none; border-block-end: 2px solid transparent; }
-.sv-tab:hover { color: var(--text); }
+/* PD-12 S1. Layout reuses .page / .table / .toolbar from the design system. */
+/* The super admin's Teachers tabs: words with a teal underline. */
+.sv-tabs { display: flex; flex-wrap: nowrap; gap: var(--space-5); overflow-x: auto; scrollbar-width: none; border-block-end: 1px solid var(--hairline); margin-block: 0 var(--space-5); }
+.sv-tab { flex: none; padding: 8px 0 9px; margin-block-end: -1px; color: var(--ink-muted); font-size: var(--fs-sm); font-weight: 500; white-space: nowrap; text-decoration: none; border-block-end: 2px solid transparent; }
+.sv-tab:hover { color: var(--ink); }
 .sv-tab[aria-current='page'] { color: var(--text-link); border-block-end-color: var(--accent); font-weight: 600; }
+.sv-tab:focus-visible { outline-offset: -2px; }
+@media (max-width: 767px) { .sv-tab { min-block-size: 44px; display: inline-flex; align-items: center; } }
 .sv-table-wrap { overflow-x: auto; }
-.sv-cell-main { display: grid; gap: var(--space-1); min-inline-size: 12rem; }
-.sv-muted { color: var(--text-muted); font-size: var(--fs-sm); }
-.sv-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
-.sv-days { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: var(--space-2) 0 0; padding: 0; border: none; }
-.sv-day { display: inline-flex; align-items: center; gap: var(--space-1); padding: var(--space-1) var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-md); }
-.sv-collisions { margin: var(--space-2) 0 0; padding-inline-start: var(--space-4); }
-.sv-check { display: flex; align-items: center; gap: var(--space-2); margin-block-start: var(--space-2); }
-.sv-figures { display: flex; flex-wrap: wrap; gap: var(--space-4); margin: var(--space-3) 0 0; }
-.sv-figure { display: grid; gap: var(--space-1); }
-.sv-figure dt { color: var(--text-muted); font-size: var(--fs-sm); }
-.sv-figure dd { margin: 0; font-size: var(--fs-lg); font-weight: 600; font-variant-numeric: tabular-nums; }
+.sv-cell-main { display: grid; gap: 2px; min-inline-size: 10rem; }
+.sv-muted { color: var(--ink-muted); font-size: var(--fs-xs); }
+/* Days that will be unpaid: a real consequence, said in terracotta words. */
+.sv-warn { margin: 0; color: var(--terracotta); font-size: var(--fs-xs); font-weight: 600; }
+.sv-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.sv-days { display: flex; flex-wrap: wrap; gap: 0 var(--space-4); margin: var(--space-2) 0 0; padding: 0; border: none; }
+.sv-day { display: inline-flex; align-items: center; gap: 6px; min-block-size: 32px; padding: 0; border: 0; border-radius: 0; font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
+.sv-day input { accent-color: var(--teal); }
+.sv-collisions { margin: var(--space-2) 0 0; padding-inline-start: var(--space-4); font-size: var(--fs-sm); }
+.sv-check { display: flex; align-items: center; gap: var(--space-2); margin-block-start: var(--space-2); font-size: var(--fs-sm); }
+.sv-check input { accent-color: var(--teal); }
+/* The year's leave in three numerals. */
+.sv-figures { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 var(--space-5); margin: 0; }
+.sv-figure { display: grid; gap: 1px; padding: 10px 0 9px; border-block-end: 1px solid var(--hairline-soft); }
+.sv-figure dt { color: var(--ink-muted); font-size: 12.5px; }
+.sv-figure dd { margin: 0; font-family: var(--display); font-size: var(--fs-xl); font-weight: 600; line-height: 1.2; font-variant-numeric: tabular-nums lining-nums; }
+.sv-figure dd .sv-muted { font-family: var(--font); font-size: var(--fs-sm); font-weight: 400; }
 .sv-textarea { min-block-size: 5rem; resize: vertical; }

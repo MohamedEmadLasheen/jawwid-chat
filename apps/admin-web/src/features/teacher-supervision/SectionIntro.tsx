@@ -1,10 +1,10 @@
 import type { ReactNode } from 'react'
 
-/** A section's one-line explanation, and its record buttons. */
+/** A section's rule, in one line, and its record button. */
 export function SectionIntro({ hint, actions }: { hint: string; actions?: ReactNode }) {
   return (
     <div className="th-intro">
-      <p className="field__hint">{hint}</p>
+      <p className="th-rule">{hint}</p>
       {actions && <div className="th-actions">{actions}</div>}
     </div>
   )

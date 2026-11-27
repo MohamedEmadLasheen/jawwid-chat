@@ -74,7 +74,7 @@ export function MaterialsPage({ eyebrow }: { eyebrow?: string }) {
       <div className="page__inner">
         <PageHeader eyebrow={eyebrow} title={tx(M.title)} subtitle={tx(M.subtitle)} />
         {access.error ? (
-          <EmptyState icon="alert" title={describeError(access.error, locale)} />
+          <EmptyState title={describeError(access.error, locale)} />
         ) : !access.data ? (
           <QueryBoundary isLoading error={null} onRetry={() => void access.refetch()}>
             <></>
@@ -201,7 +201,7 @@ function LibraryTab({ access }: { access: MaterialsAccess }) {
       </div>
       {save.error ? <ServerError error={save.error} /> : null}
       {items.error ? (
-        <EmptyState icon="alert" title={describeError(items.error, locale)} />
+        <EmptyState title={describeError(items.error, locale)} />
       ) : (
         <QueryBoundary isLoading={items.isLoading} error={null} onRetry={() => void items.refetch()}>
           {!items.data || items.data.items.length === 0 ? (
@@ -241,13 +241,13 @@ function ItemRow({ item, busy, onEdit, onPreview, onStatus }: {
   const surah = item.surah ? surahs.data?.surahs.find((s) => s.number === item.surah) : undefined
   const title = itemTitle(item, locale)
   return (
-    <li className="card panel mt-item" aria-label={title}>
+    <li className="mt-item" aria-label={title}>
       <div className="mt-item__body">
         <div className="mt-item__head">
+          <strong className="mt-item__title" dir="auto">{title}</strong>
           <Badge tone={STATUS_TONE[item.status]} dot>
             {tx(STATUS_LABEL[item.status])}
           </Badge>
-          <strong dir="auto">{title}</strong>
         </div>
         <div className="mt-item__meta">
           <span>{tx(SUBJECT_LABEL[item.subject])}</span>
@@ -748,11 +748,11 @@ function ImportReportView({ report }: { report: ImportReport }) {
   const actionLabel = { create: tx(M.actionCreate), update: tx(M.actionUpdate), error: tx(M.actionError) }
   const actionTone: Record<'create' | 'update' | 'error', Tone> = { create: 'info', update: 'outline', error: 'danger' }
   return (
-    <section className="card panel mt-report" aria-label={tx(M.details)}>
+    <section className="mt-report" aria-label={tx(M.details)}>
       <p>{tx(M.summary, { create: report.summary.create, update: report.summary.update, errors: report.summary.errors })}</p>
       {report.summary.errors > 0 && <p className="field__error">{tx(M.fixFirst)}</p>}
       {report.unmatchedFiles.length > 0 && <p className="field__hint">{tx(M.unmatched, { files: report.unmatchedFiles.join(', ') })}</p>}
-      <table className="mt-table">
+      <table className="table mt-table">
         <thead>
           <tr>
             <th scope="col">{tx(M.row)}</th>
@@ -812,7 +812,8 @@ function RecitationsTab() {
           {list.data?.sources.map((s) => <SourceCard key={s.id} source={s} />)}
         </ul>
       </QueryBoundary>
-      <section className="card panel mt-add-source" aria-label={tx(M.addSource)}>
+      <section className="mt-add-source" aria-label={tx(M.addSource)}>
+        <h2 className="section-label mt-add-source__label">{tx(M.addSource)}</h2>
         <Field label={tx(M.sourceName)}>{(id) => <input id={id} className="input" dir="auto" value={name} onChange={(e) => setName(e.target.value)} />}</Field>
         <Field label={tx(M.urlTemplate)}>
           {(id) => <input id={id} className="input" dir="ltr" placeholder="https://…/{surah3}.mp3" value={template} onChange={(e) => setTemplate(e.target.value)} />}
@@ -850,7 +851,7 @@ function SourceCard({ source }: { source: RecitationSource }) {
     }
   }
   return (
-    <li className="card panel mt-source" aria-label={source.name}>
+    <li className="mt-source" aria-label={source.name}>
       <div className="mt-item__head">
         {source.isDefault && <Badge tone="ok" dot>{tx(M.isDefault)}</Badge>}
         {!source.isActive && <Badge tone="outline">{tx(M.inactive)}</Badge>}

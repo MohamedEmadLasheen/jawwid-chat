@@ -1,17 +1,42 @@
-/* PD-48: the Lesson audio review page. Layout only; colours come from the theme tokens. */
-.lesson-audio__note { padding: var(--space-3, 12px); border-radius: var(--radius-2, 8px); background: var(--surface-warn, var(--surface-2)); }
-.lesson-audio__units { display: flex; flex-wrap: wrap; gap: var(--space-2, 8px); margin-block: var(--space-3, 12px); }
-.lesson-audio__units button[aria-pressed='true'] { outline: 2px solid var(--accent, currentColor); }
-.lesson-audio__bar { display: flex; gap: var(--space-2, 8px); margin-block-end: var(--space-3, 12px); }
-.lesson-audio__strings { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-3, 12px); }
-.lesson-audio__strings > li { padding: var(--space-3, 12px); border: 1px solid var(--border, currentColor); border-radius: var(--radius-2, 8px); }
-.lesson-audio__strings > li.is-playing { outline: 2px solid var(--accent, currentColor); }
+/* PD-48: the Lesson audio review page. The words set large on the paper, their clips as ruled lines. */
+.lesson-audio__note { margin: 0 0 var(--space-4); padding-inline-start: var(--space-3); border-inline-start: 2px solid var(--gold-line); color: var(--gold-text); font-size: var(--fs-sm); }
+/* The units: a ruled index. The one on view carries a teal rule above it. */
+.lesson-audio__units { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); margin-block-end: var(--space-4); border-block-start: 1px solid var(--hairline); }
+.lesson-audio__unit-tab { display: grid; align-content: start; justify-items: start; gap: 0; min-block-size: 52px; padding: 7px var(--space-2) 6px; border: 0; border-block-end: 1px solid var(--hairline); border-inline-end: 1px solid var(--hairline-soft); border-radius: 0; background: none; color: var(--ink-muted); font: inherit; text-align: start; cursor: pointer; transition: background var(--dur-fast) var(--ease-out); }
+.lesson-audio__unit-tab:hover { background: var(--surface-hover); }
+.lesson-audio__unit-tab[aria-pressed='true'] { background: var(--teal-tint); box-shadow: inset 0 2px 0 var(--teal); color: var(--teal-dark); }
+.lesson-audio__unit-tab:focus-visible { outline-offset: -2px; }
+.lesson-audio__unit-name { font-size: var(--fs-sm); font-weight: 600; color: var(--ink); direction: ltr; unicode-bidi: isolate; overflow-wrap: anywhere; }
+.lesson-audio__count { font-size: var(--fs-xs); font-variant-numeric: tabular-nums; direction: ltr; unicode-bidi: isolate; }
+.lesson-audio__mark { font-size: 11.5px; font-weight: 600; color: var(--gold-text); }
+.lesson-audio__mark--decide { color: var(--terracotta); }
+.lesson-audio__bar { display: flex; gap: var(--space-2); margin-block-end: var(--space-2); }
+.lesson-audio__strings { list-style: none; margin: 0; padding: 0; border-block-start: 1px solid var(--hairline); }
+.lesson-audio__strings > li { padding: var(--space-4) 2px; border: 0; border-block-end: 1px solid var(--hairline); border-radius: 0; }
+/* The clip being heard: a teal edge on the word it belongs to. */
+.lesson-audio__strings > li.is-playing { box-shadow: inset -3px 0 0 var(--teal); padding-inline-start: var(--space-4); }
+[dir='ltr'] .lesson-audio__strings > li.is-playing { box-shadow: inset 3px 0 0 var(--teal); }
+.lesson-audio__head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--space-2) var(--space-5); }
 /* The vowelled text, large enough that every mark is seen (design §9: at least 40 px). */
-.lesson-audio__text { font-size: 2.75rem; line-height: 1.6; }
-.lesson-audio__meta { display: flex; gap: var(--space-2, 8px); align-items: center; }
-.lesson-audio__clip { margin-block-start: var(--space-2, 8px); display: grid; gap: var(--space-2, 8px); }
-.lesson-audio__clip.is-rejected, .lesson-audio__clip.is-withdrawn { opacity: 0.6; }
-.lesson-audio__row { display: flex; flex-wrap: wrap; gap: var(--space-2, 8px); align-items: center; }
-.lesson-audio__voice { color: var(--text-muted, inherit); font-size: 0.875em; }
-.lesson-audio__form { display: grid; gap: var(--space-2, 8px); max-width: 32rem; }
-.lesson-audio__hint { color: var(--text-muted, inherit); font-size: 0.875em; margin: 0; }
+.lesson-audio__text { font-family: var(--font-display-ar); font-size: 2.75rem; line-height: 1.6; color: var(--ink); }
+.lesson-audio__meta { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); align-items: baseline; }
+.lesson-audio__meta code { color: var(--ink-muted); font-size: var(--fs-xs); }
+.lesson-audio__clip { margin-block-start: var(--space-2); padding-block-start: var(--space-2); border-block-start: 1px solid var(--hairline-soft); display: grid; gap: 6px; }
+.lesson-audio__clip.is-rejected, .lesson-audio__clip.is-withdrawn { color: var(--ink-muted); }
+.lesson-audio__row { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); align-items: center; font-size: var(--fs-sm); }
+.lesson-audio__listen .icon { color: var(--teal); }
+.lesson-audio__fact { font-variant-numeric: tabular-nums; }
+.lesson-audio__voice { color: var(--ink-muted); font-size: var(--fs-xs); }
+.lesson-audio__decide { display: inline-flex; flex-wrap: wrap; gap: var(--space-2); margin-inline-start: auto; }
+.lesson-audio__form { display: grid; gap: var(--space-3); max-inline-size: 30rem; padding-block: var(--space-2); }
+.lesson-audio__form .field { margin: 0; }
+.lesson-audio__hint { color: var(--ink-muted); font-size: var(--fs-sm); margin: 0; }
+.lesson-audio__alert { margin: 0; color: var(--terracotta); font-size: var(--fs-sm); font-weight: 500; }
+.lesson-audio__history { font-size: var(--fs-sm); color: var(--ink-muted); }
+.lesson-audio__history summary { display: inline-flex; align-items: center; min-block-size: 32px; color: var(--teal); cursor: pointer; }
+.lesson-audio__history ul { list-style: none; margin: 0; padding: 0; }
+.lesson-audio__history li { padding-block: 4px; border-block-end: 1px solid var(--hairline-soft); }
+@media (max-width: 767px) {
+  .lesson-audio__text { font-size: 2.5rem; }
+  .lesson-audio__decide { margin-inline-start: 0; }
+}

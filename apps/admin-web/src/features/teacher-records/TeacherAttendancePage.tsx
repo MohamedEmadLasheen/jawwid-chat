@@ -1,13 +1,13 @@
 import { useSearchParams } from 'react-router-dom'
 import { FilterChips } from '@/shared/components/FilterChips'
 import { PageHeader } from '@/shared/components/PageHeader'
-import { EmptyState, LoadingState } from '@/shared/components/States'
+import { LoadingState } from '@/shared/components/States'
 import { ExcusesSection, LatenessSection, LeaveSection } from '@/features/teacher-supervision/AttendanceSections'
 import { ParentFeedbackSection } from '@/features/teacher-supervision/ParentFeedback'
 import { ComplaintsSection } from '@/features/teacher-supervision/RewardsAndComplaints'
 import { R, useCopy } from './copy'
 import { useTeacherRecordsAccess } from './hooks'
-import { TeacherPicker, TeacherStrip } from './TeacherStrip'
+import { Denied, TeacherPicker, TeacherStrip } from './TeacherStrip'
 import './teacher-records.css'
 
 export type AttendanceSection = 'leave' | 'lateness' | 'excuses' | 'complaints'
@@ -60,7 +60,7 @@ export function TeacherAttendancePage({ basePath, eyebrow }: { basePath: string;
       <div className="page">
         <div className="page__inner">
           <PageHeader eyebrow={eyebrow} title={tx(R.attendanceTitle)} />
-          <EmptyState icon="lock" title={tx(R.denied)} />
+          <Denied text={tx(R.denied)} />
         </div>
       </div>
     )
@@ -80,6 +80,18 @@ export function TeacherAttendancePage({ basePath, eyebrow }: { basePath: string;
         />
         <div className="tr-toolbar">
           <TeacherPicker value={teacher} onChange={setTeacher} />
+          {/* The parents' suggestions are answered by those who decide; not Sales'. */}
+          {section === 'complaints' && !sales && (
+            <FilterChips<ComplaintsView>
+              label={tx(R.showing)}
+              value={view}
+              onChange={(next) => set(next === 'complaints' ? { section } : { section, view: next })}
+              options={[
+                { value: 'complaints', label: tx(R.complaintsList) },
+                { value: 'suggestions', label: tx(R.suggestions) },
+              ]}
+            />
+          )}
         </div>
         <TeacherStrip teacherId={teacher || null} basePath={basePath} />
         <div className="th-body">
@@ -88,18 +100,6 @@ export function TeacherAttendancePage({ basePath, eyebrow }: { basePath: string;
           {section === 'excuses' && <ExcusesSection {...rights} />}
           {section === 'complaints' && (
             <>
-              {/* The parents' suggestions are answered by those who decide; not Sales'. */}
-              {!sales && (
-                <FilterChips<ComplaintsView>
-                  label={tx(R.showing)}
-                  value={view}
-                  onChange={(next) => set(next === 'complaints' ? { section } : { section, view: next })}
-                  options={[
-                    { value: 'complaints', label: tx(R.complaintsList) },
-                    { value: 'suggestions', label: tx(R.suggestions) },
-                  ]}
-                />
-              )}
               {view === 'complaints' || sales ? (
                 <ComplaintsSection canDecide={a.attendance.decide} requireAbout={sales} />
               ) : (

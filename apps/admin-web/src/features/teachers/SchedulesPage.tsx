@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { PageHeader } from '@/shared/components/PageHeader'
-import { EmptyState, QueryBoundary } from '@/shared/components/States'
+import { QueryBoundary } from '@/shared/components/States'
 import { ActionDialog } from './ActionDialog'
 import { TeachersAreaTabs } from './area'
 import { opsApi, type Availability } from './opsApi'
@@ -65,7 +65,7 @@ export function SchedulesPage() {
               <StudentScheduleDesk students={students} />
             </>
           )}
-          {!teacher && <EmptyState title={tx(O.pickTeacher)} />}
+          {!teacher && <p className="ts-muted ts-section__hint">{tx(O.pickTeacherFirst)}</p>}
         </QueryBoundary>
       </div>
     </div>
@@ -99,9 +99,11 @@ function WorkingHours({ teacherId }: { teacherId: string }) {
 
   return (
     <QueryBoundary isLoading={q.isLoading} error={q.error} onRetry={() => void q.refetch()}>
-      <section className="card" aria-label={tx(O.workingHours)}>
-        <h2 className="ts-card__title">{tx(O.workingHours)}</h2>
-        {q.data && q.data.windows.length === 0 && <p className="ts-muted">{tx(O.noAvailabilityYet)}</p>}
+      <section className="ts-section" aria-label={tx(O.workingHours)}>
+        <header className="ts-section__head">
+          <h2 className="ts-card__title">{tx(O.workingHours)}</h2>
+        </header>
+        {q.data && q.data.windows.length === 0 && <p className="ts-muted ts-section__hint">{tx(O.noAvailabilityYet)}</p>}
         <div className="field ts-inline">
           <label className="field__label" htmlFor={`tz-${teacherId}`}>{tx(O.timezone)}</label>
           <input id={`tz-${teacherId}`} className="input" value={timezone} onChange={(e) => setTimezone(e.target.value)} />

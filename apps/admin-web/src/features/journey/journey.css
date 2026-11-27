@@ -41,11 +41,13 @@
 .jr-history li { display: grid; gap: 2px; padding-block-end: var(--space-2); border-block-end: 1px solid var(--border); }
 .jr-history time { font-size: var(--fs-xs); color: var(--text-muted); }
 
-.jr-summary { display: grid; gap: var(--space-3); grid-template-columns: repeat(auto-fill, minmax(min(100%, 11rem), 1fr)); margin-block: var(--space-3); }
-.jr-stat { padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); display: grid; gap: var(--space-1); }
-.jr-stat__label { font-size: var(--fs-sm); color: var(--text-muted); }
-.jr-stat__value { font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; }
-.jr-stat__split { font-size: var(--fs-sm); color: var(--text-muted); }
+/* The month at a glance: a quiet ruled ledger; every lesson is in exactly one figure. */
+.jr-summary { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 9.5rem), 1fr)); gap: 0 var(--space-5); margin-block: var(--space-3) var(--space-5); }
+.jr-stat { display: grid; align-content: start; gap: 1px; padding: 10px 0 9px; border-block-end: 1px solid var(--hairline-soft); }
+.jr-stat__label { font-size: 12.5px; color: var(--ink-muted); }
+.jr-stat__value { font-family: var(--display); font-size: var(--fs-xl); font-weight: 600; line-height: 1.2; font-variant-numeric: tabular-nums lining-nums; direction: ltr; unicode-bidi: isolate; text-align: start; }
+[dir='rtl'] .jr-stat__value { text-align: right; }
+.jr-stat__split { font-size: var(--fs-xs); color: var(--ink-muted); }
 .jr-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 
 /* PD-31: the lesson_moved card in a chat thread. */

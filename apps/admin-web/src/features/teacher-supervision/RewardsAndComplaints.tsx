@@ -63,7 +63,7 @@ export function RewardsSection({
       ) : (
         <QueryBoundary isLoading={list.isLoading} error={null} onRetry={() => void list.refetch()}>
           {rows.length === 0 ? (
-            <EmptyState title={tx(H.empty)} />
+            <EmptyState title={tx(H.emptyRewards)} />
           ) : (
             <div className="table-wrap">
               <table className="table">
@@ -84,7 +84,7 @@ export function RewardsSection({
                       </td>
                       <td dir="auto">{r.reason}</td>
                       {canViewAmounts && (
-                        <td>{r.amount ? money(r.amount.amount, r.amount.currency) : <span className="th-muted">{tx(H.awaitingAmount)}</span>}</td>
+                        <td className="th-money">{r.amount ? money(r.amount.amount, r.amount.currency) : <span className="th-muted">{tx(H.awaitingAmount)}</span>}</td>
                       )}
                       <td>{dateTime(r.recordedAt)}</td>
                       <td dir="auto">{r.recordedBy.name}</td>
@@ -206,11 +206,11 @@ function DeductionDefaults() {
     defaults.data?.defaults.find((d) => d.kind === kind && d.currency === currency) ?? null
 
   return (
-    <section className="card panel th-defaults" aria-labelledby="th-defaults">
-      <h2 id="th-defaults" className="th-subtitle">
+    <section className="th-defaults" aria-labelledby="th-defaults">
+      <h2 id="th-defaults" className="section-label th-subtitle">
         {tx(H.defaultsTitle)}
       </h2>
-      <p className="field__hint">{tx(H.defaultsHint)}</p>
+      <p className="th-rule">{tx(H.defaultsHint)}</p>
       {currencies.length === 0 && <p className="th-muted">{tx(H.noCurrencies)}</p>}
       {currencies.length > 0 && (
         <div className="table-wrap">
@@ -340,7 +340,7 @@ export function ComplaintsSection({ canDecide = true, requireAbout = false }: { 
       ) : (
         <QueryBoundary isLoading={list.isLoading} error={null} onRetry={() => void list.refetch()}>
           {rows.length === 0 ? (
-            <EmptyState title={tx(H.empty)} />
+            <EmptyState title={tx(H.emptyComplaints)} />
           ) : (
             <ul className="tf-entries th-complaints">
               {rows.map((c) => (

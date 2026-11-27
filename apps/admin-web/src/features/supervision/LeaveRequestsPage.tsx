@@ -116,8 +116,8 @@ export function LeaveRequestsList({ basePath }: { basePath: string }) {
                                 </span>
                               )}
                               {r.state === 'requested' && (r.unpaidDays ?? 0) > 0 && (
-                                <span className="sv-muted" role="note">
-                                  ⚠️ {tx(S.willBeUnpaid, { n: number(r.unpaidDays as number) })}
+                                <span className="sv-warn" role="note">
+                                  {tx(S.willBeUnpaid, { n: number(r.unpaidDays as number) })}
                                 </span>
                               )}
                             </div>

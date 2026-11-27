@@ -30,8 +30,8 @@ export function TeacherBoardsPage({ basePath }: { basePath: string }) {
   return (
     <div className="page">
       <div className="page__inner">
-        <PageHeader title={tx(B.title)} subtitle={tx(B.subtitle)} />
         <TeachersTabs basePath={basePath} />
+        <PageHeader title={tx(B.title)} subtitle={tx(B.subtitle)} />
         <div className="tb-picker field">
           <label className="field__label" htmlFor="tb-teacher">
             {tx(B.teacher)}
@@ -52,7 +52,7 @@ export function TeacherBoardsPage({ basePath }: { basePath: string }) {
           </SearchableSelect>
         </div>
         {!teacherId ? (
-          <EmptyState title={tx(B.chooseTeacher)} hint={tx(B.chooseTeacherHint)} />
+          <p className="tb-hint">{tx(B.chooseTeacherHint)}</p>
         ) : forbidden ? (
           <EmptyState title={tx(B.notYours)} hint={tx(B.notYoursHint)} />
         ) : (
@@ -70,9 +70,8 @@ export function TeacherBoardsPage({ basePath }: { basePath: string }) {
                   <Link className="tb-row__title" to={`${basePath}/boards/${encodeURIComponent(b.id)}`}>
                     {b.title}
                   </Link>
-                  <span className="tb-row__meta">
-                    {tx(B.pages, { n: b.pageCount })} · {tx(B.updated, { date: date(b.updatedAt) })}
-                  </span>
+                  <span className="tb-row__meta">{tx(B.pages, { n: b.pageCount })}</span>
+                  <span className="tb-row__meta">{tx(B.updated, { date: date(b.updatedAt) })}</span>
                   {b.state === 'retained' && b.retainedUntil && (
                     <Badge tone="warn" dot>
                       {tx(B.kept, { date: date(b.retainedUntil) })}

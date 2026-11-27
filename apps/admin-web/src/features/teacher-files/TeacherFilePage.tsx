@@ -19,6 +19,8 @@ import { EmploymentSection, FinancialSummarySection, HistorySection, usePayroll 
 import { MonthlyKpis, TeacherScheduleSection, currentMonth, teacherAreaLinks, type TeacherWorkLinks } from './TeacherWork'
 import { ShiftSection } from '@/features/schedule/ShiftSection'
 import './teacher-files.css'
+import { MonthPicker } from '@/features/teachers/MonthPicker'
+import { Icon } from '@/shared/components/Icon'
 import { studentPath } from '@/features/profiles/api'
 import { OpenSupervisionButton, TeacherLeaveSection } from '@/features/supervision/TeacherLeaveSection'
 import { OpenCaseButton } from '@/features/cases/OpenCaseDialog'
@@ -45,7 +47,10 @@ export function TeacherFilePage({ basePath, eyebrow }: { basePath: string; eyebr
     <div className="page">
       <div className="page__inner">
         <p className="tf-back">
-          <Link to={basePath}>{tx(T.back)}</Link>
+          <Link to={basePath}>
+            <Icon name="arrowBack" size={16} />
+            {tx(T.back)}
+          </Link>
         </p>
         {isTeacherFileRefusal(file.error) ? (
           <Refusal error={file.error} />
@@ -124,10 +129,14 @@ function FileSections({
   // RQA-F1: one month for the monthly figures and the lesson reports they count.
   const [month, setMonth] = useState(currentMonth)
   return (
-    <>
-      <SetupChecklist file={file} />
-      <Personal file={file} onEdit={onEdit} />
-      <EmploymentSection file={file} payroll={payroll} onEdit={onEdit} />
+    <div className="tf-file">
+      {/* Who the teacher is, beside the work: the record a manager reads first. */}
+      <div className="tf-file__side">
+        <SetupChecklist file={file} />
+        <Personal file={file} onEdit={onEdit} />
+        <EmploymentSection file={file} payroll={payroll} onEdit={onEdit} />
+      </div>
+      <div className="tf-file__main">
       <Students file={file} />
       {/* PD-38: category and shift, effective-dated. */}
       <ShiftSection teacherId={file.teacher.id} />
@@ -149,8 +158,9 @@ function FileSections({
       <LifecycleHistory teacherId={file.teacher.id} />
       {/* PD-11's timeline: every record about the teacher in one line, plus notes and the bonus ticket. */}
       <SupervisionTimeline teacherId={file.teacher.id} canWrite={file.access.canWriteSupervision} />
+      </div>
       {payroll.dialogs}
-    </>
+    </div>
   )
 }
 
@@ -168,7 +178,7 @@ function Section({
   children: ReactNode
 }) {
   return (
-    <section className="card panel tf-section" aria-labelledby={id}>
+    <section className="tf-section" aria-labelledby={id}>
       <div className="tf-section__head">
         <h2 id={id} className="tf-section__title">
           {title}
@@ -415,17 +425,7 @@ function Monthly({
       id="tf-monthly"
       title={tx(T.monthly)}
       action={
-        <label className="tf-month">
-          <span className="field__label">{tx(T.month)}</span>
-          <input
-            className="input"
-            type="month"
-            value={month}
-            max={currentMonth()}
-            onChange={(e) => e.target.value && setMonth(e.target.value)}
-            aria-label={tx(T.month)}
-          />
-        </label>
+        <MonthPicker value={month} onChange={(next) => next <= currentMonth() && setMonth(next)} label={tx(T.month)} showLabel={false} />
       }
     >
       <MonthlyKpis teacherId={file.teacher.id} month={month} links={links} />

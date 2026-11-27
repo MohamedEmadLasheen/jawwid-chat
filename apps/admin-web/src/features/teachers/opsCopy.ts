@@ -16,8 +16,8 @@ export const O = {
   // Needs action
   needsTitle: { en: 'Needs action', ar: 'بحاجة إلى إجراء' },
   needsSubtitle: {
-    en: 'What the Teachers department owes a decision on today. Each action is checked by the server and recorded.',
-    ar: 'ما ينتظر قرارًا من قسم المعلمين اليوم. يتحقق الخادم من كل إجراء ويسجّله.',
+    en: 'Waiting on a decision today. The server checks and records each action.',
+    ar: 'بانتظار قرار اليوم. يتحقق الخادم من كل إجراء ويسجّله.',
   },
   allClear: { en: 'Nothing is waiting. Every lesson is closed and every request answered.', ar: 'لا شيء ينتظر. كل الحصص مغلقة وكل الطلبات مُجاب عنها.' },
   overdue: { en: 'Reports overdue', ar: 'تقارير متأخرة' },
@@ -61,11 +61,12 @@ export const O = {
   // Schedules
   schedulesTitle: { en: 'Schedules', ar: 'الجداول' },
   schedulesSubtitle: {
-    en: 'Working hours, days off and regular lesson times. Lessons are created from regular times four weeks ahead.',
-    ar: 'ساعات العمل والإجازات والمواعيد الثابتة. تُنشأ الحصص من المواعيد الثابتة قبل أربعة أسابيع.',
+    en: 'Lessons are created from regular times four weeks ahead.',
+    ar: 'تُنشأ الحصص من المواعيد الثابتة قبل أربعة أسابيع.',
   },
   chooseTeacher: { en: 'Teacher', ar: 'المعلم' },
   pickTeacher: { en: 'Choose a teacher', ar: 'اختر معلمًا' },
+  pickTeacherFirst: { en: 'Choose a teacher to see their working hours and students.', ar: 'اختر معلمًا لعرض ساعات عمله وطلابه.' },
   workingHours: { en: 'Working hours', ar: 'ساعات العمل' },
   timezone: { en: 'Time zone', ar: 'المنطقة الزمنية' },
   addWindow: { en: 'Add hours', ar: 'إضافة ساعات' },
@@ -102,8 +103,8 @@ export const O = {
   // Students
   studentsTitle: { en: 'Paused and stopped students', ar: 'الطلاب المتوقفون' },
   studentsSubtitle: {
-    en: 'Paused students come back on their return date by themselves; the family is told two days before. The package is held in Core.',
-    ar: 'يعود الطلاب المتوقفون مؤقتًا في تاريخ عودتهم تلقائيًا، وتُبلّغ الأسرة قبلها بيومين. تُحفظ الباقة في النظام الأساسي.',
+    en: 'A pause ends by itself on its return date; the family is told two days before.',
+    ar: 'ينتهي الإيقاف المؤقت تلقائيًا في تاريخ العودة، وتُبلّغ الأسرة قبله بيومين.',
   },
   pausedList: { en: 'Paused', ar: 'متوقفون مؤقتًا' },
   stoppedList: { en: 'Stopped', ar: 'متوقفون نهائيًا' },
@@ -112,6 +113,8 @@ export const O = {
   package: { en: 'Package left', ar: 'المتبقي من الباقة' },
   packageUnknown: { en: 'Kept in Core', ar: 'في النظام الأساسي' },
   noneList: { en: 'Nobody here.', ar: 'لا أحد هنا.' },
+  nonePaused: { en: 'No student is paused. A pause appears here with its return date.', ar: 'لا طالب موقوف مؤقتًا. يظهر الإيقاف هنا مع تاريخ العودة.' },
+  noneStopped: { en: 'No student has stopped. A stop appears here with its reason.', ar: 'لا طالب متوقف نهائيًا. يظهر التوقف هنا مع سببه.' },
 
   // PD-31: weekly times
   weeklyTitle: { en: 'Weekly times — {name}', ar: 'المواعيد الأسبوعية — {name}' },

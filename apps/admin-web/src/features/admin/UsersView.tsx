@@ -15,6 +15,7 @@ import { RefreshAction, matches, useEyebrow, useRoleLabel } from './common'
 import { ACCOUNT_STATUS, PLURAL, PRINCIPAL_KIND, PRINCIPAL_KIND_PLURAL, TEXT, listTime, useLabel, usePlural, useText } from './copy'
 import type { AdminSection } from './sections'
 import { SearchableSelect } from '@/shared/components/SearchableSelect'
+import './admin.css'
 
 type KindFilter = 'all' | AdminUser['principalKind']
 type StatusFilter = 'all' | 'active' | 'inactive'
@@ -114,14 +115,13 @@ export function UsersView({ section }: { section: AdminSection }) {
           onRetry={() => void query.refetch()}
           isEmpty={users.length === 0}
           emptyTitle={tx(TEXT.noUsers)}
-          emptyIcon="users"
         >
           {/* Real counts, not filters: the filters are below. */}
-          <dl className="summary-strip">
+          <dl className="summary-strip ledger adm-ledger">
             {summary.map((m) => (
-              <div className={`summary-strip__item summary-strip__item--${m.key}`} key={m.key}>
-                <dt>{m.label}</dt>
-                <dd>{number(m.value)}</dd>
+              <div className="ledger__cell" key={m.key}>
+                <dt className="ledger__label">{m.label}</dt>
+                <dd className="ledger__value">{number(m.value)}</dd>
               </div>
             ))}
           </dl>
@@ -166,7 +166,6 @@ export function UsersView({ section }: { section: AdminSection }) {
             <div className="table-wrap">
               <EmptyState
                 compact
-                icon="search"
                 title={tx(TEXT.noMatches)}
                 action={
                   filtered && (

@@ -237,6 +237,6 @@ describe('Students', () => {
     await waitFor(() => expect(fetchMock.mock.calls.some(([u, i]) => /\/suspensions\/s-1\/end$/.test(String(u)) && (i as RequestInit).method === 'POST')).toBe(true))
 
     await userEvent.click(screen.getByRole('tab', { name: 'Stopped' }))
-    expect(await screen.findByText('Nobody here.')).toBeInTheDocument()
+    expect(await screen.findByText('No student has stopped. A stop appears here with its reason.')).toBeInTheDocument()
   })
 })

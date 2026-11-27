@@ -18,14 +18,15 @@ import {
 } from './api'
 import { browserPlayer, type ClipPlayer } from './player'
 import { SearchableSelect } from '@/shared/components/SearchableSelect'
+import { Icon } from '@/shared/components/Icon'
 import './lesson-audio.css'
 
 /** PD-48 copy, Arabic and English side by side. */
 const C = {
   title: { en: 'Lesson audio', ar: 'تسجيلات الدروس' },
   subtitle: {
-    en: 'Computer-voice clips for the lessons. Listen to each one to the end next to its text. A clip plays to children only after two different reviewers approved it; one rejection is final.',
-    ar: 'تسجيلات بصوت حاسوبي للدروس. استمع إلى كل تسجيل حتى نهايته بجانب نصه. لا يُسمَع التسجيل للأطفال إلا بعد أن يعتمده مراجعان مختلفان، ورفضٌ واحد نهائي.',
+    en: 'A computer-voice clip plays to children only after two different reviewers approved it; one rejection is final.',
+    ar: 'لا يُسمَع التسجيل الحاسوبي للأطفال إلا بعد أن يعتمده مراجعان مختلفان، ورفضٌ واحد نهائي.',
   },
   lesson: { en: 'Lesson', ar: 'الدرس' },
   unit: { en: 'Unit', ar: 'الوحدة' },
@@ -48,6 +49,10 @@ const C = {
   approvals: { en: '{n} of {of} approvals', ar: '{n} من {of} اعتمادات' },
   attempt: { en: 'Attempt {n}', ar: 'المحاولة {n}' },
   noClip: { en: 'No clip yet.', ar: 'لا يوجد تسجيل بعد.' },
+  noUnits: { en: 'No clips to review yet. Each unit appears here once its clips are made.', ar: 'لا تسجيلات للمراجعة بعد. تظهر كل وحدة هنا عند صنع تسجيلاتها.' },
+  unitApproved: { en: '{n} of {of} play', ar: 'يُشغَّل {n} من {of}' },
+  unitWaiting: { en: '{n} waiting', ar: 'بانتظار: {n}' },
+  unitDecide: { en: '{n} to decide', ar: 'للقرار: {n}' },
   noAudio: { en: 'Decided: no audio. This word has no play button.', ar: 'تقرّر: بلا صوت. لا يظهر لهذه الكلمة زر تشغيل.' },
   needsDecision: { en: 'Three clips failed. Decide: no audio, or one more round.', ar: 'فشلت ثلاثة تسجيلات. قرّر: بلا صوت، أو جولة أخرى.' },
   decideNoAudio: { en: 'No audio', ar: 'بلا صوت' },
@@ -61,8 +66,8 @@ const STATUS: Record<StringStatus, { label: Pair; tone: Tone }> = {
   approved: { label: { en: 'Plays', ar: 'يُشغَّل' }, tone: 'ok' },
   pending: { label: { en: 'Waiting for review', ar: 'بانتظار المراجعة' }, tone: 'waiting' },
   needsDecision: { label: { en: 'Needs a decision', ar: 'يحتاج إلى قرار' }, tone: 'danger' },
-  noAudio: { label: { en: 'No audio', ar: 'بلا صوت' }, tone: 'internal' },
-  none: { label: { en: 'No clip', ar: 'بلا تسجيل' }, tone: 'internal' },
+  noAudio: { label: { en: 'No audio', ar: 'بلا صوت' }, tone: 'neutral' },
+  none: { label: { en: 'No clip', ar: 'بلا تسجيل' }, tone: 'neutral' },
 }
 
 const CATEGORY: Record<RejectCategory, Pair> = {
@@ -101,16 +106,31 @@ export function LessonAudioPage({ player: given }: { player?: ClipPlayer } = {})
   })
 
   return (
-    <div className="lesson-audio">
+    <div className="page lesson-audio">
+      <div className="page__inner">
       <PageHeader title={tx(C.title)} subtitle={tx(C.subtitle)} />
-      <QueryBoundary isLoading={access.isLoading || summary.isLoading} error={access.error ?? summary.error} isEmpty={units.length === 0} emptyTitle={tx(C.noClip)}>
+      <QueryBoundary isLoading={access.isLoading || summary.isLoading} error={access.error ?? summary.error} isEmpty={units.length === 0} emptyTitle={tx(C.noUnits)}>
         {summary.data && !summary.data.lessonApproved ? <p className="lesson-audio__note">{tx(C.pendingFile)}</p> : null}
+        {/* The units as a ruled index: how many of each unit's words play, and a mark where something waits. */}
         <nav className="lesson-audio__units" aria-label={tx(C.unit)}>
           {units.map((u) => (
-            <button key={u.unit} type="button" aria-pressed={u.unit === current} onClick={() => setUnit(u.unit)}>
-              {u.unit} · {u.approved}/{u.strings}
-              {u.pending ? <Badge tone="waiting">{u.pending}</Badge> : null}
-              {u.needsDecision ? <Badge tone="danger">{u.needsDecision}</Badge> : null}
+            <button
+              key={u.unit}
+              type="button"
+              className="lesson-audio__unit-tab"
+              aria-pressed={u.unit === current}
+              title={[tx(C.unitApproved, { n: u.approved, of: u.strings }), u.pending ? tx(C.unitWaiting, { n: u.pending }) : '', u.needsDecision ? tx(C.unitDecide, { n: u.needsDecision }) : ''].filter(Boolean).join(' · ')}
+              onClick={() => setUnit(u.unit)}
+            >
+              <span className="lesson-audio__unit-name">{u.unit}</span>
+              <span className="lesson-audio__count">
+                {u.approved}/{u.strings}
+              </span>
+              {u.needsDecision ? (
+                <span className="lesson-audio__mark lesson-audio__mark--decide">{tx(C.unitDecide, { n: u.needsDecision })}</span>
+              ) : u.pending ? (
+                <span className="lesson-audio__mark">{tx(C.unitWaiting, { n: u.pending })}</span>
+              ) : null}
             </button>
           ))}
         </nav>
@@ -125,6 +145,7 @@ export function LessonAudioPage({ player: given }: { player?: ClipPlayer } = {})
           />
         ) : null}
       </QueryBoundary>
+      </div>
     </div>
   )
 }
@@ -174,15 +195,18 @@ function Unit({ lesson, strings, required, canReview, player }: { lesson: string
         {playingAll ? (
           <button
             type="button"
+            className="btn btn--sm"
             onClick={() => {
               stopAll.current = true
               player.stop()
             }}
           >
+            <Icon name="stop" size={16} />
             {tx(C.stop)}
           </button>
         ) : (
-          <button type="button" onClick={playUnit}>
+          <button type="button" className="btn btn--sm" onClick={playUnit}>
+            <Icon name="play" size={16} />
             {tx(C.playUnit)}
           </button>
         )}
@@ -190,15 +214,18 @@ function Unit({ lesson, strings, required, canReview, player }: { lesson: string
       <ol className="lesson-audio__strings">
         {strings.map((s) => (
           <li key={s.id} className={s.clips.some((c) => c.clipId === playing) ? 'is-playing' : undefined}>
-            <div className="lesson-audio__text" lang="ar" dir="rtl">
-              {s.text}
+            <div className="lesson-audio__head">
+              <div className="lesson-audio__text" lang="ar" dir="rtl">
+                {s.text}
+              </div>
+              <div className="lesson-audio__meta">
+                <Badge tone={STATUS[s.status].tone} dot>{tx(STATUS[s.status].label)}</Badge>
+                <code className="ltr">{s.id}</code>
+              </div>
             </div>
-            <div className="lesson-audio__meta">
-              <code>{s.id}</code> <Badge tone={STATUS[s.status].tone}>{tx(STATUS[s.status].label)}</Badge>
-            </div>
-            {s.status === 'noAudio' ? <p>{tx(C.noAudio)}</p> : null}
+            {s.status === 'noAudio' ? <p className="lesson-audio__hint">{tx(C.noAudio)}</p> : null}
             {s.status === 'needsDecision' && canReview ? <Decision lesson={lesson} s={s} /> : null}
-            {s.clips.length === 0 && s.status === 'none' ? <p>{tx(C.noClip)}</p> : null}
+            {s.clips.length === 0 && s.status === 'none' ? <p className="lesson-audio__hint">{tx(C.noClip)}</p> : null}
             {s.clips.map((c) => (
               <Clip
                 key={c.clipId}
@@ -274,43 +301,46 @@ function Clip(props: {
     <div className={`lesson-audio__clip is-${c.state}`} data-testid={`clip-${c.clipId}`}>
       <div className="lesson-audio__row">
         {c.url ? (
-          <button type="button" onClick={onListen} disabled={playing}>
+          <button type="button" className="btn btn--sm lesson-audio__listen" onClick={onListen} disabled={playing}>
+            <Icon name="play" size={16} />
             {playing ? tx(C.playing) : tx(C.listen)}
           </button>
         ) : null}
-        <span>{tx(C.attempt, { n: c.attempt })}</span>
-        <span>{tx(C.approvals, { n: c.approvals.length, of: required })}</span>
-        <span className="lesson-audio__voice">
+        <span className="lesson-audio__fact">{tx(C.attempt, { n: c.attempt })}</span>
+        <span className="lesson-audio__fact">{tx(C.approvals, { n: c.approvals.length, of: required })}</span>
+        <span className="lesson-audio__voice ltr">
           {c.vendor} · {c.voice}
         </span>
-        {canReview && c.canReview ? (
-          <>
-            <button type="button" className="primary" disabled={!ready || approve.isPending} aria-describedby={heard ? undefined : hintId} onClick={() => approve.mutate()}>
-              {tx(C.approve)}
+        <span className="lesson-audio__decide">
+          {canReview && c.canReview ? (
+            <>
+              <button type="button" className="btn btn--sm btn--primary" disabled={!ready || approve.isPending} aria-describedby={heard ? undefined : hintId} onClick={() => approve.mutate()}>
+                {tx(C.approve)}
+              </button>
+              <button type="button" className="btn btn--sm" disabled={!ready} aria-describedby={heard ? undefined : hintId} onClick={() => setForm('reject')}>
+                {tx(C.reject)}
+              </button>
+            </>
+          ) : null}
+          {canReview && c.state === 'approved' ? (
+            <button type="button" className="btn btn--sm" disabled={!ready} aria-describedby={heard ? undefined : hintId} onClick={() => setForm('withdraw')}>
+              {tx(C.withdraw)}
             </button>
-            <button type="button" disabled={!ready} aria-describedby={heard ? undefined : hintId} onClick={() => setForm('reject')}>
-              {tx(C.reject)}
-            </button>
-          </>
-        ) : null}
-        {canReview && c.state === 'approved' ? (
-          <button type="button" disabled={!ready} aria-describedby={heard ? undefined : hintId} onClick={() => setForm('withdraw')}>
-            {tx(C.withdraw)}
-          </button>
-        ) : null}
+          ) : null}
+        </span>
       </div>
       {canReview && !heard && (c.canReview || c.state === 'approved') ? (
         <p id={hintId} className="lesson-audio__hint">
           {tx(C.approveHint)}
         </p>
       ) : null}
-      {mismatch ? <p role="alert">{tx(C.mismatch)}</p> : null}
-      {shownSha !== null && !textMatches ? <p role="alert">{tx(C.textMismatch)}</p> : null}
+      {mismatch ? <p className="lesson-audio__alert" role="alert">{tx(C.mismatch)}</p> : null}
+      {shownSha !== null && !textMatches ? <p className="lesson-audio__alert" role="alert">{tx(C.textMismatch)}</p> : null}
       {form ? (
         <div className="lesson-audio__form">
-          <label>
-            {tx(C.category)}
-            <SearchableSelect value={category} onValueChange={(v) => setCategory(v as RejectCategory | '')}>
+          <label className="field">
+            <span className="field__label">{tx(C.category)}</span>
+            <SearchableSelect className="input" value={category} onValueChange={(v) => setCategory(v as RejectCategory | '')}>
               <option value="" disabled>
                 {tx(C.chooseCategory)}
               </option>
@@ -321,21 +351,23 @@ function Clip(props: {
               ))}
             </SearchableSelect>
           </label>
-          <label>
-            {tx(C.reason)}
-            <textarea value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} />
+          <label className="field">
+            <span className="field__label">{tx(C.reason)}</span>
+            <textarea className="input" rows={2} dir="auto" value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} />
           </label>
-          <button type="button" disabled={!category || !reason.trim() || refuse.isPending} onClick={() => refuse.mutate()}>
-            {tx(C.confirm)}
-          </button>
-          <button type="button" onClick={() => setForm(null)}>
-            {tx(C.cancel)}
-          </button>
+          <div className="lesson-audio__row">
+            <button type="button" className="btn btn--sm btn--primary" disabled={!category || !reason.trim() || refuse.isPending} onClick={() => refuse.mutate()}>
+              {tx(C.confirm)}
+            </button>
+            <button type="button" className="btn btn--sm btn--ghost" onClick={() => setForm(null)}>
+              {tx(C.cancel)}
+            </button>
+          </div>
         </div>
       ) : null}
-      {error ? <p role="alert">{errorText(error)}</p> : null}
+      {error ? <p className="lesson-audio__alert" role="alert">{errorText(error)}</p> : null}
       {c.approvals.length || c.rejections.length ? (
-        <details>
+        <details className="lesson-audio__history">
           <summary>{tx(C.history)}</summary>
           <ul>
             {c.approvals.map((a, i) => (
@@ -349,7 +381,7 @@ function Clip(props: {
               </li>
             ))}
             <li>
-              <code>{c.audioSha256.slice(0, 12)}</code>
+              <code className="ltr">{c.audioSha256.slice(0, 12)}</code>
             </li>
           </ul>
         </details>
@@ -368,18 +400,20 @@ function Decision({ lesson, s }: { lesson: string; s: StringView }) {
   })
   return (
     <div className="lesson-audio__form">
-      <p>{tx(C.needsDecision)}</p>
-      <label>
-        {tx(C.reason)}
-        <textarea value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} />
+      <p className="lesson-audio__alert">{tx(C.needsDecision)}</p>
+      <label className="field">
+        <span className="field__label">{tx(C.reason)}</span>
+        <textarea className="input" rows={2} dir="auto" value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} />
       </label>
-      <button type="button" disabled={!reason.trim() || decide.isPending} onClick={() => decide.mutate('no_audio')}>
-        {tx(C.decideNoAudio)}
-      </button>
-      <button type="button" disabled={!reason.trim() || decide.isPending} onClick={() => decide.mutate('one_more_round')}>
-        {tx(C.decideAgain)}
-      </button>
-      {decide.error ? <p role="alert">{errorText(decide.error)}</p> : null}
+      <div className="lesson-audio__row">
+        <button type="button" className="btn btn--sm" disabled={!reason.trim() || decide.isPending} onClick={() => decide.mutate('no_audio')}>
+          {tx(C.decideNoAudio)}
+        </button>
+        <button type="button" className="btn btn--sm" disabled={!reason.trim() || decide.isPending} onClick={() => decide.mutate('one_more_round')}>
+          {tx(C.decideAgain)}
+        </button>
+      </div>
+      {decide.error ? <p className="lesson-audio__alert" role="alert">{errorText(decide.error)}</p> : null}
     </div>
   )
 }

@@ -2,6 +2,7 @@ import { useId } from 'react'
 import { Link } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Badge } from '@/shared/components/Badge'
+import { Icon } from '@/shared/components/Icon'
 import { SearchableSelect } from '@/shared/components/SearchableSelect'
 import { DECISION_LABEL } from '@/features/discipline/copy'
 import type { Decision } from '@/features/discipline/api'
@@ -48,17 +49,27 @@ export function TeacherStrip({ teacherId, basePath }: { teacherId: string | null
   const step = ladder ? DECISION_LABEL[ladder.nextStep as Decision] : null
   return (
     <section className="tr-strip" aria-label={s.teacher.name}>
-      <strong dir="auto">{s.teacher.name}</strong>
+      <strong className="tr-strip__name" dir="auto">{s.teacher.name}</strong>
       {ladder && (s.away ? <AwayBadge away={s.away} /> : <Badge tone="ok">{tx(R.available)}</Badge>)}
       {ladder && <span>{tx(R.ladder, { n: number(ladder.counted), step: step ? tx(step) : ladder.nextStep })}</span>}
       {s.openComplaints !== null && <span>{tx(R.openComplaints, { n: number(s.openComplaints) })}</span>}
       {s.grants !== null && <span>{tx(R.yearGrants, { n: number(s.grants), year: s.year })}</span>}
       {s.testimonials !== null && <span>{tx(R.yearTestimonials, { n: number(s.testimonials), year: s.year })}</span>}
       {s.opensFile && (
-        <Link className="btn btn--sm btn--ghost" to={teacherFilePath(basePath, s.teacher.id)}>
+        <Link className="tr-strip__file" to={teacherFilePath(basePath, s.teacher.id)}>
           {tx(R.openFile)}
         </Link>
       )}
     </section>
+  )
+}
+
+/** Not this reader's page: one calm line and a lock, never a red block. */
+export function Denied({ text }: { text: string }) {
+  return (
+    <p className="tr-denied">
+      <Icon name="lock" size={18} />
+      <span>{text}</span>
+    </p>
   )
 }

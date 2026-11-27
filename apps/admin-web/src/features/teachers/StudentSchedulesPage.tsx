@@ -12,8 +12,8 @@ import './teachers.css'
 const COPY = {
   title: { en: 'Student schedules', ar: 'جداول الطلاب' },
   subtitle: {
-    en: 'Find any student and manage their weekly lesson times, one-off lessons, teacher, pause or stop. It is the same desk as Teachers’ schedules, and the same academy calendar shows the result.',
-    ar: 'ابحث عن أي طالب وأدر مواعيد دروسه الأسبوعية ودروسه المنفردة ومعلمه وإيقافه المؤقت أو النهائي. هي نفس شاشة جداول المعلمين، ويعرض تقويم الأكاديمية النتيجة نفسها.',
+    en: 'Weekly times, one-off lessons, teacher, pause or stop, for any student.',
+    ar: 'المواعيد الأسبوعية والحصص المنفردة والمعلم والإيقاف، لأي طالب.',
   },
   chooseStudent: { en: 'Student', ar: 'الطالب' },
   allStudents: { en: 'All students', ar: 'كل الطلاب' },

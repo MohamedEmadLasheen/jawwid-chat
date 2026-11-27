@@ -1,13 +1,13 @@
 import { useSearchParams } from 'react-router-dom'
 import { FilterChips } from '@/shared/components/FilterChips'
 import { PageHeader } from '@/shared/components/PageHeader'
-import { EmptyState, LoadingState } from '@/shared/components/States'
+import { LoadingState } from '@/shared/components/States'
 import { RewardsSection } from '@/features/teacher-supervision/RewardsAndComplaints'
 import '@/features/teacher-supervision/teacher-supervision.css'
 import { R, useCopy } from './copy'
 import { useTeacherRecordsAccess } from './hooks'
 import { TestimonialsSection } from './Testimonials'
-import { TeacherPicker, TeacherStrip } from './TeacherStrip'
+import { Denied, TeacherPicker, TeacherStrip } from './TeacherStrip'
 import './teacher-records.css'
 
 export type GrantsSection = 'grants' | 'testimonials'
@@ -47,7 +47,7 @@ export function TeacherGrantsPage({ basePath, eyebrow }: { basePath: string; eye
       <div className="page">
         <div className="page__inner">
           <PageHeader eyebrow={eyebrow} title={tx(R.grantsTitle)} />
-          <EmptyState icon="lock" title={tx(R.denied)} />
+          <Denied text={tx(R.denied)} />
         </div>
       </div>
     )

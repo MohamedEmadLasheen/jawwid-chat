@@ -53,7 +53,7 @@ export function SupervisionTimeline({ teacherId, canWrite }: { teacherId: string
   const count = (f: Exclude<Filter, 'all'>) => items.filter((i) => KIND[i.type]?.filter === f).length
 
   return (
-    <section className="card panel tf-section" aria-labelledby="tf-timeline">
+    <section className="tf-section" aria-labelledby="tf-timeline">
       <div className="tf-section__head">
         <h2 id="tf-timeline" className="tf-section__title">
           {tx(T.timeline)}

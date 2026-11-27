@@ -40,9 +40,9 @@ export function ReportDetail({ id, canAct, onClose, onGone }: { id: string; canA
       ) : (
         <QueryBoundary isLoading={q.isLoading} error={q.error} onRetry={() => void q.refetch()}>
           {r && (
-            <div>
-              <p className="field__hint">{tx(MOD.detailAudited)}</p>
-              <dl className="sa-fixed">
+            <div className="mod-detail">
+              <p className="mod-note">{tx(MOD.detailAudited)}</p>
+              <dl className="sa-fixed mod-facts">
                 <dt>{tx(MOD.subject)}</dt>
                 <dd>
                   <SubjectView subject={r.subject} targetKind={r.targetKind} testId="report-subject" />

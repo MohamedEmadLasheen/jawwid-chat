@@ -9,6 +9,8 @@ import type { Bucket, CategoryStats, TeacherDetail, TeacherRow } from './api'
 import { CATEGORY_LABEL, CATEGORY_TONE, T, type Pair } from './copy'
 import { useTeacherDetail, useTeacherStats } from './hooks'
 import { TeachersAreaTabs } from './area'
+import { MonthPicker } from './MonthPicker'
+import { Icon } from '@/shared/components/Icon'
 import { MonthSummaryPanel, S } from '@/features/journey/MonthSummary'
 import { useJourneyCopy } from '@/features/journey/copy'
 import './teachers.css'
@@ -39,18 +41,7 @@ export function TeacherStatsPage({ inTeachersArea = false }: { inTeachersArea?: 
     [params, setParams],
   )
 
-  const monthPicker = (
-    <label className="ts-month">
-      <span className="field__label">{tx(T.month)}</span>
-      <input
-        className="input"
-        type="month"
-        value={month}
-        onChange={(e) => e.target.value && set({ month: e.target.value })}
-        aria-label={tx(T.month)}
-      />
-    </label>
-  )
+  const monthPicker = <MonthPicker value={month} onChange={(next) => set({ month: next })} label={tx(T.month)} showLabel={false} />
 
   return (
     <div className="page">
@@ -94,9 +85,8 @@ function TeacherList({ month, onOpen }: { month: string; onOpen: (id: string) =>
       {(q.data?.teachers.length ?? 0) === 0 ? (
         <EmptyState title={tx(T.noTeachers)} />
       ) : (
-        <div className="card card--flush">
-          <div className="table-wrap">
-            <table className="table ts-table">
+        <div className="table-wrap ts-table-wrap">
+          <table className="table ts-table">
               <thead>
                 <tr>
                   <th scope="col">{tx(T.colTeacher)}</th>
@@ -123,25 +113,24 @@ function TeacherList({ month, onOpen }: { month: string; onOpen: (id: string) =>
                       </button>
                       {!r.teacher.isActive && <span className="ts-muted"> · {tx(T.inactive)}</span>}
                     </th>
-                    <td className="num">{fmt.lessonsHours(r.held)}</td>
-                    <td className="num">{fmt.lessonsHours(r.scheduled)}</td>
-                    <td className="num">{fmt.number(r.notHeld.lessons)}</td>
-                    <td className={`num${r.unreported.lessons > 0 ? ' ts-attention' : ''}`}>{fmt.number(r.unreported.lessons)}</td>
-                    <td className="num">{fmt.percent(r.attendanceRate)}</td>
-                    <td className="num">{fmt.percent(r.reportsOnTimeRate)}</td>
-                    <td className="num">{r.summary ? `${fmt.number(r.summary.makeups.completed)} / ${fmt.number(r.summary.makeups.total)}` : '—'}</td>
-                    <td className="num">
+                    <td className={quiet(r.held.lessons)}>{fmt.lessonsHours(r.held)}</td>
+                    <td className={quiet(r.scheduled.lessons)}>{fmt.lessonsHours(r.scheduled)}</td>
+                    <td className={quiet(r.notHeld.lessons)}>{fmt.number(r.notHeld.lessons)}</td>
+                    <td className={r.unreported.lessons > 0 ? 'num ts-attention' : quiet(0)}>{fmt.number(r.unreported.lessons)}</td>
+                    <td className={quiet(r.attendanceRate)}>{fmt.percent(r.attendanceRate)}</td>
+                    <td className={quiet(r.reportsOnTimeRate)}>{fmt.percent(r.reportsOnTimeRate)}</td>
+                    <td className={quiet(r.summary?.makeups.total)}>{r.summary ? `${fmt.number(r.summary.makeups.completed)} / ${fmt.number(r.summary.makeups.total)}` : '—'}</td>
+                    <td className={quiet(r.summary ? r.summary.studentExcuses.beforeStart + r.summary.studentExcuses.afterStart : undefined)}>
                       {r.summary ? `${fmt.number(r.summary.studentExcuses.beforeStart)} + ${fmt.number(r.summary.studentExcuses.afterStart)}` : '—'}
                     </td>
-                    <td className="num">{r.summary ? fmt.number(r.summary.teacherExcuses) : '—'}</td>
-                    <td className="num">{fmt.number(r.trials?.total ?? 0)}</td>
-                    <td className="num">{fmt.number(r.trials?.subscribed ?? 0)}</td>
-                    <td className="num">{r.movesByTeacher === undefined ? '—' : fmt.number(r.movesByTeacher)}</td>
+                    <td className={quiet(r.summary?.teacherExcuses)}>{r.summary ? fmt.number(r.summary.teacherExcuses) : '—'}</td>
+                    <td className={quiet(r.trials?.total ?? 0)}>{fmt.number(r.trials?.total ?? 0)}</td>
+                    <td className={quiet(r.trials?.subscribed ?? 0)}>{fmt.number(r.trials?.subscribed ?? 0)}</td>
+                    <td className={quiet(r.movesByTeacher)}>{r.movesByTeacher === undefined ? '—' : fmt.number(r.movesByTeacher)}</td>
                   </tr>
                 ))}
               </tbody>
-            </table>
-          </div>
+          </table>
         </div>
       )}
     </QueryBoundary>
@@ -170,19 +159,11 @@ function TeacherDetailView({
 
   return (
     <>
-      <button type="button" className="btn btn--ghost ts-back" onClick={onBack}>
+      <button type="button" className="ts-back" onClick={onBack}>
+        <Icon name="arrowBack" size={16} />
         {tx(T.back)}
       </button>
-      <PageHeader
-        title={d?.teacher.name ?? tx(T.title)}
-        subtitle={tx(T.detailSubtitle, { month: fmt.month(month) })}
-        actions={
-          <div className="ts-head-actions">
-            {d && <TotalBox detail={d} />}
-            {monthPicker}
-          </div>
-        }
-      />
+      <PageHeader title={d?.teacher.name ?? tx(T.title)} subtitle={tx(T.detailSubtitle, { month: fmt.month(month) })} actions={monthPicker} />
       <QueryBoundary isLoading={q.isLoading} error={q.error} onRetry={() => void q.refetch()}>
         {d && <DetailBody detail={d} />}
       </QueryBoundary>
@@ -190,13 +171,33 @@ function TeacherDetailView({
   )
 }
 
-function TotalBox({ detail }: { detail: TeacherDetail }) {
+/** The month in one ruled line: what counted, and the three rates the server derives from it. */
+function MonthLedger({ detail: d }: { detail: TeacherDetail }) {
   const tx = useCopy()
   const fmt = useFormat()
+  const held = d.categories.find((c) => c.key === 'held')
   return (
-    <div className="ts-total" aria-label={tx(T.total)}>
-      <span className="ts-total__label">{tx(T.total)}</span>
-      <span className="ts-total__value">{fmt.number(detail.totals.counted.lessons)}</span>
+    <div className="ledger ts-ledger">
+      <div className="ledger__cell">
+        <span className="ledger__label">{tx(T.totalCounted)}</span>
+        <span className="ledger__value">{fmt.number(d.totals.counted.lessons)}</span>
+        {held && <span className="ledger__note">{tx(T.heldOf, { n: fmt.number(held.lessons) })}</span>}
+      </div>
+      <div className="ledger__cell">
+        <span className="ledger__label">{tx(T.attendance)}</span>
+        <span className="ledger__value">{fmt.percent(d.rates.attendance)}</span>
+        <span className="ledger__note">{tx(T.attendanceHint)}</span>
+      </div>
+      <div className="ledger__cell">
+        <span className="ledger__label">{tx(T.completion)}</span>
+        <span className="ledger__value">{fmt.percent(d.rates.completion)}</span>
+        <span className="ledger__note">{tx(T.completionHint)}</span>
+      </div>
+      <div className="ledger__cell">
+        <span className="ledger__label">{tx(T.reliability)}</span>
+        <span className="ledger__value">{fmt.percent(d.rates.teacherReliability)}</span>
+        <span className="ledger__note">{tx(T.reliabilityHint)}</span>
+      </div>
     </div>
   )
 }
@@ -210,19 +211,16 @@ function DetailBody({ detail: d }: { detail: TeacherDetail }) {
 
   return (
     <>
+      <MonthLedger detail={d} />
       {d.summary && <MonthSummaryPanel summary={d.summary} />}
-      <section className="ts-grid" aria-label={tx(T.title)}>
+      <h2 className="section-label ts-label">{tx(T.byOutcome)}</h2>
+      <section className="ts-cats" aria-label={tx(T.title)}>
         {cards.map((c) => (
           <CategoryCard key={c.key} category={c} />
         ))}
       </section>
 
-      <section className="ts-grid ts-grid--facts">
-        <Fact title={tx(T.rates)}>
-          <Metric label={tx(T.attendance)} value={fmt.percent(d.rates.attendance)} hint={tx(T.attendanceHint)} />
-          <Metric label={tx(T.completion)} value={fmt.percent(d.rates.completion)} hint={tx(T.completionHint)} />
-          <Metric label={tx(T.reliability)} value={fmt.percent(d.rates.teacherReliability)} hint={tx(T.reliabilityHint)} />
-        </Fact>
+      <section className="ts-facts">
         <Fact title={tx(T.reports)}>
           <Metric label={tx(T.onTime)} value={`${fmt.percent(d.reports.onTimeRate)} · ${fmt.number(d.reports.onTime)}/${fmt.number(d.reports.reports)}`} />
           <Metric label={tx(T.medianDelay)} value={fmt.duration(d.reports.medianDelayMinutes)} />
@@ -233,7 +231,7 @@ function DetailBody({ detail: d }: { detail: TeacherDetail }) {
         </Fact>
         <Fact title={tx(T.workload)}>
           {d.workload.availableMinutes === null ? (
-            <p className="ts-muted">{tx(T.noAvailability)}</p>
+            <p className="ts-muted ts-fact__none">{tx(T.noAvailability)}</p>
           ) : (
             <>
               <Metric label={tx(T.available)} value={fmt.hours(d.workload.availableMinutes)} />
@@ -283,33 +281,40 @@ function DetailBody({ detail: d }: { detail: TeacherDetail }) {
   )
 }
 
+/** One tick per lesson, grouped by lesson length. Past this many, a group is drawn at this length. */
+const TICK_LIMIT = 160
+
 function CategoryCard({ category: c }: { category: CategoryStats }) {
   const tx = useCopy()
   const fmt = useFormat()
   const label = tx(CATEGORY_LABEL[c.key])
   return (
-    <article className={`card ts-card ts-card--${CATEGORY_TONE[c.key]}`} aria-label={label}>
-      <header className="ts-card__head">
-        <h2 className="ts-card__title">{label}</h2>
-        <span className="ts-card__count">{fmt.number(c.lessons)}</span>
+    <article className={`ts-cat ts-cat--${CATEGORY_TONE[c.key]}${c.lessons === 0 ? ' ts-cat--none' : ''}`} aria-label={label}>
+      <header className="ts-cat__head">
+        <h3 className="ts-cat__title">{label}</h3>
+        <span className="ts-cat__count">{fmt.number(c.lessons)}</span>
       </header>
-      <div className="ts-card__rule" />
       {c.byDuration.length === 0 ? (
-        <p className="ts-muted ts-card__empty">{tx(T.noData)}</p>
+        <p className="ts-muted ts-cat__empty">{tx(T.noData)}</p>
       ) : (
-        <ul className="ts-card__rows">
-          {c.byDuration.map((b) => (
-            <li key={b.durationMinutes} className="ts-card__row">
-              <span>{tx(T.minutesLong, { m: fmt.number(b.durationMinutes) })}</span>
-              <span className="ts-card__right">
+        <>
+          <div className="ts-ticks" aria-hidden="true">
+            {c.byDuration.map((b) => (
+              <span key={b.durationMinutes} className="ts-ticks__run" style={{ ['--n' as string]: Math.min(b.lessons, TICK_LIMIT) }} />
+            ))}
+          </div>
+          <ul className="ts-cat__rows">
+            {c.byDuration.map((b) => (
+              <li key={b.durationMinutes} className="ts-cat__row">
+                <span>{tx(T.minutesLong, { m: fmt.number(b.durationMinutes) })}</span>
                 <strong>{fmt.lessons(b.lessons)}</strong>
                 <span className="ts-muted">{tx(T.total)}: {fmt.hours(b.minutes)}</span>
-              </span>
-            </li>
-          ))}
-        </ul>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
-      <footer className="ts-card__foot">
+      <footer className="ts-cat__foot">
         <span>{tx(T.total)}</span>
         <strong>{fmt.lessonsHours(c)}</strong>
       </footer>
@@ -320,8 +325,8 @@ function CategoryCard({ category: c }: { category: CategoryStats }) {
 
 function Fact({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <article className="card ts-fact" aria-label={title}>
-      <h2 className="ts-card__title">{title}</h2>
+    <article className="ts-fact" aria-label={title}>
+      <h2 className="section-label ts-fact__title">{title}</h2>
       <dl className="ts-fact__list">{children}</dl>
     </article>
   )
@@ -382,6 +387,11 @@ function useFormat() {
       lessonsHours: (b: Bucket) => `${lessonsOf(b.lessons)} · ${hoursOf(b.minutes)}`,
     }
   }, [number, locale, tx])
+}
+
+/** A zero or a missing figure is set quietly, so the eye lands on what is there. */
+function quiet(value: number | null | undefined): string {
+  return value ? 'num' : 'num ts-zero'
 }
 
 function currentMonth(): string {

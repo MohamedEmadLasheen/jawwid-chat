@@ -14,8 +14,8 @@ export interface Pair {
 export const T = {
   title: { en: 'Teacher statistics', ar: 'إحصائيات المعلمين' },
   subtitle: {
-    en: 'Every number is counted by the server from the lessons themselves: nothing is typed in, and nothing can drift.',
-    ar: 'يحسب الخادم كل رقم من الحصص نفسها: لا شيء يُدخل يدويًا، ولا شيء ينحرف.',
+    en: 'Counted by the server from the lessons themselves. Nothing is typed in.',
+    ar: 'يحسبها الخادم من الحصص نفسها. لا شيء يُدخل يدويًا.',
   },
   month: { en: 'Month', ar: 'الشهر' },
   search: { en: 'Search a teacher', ar: 'ابحث عن معلم' },
@@ -31,6 +31,9 @@ export const T = {
   back: { en: 'All teachers', ar: 'كل المعلمين' },
   detailSubtitle: { en: 'Teaching statistics — {month}', ar: 'إحصائيات التدريس — {month}' },
   total: { en: 'Total', ar: 'الإجمالي' },
+  totalCounted: { en: 'Counted lessons', ar: 'الحصص المحتسبة' },
+  heldOf: { en: '{n} held', ar: 'المنعقدة: {n}' },
+  byOutcome: { en: 'By outcome and length', ar: 'حسب النتيجة والمدة' },
   minutesLong: { en: '{m} min', ar: '{m} دقيقة' },
   noData: { en: 'No lessons', ar: 'لا توجد حصص' },
   notCounted: { en: 'Shown for information; not counted for or against anyone.', ar: 'للاطلاع فقط؛ لا تُحتسب لأحد ولا عليه.' },
