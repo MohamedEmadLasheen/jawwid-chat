@@ -502,9 +502,9 @@ describe('the Student Profile', () => {
     const [monday, thursday] = within(screen.getByRole('region', { name: 'Class schedule' })).getAllByRole('listitem')
     expect(monday).toHaveTextContent(/^Monday\s*16:30\s*30 min$/)
     expect(thursday).toHaveTextContent(/^Thursday\s*17:00\s*45 min$/)
-    // The parents are the Family tab.
+    // The parents are the Family tab (and named on Overview, each a way into their file).
     await userEvent.click(screen.getByRole('tab', { name: 'Family' }))
-    expect(screen.getByRole('link', { name: 'Parent Alpha' })).toHaveAttribute('href', '/parents/p-1')
+    expect(within(screen.getByRole('region', { name: 'Parents' })).getByRole('link', { name: 'Parent Alpha' })).toHaveAttribute('href', '/parents/p-1')
   })
 
   it('the masthead carries the lessons and the next lesson only when the server sends them; the tabs follow', async () => {

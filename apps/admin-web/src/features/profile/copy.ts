@@ -66,7 +66,7 @@ export const T = {
     ar: 'أحدث نسخة محفوظة معروضة أدناه. تعديلاتك ما زالت في النموذج؛ الحفظ الآن يستبدل النسخة المحفوظة بها.',
   },
   editReason: { en: 'Reason for this change (optional, recorded in the audit log)', ar: 'سبب هذا التعديل (اختياري، يُسجَّل في سجل التدقيق)' },
-  editingFor: { en: 'You are editing {name}’s profile. This change is recorded with your name.', ar: 'أنت تعدّل ملف {name}. يُسجَّل هذا التعديل باسمك.' },
+  editingFor: { en: 'Changes to {name}’s profile are recorded with your name.', ar: 'تُسجَّل باسمك أي تعديلات على ملف {name}.' },
   lastUpdated: { en: 'Last updated {when} by {who}', ar: 'آخر تحديث {when} بواسطة {who}' },
 
   // Photo

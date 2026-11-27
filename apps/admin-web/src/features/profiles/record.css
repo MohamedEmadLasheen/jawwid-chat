@@ -48,10 +48,7 @@
 
 /* Highlights: small facts, not a scoreboard. The value carries the colour; the tile does not. */
 .figures.rec-hl { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); margin-block-start: var(--space-4); padding: 2px; }
-.rec-hl[data-count='5'] { grid-template-columns: repeat(5, minmax(0, 1fr)); }
-.rec-hl[data-count='4'] { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-.rec-hl[data-count='3'] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.rec-hl[data-count='2'] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+/* Six slots on every record, filled from the start, so walking from one record to the next keeps its rhythm. */
 .rec-hl .figure { flex: none; gap: 4px; padding: 10px 14px 11px; }
 .rec-hl .figure__label { display: flex; align-items: center; gap: 6px; font-size: var(--fs-sm); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rec-hl .figure__label .icon { flex: none; color: var(--ink-muted); }
@@ -64,10 +61,9 @@
 .rec-hl__item--waiting .figure__n { color: var(--waiting); }
 .rec-hl__late { color: var(--urgent); font-weight: 600; }
 .rec-hl__item--text .figure__n { font-family: var(--font); font-size: var(--fs-md); font-weight: 600; }
-.rec-hl__none { font-family: var(--font); font-size: var(--fs-sm); font-weight: 400; color: var(--ink-muted); }
+.rec-hl__none { font-family: var(--font); font-size: var(--fs-md); font-weight: 500; color: var(--ink-muted); }
 @media (max-width: 1199px) {
-  .figures.rec-hl, .rec-hl[data-count] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .rec-hl[data-count='4'], .rec-hl[data-count='2'] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .figures.rec-hl { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .rec-hl .figure + .figure::after { content: none; }
 }
 
@@ -105,7 +101,7 @@
   .rec-head__line { font-size: var(--fs-sm); }
   .rec-head__actions { inline-size: 100%; flex-wrap: nowrap; }
   .rec-head__actions > .btn--primary { flex: 1; }
-  .figures.rec-hl, .rec-hl[data-count] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .figures.rec-hl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .rec-hl .figure { padding: 9px 12px 10px; }
   .rec-callout { flex-wrap: wrap; align-items: flex-start; padding: 12px; }
   .rec-callout__text { flex-basis: calc(100% - 40px); font-size: var(--fs-sm); }

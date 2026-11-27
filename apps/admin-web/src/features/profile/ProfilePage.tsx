@@ -181,17 +181,19 @@ function StaffFile({ profile, refKey }: { profile: StaffProfile; refKey: string 
   const showEdit = mayEdit && !editing
   const showChat = !!conversation && callout?.uses !== 'chat'
   const sep = locale === 'ar' ? '، ' : ', '
-  const titled = !!profile.jobTitle
+  const roleLabel = tx(ROLE_LABEL[profile.role] ?? { en: profile.role, ar: profile.role })
   const line = (
     <>
-      {titled && (
+      {roleLabel}
+      {profile.jobTitle && (
         <>
-          <bdi>{profile.jobTitle}</bdi>
           {sep}
+          <bdi>{profile.jobTitle}</bdi>
         </>
       )}
+      {sep}
       {manager
-        ? fill(tx(titled ? T.lineReportsTo : T.lineReportsToFirst), {
+        ? fill(tx(T.lineReportsTo), {
             // Only whoever sees the whole organization can be sure to open a manager's profile.
             name: viewer.organizationOverview ? (
               <Link to={`/profile/${manager.staffId}`}>
@@ -203,7 +205,7 @@ function StaffFile({ profile, refKey }: { profile: StaffProfile; refKey: string 
               </strong>
             ),
           })
-        : tx(titled ? T.lineNoManager : T.lineNoManagerFirst)}
+        : tx(T.lineNoManager)}
       {sep}
       {tx(T.lineJoined, { date: longDay(profile.joinedAt, locale) })}
     </>
@@ -387,7 +389,7 @@ function useStaffHighlights(profile: StaffProfile, showReports: boolean, own: bo
       text: true,
     })
   }
-  out.push({ key: 'role', icon: 'briefcase', label: tx(T.hlRole), value: tx(ROLE_LABEL[profile.role] ?? { en: profile.role, ar: profile.role }), text: true })
+  // The role is the first words of the head's sentence; it is not said twice.
   if (showReports) {
     out.push({ key: 'reports', icon: 'teams', label: tx(WORKLOAD_LABEL.directReports), value: number(w.directReports), tone: w.directReports === 0 ? 'quiet' : undefined })
   }

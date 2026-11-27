@@ -129,10 +129,10 @@ export function StudentDirectoryPage() {
   const query: StudentQuery = { q: deferred, teacher, supervisor, status, page }
   const list = useStudentList(query)
   const data = list.data
-  // A student's file walks this page of the list in the order it is shown.
-  useRememberWalk('students', data?.students)
   const pages = data ? Math.max(1, Math.ceil(data.total / (data.limit || STUDENTS_PAGE_SIZE))) : 1
   const groups = byTeacher(data?.students ?? [], locale)
+  // A student's file walks this page of the list in the order it is shown: teacher by teacher.
+  useRememberWalk('students', data ? groups.flatMap((g) => g.rows) : undefined)
 
 
   return (

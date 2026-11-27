@@ -39,7 +39,7 @@
 .dir-row:hover > td { background: var(--surface-hover); }
 .dir-row:has(.dir-name:focus-visible) > td { background: var(--teal-tint); }
 
-.dir-cell-who { inline-size: 55%; }
+.dir-cell-who { inline-size: 60%; }
 .dir-who { display: flex; align-items: center; gap: 12px; min-inline-size: 0; }
 .dir-who__text { display: grid; gap: 1px; min-inline-size: 0; }
 .dir-name { justify-self: start; font-weight: 600; color: var(--ink); text-decoration: none; overflow-wrap: anywhere; }

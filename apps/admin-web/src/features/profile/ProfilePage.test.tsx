@@ -423,7 +423,7 @@ describe('a manager', () => {
     // The record's heading is the person; the masthead's tabs say it is a staff profile.
     expect(await screen.findByRole('heading', { level: 1, name: /^Admin A/ })).toBeInTheDocument()
     expect(screen.getByRole('tablist', { name: 'Staff profile' })).toBeInTheDocument()
-    expect(screen.getByText('You are editing Admin A’s profile. This change is recorded with your name.')).toBeInTheDocument()
+    expect(screen.getByText('Changes to Admin A’s profile are recorded with your name.')).toBeInTheDocument()
     expect(screen.queryByLabelText('Choose a photo')).not.toBeInTheDocument()
     // The photo and the reporting line live in the file's menu: with neither offered, there is no menu.
     expect(screen.queryByRole('button', { name: /More actions/ })).not.toBeInTheDocument()

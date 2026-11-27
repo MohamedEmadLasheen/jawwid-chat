@@ -14,7 +14,7 @@ import { PageHeader } from '@/shared/components/PageHeader'
 import { RowActions } from '@/shared/components/RowActions'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
 import { preparePhoto, type PreparedPhoto } from '@/features/profile/photo'
-import { INSTALMENTS, countWords, formatDay, formatMoney, inDaysWords, lateWords } from '@/features/instalments/copy'
+import { INSTALMENTS, countWords, formatMoney, inDaysWords, lateWords } from '@/features/instalments/copy'
 import type { Payment, PaymentRequest } from '@/features/payments/api'
 import { METHOD, PAY, RECEIPT_STATUS, owed } from '@/features/payments/copy'
 import { InvoiceDownloadButton, InvoiceStatusBadge, PaymentList, ReceiptFile, ReceiptStatusBadge, RequestList } from '@/features/payments/PaymentParts'
@@ -738,7 +738,7 @@ function AttentionSheet({ billing: query, onOpen }: { billing: ReturnType<typeof
                     tag={<Badge tone="warn">{tx(RECEIPT_STATUS.pending)}</Badge>}
                     sub={
                       <span>
-                        {tx(PAY.transferredOn)}: {formatDay(r.transferredOn, locale)}
+                        {tx(PAY.transferredOn)}: {longDay(r.transferredOn, locale)}
                       </span>
                     }
                     amount={<Amount minor={r.amountMinor} currency={r.currency} locale={locale} />}
@@ -1098,7 +1098,7 @@ function MoneyTab({ billing, onOpen }: { billing: FamilyBilling; onOpen: (d: Dia
                   sub={
                     <>
                       <span>
-                        {tx(PAY.transferredOn)}: {formatDay(r.transferredOn, locale)}
+                        {tx(PAY.transferredOn)}: {longDay(r.transferredOn, locale)}
                       </span>
                       <span>
                         {tx(PAY.uploadedAt)}: {dateTime(r.uploadedAt)}
@@ -1145,7 +1145,7 @@ function TotalsRows({ totals, locale }: { totals: FamilyBilling['totals'][number
             {r.label}
           </th>
           <td>
-            <bdi dir="ltr">{amountText(r.minor, totals.currency, locale)}</bdi>
+            <Amount minor={r.minor} currency={totals.currency} locale={locale} />
           </td>
         </tr>
       ))}
@@ -1215,11 +1215,11 @@ function TimelineRow({ item, canRecord, onOpen }: { item: TimelineInstalment; ca
         <span className="rec-attn__more">
           {item.payment.recordedBy
             ? tx(P.paidOnBy, {
-                date: formatDay(item.payment.paidOn, locale),
+                date: longDay(item.payment.paidOn, locale),
                 method: tx(METHOD[item.payment.method]),
                 name: item.payment.recordedBy.name,
               })
-            : tx(P.paidOnByStripe, { date: formatDay(item.payment.paidOn, locale), method: tx(METHOD[item.payment.method]) })}
+            : tx(P.paidOnByStripe, { date: longDay(item.payment.paidOn, locale), method: tx(METHOD[item.payment.method]) })}
           {item.payment.reference && (
             <>
               {locale === 'ar' ? '، ' : ', '}
