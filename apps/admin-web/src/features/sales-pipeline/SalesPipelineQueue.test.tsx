@@ -126,12 +126,13 @@ describe('the pipeline board and the lead beside it', () => {
     ])
     // The server's overdue follow-up is the panel's one problem mark.
     expect(within(panel).getByText('Follow-up due')).toBeInTheDocument()
-    // The foot states the one next act; the rest is behind "⋯", what ends the lead last.
+    // The callout states the one next act, from the lead's most urgent fact: its follow-up is overdue, so the
+    // contact comes before the hand-over; the rest is behind "⋯", what ends the lead last.
     const foot = panel.querySelector<HTMLElement>('.rq-foot')!
-    expect(within(foot).getAllByRole('button').map((b) => b.getAttribute('aria-label') ?? b.textContent)).toEqual(['Convert', 'More actions: Lead Alpha'])
-    expect(within(foot).getByRole('button', { name: 'Convert' })).toHaveClass('btn--primary')
+    expect(within(foot).getAllByRole('button').map((b) => b.getAttribute('aria-label') ?? b.textContent)).toEqual(['Mark contacted', 'More actions: Lead Alpha'])
+    expect(within(foot).getByRole('button', { name: 'Mark contacted' })).toHaveClass('btn--primary')
     await userEvent.click(within(foot).getByRole('button', { name: 'More actions: Lead Alpha' }))
-    expect(screen.getAllByRole('menuitem').map((i) => i.textContent)).toEqual(['Mark contacted', 'Mark lost'])
+    expect(screen.getAllByRole('menuitem').map((i) => i.textContent)).toEqual(['Convert', 'Mark lost'])
     await userEvent.keyboard('{Escape}')
     // Selecting the same row again, or a re-render of the page, is not another read.
     await userEvent.click(open)
@@ -148,7 +149,8 @@ describe('the pipeline board and the lead beside it', () => {
     expect(document.body.textContent).not.toContain(SECRET_PHONE)
     expect(screen.queryByRole('complementary', { name: 'Lead details' })).not.toBeInTheDocument()
 
-    await userEvent.click(screen.getByRole('button', { name: 'Open Lead Beta' }))
+    // A lost lead is a quiet card: it opens from its name.
+    await userEvent.click(screen.getByRole('button', { name: 'Lead Beta' }))
     const again = screen.getByRole('complementary', { name: 'Lead details' })
     await within(again).findByText('No contact details are on file.')
     // A lost lead got as far as its record shows, and ends in Lost with its reason.
@@ -186,8 +188,8 @@ describe('the pipeline board and the lead beside it', () => {
     await waitFor(() => expect(within(screen.getByRole('group', { name: 'Stage' })).getAllByRole('region')).toHaveLength(1))
     expect(await screen.findByRole('button', { name: 'Next' })).toBeEnabled()
     expect(screen.getByRole('button', { name: 'Previous' })).toBeDisabled()
-    // "Leads" in the masthead is the way back to every stage.
-    await userEvent.click(screen.getByRole('button', { name: /^Leads/ }))
+    // "All stages" beside the search is the way back to every stage.
+    await userEvent.click(screen.getByRole('button', { name: 'All stages' }))
     await waitFor(() => expect(within(screen.getByRole('group', { name: 'Stage' })).getAllByRole('region')).toHaveLength(6))
   })
 
@@ -211,21 +213,19 @@ describe('the pipeline board and the lead beside it', () => {
     expect(within(within(board).getByRole('region', { name: 'New lead' })).getByText('No lead at this stage.')).toBeInTheDocument()
   })
 
-  it('the masthead carries the totals and the follow-ups that are due, which filter across every stage', async () => {
-    renderWithProviders(<AppRoutes />, { staff: sales, route: '/sales/pipeline' })
+  it('the follow-ups that are due are a chip beside the search, counted in solid red, and filter across every stage', async () => {
+    const { container } = renderWithProviders(<AppRoutes />, { staff: sales, route: '/sales/pipeline' })
     await screen.findByText('Lead Alpha')
-    const all = screen.getByRole('button', { name: /^Leads/ })
-    expect(all).toHaveTextContent(/^Leads2$/)
-    expect(all).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByText('Being worked').closest('.figure')).toHaveTextContent(/^Being worked1$/)
+    // No strip of totals repeats the columns.
+    expect(container.querySelector('.figures')).toBeNull()
     const due = screen.getByRole('button', { name: /^Follow-up due/ })
     expect(due).toHaveTextContent(/^Follow-up due1$/)
-    expect(due).toHaveClass('figure--urgent')
+    expect(due.querySelector('.count')).toHaveClass('count--urgent')
     expect(due).toHaveAttribute('aria-pressed', 'false')
     await userEvent.click(due)
     expect(due).toHaveAttribute('aria-pressed', 'true')
     await waitFor(() => expect(calls('GET', /followUp=due/).length).toBeGreaterThan(0))
-    // It filters alongside the stage, not instead of it.
-    expect(all).toHaveAttribute('aria-pressed', 'true')
+    // It filters alongside the stage, not instead of it: every stage keeps its column.
+    expect(within(screen.getByRole('group', { name: 'Stage' })).getAllByRole('region')).toHaveLength(6)
   })
 })

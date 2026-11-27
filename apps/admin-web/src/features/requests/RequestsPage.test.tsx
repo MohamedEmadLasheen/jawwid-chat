@@ -7,10 +7,11 @@ import { RequestsPage } from './RequestsPage'
 
 /**
  * Requests, the hub over Trial lessons, New students, Certificates, Renewal
- * requests and Receipts: the masthead counts each type and filters by it, the
- * body is grouped by wait. It only reads, each list only when the account has
- * that list's page, and a list the server refuses is left out. Each row opens
- * on its own page with that request selected. Synthetic people only.
+ * requests, Receipts and the Sales pipeline's due follow-ups: the type tabs
+ * count each type and filter by it, the body is grouped by wait, each row says
+ * why it is there in a sentence. It only reads, each list only when the account
+ * has that list's page, and a list the server refuses is left out. Each row
+ * opens on its own page with that request selected. Synthetic people only.
  */
 
 function json(body: unknown, status = 200) {
@@ -89,9 +90,9 @@ function everything() {
 const queue = () => [...document.querySelectorAll<HTMLElement>('.rq-row')]
 const whoOf = (row: HTMLElement) => row.querySelector('.rq-row__title')?.textContent
 const openOf = (row: HTMLElement) => within(row).getByRole('link')
-/** The masthead's figures: one per type the account reaches. */
-const figures = () => [...document.querySelectorAll<HTMLElement>('.figures .figure')]
-const figure = (name: RegExp) => screen.getByRole('button', { name })
+/** The type tabs: "All", then one per type the account reaches, each with its count. */
+const tabs = () => [...(screen.queryByRole('group', { name: 'Request types' })?.querySelectorAll<HTMLElement>('.seg__item') ?? [])]
+const tab = (name: RegExp) => within(screen.getByRole('group', { name: 'Request types' })).getByRole('button', { name })
 
 beforeEach(() => {
   routes = []
@@ -127,15 +128,16 @@ describe('the Requests hub', () => {
     ])
     expect(openOf(queue()[0]!)).toHaveAccessibleName('Open Parent Delta')
     expect(queue().every((r) => within(r).getAllByRole('link').length === 1 && within(r).queryByRole('button') === null)).toBe(true)
-    // Type with its word, what is being asked, who owns it.
+    // Type with its word, and why the row is here in one sentence that names who owns it.
     const [familyRow, trialRow, certificateRow, , renewalRow, receiptRow] = queue()
     expect(within(trialRow!).getByText('Trial lesson')).toBeInTheDocument()
     expect(within(trialRow!).getByText('Teacher One')).toBeInTheDocument()
-    expect(within(trialRow!).getByText('Needs an outcome')).toBeInTheDocument()
-    expect(within(familyRow!).getByText('Needs a supervisor')).toBeInTheDocument()
-    expect(within(certificateRow!).getByText('Pending')).toBeInTheDocument()
+    expect(trialRow!.querySelector('.rq-why')).toHaveTextContent('The lesson with Teacher One is over; no outcome recorded yet')
+    expect(familyRow!.querySelector('.rq-why')).toHaveTextContent('no supervisor assigned yet')
+    expect(certificateRow!.querySelector('.rq-why')).toHaveTextContent('Supervisor One asked for it; waiting for the designer')
     expect(within(renewalRow!).getByText('Parent Echo')).toBeInTheDocument()
-    expect(within(receiptRow!).getByText('To confirm')).toBeInTheDocument()
+    expect(renewalRow!.querySelector('.rq-why')).toHaveTextContent('Parent Echo asked to renew')
+    expect(receiptRow!.querySelector('.rq-why')).toHaveTextContent('not confirmed yet')
     // What is settled is not a request any more.
     for (const gone of ['Prospect Soon', 'Prospect Done', 'Parent Settled', 'Child Renewed']) expect(screen.queryByText(gone)).not.toBeInTheDocument()
     expect(screen.queryAllByRole('alert')).toHaveLength(0)
@@ -158,26 +160,58 @@ describe('the Requests hub', () => {
     // Only what is late is drawn late.
     expect(groups[0]!.querySelectorAll('.rq-age--late')).toHaveLength(5)
     expect(groups[1]!.querySelector('.rq-age--late')).toBeNull()
-    // The masthead says how much of a type has waited since before today.
-    expect(figure(/^Receipts/)).toHaveTextContent(/^Receipts1$/)
-    expect(figure(/^Certificates/)).toHaveTextContent(/^Certificates22 since before today$/)
+    // Each type's tab counts what of it waits; its group says how much has waited since before today.
+    expect(tab(/^Receipts/)).toHaveTextContent(/^Receipts1$/)
+    expect(tab(/^Certificates/)).toHaveTextContent(/^Certificates2$/)
+    await userEvent.click(tab(/^Certificates/))
+    expect(screen.getByRole('region', { name: 'Waiting since before today' }).querySelector('.count')).toHaveTextContent(/^2$/)
   })
 
-  it('the masthead counts each type and is the type filter: a figure filters, and again shows every type', async () => {
+  it('the type tabs count each type and are the type filter: a tab filters, and again shows every type', async () => {
     everything()
     renderWithProviders(<RequestsPage />, { staff, route: '/requests' })
     await waitFor(() => expect(queue()).toHaveLength(6))
-    expect(figures().map((f) => `${f.querySelector('.figure__label')?.textContent} ${f.querySelector('.figure__n')?.textContent}`)).toEqual([
-      'Trial lessons 1', 'New students 1', 'Certificates 2', 'Renewal requests 1', 'Receipts 1',
-    ])
-    // No second strip of the same numbers under the masthead.
-    expect(screen.queryByRole('group', { name: 'Requests by type' })).not.toBeInTheDocument()
-    await userEvent.click(figure(/^Certificates/))
-    expect(figure(/^Certificates/)).toHaveAttribute('aria-pressed', 'true')
+    expect(tabs().map((t) => t.textContent)).toEqual(['All6', 'Trial lessons1', 'New students1', 'Certificates2', 'Renewal requests1', 'Receipts1'])
+    // No strip of the same numbers above the tabs.
+    expect(document.querySelector('.figures')).toBeNull()
+    await userEvent.click(tab(/^Certificates/))
+    expect(tab(/^Certificates/)).toHaveAttribute('aria-pressed', 'true')
     expect(queue().map(whoOf)).toEqual(['Child Gamma', 'Child Omega'])
-    await userEvent.click(figure(/^Certificates/))
-    expect(figure(/^Certificates/)).toHaveAttribute('aria-pressed', 'false')
+    await userEvent.click(tab(/^Certificates/))
+    expect(tab(/^Certificates/)).toHaveAttribute('aria-pressed', 'false')
+    expect(tab(/^All/)).toHaveAttribute('aria-pressed', 'true')
     expect(queue()).toHaveLength(6)
+  })
+
+  it('names its order by need: the longest wait first, or the newest first', async () => {
+    everything()
+    renderWithProviders(<RequestsPage />, { staff, route: '/requests' })
+    await waitFor(() => expect(queue()).toHaveLength(6))
+    const order = screen.getByRole('group', { name: 'Order' })
+    expect(within(order).getByRole('button', { name: 'Longest wait first' })).toHaveAttribute('aria-pressed', 'true')
+    await userEvent.click(within(order).getByRole('button', { name: 'Newest first' }))
+    expect(queue().map(whoOf)).toEqual(['Family Golf', 'Child Renewing', 'Child Gamma', 'Child Omega', 'Prospect Alpha', 'Parent Delta'])
+  })
+
+  it('lists the Sales pipeline\'s due follow-ups from its own list read, opening the lead on the pipeline', async () => {
+    everything()
+    on('GET', /\/sales-pipeline\/leads\?/, () =>
+      json({
+        leads: [
+          { id: 'lead-1', owner: { id: 'r-1', name: 'Rep One' }, displayName: 'Lead Alpha', level: null, stage: 'contacted', lostReason: null, manualStage: true, lastContactedAt: '2026-10-20T09:00:00Z', nextFollowUpOn: '2026-10-22', followUpDue: true, followUpNote: null, createdAt: '2026-10-19T09:00:00Z', handedOver: false, contact: { phone: true, whatsapp: false, email: false } },
+        ],
+        total: 1, counts: { new_lead: 0, contacted: 1, trial_booked: 0, trial_completed: 0, converted: 0, lost: 0 }, dueCount: 1, limit: 100, offset: 0, truncated: false,
+      }),
+    )
+    renderWithProviders(<RequestsPage />, { staff, route: '/requests?type=lead' })
+    await waitFor(() => expect(queue()).toHaveLength(1))
+    const [lead] = queue()
+    expect(whoOf(lead!)).toBe('Lead Alpha')
+    expect(lead!.querySelector('.rq-why')).toHaveTextContent('Rep One planned a follow-up for')
+    expect(openOf(lead!)).toHaveAttribute('href', '/sales/pipeline?open=lead-1')
+    // Only the due follow-ups are asked for, and the lead itself (its contact) is never read here.
+    expect(calls(/\/sales-pipeline\/leads\?.*followUp=due/)).toHaveLength(1)
+    expect(calls(/\/sales-pipeline\/leads\/lead-1/)).toHaveLength(0)
   })
 
   it('asks certificates only for the lists that still wait, in the categories the account reaches', async () => {
@@ -199,7 +233,8 @@ describe('the Requests hub', () => {
     on('GET', /\/trials$/, () => json({ trials: [trial('tr-1', 'Prospect Alpha', 'awaiting')] }))
     renderWithProviders(<RequestsPage />, { staff, route: '/requests' })
     await screen.findByText('Prospect Alpha')
-    expect(figures().map((f) => f.querySelector('.figure__label')?.textContent)).toEqual(['Trial lessons'])
+    // One type needs no tabs.
+    expect(tabs()).toHaveLength(0)
     expect(calls(/\/trials\/new-students$/)).toHaveLength(0)
     expect(calls(/\/payment-receipts/)).toHaveLength(0)
     expect(calls(/\/subscriptions\/renewal-requests/)).toHaveLength(0)
@@ -212,7 +247,7 @@ describe('the Requests hub', () => {
     on('GET', /\/trials\/new-students$/, refused)
     renderWithProviders(<RequestsPage />, { staff, route: '/requests' })
     await waitFor(() => expect(queue()).toHaveLength(4))
-    expect(figures().map((f) => f.querySelector('.figure__label')?.textContent)).toEqual(['Trial lessons', 'Certificates', 'Receipts'])
+    expect(tabs().map((t) => t.firstChild?.textContent)).toEqual(['All', 'Trial lessons', 'Certificates', 'Receipts'])
     expect(screen.queryAllByRole('alert')).toHaveLength(0)
     expect(document.querySelector('.state--forbidden, .banner--danger')).toBeNull()
   })
@@ -225,10 +260,10 @@ describe('the Requests hub', () => {
     on('GET', /\/trials\/new-students$/, () => json({ students: [family('ns-2', 'Parent Settled', true)] }))
     renderWithProviders(<RequestsPage />, { staff, route: '/requests?type=family' })
     expect(await screen.findByText('Nothing of this type is waiting.')).toBeInTheDocument()
-    expect(figure(/^New students/)).toHaveAttribute('aria-pressed', 'true')
+    expect(tab(/^New students/)).toHaveAttribute('aria-pressed', 'true')
     // A count that arrived as nothing is a zero; it is quiet, not an alarm.
-    expect(figure(/^New students/)).toHaveTextContent(/^New students0$/)
-    await userEvent.click(figure(/^New students/))
+    expect(tab(/^New students/)).toHaveTextContent(/^New students0$/)
+    await userEvent.click(tab(/^New students/))
     expect(screen.getByText('Nothing is waiting.')).toBeInTheDocument()
     expect(screen.queryAllByRole('region')).toHaveLength(0)
   })

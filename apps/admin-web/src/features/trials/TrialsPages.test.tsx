@@ -133,7 +133,8 @@ describe('Trial lessons, as Sales', () => {
     access({ sales: true })
     renderWithProviders(<AppRoutes />, { staff, route: '/trials' })
     const row = (await screen.findByText('Prospect Gamma')).closest('li')!
-    expect(within(row).getByText('Attended')).toBeInTheDocument()
+    // Why it is on the page, in a sentence that names the teacher, and its one outcome.
+    expect(row).toHaveTextContent('Subscribed after the lesson with Teacher One')
     expect(within(row).getByText('Subscribed')).toBeInTheDocument()
     expect(screen.queryByText(/Core/)).not.toBeInTheDocument()
     expect(within(row).getByRole('button', { name: 'Correct outcome' })).toBeInTheDocument()
@@ -912,15 +913,15 @@ describe('PD-45 PR-3b: the family\'s location on the forms', () => {
     })
     const GIZA = { countryCode: 'EG', subdivisionCode: 'EG-GZ', names: { country: { code: 'EG', en: 'Egypt', ar: 'مصر' }, subdivision: { code: 'EG-GZ', en: 'Giza', ar: 'الجيزة' }, label: { en: 'Governorate', ar: 'المحافظة' } } }
 
-    it('[en] shows the form\'s location as "Egypt · Giza", and a dash for an older form without one', async () => {
+    it('[en] shows the form\'s location as "Egypt, Giza", and says so for an older form without one', async () => {
       access({ operations: true })
       on('GET', /\/trials\/new-students$/, () => json({ students: [base(GIZA), { ...base(null), trialId: 'tr-old', parent: { ...base(null).parent, name: 'Parent Old' } }] }))
       renderWithProviders(<AppRoutes />, { staff, route: '/trials/new-students' })
       const card = await openFamily('Parent Gamma')
       const term = within(card).getByText('Location')
-      expect(term.nextElementSibling).toHaveTextContent('Egypt · Giza')
+      expect(term.nextElementSibling).toHaveTextContent('Egypt, Giza')
       const old = await openFamily('Parent Old')
-      expect(within(old).getByText('Location').nextElementSibling).toHaveTextContent('—')
+      expect(within(old).getByText('Location').nextElementSibling).toHaveTextContent('None given')
     })
 
     it('[ar] shows the form\'s location in Arabic', async () => {
@@ -928,7 +929,7 @@ describe('PD-45 PR-3b: the family\'s location on the forms', () => {
       on('GET', /\/trials\/new-students$/, () => json({ students: [base(GIZA)] }))
       renderWithProviders(<AppRoutes />, { staff, route: '/trials/new-students', locale: 'ar' })
       const card = await openFamily('Parent Gamma')
-      expect(within(card).getByText('الموقع').nextElementSibling).toHaveTextContent('مصر · الجيزة')
+      expect(within(card).getByText('الموقع').nextElementSibling).toHaveTextContent('مصر، الجيزة')
     })
 
     it('editing keeps working: a form with a location shows it in the picker and sends it back; an older form without one saves without it', async () => {

@@ -35,6 +35,24 @@ export const TR = {
   recordedOn: { en: 'Recorded {when}', ar: 'سُجّلت {when}' },
   correctedOn: { en: 'corrected {when}', ar: 'صُحّحت {when}' },
   length: { en: 'Length', ar: 'المدة' },
+  noLevel: { en: 'Level not given', ar: 'لم يُحدَّد المستوى' },
+  // Why each trial is on the agenda, in one sentence
+  whyAwaiting: { en: 'Lesson with {teacher} ended; no outcome yet', ar: 'انتهت الحصة مع {teacher} ولم تُسجَّل نتيجتها' },
+  whyUpcoming: { en: 'Booked with {teacher}', ar: 'محجوزة مع {teacher}' },
+  whySubscribed: { en: 'Subscribed after the lesson with {teacher}', ar: 'اشترك بعد الحصة مع {teacher}' },
+  whyNotSubscribed: { en: 'Did not subscribe after the lesson with {teacher}', ar: 'لم يشترك بعد الحصة مع {teacher}' },
+  whyNotSubscribedBecause: { en: 'Did not subscribe; the reason given: {reason}', ar: 'لم يشترك، والسبب: {reason}' },
+  whyNoShow: { en: 'Did not attend the lesson with {teacher}', ar: 'لم يحضر الحصة مع {teacher}' },
+  whyCancelled: { en: 'Cancelled before it took place', ar: 'أُلغيت قبل أن تُعقد' },
+  // The inspector's state, in one sentence
+  stateAwaiting: { en: 'The lesson is over. Record whether the student attended and subscribed.', ar: 'انتهت الحصة. سجّل هل حضر الطالب وهل اشترك.' },
+  filterLabel: { en: 'Show', ar: 'عرض' },
+  stateUpcoming: { en: 'Booked with {teacher} for {when}.', ar: 'محجوزة مع {teacher} في {when}.' },
+  stateSubscribed: { en: 'Subscribed. The family is now on the New students page.', ar: 'اشترك، والأسرة الآن في صفحة الطلاب الجدد.' },
+  stateNotSubscribed: { en: 'Did not subscribe.', ar: 'لم يشترك.' },
+  stateNotSubscribedBecause: { en: 'Did not subscribe. The reason given: {reason}.', ar: 'لم يشترك، والسبب: {reason}.' },
+  stateNoShow: { en: 'The student did not attend.', ar: 'لم يحضر الطالب الحصة.' },
+  stateCancelled: { en: 'This trial was cancelled and did not take place.', ar: 'أُلغيت هذه الحصة ولم تُعقد.' },
   noneForFilter: { en: 'No trial is in this state.', ar: 'لا توجد حصة تجريبية في هذه الحالة.' },
   noneHint: {
     en: 'A booked trial stays here from its booking until its outcome is recorded.',
@@ -95,7 +113,7 @@ export const TR = {
   cancelReason: { en: 'Reason', ar: 'السبب' },
   absence: { en: 'Prospect absent', ar: 'غياب المهتم' },
   report: { en: 'Teacher\'s report', ar: 'تقرير المعلم' },
-  openGroup: { en: 'Trial group', ar: 'مجموعة التجريبية' },
+  openGroup: { en: 'Trial group', ar: 'مجموعة الحصة التجريبية' },
 
   outcome: { en: 'Outcome', ar: 'النتيجة' },
   recordOutcome: { en: 'Record outcome', ar: 'تسجيل النتيجة' },
