@@ -541,7 +541,7 @@ describe('Payments > Stripe events', () => {
     serve({ canReconcile: false })
     renderWithProviders(<AppRoutes />, { staff: makeStaff({ role: 'admin' }), route: '/payments?tab=events' })
     await waitFor(() => expect(calls('GET', /\/instalments\/access$/).length).toBeGreaterThan(0))
-    expect(await screen.findByText('No receipts here.')).toBeInTheDocument()
+    expect(await screen.findByText('A receipt appears here when a parent uploads one in the app.')).toBeInTheDocument()
     expect(within(tabs()).queryByRole('button', { name: 'Stripe events' })).not.toBeInTheDocument()
     expect(within(tabs()).getByRole('button', { name: 'Receipts' })).toHaveAttribute('aria-pressed', 'true')
     expect(calls('GET', /\/stripe\/events/)).toHaveLength(0)

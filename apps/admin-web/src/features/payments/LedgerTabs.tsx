@@ -8,6 +8,7 @@ import { Icon } from '@/shared/components/Icon'
 import { SearchField } from '@/shared/components/SearchField'
 import { SearchableSelect, type SelectOption } from '@/shared/components/SearchableSelect'
 import { EmptyState, LoadingState, QueryBoundary } from '@/shared/components/States'
+import { useMediaQuery } from '@/shared/hooks/useMediaQuery'
 import { monthsLabel } from '@/features/subscriptions/copy'
 import type {
   AttemptFilter,
@@ -103,6 +104,16 @@ const OUTCOME_TONE: Record<string, Tone> = {
 }
 
 const raw = (s: string): Pair => ({ en: s, ar: s })
+
+/** Whether a phone's filter fields are unfolded: the person's own choice, kept on this browser. */
+const FILTERS_OPEN_KEY = 'jawwid.payments.filters-open'
+function readFiltersOpen(): boolean {
+  try {
+    return localStorage.getItem(FILTERS_OPEN_KEY) === '1'
+  } catch {
+    return false
+  }
+}
 
 function useDebounced<T>(value: T, ms: number): T {
   const [v, setV] = useState(value)
@@ -226,6 +237,20 @@ export function TransactionsTab({ onSeeReceipts }: { onSeeReceipts?: () => void 
   const rows = list.data?.pages.flatMap((p) => p.items) ?? []
   const totals = list.data?.pages[0]?.totals ?? []
   const filtered = Boolean(status || method || purpose || plan || from || to || search)
+  // A phone folds the six fields behind one control; the search stays out. A wrong range is never hidden.
+  const narrow = useMediaQuery('(max-width: 767px)')
+  const [filtersOpen, setFiltersOpen] = useState(readFiltersOpen)
+  const fieldsShown = !narrow || filtersOpen || rangeError
+  const fieldsSet = [status, method, purpose, plan, from, to].filter(Boolean).length
+  const toggleFilters = () => {
+    const next = !filtersOpen
+    setFiltersOpen(next)
+    try {
+      localStorage.setItem(FILTERS_OPEN_KEY, next ? '1' : '0')
+    } catch {
+      // Storage blocked: the fields still fold for this visit.
+    }
+  }
 
   const clear = () => {
     setStatus('')
@@ -242,13 +267,19 @@ export function TransactionsTab({ onSeeReceipts }: { onSeeReceipts?: () => void 
       <section className="pay-filters" aria-label={tx(LED.filters)}>
         <div className="pay-filters__search">
           <SearchField value={search} onChange={(v) => setSearch(v.slice(0, MAX_SEARCH))} label={tx(LED.search)} clearLabel={tx(LED.clearSearch)} />
-          {filtered && (
-            <button type="button" className="btn btn--sm btn--ghost" onClick={clear}>
+          {narrow && (
+            <button type="button" className="btn pay-filters__toggle" aria-expanded={fieldsShown} aria-controls="pay-filter-fields" onClick={toggleFilters}>
+              {fieldsSet > 0 ? tx(LED.filtersOn, { n: fieldsSet }) : tx(LED.filters)}
+              <Icon name={fieldsShown ? 'chevronUp' : 'chevronDown'} size={16} />
+            </button>
+          )}
+          {filtered && (!narrow || fieldsShown) && (
+            <button type="button" className="btn btn--sm btn--ghost pay-filters__clear" onClick={clear}>
               {tx(LED.clearFilters)}
             </button>
           )}
         </div>
-        <div className="pay-filters__row">
+        <div id="pay-filter-fields" className="pay-filters__row" hidden={!fieldsShown}>
           <Picker
             label={tx(PAY.status)}
             value={status}
@@ -278,11 +309,11 @@ export function TransactionsTab({ onSeeReceipts }: { onSeeReceipts?: () => void 
             options={PLANS.map((m) => ({ value: String(m), label: monthsLabel(m, locale) }))}
           />
           <Field label={tx(LED.from)}>
-            {(id) => <input id={id} className="input" type="date" dir="ltr" value={from} max={to || undefined} onChange={(e) => setFrom(e.target.value)} />}
+            {(id) => <input id={id} className="input" type="date" dir="ltr" value={from} max={to || undefined} data-empty={from === '' || undefined} onChange={(e) => setFrom(e.target.value)} />}
           </Field>
           <Field label={tx(LED.to)} error={rangeError ? tx(PAY.periodOrder) : null}>
             {(id, d) => (
-              <input id={id} className="input" type="date" dir="ltr" value={to} min={from || undefined} aria-describedby={d} aria-invalid={rangeError || undefined} onChange={(e) => setTo(e.target.value)} />
+              <input id={id} className="input" type="date" dir="ltr" value={to} min={from || undefined} data-empty={to === '' || undefined} aria-describedby={d} aria-invalid={rangeError || undefined} onChange={(e) => setTo(e.target.value)} />
             )}
           </Field>
         </div>
@@ -372,10 +403,12 @@ function Totals({ totals }: { totals: TransactionTotal[] }) {
       <ul className="pay-sum__lines">
         {totals.map((t) => {
           const figure = (n: number) => moneyParts(n, t.currency, locale).number
+          // The line is named the way every amount on the page names its currency.
+          const name = moneyParts(0, t.currency, locale).unit
           return (
-            <li key={t.currency} className="pay-sum__line" aria-label={t.currency}>
-              <span className="pay-sum__currency" dir="ltr">
-                {t.currency}
+            <li key={t.currency} className="pay-sum__line" aria-label={name}>
+              <span className="pay-sum__currency" dir="auto">
+                {name}
               </span>
               <span className="pay-sum__term pay-sum__term--count">
                 <span className="pay-sum__k">{tx(LED.count)}</span>
@@ -577,9 +610,13 @@ function TransactionDetailBody({ d }: { d: TransactionDetail }) {
             )}
           </dd>
           <dt>{tx(LED.colAmount)}</dt>
-          <dd className="pf-amount">{money(p.amountMinor)}</dd>
+          <dd>
+            <Money amountMinor={p.amountMinor} currency={p.currency} />
+          </dd>
           <dt>{tx(LED.colRefunded)}</dt>
-          <dd className="pf-amount">{money(p.refundedMinor)}</dd>
+          <dd>
+            <Money amountMinor={p.refundedMinor} currency={p.currency} />
+          </dd>
           {p.overpaid && (
             <>
               <dt>
@@ -665,7 +702,7 @@ function TransactionDetailBody({ d }: { d: TransactionDetail }) {
             {d.refunds.map((r) => (
               <li key={r.id} className="pf-entry">
                 <div className="pf-entry__head">
-                  <span className="pf-amount">{money(r.amountMinor)}</span>
+                  <Money amountMinor={r.amountMinor} currency={p.currency} />
                   <span className="tf-muted">{dateTime(r.at)}</span>
                   <span className="tf-muted" dir="auto">
                     {r.source === 'stripe' ? tx(PAY.refundStripe) : r.recordedBy ? tx(LED.refundBy, { name: r.recordedBy.name }) : tx(PAY.refundStaff)}
@@ -697,7 +734,9 @@ function TransactionDetailBody({ d }: { d: TransactionDetail }) {
             <dt>{tx(PAY.purpose)}</dt>
             <dd>{tx(PURPOSE_LABEL[d.request.purpose] ?? raw(d.request.purpose))}</dd>
             <dt>{tx(PAY.amount)}</dt>
-            <dd className="pf-amount">{money(d.request.amountMinor, d.request.currency)}</dd>
+            <dd>
+              <Money amountMinor={d.request.amountMinor} currency={d.request.currency} />
+            </dd>
             {d.request.planMonths && (
               <>
                 <dt>{tx(LED.planMonths)}</dt>
@@ -767,12 +806,12 @@ function FailureWords({ a }: { a: Pick<CardAttempt, 'failureCode' | 'failureCoun
 
 function AttemptEntry({ a }: { a: CardAttempt }) {
   const tx = useCopy()
-  const { locale, dateTime } = useI18n()
+  const { dateTime } = useI18n()
   return (
     <li className="pf-entry">
       <div className="pf-entry__head">
         <AttemptStatusBadge status={a.status} />
-        <span className="pf-amount">{formatMoney(a.amountMinor, a.currency, locale)}</span>
+        <Money amountMinor={a.amountMinor} currency={a.currency} />
         <span className="tf-muted">{tx(LED.attemptOpened, { date: dateTime(a.createdAt) })}</span>
       </div>
       {(a.failureCount > 0 || a.failureCode) && (
@@ -810,7 +849,6 @@ function ReconcilePanel({ paymentId }: { paymentId: string }) {
 
 function ReconcileResult({ r }: { r: PaymentReconciliation }) {
   const tx = useCopy()
-  const { locale } = useI18n()
   return (
     <div className={r.inSync ? 'banner banner--info pay-result' : 'banner banner--warn pay-result'} role="status">
       <p className="pay-result__lead">{tx(r.inSync ? LED.inSync : LED.outOfSync)}</p>
@@ -828,13 +866,21 @@ function ReconcileResult({ r }: { r: PaymentReconciliation }) {
           <tbody>
             <tr>
               <th scope="row">{tx(LED.amountReceived)}</th>
-              <td className="pf-amount">{formatMoney(r.chat.amountMinor, r.chat.currency, locale)}</td>
-              <td className="pf-amount">{formatMoney(r.stripe.amountReceivedMinor, r.stripe.currency, locale)}</td>
+              <td>
+                <Money amountMinor={r.chat.amountMinor} currency={r.chat.currency} />
+              </td>
+              <td>
+                <Money amountMinor={r.stripe.amountReceivedMinor} currency={r.stripe.currency} />
+              </td>
             </tr>
             <tr>
               <th scope="row">{tx(LED.amountRefunded)}</th>
-              <td className="pf-amount">{formatMoney(r.chat.refundedMinor, r.chat.currency, locale)}</td>
-              <td className="pf-amount">{formatMoney(r.stripe.amountRefundedMinor, r.stripe.currency, locale)}</td>
+              <td>
+                <Money amountMinor={r.chat.refundedMinor} currency={r.chat.currency} />
+              </td>
+              <td>
+                <Money amountMinor={r.stripe.amountRefundedMinor} currency={r.stripe.currency} />
+              </td>
             </tr>
             <tr>
               <th scope="row">{tx(LED.stripeStatus)}</th>
@@ -863,8 +909,8 @@ export function AttemptsTab() {
     <>
       <div className="pay-bar">
         <FilterChips<AttemptFilter> label={tx(PAY.status)} value={status} onChange={setStatus} options={ATTEMPT_FILTERS.map((s) => ({ value: s, label: tx(ATTEMPT_FILTER[s]) }))} />
-        <p className="pay-bar__hint">{tx(LED.attemptsHint)}</p>
       </div>
+      <p className="pay-hint">{tx(LED.attemptsHint)}</p>
       {list.error && rows.length === 0 ? (
         <EmptyState icon="alert" title={describeError(list.error, locale)} />
       ) : (

@@ -69,6 +69,11 @@
 .plan__tick--due { background: var(--gold); box-shadow: inset 0 0 0 1px var(--gold-line); }
 .plan__tick--here { block-size: 16px; }
 .plan__at { font-size: var(--fs-xs); color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+/* The key to the plan marks, one line over the table. */
+.plan-key { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 2px var(--space-4); margin: 0 0 var(--space-2); font-size: var(--fs-xs); color: var(--ink-muted); }
+.plan-key__name { font-weight: 500; color: var(--ink); }
+.plan-key__item { display: inline-flex; align-items: flex-end; gap: 6px; line-height: 1.2; }
+.plan-key .plan__tick { flex: none; inline-size: 6px; }
 
 /* The billing supervisor dialog. */
 .in-options { display: grid; gap: var(--space-2); margin: var(--space-2) 0 0; padding: 0; border: none; }
@@ -105,6 +110,6 @@
   .in-td-status { grid-area: status; justify-self: end; }
   .in-td-status .in-sub { text-align: end; padding-inline-start: 0; }
   .in-td-sup { grid-area: sup; padding-inline-start: 38px !important; font-size: var(--fs-sm); }
-  .in-td-act { grid-area: act; align-self: center; }
+  .table.in-table tbody tr .in-td-act { grid-area: act; align-self: center; justify-self: end; inline-size: auto; padding: 0; }
   .table.in-table .in-td-amount, [dir='rtl'] .table.in-table .in-td-amount { text-align: end; }
 }

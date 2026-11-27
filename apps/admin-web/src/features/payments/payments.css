@@ -10,7 +10,7 @@
   display: flex;
   align-items: baseline;
   gap: 10px;
-  margin: calc(-1 * var(--space-3)) 0 var(--space-5);
+  margin: calc(-1 * var(--space-3)) 0 var(--space-4);
   padding-block: 7px;
   padding-inline: var(--space-3) 0;
   border-inline-start: 2px solid var(--terracotta);
@@ -21,8 +21,14 @@
 .pay-paused strong { font-weight: 500; }
 
 .pay-tabs { margin-block-end: var(--space-4); }
+@media (max-width: 767px) {
+  .pay-paused { margin: 0 0 var(--space-3); padding-block: 4px; }
+  .pay-tabs { margin-block-end: var(--space-3); }
+}
 .pay-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-5); margin-block-end: var(--space-3); }
 .pay-bar__hint { flex: 1 1 320px; margin: 0; max-inline-size: 78ch; font-size: var(--fs-sm); color: var(--ink-muted); }
+/* A helper sentence takes its own line under the chips it explains. */
+.pay-hint { margin: calc(-1 * var(--space-1)) 0 var(--space-3); max-inline-size: 86ch; font-size: var(--fs-sm); color: var(--ink-muted); }
 
 /* Who may act here: a lock and one line. */
 .pay-lock { display: flex; align-items: flex-start; gap: 8px; margin: 0; max-inline-size: 86ch; font-size: var(--fs-sm); color: var(--ink-muted); }
@@ -101,6 +107,7 @@
   .rc__from { grid-area: from; }
   .rc > .rc-actions { grid-area: actions; justify-content: flex-start; }
   .rc:hover { background: none; }
+  .rc-proof { inline-size: 46px; block-size: 58px; }
 }
 
 /* The side drawer: the image at reading size, the amount beside it. */
@@ -140,12 +147,22 @@
 .pay-filters__search { display: flex; align-items: center; gap: var(--space-2); }
 .pay-filters__search .search { flex: 1 1 auto; max-inline-size: 480px; }
 .pay-filters__row { display: grid; grid-template-columns: repeat(auto-fit, minmax(148px, 1fr)); align-items: end; gap: var(--space-3); }
+.pay-filters__row[hidden] { display: none; }
 .pay-filters__row > .field { margin: 0; min-inline-size: 0; }
+.pay-filters__toggle { flex: none; gap: 6px; }
+/* An empty date field shows the browser's own pattern: muted, so it reads as a pattern under its label. */
+.pay-filters input[type='date'][data-empty]::-webkit-datetime-edit { color: var(--ink-muted); }
+/* The date itself stays left to right; in Arabic the field still starts under its label. */
+[dir='rtl'] .pay-filters input[type='date'] { flex-direction: row-reverse; }
+[dir='rtl'] .pay-filters input[type='date']::-webkit-datetime-edit { text-align: end; }
 .pay-filters .input, .pay-filters .select { padding-block: 5px; font-size: var(--fs-sm); }
 .pay-filters .field__label { margin-block-end: 3px; }
 @media (max-width: 767px) {
-  .pay-filters { --control-h: 44px; }
+  .pay-filters { --control-h: 44px; margin-block-end: var(--space-3); }
   .pay-filters__row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pay-filters__search { flex-wrap: wrap; }
+  .pay-filters__search .search { flex: 1 1 0; min-inline-size: 0; max-inline-size: none; }
+  .pay-filters__clear { margin-inline-start: auto; }
 }
 .pay-filters--events .pay-filters__row { grid-template-columns: minmax(170px, 240px) minmax(170px, 280px) minmax(0, 1fr); }
 .pay-filters--events .pay-bar__hint { align-self: end; padding-block-end: 7px; }
@@ -226,13 +243,20 @@ html[lang='ar'] .pay-detail .tf-section__title { font-weight: 700; }
   .pay-rules__list { display: grid; gap: 4px; }
   .pay-rules__list li { margin: 0; padding: 0; border: 0; }
   .pay-filters--events .pay-filters__row { grid-template-columns: minmax(0, 1fr); }
-  .pay-sum__line { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px var(--space-3); }
-  .pay-sum__currency { grid-column: 1 / -1; }
-  .pay-sum__term { display: contents; }
-  .pay-sum__k { align-self: baseline; font-size: var(--fs-sm); }
-  .pay-sum__v, [dir='rtl'] .pay-sum__v { text-align: end; }
-  .pay-sum__op { display: none; }
-  .pay-sum__term--net .pay-sum__v { font-size: 22px; }
+  /* Two lines per currency: its name, the count and the net; then how the net was reached. */
+  .pay-sum { margin-block-end: var(--space-3); }
+  .pay-sum__line { align-items: baseline; gap: 0 10px; padding-block: 8px 7px; }
+  .pay-sum__currency { align-self: baseline; min-inline-size: 0; }
+  .pay-sum__term { display: inline-flex; align-items: baseline; gap: 5px; }
+  .pay-sum__currency { order: -4; }
+  .pay-sum__term--count { order: -3; flex: 1 1 auto; min-inline-size: 0; }
+  .pay-sum__term--net { order: -2; }
+  .pay-sum__line::before { content: ''; order: -1; flex-basis: 100%; block-size: 0; }
+  .pay-sum__k { font-size: var(--fs-xs); }
+  .pay-sum__v { font-size: 14px; }
+  .pay-sum__term--net .pay-sum__v { font-size: 20px; }
+  .pay-sum__op { padding: 0; font-size: 14px; }
+  .pay-sum__op:has(+ .pay-sum__term--net) { display: none; }
 
   .pay-table-wrap { overflow: visible; }
   .pay-table, .pay-table tbody { display: block; }
@@ -259,9 +283,8 @@ html[lang='ar'] .pay-detail .tf-section__title { font-weight: 700; }
   .pay-a-for > .pay-quiet:only-child, .pay-a-invoice > .pay-quiet:only-child { display: none; }
   .pay-table td[data-label]::before { content: attr(data-label) ' '; font-family: var(--font); font-size: var(--fs-xs); font-weight: 400; color: var(--ink-muted); }
   /* Transactions: who and how much, what for and when, how and where it stands, the invoice; the way in at the end. */
-  .table.pay-table--tx tr { grid-template-columns: minmax(0, 1fr) auto 36px; grid-template-areas: 'who amount open' 'for date open' 'method status open' 'invoice invoice open'; }
+  .table.pay-table--tx tr { grid-template-columns: minmax(0, 1fr) auto 44px; grid-template-areas: 'who amount open' 'for date open' 'method status open' 'invoice invoice open'; }
   .table.pay-table--tx .pay-a-open { align-self: center; justify-self: end; inline-size: auto; padding: 0; }
-  .pay-a-open .btn, .pay-a-open .btn.btn--icon.btn--sm { inline-size: 36px; }
   /* Card attempts: who and how much, the request and its state, why, then the counts. */
   .table.pay-table--attempts tr { grid-template-areas: 'who amount' 'for status' 'why why' 'tries paid' 'last last'; }
   .pay-table--attempts .pay-count { font-family: var(--font); font-size: var(--fs-sm); font-weight: 500; justify-self: start; text-align: start; }
@@ -295,6 +318,9 @@ html[lang='ar'] .set-group__title { font-weight: 700; line-height: 1.45; }
 .set-none { margin: 0 0 var(--space-3); font-size: var(--fs-sm); color: var(--ink-muted); }
 .set-card { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3) var(--space-5); min-block-size: var(--control-h); }
 .set-card__state { display: grid; gap: 6px; justify-items: start; }
+/* Paused: the state, and under it what the pause means. Said here once on this tab. */
+.set-paused { display: grid; gap: 3px; justify-items: start; }
+.set-paused__why { max-inline-size: 56ch; font-size: var(--fs-sm); color: var(--ink-muted); }
 
 /* Reminders in the order they fire: before the due date, on it (the gold mark), after it. */
 .set-reminders { display: flex; flex-wrap: wrap; margin: 4px 0 0; padding: 0; list-style: none; }

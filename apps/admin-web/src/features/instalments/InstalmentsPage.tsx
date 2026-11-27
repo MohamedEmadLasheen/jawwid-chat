@@ -73,7 +73,7 @@ export function InstalmentsPage({ eyebrow }: { eyebrow?: string }) {
   }
 
   return (
-    <div className="page">
+    <div className="page in-page">
       <div className="page__inner">
         <PageHeader eyebrow={eyebrow} title={tx(I.title)} subtitle={tx(I.subtitle)} />
         <FinanceLedger here="instalments" />
@@ -140,6 +140,31 @@ export function InstalmentsPage({ eyebrow }: { eyebrow?: string }) {
                     />
                   )
                 ) : (
+                  <>
+                  {/* What the plan column's marks mean. Each strip also says it in words. */}
+                  <p className="plan-key" aria-hidden="true">
+                    <span className="plan-key__name">{tx(I.planKey)}</span>
+                    <span className="plan-key__item">
+                      <span className="plan__tick plan__tick--paid" />
+                      {tx(I.keyPaid)}
+                    </span>
+                    <span className="plan-key__item">
+                      <span className="plan__tick plan__tick--overdue" />
+                      {tx(I.keyLate)}
+                    </span>
+                    <span className="plan-key__item">
+                      <span className="plan__tick plan__tick--due" />
+                      {tx(I.keyDue)}
+                    </span>
+                    <span className="plan-key__item">
+                      <span className="plan__tick" />
+                      {tx(I.keyUpcoming)}
+                    </span>
+                    <span className="plan-key__item">
+                      <span className="plan__tick plan__tick--paid plan__tick--here" />
+                      {tx(I.keyHere)}
+                    </span>
+                  </p>
                   <div className="table-wrap in-table-wrap">
                     <table className="table in-table">
                       <thead>
@@ -176,6 +201,7 @@ export function InstalmentsPage({ eyebrow }: { eyebrow?: string }) {
                       </tbody>
                     </table>
                   </div>
+                  </>
                 )}
               </>
             }
@@ -204,9 +230,22 @@ function PlanStrip({ row, plan, view }: { row: Instalment; plan: Instalment[]; v
   const { locale } = useI18n()
   const at = plan.findIndex((r) => r.id === row.id) + 1
   // Without the paid instalments the list holds only what is still open: say so, never "2 of 4".
-  const label = tx(view === 'whole' ? I.planLabel : I.planOpenLabel, { i: at, n: plan.length })
+  const count = (status: InstalmentStatus) => plan.filter((r) => r.status === status).length
+  const said = (
+    [
+      [count('paid'), I.keyPaid],
+      [count('overdue'), I.keyLate],
+      [count('due'), I.keyDue],
+      [count('upcoming'), I.keyUpcoming],
+    ] as const
+  )
+    .filter(([n]) => n > 0)
+    .map(([n, word]) => `${n} ${tx(word)}`)
+    .join(locale === 'ar' ? '، ' : ', ')
+  // "Instalment 2 of 4: 1 paid, 1 late, 2 to come".
+  const label = `${tx(view === 'whole' ? I.planLabel : I.planOpenLabel, { i: at, n: plan.length })}: ${said}`
   return (
-    <span className="plan" role="img" aria-label={label} title={`${label}. ${tx(I.planHint)}`}>
+    <span className="plan" role="img" aria-label={label} title={label}>
       <span className="plan__ticks">
         {plan.map((r) => (
           <span key={r.id} className={`plan__tick plan__tick--${r.status}${r.id === row.id ? ' plan__tick--here' : ''}`} />
