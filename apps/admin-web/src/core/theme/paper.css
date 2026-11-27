@@ -735,6 +735,8 @@ html[lang='ar'] .table { font-size: var(--fs-sm); }
   padding-block: 9px;
   border-block-end: 1px solid var(--hairline);
 }
+/* A row header in the body is a cell that names its row, not a column head. */
+.table tbody th { position: static; background: none; color: inherit; font-size: inherit; font-weight: 600; border-block-end: 1px solid var(--hairline-soft); }
 .table th, .table td { padding-inline: var(--space-3); }
 .table th:first-child, .table td:first-child { padding-inline-start: 2px; }
 .table th:last-child, .table td:last-child { padding-inline-end: 2px; }
@@ -790,7 +792,7 @@ html[lang='ar'] .table { font-size: var(--fs-sm); }
 }
 .ledger__cell:first-child { padding-inline-start: 3px; }
 a.ledger__cell:hover, button.ledger__cell:hover { background: var(--surface-hover); }
-.ledger__cell[aria-pressed='true'], .ledger__cell[aria-current='true'] { box-shadow: inset 0 2px 0 var(--teal); }
+.ledger__cell[aria-pressed='true'], .ledger__cell[aria-current='true'], .ledger__cell[aria-selected='true'] { box-shadow: inset 0 2px 0 var(--teal); }
 .ledger__label { font-size: 12.5px; color: var(--ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ledger__value { font-family: var(--display); font-size: var(--fs-kpi); font-weight: 600; line-height: 1.15; font-variant-numeric: tabular-nums lining-nums; color: var(--ink); unicode-bidi: plaintext; text-align: start; }
 .ledger__unit { margin-inline-start: 5px; font-family: var(--font); font-size: var(--fs-xs); font-weight: 400; color: var(--ink-muted); }

@@ -16,6 +16,7 @@ import { adminSectionPath } from '@/features/admin/sections'
 import { ProfilePage } from '@/features/profile/ProfilePage'
 import { TodayPage } from '@/features/today/TodayPage'
 import { TeamPage } from '@/features/profile/TeamPage'
+import { RequestsPage } from '@/features/requests/RequestsPage'
 import { OrganizationPage } from '@/features/organization/OrganizationPage'
 import { TeacherStatsPage } from '@/features/teachers/TeacherStatsPage'
 import { NeedsActionPage } from '@/features/teachers/NeedsActionPage'
@@ -220,6 +221,10 @@ export function AppRoutes() {
         <Route path="/today" element={<TodayPage />} />
         {/* Team: the staff the viewer may list; /staff-profiles decides who that is, as on /profile. */}
         <Route path="/team" element={<TeamPage />} />
+        {/* Requests: one read-only queue over the request pages the account already has
+            (trials, new students, certificates, renewals, receipts). No gate of its own:
+            each list is asked for only if its page is offered, and the server answers each. */}
+        <Route path="/requests" element={<RequestsPage />} />
         <Route path="/profile/:staffId" element={<ProfilePage />} />
         <Route
           path="/admin/:section"

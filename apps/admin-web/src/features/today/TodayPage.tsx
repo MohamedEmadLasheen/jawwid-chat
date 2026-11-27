@@ -44,6 +44,7 @@ const T = {
   activity: { en: 'Latest', ar: 'آخر المستجدات' },
   noActivity: { en: 'Nothing new since you last looked. Notifications appear here as they arrive.', ar: 'لا جديد منذ آخر مرة. تظهر الإشعارات هنا عند وصولها.' },
   all: { en: 'All notifications', ar: 'كل الإشعارات' },
+  requests: { en: 'All requests', ar: 'كل الطلبات' },
   first: { en: 'Reply first', ar: 'ابدأ بالرد على' },
   paused: { en: 'Paused', ar: 'موقوفة' },
   unpaid: { en: 'Held for payment', ar: 'معلّقة للدفع' },
@@ -69,6 +70,8 @@ export function TodayPage() {
   const instalmentsPath = pathTo('/instalments')
   const paymentsPath = pathTo('/payments')
   const calendarPath = pathTo('/schedule')
+  // The requests queue gathers trials, new students, certificates, renewals and receipts.
+  const hasRequests = pathTo('/trials') !== null || pathTo('/certificates') !== null || paymentsPath !== null
 
   const today = academyToday()
   const from = weekStart(today)
@@ -167,9 +170,16 @@ export function TodayPage() {
 
         {cells.length > 0 && (
           <section aria-labelledby="today-needs">
-            <h2 className="section-label today__label" id="today-needs">
-              {tx(T.needs)}
-            </h2>
+            <div className="today__needs-head">
+              <h2 className="section-label" id="today-needs">
+                {tx(T.needs)}
+              </h2>
+              {hasRequests && (
+                <Link to="/requests" className="card__link">
+                  {tx(T.requests)}
+                </Link>
+              )}
+            </div>
             <div className="ledger">
               {cells.map((c) => (
                 <Link key={c.key} to={c.to} className={c.late ? 'ledger__cell ledger__cell--late' : 'ledger__cell'}>

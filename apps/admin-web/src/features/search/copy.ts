@@ -23,6 +23,7 @@ export const S = {
   addFamily: { en: 'Add a family', ar: 'إضافة عائلة' },
   newTask: { en: 'Open my tasks', ar: 'فتح مهامي' },
   today: { en: 'Today', ar: 'اليوم' },
+  requests: { en: 'Requests', ar: 'الطلبات' },
   profile: { en: 'My profile', ar: 'ملفي الشخصي' },
   notifications: { en: 'Notifications', ar: 'الإشعارات' },
 } satisfies Record<string, Bilingual>

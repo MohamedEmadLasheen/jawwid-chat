@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Badge, type Tone } from '@/shared/components/Badge'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
+import { TrialBadge } from '@/shared/components/TrialBadge'
 import { Icon } from '@/shared/components/Icon'
 import { SlotPicker } from '@/shared/components/SlotPicker'
 import { PageHeader } from '@/shared/components/PageHeader'
@@ -414,6 +415,8 @@ function TrialDetail({
           <Icon name="conversations" size={18} />
           {tx(TR.openGroup)}
         </button>
+        {/* PD-32: a trial group carries its Trial label wherever it is opened. */}
+        <TrialBadge />
       </DetailActions>
     </>
   )

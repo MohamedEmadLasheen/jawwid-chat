@@ -48,6 +48,8 @@ const TABBAR_QUERY = '(max-width: 767px)'
 
 /** The Today page: where the logo goes. */
 export const TODAY_PATH = '/today'
+/** The unified requests queue: reached from Today and from search. */
+export const REQUESTS_PATH = '/requests'
 const TODAY_LABEL = { en: 'Today', ar: 'اليوم' }
 const ACCOUNT_LABEL = { en: 'Account', ar: 'الحساب' }
 
@@ -436,6 +438,7 @@ function Where({ destinations }: { destinations: Destination[] }) {
   let section: string | null = null
   let page: string | null = null
   if (pathname === TODAY_PATH) page = tx(TODAY_LABEL)
+  else if (pathname === REQUESTS_PATH) page = tx(SEARCH.requests)
   else if (pathname.startsWith('/profile')) page = t('nav.profile')
   else if (pathname.startsWith('/notifications')) page = tx(SEARCH.notifications)
   else {

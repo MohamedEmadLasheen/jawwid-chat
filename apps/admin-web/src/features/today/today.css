@@ -63,3 +63,4 @@
 .today__line-time { color: var(--ink-muted); font-size: var(--fs-xs); white-space: nowrap; }
 /* Nothing waiting reads quieter than something waiting. */
 .ledger__value--none { color: var(--border-control); }
+.today__needs-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); margin-block-end: 6px; }

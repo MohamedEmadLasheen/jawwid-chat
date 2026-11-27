@@ -176,6 +176,7 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
 
     const pages = [
       { id: 'page:today', icon: 'home' as const, text: tx(S.today), to: '/today' },
+      { id: 'page:requests', icon: 'requests' as const, text: tx(S.requests), to: '/requests' },
       ...entries.filter((e) => !e.inDevelopment).map((e) => ({ id: `page:${e.path}`, icon: e.icon, text: entryLabel(e), to: e.path })),
       { id: 'page:notifications', icon: 'notifications' as const, text: tx(S.notifications), to: '/notifications' },
       { id: 'page:profile', icon: 'staff' as const, text: tx(S.profile), to: '/profile' },
