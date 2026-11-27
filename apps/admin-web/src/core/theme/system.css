@@ -792,7 +792,7 @@ html[lang='ar'] .side__item { font-size: 14.5px; }
 .badge--ok { --dot: var(--done); }
 .badge--info, .badge--coverage { --dot: var(--teal); }
 .badge--waiting, .badge--today, .badge--warn, .badge--gold, .badge--internal { --dot: var(--waiting); }
-.badge--outline, .badge--neutral { --dot: var(--line-strong); color: var(--ink-muted); }
+.badge--outline, .badge--neutral { --dot: var(--border-control); color: var(--ink-muted); }
 /* What needs a person now: a solid tag. */
 .badge--now, .badge--danger {
   gap: 5px;
@@ -1053,3 +1053,6 @@ a.ledger__cell:hover, button.ledger__cell:hover { background: var(--surface-hove
 .table tbody th { background: none; color: var(--ink); font-size: inherit; position: static; }
 /* A picker's empty choice ("All teachers") is a real choice: it reads as a value, not a hint. */
 .ss__input::placeholder { color: var(--ink-2); opacity: 1; }
+/* Sheets stacked in one column keep a section's distance; anything placed side by side overrides it. */
+:where(.sheet) + :where(.sheet) { margin-block-start: var(--space-5); }
+html[lang='ar'] .count { font-size: 13px; }
