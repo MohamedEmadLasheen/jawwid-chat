@@ -172,6 +172,8 @@ export function CertificatesPage() {
       label: tx(groupLabel(g)),
       count: countOf(g),
       quiet: g === 'sent' || g === 'closed',
+      // A solid red count over the cards whose red age asks this desk to act, as on the other boards.
+      urgent: (list?.certificates ?? []).some(certificateLate),
       more: !!list?.nextCursor,
       cards: (list?.certificates ?? []).map((c) => card(c, g)),
       empty: tx(C.stageEmpty),
