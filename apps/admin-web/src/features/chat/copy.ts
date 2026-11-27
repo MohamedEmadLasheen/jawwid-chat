@@ -343,7 +343,7 @@ export const chatCopy = {
       trial_group: 'مجموعة الحصص التجريبية',
       department_room: 'غرفة القسم',
     } as Record<string, string>,
-    role: { contact: 'ولي أمر', teacher: 'معلم', staff: 'جوّد', system: 'النظام' } as Record<string, string>,
+    role: { contact: 'ولي أمر', teacher: 'معلم', staff: 'فريق جوّد', system: 'النظام' } as Record<string, string>,
     system: {
       'group.created': (p: Record<string, unknown>) => `أُنشئت مجموعة الطالب${p.learner ? ` لـ ${String(p.learner)}` : ''}`,
       'group.membership_changed': (p: Record<string, unknown>) =>
@@ -671,7 +671,7 @@ export const chatCopy = {
       trial_group: 'Trial group',
       department_room: 'Department room',
     } as Record<string, string>,
-    role: { contact: 'Parent', teacher: 'Teacher', staff: 'Jawwid', system: 'System' } as Record<string, string>,
+    role: { contact: 'Parent', teacher: 'Teacher', staff: 'Jawwid staff', system: 'System' } as Record<string, string>,
     system: {
       'group.created': (p: Record<string, unknown>) => `Student Group created${p.learner ? ` for ${String(p.learner)}` : ''}`,
       'group.membership_changed': (p: Record<string, unknown>) =>

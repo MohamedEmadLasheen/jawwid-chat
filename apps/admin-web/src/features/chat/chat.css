@@ -68,7 +68,7 @@
 /* Views of the list: words with a count, the open one ruled in teal.
    One line that scrolls sideways; the rule under it runs the pane's width. */
 .cw-filters { display: flex; min-inline-size: 0; margin-inline: calc(-1 * var(--cw-pad)); }
-.cw-filters .seg { flex: 1; min-inline-size: 0; gap: 18px; padding-inline: var(--cw-pad); scroll-padding-inline: 44px; border-block-end-color: var(--line-2); }
+.cw-filters .seg { flex: 1; min-inline-size: 0; gap: 12px; padding-inline: var(--cw-pad); scroll-padding-inline: 44px; border-block-end-color: var(--line-2); }
 .cw .workspace__head .seg__item { min-block-size: 40px; gap: 6px; padding-inline: 0; }
 .cw-filters .seg__count { margin-inline-start: 0; }
 /* More tabs than the pane is wide: the side that hides more fades out over a
@@ -612,7 +612,7 @@ button.cw-head__fact:hover { background: var(--surface-hover); }
 .cw-mode:hover { color: var(--ink); }
 .cw-mode[aria-pressed='true'] { background: var(--surface); color: var(--ink); font-weight: 600; box-shadow: var(--shadow-lift); }
 .cw-mode--internal[aria-pressed='true'] { color: var(--waiting); }
-.cw-composer__flag { display: inline-flex; align-items: center; gap: 6px; margin-inline-start: auto; color: var(--waiting); font-size: var(--fs-xs); font-weight: 600; }
+.cw-composer__flag { display: flex; flex-basis: 100%; align-items: center; gap: 6px; margin-inline-start: 2px; color: var(--waiting); font-size: var(--fs-xs); font-weight: 600; }
 .cw-composer--internal { border-color: var(--cw-note-line); background: var(--waiting-tint); }
 .cw-composer--internal:focus-within { border-color: var(--waiting); box-shadow: 0 0 0 3px color-mix(in srgb, var(--waiting) 18%, transparent); }
 .cw-composer--internal .cw-composer__modes { background: color-mix(in srgb, var(--waiting) 10%, var(--waiting-tint)); border-color: var(--cw-note-line); }
@@ -672,7 +672,6 @@ button.cw-head__fact:hover { background: var(--surface-hover); }
 }
 .cw-send:hover:not(:disabled) { background: var(--teal-dark); }
 .cw-send:disabled { background: var(--surface-2); color: var(--border-control); cursor: default; }
-.cw-composer--internal .cw-send:not(:disabled) { background: var(--waiting); }
 .cw-composer--internal .cw-send:disabled { background: color-mix(in srgb, var(--waiting) 10%, transparent); }
 .cw-reply-banner { display: flex; align-items: center; gap: 8px; }
 .cw-reply-banner .cw-quote { flex: 1; }
@@ -797,9 +796,9 @@ button.cw-head__fact:hover { background: var(--surface-hover); }
 .cw-fam__sum { display: grid; gap: 2px; }
 .cw-fam__sum + .cw-fam__sum { margin-block-start: 10px; }
 .cw-fam__figure { display: flex; align-items: baseline; gap: 6px; }
-.cw-fam__figure .numeral { font-family: var(--font-head); font-size: 26px; font-weight: 700; line-height: 1.2; color: var(--ink); }
+.cw-fam__figure .numeral { font-family: var(--font-head); font-size: 22px; font-weight: 700; line-height: 1.2; color: var(--ink); }
 .cw-fam__unit { font-size: var(--fs-sm); color: var(--ink-muted); }
-.cw-fam__note { display: flex; align-items: center; flex-wrap: wrap; gap: 0 6px; min-block-size: 1.2em; font-size: var(--fs-sm); color: var(--ink-2); }
+.cw-fam__note { text-wrap: balance; display: flex; align-items: center; flex-wrap: wrap; gap: 0 6px; min-block-size: 1.2em; font-size: var(--fs-sm); color: var(--ink-2); }
 /* The total is not itself late: it stays ink. Red goes only on the line that
    says how much of it is overdue and since when -- the breached value. */
 .cw-fam__sum--late .cw-fam__note { color: var(--urgent); font-size: var(--fs-md); font-weight: 600; }
