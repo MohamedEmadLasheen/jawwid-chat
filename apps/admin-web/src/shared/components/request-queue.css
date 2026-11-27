@@ -129,6 +129,8 @@
 .rq-open:hover, .rq-table tbody tr:hover .rq-open { color: var(--teal-dark); }
 .rq-open:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; border-radius: var(--radius-sm); }
 .rq-sub { display: block; margin-block-start: 1px; font-size: var(--fs-xs); color: var(--ink-muted); font-weight: 400; }
+.rq-table .rq-c-who { min-inline-size: 9.5em; }
+.rq-table .rq-c-meta { min-inline-size: 6.5em; }
 .rq-muted { color: var(--ink-muted); }
 .rq-nowrap { white-space: nowrap; }
 .rq-type { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; color: var(--ink); }
@@ -144,6 +146,8 @@
 /* The queue has less room beside the panel: the columns that only add detail give way. */
 @container rq-queue (max-width: 700px) {
   .rq-c--extra { display: none; }
+  /* Beside the panel a row needs no buttons of its own: the open row's are in the panel. */
+  .rq--split .rq-table .rq-c-act { display: none; }
 }
 @container rq-queue (max-width: 560px) {
   .rq-c--more { display: none; }
