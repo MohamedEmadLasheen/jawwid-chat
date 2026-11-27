@@ -133,7 +133,7 @@ export function LessonReports({ teacherId, month }: { teacherId: string; month: 
   const rows = q.data?.pages.flatMap((p) => p.lessons) ?? []
   const grace = rows.find((r) => r.report)?.report?.graceHours ?? 24
   return (
-    <section className="card panel tf-section" aria-labelledby="tf-lesson-reports">
+    <section className="tf-section" aria-labelledby="tf-lesson-reports">
       <div className="tf-section__head">
         <h2 id="tf-lesson-reports" className="tf-section__title">
           {tx(R.title)}

@@ -48,7 +48,7 @@ export function TeacherScheduleSection({ teacherId, links }: { teacherId: string
   })
 
   return (
-    <section className="card panel tf-section" aria-labelledby="tf-schedule">
+    <section className="tf-section" aria-labelledby="tf-schedule">
       <div className="tf-section__head">
         <h2 id="tf-schedule" className="tf-section__title">{tx(T.schedule)}</h2>
         {links && (

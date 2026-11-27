@@ -11,12 +11,12 @@ export { useCopy, type Pair } from '@/features/organization/copy'
 export const T = {
   title: { en: 'Teachers', ar: 'المعلمون' },
   subtitle: {
-    en: 'Each teacher’s file: personal information, assigned students and supervision notes. Visible to administration only — never to parents or teachers.',
-    ar: 'ملف كل معلم: البيانات الشخصية والطلاب المسندون وملاحظات الإشراف. للإدارة فقط، ولا يراه أولياء الأمور ولا المعلمون.',
+    en: 'For administration only: parents and teachers never see a teacher’s file.',
+    ar: 'للإدارة فقط: لا يرى أولياء الأمور ولا المعلمون ملف المعلم.',
   },
   search: { en: 'Search a teacher', ar: 'ابحث عن معلم' },
   count: { en: '{n} teachers', ar: '{n} معلمًا' },
-  noTeachers: { en: 'No teachers to show.', ar: 'لا يوجد معلمون للعرض.' },
+  noTeachers: { en: 'No teacher matches. Clear the search or the filters to see every teacher.', ar: 'لا معلم يطابق. امسح البحث أو عوامل التصفية لعرض كل المعلمين.' },
   name: { en: 'Teacher', ar: 'المعلم' },
   students: { en: 'Students', ar: 'الطلاب' },
   openComplaints: { en: 'Open complaints', ar: 'شكاوى مفتوحة' },

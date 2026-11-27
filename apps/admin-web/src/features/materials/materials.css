@@ -1,41 +1,49 @@
-/* PD-29 Materials. The design system's page, card, field and button classes;
-   logical properties only, so it reads the same in Arabic and English. */
-.mt-tabs { margin-block-end: var(--space-3); }
-.mt-toolbar { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; justify-content: space-between; margin-block-end: var(--space-2); }
-.mt-filters { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-block-end: var(--space-3); }
+/* PD-29 Materials. A ruled library: each item a line with its status as a dot and
+   a word. Logical properties only, so it reads the same in Arabic and English. */
+.mt-tabs { margin-block-end: var(--space-4); }
+.mt-toolbar { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; justify-content: space-between; margin-block-end: var(--space-3); }
+.mt-filters { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-3); margin-block-end: var(--space-3); }
 .mt-filters .input { flex: 2 1 16rem; min-inline-size: 0; inline-size: auto; }
 .mt-filters .ss { flex: 1 1 11rem; min-inline-size: 0; inline-size: auto; }
-.mt-items { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-3); }
-.mt-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-3); align-items: start; }
-.mt-item__body { display: grid; gap: var(--space-1); min-inline-size: 0; }
-.mt-item__head { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
-.mt-item__meta { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-3); color: var(--text-muted); font-size: var(--fs-sm); }
+.mt-items { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; border-block-start: 1px solid var(--hairline); }
+.mt-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-2) var(--space-4); align-items: center; padding: 10px 2px; border-block-end: 1px solid var(--hairline-soft); transition: background var(--dur-fast) var(--ease-out); }
+.mt-item:hover { background: var(--surface-hover); }
+.mt-item__body { display: grid; gap: 2px; min-inline-size: 0; }
+.mt-item__head { display: flex; flex-wrap: wrap; gap: 2px var(--space-4); align-items: baseline; }
+.mt-item__title { font-weight: 600; }
+.mt-item__meta { display: flex; flex-wrap: wrap; gap: 0 var(--space-3); color: var(--ink-muted); font-size: var(--fs-xs); }
 .mt-item__actions { display: flex; flex-wrap: wrap; gap: var(--space-2); justify-content: flex-end; }
-.mt-ref { font-family: var(--font-mono, monospace); font-size: var(--fs-sm); color: var(--text-muted); overflow-wrap: anywhere; }
+.mt-ref { font-family: var(--font-mono, monospace); font-size: var(--fs-xs); color: var(--ink-muted); overflow-wrap: anywhere; }
 .mt-form { display: grid; gap: var(--space-2); min-inline-size: min(34rem, 80vw); }
 .mt-textarea { min-block-size: 5rem; resize: vertical; }
-.mt-ages, .mt-mode { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-3); border: 0; margin: 0; padding: 0; min-inline-size: 0; }
-.mt-ages legend, .mt-mode legend { inline-size: 100%; }
-.mt-ages label, .mt-mode label { display: inline-flex; gap: var(--space-1); align-items: center; }
+.mt-ages, .mt-mode { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); border: 0; margin: 0; padding: 0; min-inline-size: 0; }
+.mt-ages legend, .mt-mode legend { inline-size: 100%; padding: 0; }
+.mt-ages label, .mt-mode label { display: inline-flex; gap: 6px; align-items: center; min-block-size: 32px; font-size: var(--fs-sm); }
+.mt-ages input, .mt-mode input { accent-color: var(--teal); }
 .mt-ages .field__hint { inline-size: 100%; }
-.mt-frame { display: block; inline-size: 100%; block-size: min(70vh, 40rem); border: 1px solid var(--border); border-radius: var(--radius-md); background: #fff; }
+.mt-frame { display: block; inline-size: 100%; block-size: min(70vh, 40rem); border: 1px solid var(--hairline); border-radius: var(--radius); background: var(--surface); }
 .mt-browser { display: grid; gap: var(--space-2); justify-items: start; }
 .mt-media { display: block; inline-size: 100%; max-block-size: 60vh; object-fit: contain; }
-.mt-import, .mt-recitations { display: grid; gap: var(--space-3); }
-.mt-intro { margin: 0; color: var(--text-muted); max-inline-size: 60rem; }
+.mt-import, .mt-recitations { display: grid; gap: var(--space-4); }
+/* What the tab does and its one rule, in a line. */
+.mt-intro { margin: 0; padding-inline-start: var(--space-3); border-inline-start: 2px solid var(--gold-line); color: var(--ink-muted); font-size: var(--fs-sm); max-inline-size: 96ch; }
 .mt-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .mt-report { overflow-x: auto; }
 .mt-table { inline-size: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
-.mt-table th, .mt-table td { text-align: start; vertical-align: top; padding: var(--space-2); border-block-end: 1px solid var(--border); }
-.mt-table__error td { background: color-mix(in srgb, var(--danger, #b42318) 6%, transparent); }
-.mt-source { display: grid; gap: var(--space-2); }
-.mt-subhead { margin: var(--space-2) 0 0; font-size: var(--fs-sm); }
-.mt-tracks { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-1); }
-.mt-tracks li { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+.mt-table th, .mt-table td { text-align: start; vertical-align: top; }
+/* A row that cannot be imported: a terracotta edge, and its error in words. */
+.mt-table__error td:first-child { box-shadow: inset 2px 0 0 var(--terracotta); }
+[dir='rtl'] .mt-table__error td:first-child { box-shadow: inset -2px 0 0 var(--terracotta); }
+.mt-source { display: grid; gap: var(--space-2); padding: var(--space-3) 2px var(--space-4); border-block-end: 1px solid var(--hairline-soft); }
+.mt-subhead { margin: var(--space-2) 0 0; font-size: 12.5px; font-weight: 500; color: var(--ink-muted); }
+.mt-tracks { list-style: none; margin: 0; padding: 0; }
+.mt-tracks li { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; padding-block: 4px; border-block-end: 1px solid var(--hairline-soft); font-size: var(--fs-sm); }
 .mt-override { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
 .mt-override .input { flex: 1 1 12rem; min-inline-size: 0; inline-size: auto; }
 .mt-override .ss { flex: 1 1 14rem; min-inline-size: 0; inline-size: auto; }
-.mt-add-source { display: grid; gap: var(--space-2); max-inline-size: 40rem; }
+.mt-add-source { display: grid; gap: var(--space-3); max-inline-size: 40rem; }
+.mt-add-source__label { margin: 0; padding-block-end: 8px; border-block-end: 1px solid var(--hairline); }
+.mt-add-source .btn { justify-self: start; }
 .dialog--sheet .mt-form { min-inline-size: 0; }
 /* A framed lesson in the full-window preview: the frame takes every pixel left. */
 .mt-stage { flex: 1; display: flex; min-block-size: 0; background: var(--surface); }

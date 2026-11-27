@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { QueryBoundary } from '@/shared/components/States'
 import { Badge } from '@/shared/components/Badge'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
 import type { CertificateReviewItem, ReviewCertificate } from '@/core/api/endpoints'
 import { openCertificate, useDecideCertificate, usePendingReviews } from './hooks'
+import './teacher-profiles.css'
 
 /**
  * Teacher CREDENTIAL review.
@@ -33,7 +34,12 @@ export function TeacherProfilesPage() {
 
   return (
     <div className="page">
-      <h1 className="page__title">{t('nav.teacher-profiles')}</h1>
+      <div className="page__inner">
+      <header className="page-header">
+        <div className="page-header__text">
+          <h1 className="page-header__title">{t('nav.teacher-profiles')}</h1>
+        </div>
+      </header>
 
       <QueryBoundary
         isLoading={query.isLoading}
@@ -42,12 +48,13 @@ export function TeacherProfilesPage() {
         emptyTitle={t('tprofile.empty')}
         onRetry={() => void query.refetch()}
       >
-        <ul className="card" aria-label={t('tprofile.pending.title')}>
+        <ul className="tp-list" aria-label={t('tprofile.pending.title')}>
           {query.profiles.map((profile) => (
             <TeacherRow key={profile.profileId} profile={profile} />
           ))}
         </ul>
       </QueryBoundary>
+      </div>
     </div>
   )
 }
@@ -56,26 +63,26 @@ function TeacherRow({ profile }: { profile: CertificateReviewItem }) {
   const { t } = useI18n()
 
   return (
-    <li className="row">
-      <div>
+    <li className="tp-teacher">
+      <div className="tp-teacher__head">
         {/* The teacher's name as the SERVER resolved it, from chat.teacher.
             The console stores no identity of its own. */}
-        <strong>{profile.teacherName}</strong>
+        <strong className="tp-teacher__name" dir="auto">{profile.teacherName}</strong>
         {profile.pendingCertificates > 0 ? (
-          <Badge tone="now">
+          <Badge tone="warn" dot>
             {profile.pendingCertificates} · {t('tprofile.cert.state.pending')}
           </Badge>
         ) : (
-          <Badge tone="ok">{t('tprofile.ready')}</Badge>
+          <Badge tone="ok" dot>{t('tprofile.ready')}</Badge>
         )}
-
-        <h4>{t('tprofile.certificates')}</h4>
-        <ul aria-label={t('tprofile.certificates')}>
-          {profile.certificates.map((certificate) => (
-            <CertificateRow key={certificate.id} certificate={certificate} />
-          ))}
-        </ul>
       </div>
+
+      <h2 className="section-label tp-teacher__label">{t('tprofile.certificates')}</h2>
+      <ul className="tp-certs" aria-label={t('tprofile.certificates')}>
+        {profile.certificates.map((certificate) => (
+          <CertificateRow key={certificate.id} certificate={certificate} />
+        ))}
+      </ul>
     </li>
   )
 }
@@ -90,24 +97,26 @@ function CertificateRow({ certificate }: { certificate: ReviewCertificate }) {
       ? 'ok'
       : certificate.state === 'rejected'
         ? 'danger'
-        : 'now'
+        : 'warn'
 
   return (
-    <li>
-      <strong>{certificate.title}</strong>
-      <Badge tone={tone}>{t(`tprofile.cert.state.${certificate.state}` as const)}</Badge>
+    <li className="tp-cert">
+      <div className="tp-cert__main">
+        <div className="tp-cert__head">
+          <strong className="tp-cert__title" dir="auto">{certificate.title}</strong>
+          <Badge tone={tone} dot>{t(`tprofile.cert.state.${certificate.state}` as const)}</Badge>
+        </div>
+        <p className="tp-cert__meta">
+          {certificate.issuingOrganization}
+          {certificate.issuedOn && <> · {date(certificate.issuedOn)}</>}
+        </p>
+        {certificate.reviewNote && <p className="tp-cert__note" dir="auto">{certificate.reviewNote}</p>}
+      </div>
 
-      <p>
-        {certificate.issuingOrganization}
-        {certificate.issuedOn && <> · {date(certificate.issuedOn)}</>}
-      </p>
-      {certificate.reviewNote && <p>{certificate.reviewNote}</p>}
-
-      {decide.error != null && <p role="alert">{(decide.error as Error).message}</p>}
-
-      <div style={{ display: 'flex', gap: 8 }}>
+      <div className="tp-cert__actions">
         <button
           type="button"
+          className="btn btn--sm btn--ghost"
           // A fresh signed URL per click. Nothing about where the file lives is
           // held here between clicks, and no URL is constructed.
           onClick={() => void openCertificate(certificate.id)}
@@ -116,6 +125,7 @@ function CertificateRow({ certificate }: { certificate: ReviewCertificate }) {
         </button>
         <button
           type="button"
+          className="btn btn--sm btn--primary"
           onClick={() =>
             decide.mutate({ certificateId: certificate.id, approved: true })
           }
@@ -125,12 +135,15 @@ function CertificateRow({ certificate }: { certificate: ReviewCertificate }) {
         </button>
         <button
           type="button"
+          className="btn btn--sm"
           onClick={() => setRejecting(true)}
           disabled={decide.isPending}
         >
           {t('tprofile.cert.reject')}
         </button>
       </div>
+
+      {decide.error != null && <p className="tp-cert__error" role="alert">{(decide.error as Error).message}</p>}
 
       {rejecting && (
         <NoteDialog
@@ -176,6 +189,7 @@ function NoteDialog({
   const { t } = useI18n()
   const [note, setNote] = useState('')
   const [touched, setTouched] = useState(false)
+  const noteId = useId()
   const invalid = note.trim().length === 0
 
   return (
@@ -187,6 +201,7 @@ function NoteDialog({
           <DialogCancelButton onClick={onCancel} />
           <button
             type="button"
+            className="btn btn--primary"
             disabled={pending}
             onClick={() => {
               setTouched(true)
@@ -199,15 +214,25 @@ function NoteDialog({
         </>
       }
     >
-      <label>
-        {label}
+      <div className="field">
+        <label className="field__label" htmlFor={noteId}>
+          {label}
+        </label>
         <textarea
+          id={noteId}
+          className="input"
+          rows={3}
+          dir="auto"
           value={note}
           onChange={(event) => setNote(event.target.value)}
-          aria-label={label}
+          aria-invalid={touched && invalid}
         />
-      </label>
-      {touched && invalid && <p role="alert">{requiredMessage}</p>}
+        {touched && invalid && (
+          <p className="field__error" role="alert">
+            {requiredMessage}
+          </p>
+        )}
+      </div>
     </Dialog>
   )
 }

@@ -42,10 +42,9 @@ export function StudentsPage() {
         </div>
         <QueryBoundary isLoading={q.isLoading} error={q.error} onRetry={() => void q.refetch()}>
           {rows.length === 0 ? (
-            <EmptyState title={tx(O.noneList)} />
+            <EmptyState title={tx(kind === 'temporary' ? O.nonePaused : O.noneStopped)} />
           ) : (
-            <div className="card card--flush">
-              <div className="table-wrap">
+            <div className="table-wrap">
                 <table className="table ts-plain-rows">
                   <thead>
                     <tr>
@@ -84,7 +83,6 @@ export function StudentsPage() {
                     ))}
                   </tbody>
                 </table>
-              </div>
             </div>
           )}
           {end.error && <div className="banner banner--danger" role="alert">{describeOpsError(end.error, locale)}</div>}

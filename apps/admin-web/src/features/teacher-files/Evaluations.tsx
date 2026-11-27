@@ -109,7 +109,7 @@ export function EvaluationsSection({ teacherId, canWrite, canEditCriteria }: { t
   const data = records.data
 
   return (
-    <section className="card panel tf-section" aria-labelledby={id}>
+    <section className="tf-section" aria-labelledby={id}>
       <div className="tf-section__head">
         <h2 id={id} className="tf-section__title">{tx(E.title)}</h2>
         {canWrite && (

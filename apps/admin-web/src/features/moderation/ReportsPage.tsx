@@ -3,7 +3,7 @@ import { useI18n } from '@/core/i18n/I18nProvider'
 import { useSession } from '@/core/auth/SessionProvider'
 import { holdsAny } from '@/core/permissions/capabilities'
 import { ApiError } from '@/core/api/errors'
-import { Badge } from '@/shared/components/Badge'
+import { Badge, type Tone } from '@/shared/components/Badge'
 import { PageHeader } from '@/shared/components/PageHeader'
 import { QueryBoundary } from '@/shared/components/States'
 import { SearchableSelect } from '@/shared/components/SearchableSelect'
@@ -13,6 +13,9 @@ import { DueClockView } from './DueClockView'
 import { isNotAvailable, useForgetReport, useNow, useReports, useTake } from './hooks'
 import { ReportDetail, SubjectView } from './ReportDetail'
 import './moderation.css'
+
+/** A report's status as a dot and a word: waiting is gold, in hand is teal, closed is quiet. */
+const STATUS_TONE: Partial<Record<ReportStatus, Tone>> = { open: 'warn', in_review: 'info', actioned: 'ok' }
 
 export const MODERATION_VIEW_KEYS = ['moderation.view'] as const
 const ACT_KEYS = ['moderation.act'] as const
@@ -52,9 +55,10 @@ export function ReportsPage() {
 
   return (
     <div className="page">
+      <div className="page__inner">
       <PageHeader title={tx(MOD.title)} subtitle={tx(MOD.subtitle)} />
-      <p className="field__hint">{tx(MOD.draftNote)}</p>
-      <div className="sa-filters">
+      <p className="mod-note">{tx(MOD.draftNote)}</p>
+      <div className="mod-filters">
         <label className="field">
           <span className="field__label">{tx(MOD.filterStatus)}</span>
           <SearchableSelect
@@ -75,17 +79,17 @@ export function ReportsPage() {
             clearable={false}
           />
         </label>
-        <label className="sa-check">
+        <label className="mod-check">
           <input type="checkbox" checked={urgent} onChange={(e) => setUrgent(e.target.checked)} />
           {tx(MOD.childSafetyOnly)}
         </label>
-        <label className="sa-check">
+        <label className="mod-check">
           <input type="checkbox" checked={overdue} onChange={(e) => setOverdue(e.target.checked)} />
           {tx(MOD.overdueOnly)}
         </label>
       </div>
       {goneNotice && (
-        <div className="field__hint" role="status">
+        <div className="mod-note" role="status">
           {tx(MOD.notAvailable)}
         </div>
       )}
@@ -124,15 +128,19 @@ export function ReportsPage() {
                       <SubjectView subject={r.subject} targetKind={r.targetKind} testId="row-subject" />
                     </td>
                     <td>
-                      {tx(STATUS[r.status] ?? { ar: r.status, en: r.status })}{' '}
-                      {r.reporterAnsweredAt ? <Badge tone="ok">{tx(MOD.answered)}</Badge> : null}
+                      <span className="mod-status">
+                        <Badge tone={STATUS_TONE[r.status] ?? 'neutral'} dot>
+                          {tx(STATUS[r.status] ?? { ar: r.status, en: r.status })}
+                        </Badge>{' '}
+                        {r.reporterAnsweredAt ? <span className="mod-answered">{tx(MOD.answered)}</span> : null}
+                      </span>
                     </td>
                     <td>
                       <DueClockView dueAt={r.dueAt} status={r.status} nowMs={nowMs} overdueAt={r.overdueAt} />
                     </td>
-                    <td>{dateTime(r.createdAt)}</td>
+                    <td className="mod-when">{dateTime(r.createdAt)}</td>
                     <td className="mod-actions">
-                      <button type="button" className="btn btn--sm" onClick={() => { setGoneNotice(false); setOpenId(r.id) }}>
+                      <button type="button" className="btn btn--sm btn--ghost" onClick={() => { setGoneNotice(false); setOpenId(r.id) }}>
                         {tx(MOD.view)}
                       </button>
                       {canAct && r.status === 'open' && (
@@ -154,6 +162,7 @@ export function ReportsPage() {
         </div>
       </QueryBoundary>
       {openId && <ReportDetail id={openId} canAct={canAct} onClose={() => setOpenId(null)} onGone={gone} />}
+      </div>
     </div>
   )
 }

@@ -1,4 +1,4 @@
-import { useId, useState, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Badge } from '@/shared/components/Badge'
 import { FilterChips } from '@/shared/components/FilterChips'
@@ -16,6 +16,7 @@ import { AwayBadge } from '@/features/teacher-files/Complaint'
 import { H, useCopy } from './copy'
 import { useLeaveOverview } from './hooks'
 import { SectionIntro } from './SectionIntro'
+import { MonthPicker } from '@/features/teachers/MonthPicker'
 import './teacher-supervision.css'
 
 /**
@@ -58,7 +59,7 @@ export function LeaveSection({ basePath }: { basePath: string }) {
       ) : (
         <QueryBoundary isLoading={overview.isLoading} error={null} onRetry={() => void overview.refetch()}>
           {rows.length === 0 ? (
-            <EmptyState title={tx(H.empty)} />
+            <EmptyState title={tx(H.emptyLeave)} />
           ) : (
             <div className="table-wrap">
               <table className="table">
@@ -105,7 +106,7 @@ export function LeaveSection({ basePath }: { basePath: string }) {
           )}
         </QueryBoundary>
       )}
-      <h2 className="th-subtitle">{tx(H.leaveRequests)}</h2>
+      <h2 className="section-label th-subtitle">{tx(H.leaveRequests)}</h2>
       <LeaveRequestsList basePath={basePath} />
     </>
   )
@@ -125,7 +126,6 @@ function useWindow() {
 
 function WindowFilter({ w }: { w: ReturnType<typeof useWindow> }) {
   const tx = useCopy()
-  const monthId = useId()
   return (
     <div className="toolbar dc-toolbar">
       <FilterChips<Window>
@@ -137,12 +137,7 @@ function WindowFilter({ w }: { w: ReturnType<typeof useWindow> }) {
           { value: 'month', label: tx(H.thisMonth) },
         ]}
       />
-      {w.window === 'month' && (
-        <label className="dc-month" htmlFor={monthId}>
-          <span className="field__label">{tx(H.month)}</span>
-          <input id={monthId} className="input" type="month" value={w.month} onChange={(e) => e.target.value && w.setMonth(e.target.value)} />
-        </label>
-      )}
+      {w.window === 'month' && <MonthPicker value={w.month} onChange={w.setMonth} label={tx(H.month)} showLabel={false} />}
     </div>
   )
 }
@@ -153,9 +148,12 @@ function ViolationTable({
   filter,
   extraHead,
   extraCell,
+  empty,
 }: {
   query: ViolationQuery
   canDecide: boolean
+  /** What the empty list says: nothing waiting, or nothing in the month. */
+  empty: string
   filter?: (v: Violation) => boolean
   extraHead?: ReactNode
   extraCell?: (v: Violation) => ReactNode
@@ -169,7 +167,7 @@ function ViolationTable({
   return (
     <QueryBoundary isLoading={list.isLoading} error={null} onRetry={() => void list.refetch()}>
       {rows.length === 0 ? (
-        <EmptyState title={tx(H.empty)} />
+        <EmptyState title={empty} />
       ) : (
         <div className="table-wrap dc-table-wrap">
           <table className="table">
@@ -217,6 +215,7 @@ export function ExcusesSection({ canRecord, canDecide }: AttendanceRights) {
       <ViolationTable
         query={query}
         canDecide={canDecide}
+        empty={tx(w.window === 'open' ? H.emptyOpen : H.emptyMonth)}
         extraHead={<th scope="col">{tx(H.excuseCategory)}</th>}
         extraCell={(v) => {
           const label = excuseCategoryLabel(v.lesson?.excuseCategory)
@@ -265,6 +264,7 @@ export function LatenessSection({ canRecord, canDecide, trialsOnly = false }: At
       <ViolationTable
         query={query}
         canDecide={canDecide}
+        empty={tx(w.window === 'open' ? H.emptyOpen : H.emptyMonth)}
         // An older server sends no lesson kind: everything reads as regular.
         filter={(v) => (v.lesson?.kind ?? 'regular') === type}
         extraHead={

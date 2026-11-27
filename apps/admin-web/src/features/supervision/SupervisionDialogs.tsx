@@ -171,8 +171,8 @@ export function ApproveLeaveDialog({ request, onClose }: { request: LeaveRequest
           : tx(S.deducted, { n: number(deducted), b: after === null ? tx(S.noAllowance) : number(after) })}
       </p>
       {unpaid > 0 && (
-        <p className="sv-muted" role="note">
-          ⚠️ {tx(S.willBeUnpaid, { n: number(unpaid) })}
+        <p className="sv-warn" role="note">
+          {tx(S.willBeUnpaid, { n: number(unpaid) })}
         </p>
       )}
       {lessons.length > 0 && (

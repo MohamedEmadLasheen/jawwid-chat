@@ -60,7 +60,7 @@ export function HistorySection({ kind, file, payroll }: { kind: 'bonus' | 'deduc
 
 function Section({ id, title, hint, action, children }: { id: string; title: string; hint?: string; action?: ReactNode; children: ReactNode }) {
   return (
-    <section className="card panel tf-section" aria-labelledby={id}>
+    <section className="tf-section" aria-labelledby={id}>
       <div className="tf-section__head">
         <h2 id={id} className="tf-section__title">{title}</h2>
         {action && <div className="tf-actions">{action}</div>}

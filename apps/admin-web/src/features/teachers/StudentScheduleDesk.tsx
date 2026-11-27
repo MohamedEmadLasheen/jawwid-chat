@@ -23,7 +23,7 @@ type Open = { kind: 'weekly' | 'add' | 'lessons' | 'teacher'; learner: ScheduleL
  */
 export function StudentScheduleDesk({ students, teachers }: { students: ScheduleLearner[]; teachers?: Roster['teachers'] }) {
   const tx = useTx()
-  const { locale } = useI18n()
+  const { locale, number } = useI18n()
   const [dialog, setDialog] = useState<Pending>(null)
   const [open, setOpen] = useState<Open>(null)
   const [notice, setNotice] = useState<string | null>(null)
@@ -34,10 +34,13 @@ export function StudentScheduleDesk({ students, teachers }: { students: Schedule
   return (
     <>
       {notice && <div className="banner banner--info" role="status">{notice}</div>}
-      <section className="card" aria-label={tx(O.students)}>
-        <h2 className="ts-card__title">{tx(O.students)}</h2>
+      <section className="ts-section" aria-label={tx(O.students)}>
+        <header className="ts-section__head">
+          <h2 className="ts-card__title">{tx(O.students)}</h2>
+          {students.length > 0 && <span className="ts-section__count">{number(students.length)}</span>}
+        </header>
         {students.length === 0 ? (
-          <p className="ts-muted">{tx(O.noStudents)}</p>
+          <p className="ts-muted ts-section__hint">{tx(O.noStudents)}</p>
         ) : (
           <div className="table-wrap">
             <table className="table ts-plain-rows">
@@ -66,7 +69,7 @@ export function StudentScheduleDesk({ students, teachers }: { students: Schedule
                     <td>{l.family.displayName}</td>
                     {teachers && <td>{teachers.find((t) => t.id === l.teacherId)?.name ?? <span className="ts-muted">{tx(O.none)}</span>}</td>}
                     <td>{l.slots.length ? l.slots.map((s) => slotLabel(tx, s, locale)).join(' · ') : <span className="ts-muted">{tx(O.none)}</span>}</td>
-                    <td className="ts-actions-cell">
+                    <td className="ts-actions-cell row-actions">
                       <button type="button" className="btn btn--sm" onClick={() => setOpen({ kind: 'weekly', learner: l })}>{tx(O.editTimes)}</button>
                       <button type="button" className="btn btn--sm" onClick={() => setOpen({ kind: 'add', learner: l })}>{tx(O.addLesson)}</button>
                       <button type="button" className="btn btn--sm" onClick={() => setOpen({ kind: 'lessons', learner: l })}>{tx(O.lessons)}</button>

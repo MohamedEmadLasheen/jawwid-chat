@@ -27,7 +27,7 @@ export function TeacherLeaveSection({ teacherId, canSetAllowance }: { teacherId:
   const figure = (v: number | null | undefined) => (v === null || v === undefined ? <span className="sv-muted">{tx(S.noAllowance)}</span> : number(v))
 
   return (
-    <section className="card panel tf-section" aria-labelledby="tf-leave">
+    <section className="tf-section" aria-labelledby="tf-leave">
       <div className="tf-section__head">
         <h2 id="tf-leave" className="tf-section__title">
           {tx(S.leaveSection)}

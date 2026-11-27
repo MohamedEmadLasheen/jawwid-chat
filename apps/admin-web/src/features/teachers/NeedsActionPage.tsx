@@ -16,6 +16,9 @@ import { dayLabel, weeklyLabel } from './WeeklyChangeDialog'
 import { useNeedsAction, useOp } from './opsHooks'
 import './teachers.css'
 
+type QueueKey = 'overdue' | 'awaiting' | 'rulings' | 'makeups' | 'requests' | 'blocked' | 'corrections' | 'returning'
+const FLOW: Pair = { en: 'Queues', ar: 'القوائم' }
+
 type Pending = { title: string; intro?: string; fields: FieldSpec[]; submit: (v: FieldValue) => Promise<unknown> } | null
 
 /**
@@ -28,7 +31,7 @@ type Pending = { title: string; intro?: string; fields: FieldSpec[]; submit: (v:
  */
 export function NeedsActionPage() {
   const tx = useTx()
-  const { locale } = useI18n()
+  const { locale, number } = useI18n()
   const q = useNeedsAction()
   const [dialog, setDialog] = useState<Pending>(null)
   const op = useOp((f: () => Promise<unknown>) => f())
@@ -48,6 +51,23 @@ export function NeedsActionPage() {
   const empty =
     d &&
     d.overdue.length + d.awaitingClose.length + d.rulings.length + d.makeupsOverdue.length + d.scheduleRequests.length + d.returningSoon.length + blocked.length + openCorrections === 0
+
+  // The queues that hold something, as a ruled row of counts; pressing one shows only it.
+  const [only, setOnly] = useState<QueueKey | null>(null)
+  const flow: Array<{ key: QueueKey; label: string; count: number; late?: boolean }> = d
+    ? [
+        { key: 'overdue' as const, label: tx(O.overdue), count: d.overdue.length, late: true },
+        { key: 'awaiting' as const, label: tx(O.awaiting), count: d.awaitingClose.length },
+        { key: 'rulings' as const, label: tx(O.rulings), count: d.rulings.length },
+        { key: 'makeups' as const, label: tx(O.makeups), count: d.makeupsOverdue.length, late: true },
+        { key: 'requests' as const, label: tx(O.requests), count: d.scheduleRequests.length },
+        { key: 'blocked' as const, label: tx(O.blocked), count: blocked.length },
+        { key: 'corrections' as const, label: tx(CORRECTIONS), count: correctionRows.length },
+        { key: 'returning' as const, label: tx(O.returning), count: d.returningSoon.length },
+      ].filter((f) => f.count > 0)
+    : []
+  const active = only && flow.some((f) => f.key === only) ? only : null
+  const show = (key: QueueKey) => active === null || active === key
 
   const noteField = (required: boolean, label: Pair = required ? O.note : O.noteOptional): FieldSpec => ({ key: 'note', label, type: 'textarea', required })
   const lessonActions = (l: LessonDto) => (
@@ -71,15 +91,31 @@ export function NeedsActionPage() {
         <PageHeader title={tx(O.needsTitle)} subtitle={tx(O.needsSubtitle)} />
         <QueryBoundary isLoading={q.isLoading} error={q.error} onRetry={() => void q.refetch()}>
           {empty && <EmptyState title={tx(O.allClear)} />}
+          {d && flow.length > 1 && (
+            <div className="ledger ts-flow" role="group" aria-label={tx(FLOW)}>
+              {flow.map((f) => (
+                <button
+                  key={f.key}
+                  type="button"
+                  className={f.late ? 'ledger__cell ledger__cell--late' : 'ledger__cell'}
+                  aria-pressed={active === f.key}
+                  onClick={() => setOnly(active === f.key ? null : f.key)}
+                >
+                  <span className="ledger__label">{f.label}</span>
+                  <span className="ledger__value">{number(f.count)}</span>
+                </button>
+              ))}
+            </div>
+          )}
           {d && (
             <>
-              <Section title={tx(O.overdue)} hint={tx(O.overdueHint)} count={d.overdue.length}>
+              <Section show={show('overdue')} late title={tx(O.overdue)} hint={tx(O.overdueHint)} count={d.overdue.length}>
                 {d.overdue.map((l) => <LessonRow key={l.id} lesson={l} actions={lessonActions(l)} />)}
               </Section>
-              <Section title={tx(O.awaiting)} count={d.awaitingClose.length}>
+              <Section show={show('awaiting')} title={tx(O.awaiting)} count={d.awaitingClose.length}>
                 {d.awaitingClose.map((l) => <LessonRow key={l.id} lesson={l} actions={lessonActions(l)} />)}
               </Section>
-              <Section title={tx(O.rulings)} hint={tx(O.rulingsHint)} count={d.rulings.length}>
+              <Section show={show('rulings')} title={tx(O.rulings)} hint={tx(O.rulingsHint)} count={d.rulings.length}>
                 {d.rulings.map((r) => (
                   <LessonRow
                     key={r.id}
@@ -98,7 +134,7 @@ export function NeedsActionPage() {
                   />
                 ))}
               </Section>
-              <Section title={tx(O.makeups)} hint={tx(O.makeupsHint)} count={d.makeupsOverdue.length}>
+              <Section show={show('makeups')} late title={tx(O.makeups)} hint={tx(O.makeupsHint)} count={d.makeupsOverdue.length}>
                 {d.makeupsOverdue.map((l) => (
                   <LessonRow
                     key={l.id}
@@ -134,7 +170,7 @@ export function NeedsActionPage() {
                   />
                 ))}
               </Section>
-              <Section title={tx(O.requests)} count={d.scheduleRequests.length}>
+              <Section show={show('requests')} title={tx(O.requests)} count={d.scheduleRequests.length}>
                 {d.scheduleRequests.map((r) => (
                   <ScheduleRequestRow
                     key={r.id}
@@ -144,13 +180,13 @@ export function NeedsActionPage() {
                   />
                 ))}
               </Section>
-              <Section title={tx(O.blocked)} hint={tx(O.blockedHint)} count={blocked.length}>
+              <Section show={show('blocked')} title={tx(O.blocked)} hint={tx(O.blockedHint)} count={blocked.length}>
                 {blocked.map((b) => (
                   <div className="ts-row" key={b.id} data-blocked={b.id}>
                     <div className="ts-row__main">
                       <strong>{b.learner.name}</strong>
                       <span className="ts-muted">
-                        {b.teacher.name} · {whenIn(b.startsAt, ACADEMY_ZONE, locale)} · {formatMinutes(minutesBetween(b.startsAt, b.endsAt), locale)}
+                        <bdi>{b.teacher.name}</bdi> · <bdi>{whenIn(b.startsAt, ACADEMY_ZONE, locale)}</bdi> · {formatMinutes(minutesBetween(b.startsAt, b.endsAt), locale)}
                       </span>
                       {b.reason === 'teacher_changed' && <span className="ts-muted">{tx(O.blockedTeacherChanged)}</span>}
                       <span className="ts-muted">
@@ -171,7 +207,7 @@ export function NeedsActionPage() {
                   </div>
                 ))}
               </Section>
-              <Section title={tx(CORRECTIONS)} hint={tx(CORRECTIONS_HINT)} count={correctionRows.length}>
+              <Section show={show('corrections')} title={tx(CORRECTIONS)} hint={tx(CORRECTIONS_HINT)} count={correctionRows.length}>
                 {correctionRows.map((r) => (
                   <CorrectionRow
                     key={r.id}
@@ -185,7 +221,7 @@ export function NeedsActionPage() {
                   />
                 ))}
               </Section>
-              <Section title={tx(O.returning)} count={d.returningSoon.length}>
+              <Section show={show('returning')} title={tx(O.returning)} count={d.returningSoon.length}>
                 {d.returningSoon.map((r) => (
                   <div className="ts-row" key={r.suspensionId}>
                     <div className="ts-row__main">
@@ -275,7 +311,7 @@ function ScheduleRequestRow({ r, onApprove, onReject }: { r: ScheduleRequestDto;
         )}
         {r.note && <span className="ts-muted" dir="auto">{r.note}</span>}
         {stale && (
-          <p id={warnId} className="banner banner--warn ts-stale" role="note">
+          <p id={warnId} className="ts-stale" role="note">
             {tx(O.noLongerFree)}
           </p>
         )}
@@ -315,7 +351,7 @@ function CorrectionRow({ r, onHistory, onWithdraw }: { r: CorrectionRequest; onH
     <div className="ts-row">
       <div className="ts-row__main">
         <strong>{r.learner.name}</strong>
-        <span className="ts-muted">{r.teacher.name} · {dateTime(r.lessonStartsAt)}</span>
+        <span className="ts-muted"><bdi>{r.teacher.name}</bdi> · <bdi>{dateTime(r.lessonStartsAt)}</bdi></span>
         <span dir="auto">{r.reason}</span>
         <span className="ts-muted">
           {tx(CORRECTION_STATUS[r.status])}
@@ -334,14 +370,15 @@ function CorrectionRow({ r, onHistory, onWithdraw }: { r: CorrectionRequest; onH
   )
 }
 
-/** A queue section, left out when it has nothing in it. */
-function Section({ title, hint, count, children }: { title: string; hint?: string; count: number; children: ReactNode }) {
-  if (count === 0) return null
+/** A queue section, left out when it has nothing in it (or when the strip above shows another). */
+function Section({ title, hint, count, late, show = true, children }: { title: string; hint?: string; count: number; late?: boolean; show?: boolean; children: ReactNode }) {
+  const { number } = useI18n()
+  if (count === 0 || !show) return null
   return (
-    <section className="card ts-section" aria-label={title}>
+    <section className={late ? 'ts-section ts-section--late' : 'ts-section'} aria-label={title}>
       <header className="ts-section__head">
         <h2 className="ts-card__title">{title}</h2>
-        <span className="badge">{count}</span>
+        <span className="ts-section__count">{number(count)}</span>
       </header>
       {hint && <p className="ts-muted ts-section__hint">{hint}</p>}
       <div className="ts-rows">{children}</div>
@@ -355,7 +392,7 @@ function LessonRow({ lesson: l, detail, actions }: { lesson: LessonDto; detail?:
     <div className="ts-row" data-lesson={l.id}>
       <div className="ts-row__main">
         <strong>{l.learner.name}</strong>
-        <span className="ts-muted">{l.teacher.name} · {dateTime(l.startsAt)} · {formatMinutes(l.durationMinutes, locale)}</span>
+        <span className="ts-muted"><bdi>{l.teacher.name}</bdi> · <bdi>{dateTime(l.startsAt)}</bdi> · {formatMinutes(l.durationMinutes, locale)}</span>
         {detail}
       </div>
       <div className="ts-row__actions">{actions}</div>

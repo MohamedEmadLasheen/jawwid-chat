@@ -40,8 +40,8 @@ export function BoardViewerPage({ basePath }: { basePath: string }) {
           <Viewer board={board.data} basePath={basePath} />
         ) : (
           <>
-            <PageHeader title={tx(B.title)} />
             <TeachersTabs basePath={basePath} />
+            <PageHeader title={tx(B.title)} />
             {missing ? (
               <EmptyState title={tx(B.boardNotFound)} hint={tx(B.notYoursHint)} />
             ) : (
@@ -98,6 +98,7 @@ function Viewer({ board, basePath }: { board: BoardDetail; basePath: string }) {
 
   return (
     <>
+      <TeachersTabs basePath={basePath} />
       <PageHeader
         eyebrow={teacherName}
         title={board.title}
@@ -116,7 +117,6 @@ function Viewer({ board, basePath }: { board: BoardDetail; basePath: string }) {
           </>
         }
       />
-      <TeachersTabs basePath={basePath} />
       {retained && (
         <p className="tb-kept">
           <Badge tone="warn" dot>
@@ -161,9 +161,9 @@ function AccessHistory({ boardId }: { boardId: string }) {
   // A value this build has no words for is shown as it came, never hidden.
   const named = (pair: Pair | undefined, raw: string) => (pair ? tx(pair) : raw)
   return (
-    <section className="card tb-history">
-      <div className="card__header">
-        <h2 className="card__title">{tx(B.history)}</h2>
+    <section className="tb-history">
+      <div className="tb-history__head">
+        <h2 className="section-label">{tx(B.history)}</h2>
       </div>
       {!open ? (
         <p>

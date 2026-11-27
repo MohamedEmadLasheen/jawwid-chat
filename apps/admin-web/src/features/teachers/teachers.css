@@ -1,107 +1,201 @@
-/* PD-11 T5 teacher statistics. Layout reuses .page / .card / .table from the design system. */
-.ts-toolbar { margin-block: var(--space-3); max-inline-size: 28rem; }
-.ts-month { display: inline-flex; align-items: center; gap: var(--space-2); }
-.ts-month .field__label { margin: 0; white-space: nowrap; }
-.ts-month .input { inline-size: auto; }
-.ts-link { font: inherit; font-weight: 600; background: none; border: none; padding: 0; color: var(--text-link); cursor: pointer; text-align: start; }
-.ts-link:hover { text-decoration: underline; }
-.ts-muted { color: var(--text-muted); }
-.ts-attention { color: var(--warn); font-weight: 600; }
-.ts-back { margin-block-end: var(--space-2); }
-.ts-head-actions { display: flex; align-items: center; gap: var(--space-4); flex-wrap: wrap; }
-.ts-total { display: grid; justify-items: center; padding: var(--space-2) var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); }
-.ts-total__label { font-size: var(--fs-sm); color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
-.ts-total__value { font-size: 1.75rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+/*
+ * The Teachers area: statistics, the daily queue, the scheduling desks and
+ * their dialogs. Open ruled sections on the paper; a number is a serif numeral,
+ * a status a dot and a word, a section a quiet label over a hairline.
+ */
 
-.ts-grid { display: grid; gap: var(--space-4); grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr)); margin-block-start: var(--space-3); }
-.ts-grid .card { margin: 0; }
-.ts-grid--facts { margin-block-start: var(--space-5); }
+/* ------------------------------------------------------------ area tabs */
 
-.ts-card { display: flex; flex-direction: column; gap: var(--space-2); }
-.ts-card__head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); }
-.ts-card__title { margin: 0; font-size: var(--fs-md); font-weight: 600; }
-.ts-card__count { font-size: 1.75rem; font-weight: 700; font-variant-numeric: tabular-nums; }
-.ts-card__rule { block-size: 3px; border-radius: 2px; background: var(--border); }
-.ts-card--success .ts-card__rule { background: var(--ok); }
-.ts-card--info .ts-card__rule { background: var(--info); }
-.ts-card--warning .ts-card__rule { background: var(--warn); }
-.ts-card--danger .ts-card__rule { background: var(--danger); }
-.ts-card__rows { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
-.ts-card__row { display: flex; justify-content: space-between; gap: var(--space-2); }
-.ts-card__right { display: grid; justify-items: end; font-variant-numeric: tabular-nums; }
-.ts-card__empty { margin: var(--space-2) 0; text-align: center; }
-.ts-card__foot { display: flex; justify-content: space-between; gap: var(--space-2); padding-block-start: var(--space-2); border-block-start: 1px solid var(--border); margin-block-start: auto; }
-.ts-card__note { font-size: var(--fs-sm); margin: 0; }
-
-.ts-fact__list { margin: var(--space-2) 0 0; display: grid; gap: var(--space-3); }
-.ts-metric { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-3); }
-.ts-metric dt { color: var(--text-muted); }
-.ts-metric dd { margin: 0; display: grid; justify-items: end; font-variant-numeric: tabular-nums; }
-.ts-metric__hint { font-size: var(--fs-sm); }
-.ts-previous { margin-block-start: var(--space-4); }
-
-/* The Teachers area's tab strip (area.tsx). Same look as the Organization tabs. */
-.ts-tabs { display: flex; gap: var(--space-1); flex-wrap: wrap; border-block-end: 1px solid var(--border); margin-block-end: var(--space-3); }
-/* Also used on <button role="tab"> (Escalations), so the button's own box is reset.
-   Active text is --text-link: the dark --accent is 3.7:1 as text; only the underline uses it. */
-.ts-tab { padding: var(--space-2) var(--space-3); color: var(--text-muted); text-decoration: none; background: transparent; border: 0; border-block-end: 2px solid transparent; }
-.ts-tab:hover { color: var(--text); }
+/* Words with a teal underline (area.tsx). Also used on <button role="tab">
+   (Escalations), so the button's own box is reset. Active text is --text-link:
+   the dark --accent is 3.7:1 as text; only the underline uses it. */
+.ts-tabs { display: flex; flex-wrap: nowrap; gap: var(--space-5); overflow-x: auto; scrollbar-width: none; border-block-end: 1px solid var(--hairline); margin-block-end: var(--space-5); }
+.ts-tabs::-webkit-scrollbar { display: none; }
+.ts-tab { flex: none; padding: 8px 0 9px; margin-block-end: -1px; color: var(--ink-muted); font-size: var(--fs-sm); font-weight: 500; text-decoration: none; white-space: nowrap; background: transparent; border: 0; border-block-end: 2px solid transparent; border-radius: 0; transition: color var(--dur-fast) var(--ease-out); }
+.ts-tab:hover { color: var(--ink); }
 .ts-tab--active { color: var(--text-link); border-block-end-color: var(--accent); font-weight: 600; }
+.ts-tab:focus-visible { outline-offset: -2px; }
+@media (max-width: 767px) { .ts-tab { min-block-size: 44px; display: inline-flex; align-items: center; } }
 
-/* Supervisors' operations (Needs action, Schedules, Students). */
-.ts-section { margin-block-end: var(--space-4); }
-.ts-section__head { display: flex; align-items: center; gap: var(--space-2); }
-.ts-section__hint { margin-block: var(--space-1) var(--space-2); }
-.ts-rows { display: grid; gap: var(--space-2); }
-.ts-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-2) var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); }
-.ts-row__main { display: grid; gap: 2px; min-inline-size: 0; }
-.ts-row__actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+/* --------------------------------------------------------- shared pieces */
+
+.ts-muted { color: var(--ink-muted); }
+.ts-attention { color: var(--terracotta); font-weight: 600; }
+.ts-toolbar { margin-block: 0 var(--space-3); max-inline-size: 26rem; }
+/* Refused by the server: one calm line and a lock, never a red block. */
+.ts-denied { display: flex; align-items: center; gap: 10px; margin: 0; padding: var(--space-4) 2px; border-block-start: 1px solid var(--hairline); color: var(--ink); font-size: var(--fs-md); }
+.ts-denied .icon { color: var(--teal); flex: none; }
+.ts-label { margin: var(--space-6) 0 0; padding-block-end: 8px; border-block-end: 1px solid var(--hairline); }
+.ts-subtitle { margin: var(--space-5) 0 var(--space-2); font-size: 12.5px; font-weight: 500; color: var(--ink-muted); }
 .ts-inline { max-inline-size: 18rem; }
-.ts-windows { display: grid; gap: var(--space-2); margin-block: var(--space-2); }
-.ts-window { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
-.ts-window .ss, .ts-window > .input { inline-size: auto; }
 .ts-narrow { max-inline-size: 6rem; }
-.ts-subtitle { margin: var(--space-4) 0 var(--space-2); font-size: var(--fs-md); }
-.ts-daysoff { list-style: none; padding: 0; margin: 0 0 var(--space-2); display: grid; gap: var(--space-1); }
-.ts-daysoff li { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); }
 .ts-badge-gap { margin-inline-start: var(--space-2); }
-/* A row's name is a row header for assistive tech, but should not look like a header column. */
-.ts-plain-rows th[scope='row'] { background: transparent; font-weight: 600; color: var(--text); }
+.ts-link { font: inherit; font-weight: 600; background: none; border: none; padding: 0; color: var(--teal-dark); cursor: pointer; text-align: start; }
+.ts-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+.ts-back { display: inline-flex; align-items: center; gap: 6px; min-block-size: 32px; margin-block-end: var(--space-2); padding: 0; border: 0; background: none; color: var(--teal); font: inherit; font-size: var(--fs-sm); font-weight: 500; cursor: pointer; }
+.ts-back:hover { color: var(--teal-dark); text-decoration: underline; text-underline-offset: 3px; }
+
+/* A picker that filters the page sits on one line with its label above it. */
+.ts-month { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-3) var(--space-4); margin-block-end: var(--space-4); }
+.ts-month > label, label.ts-month { display: grid; gap: 5px; inline-size: min(100%, 20rem); }
+.ts-month .field__label { margin: 0; white-space: nowrap; }
+
+/* ---------------------------------------------------------- month picker */
+
+.monthpick { display: grid; gap: 5px; justify-items: start; }
+.monthpick__label { margin: 0; }
+.monthpick__ctl { display: inline-flex; align-items: stretch; border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--surface); }
+.monthpick__ctl:focus-within { border-color: var(--teal); }
+.monthpick__step { display: grid; place-items: center; inline-size: 34px; min-block-size: 36px; padding: 0; border: 0; background: none; color: var(--teal); cursor: pointer; transition: background var(--dur-fast) var(--ease-out); }
+.monthpick__step:hover { background: var(--surface-hover); color: var(--teal-dark); }
+.monthpick__step--prev .icon { transform: rotate(180deg); }
+[dir='rtl'] .monthpick__step--prev .icon { transform: scaleX(-1) rotate(180deg); }
+.monthpick__input { min-inline-size: 10.5rem; padding: 0 var(--space-2); border: 0; border-inline: 1px solid var(--hairline); background: none; color: var(--ink); font: inherit; font-family: var(--display); font-size: var(--fs-lg); font-weight: 600; font-variant-numeric: tabular-nums; text-align: center; }
+.monthpick__input:focus-visible { outline-offset: -2px; }
+@media (max-width: 767px), (pointer: coarse) { .monthpick__step { inline-size: 44px; min-block-size: 44px; } }
+
+/* ----------------------------------------------------------- statistics */
+
+/* Every teacher's month in one dense table: zeros are set quietly. */
+.ts-table-wrap { overflow-x: auto; }
+.ts-table { min-inline-size: 1040px; }
+.ts-table th { white-space: nowrap; }
+.ts-table th, .ts-table td { padding-inline: var(--space-2); }
+.ts-table tbody th[scope='row'] { position: sticky; inset-inline-start: 0; z-index: 1; background: var(--paper); font-weight: 600; white-space: nowrap; border-block-end: 1px solid var(--hairline-soft); padding-block: 9px; }
+.ts-table tbody tr:hover th[scope='row'] { background: var(--surface-hover); }
+.ts-table td.num { white-space: nowrap; }
+/* A figure with its unit in words reads in the page's direction; a bare numeral or a ratio stays left to right. */
+.ts-table td.ts-words, [dir='rtl'] .ts-table td.ts-words { direction: inherit; unicode-bidi: normal; text-align: start; }
+.ts-table .ts-zero { color: var(--border-control); }
+
+/* One teacher: the month's ledger, then every lesson as a tick. */
+.ts-ledger { margin-block: var(--space-2) var(--space-5); }
+.ts-ledger .ledger__note { white-space: normal; }
+.ts-cats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: var(--space-7); }
+@media (max-width: 899px) { .ts-cats { grid-template-columns: minmax(0, 1fr); } }
+.ts-cat { display: grid; align-content: start; gap: 6px; padding: var(--space-3) 2px var(--space-4); border-block-end: 1px solid var(--hairline-soft); --tick: var(--border-control); }
+.ts-cat--success { --tick: var(--teal); }
+.ts-cat--info { --tick: var(--brand-200); }
+.ts-cat--warning { --tick: var(--gold-line); }
+.ts-cat--danger { --tick: var(--terracotta); }
+.ts-cat__head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); }
+.ts-cat__title { margin: 0; font-size: var(--fs-md); font-weight: 600; }
+.ts-cat__count { font-family: var(--display); font-size: var(--fs-2xl); font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums lining-nums; direction: ltr; unicode-bidi: isolate; }
+.ts-cat--danger .ts-cat__count { color: var(--terracotta); }
+.ts-cat--none .ts-cat__count { color: var(--border-control); }
+.ts-cat__empty { margin: 0; font-size: var(--fs-sm); }
+/* One tick a lesson; a wider gap separates one lesson length from the next. */
+.ts-ticks { display: flex; flex-wrap: wrap; gap: 4px 10px; min-block-size: 12px; }
+.ts-ticks__run { block-size: 12px; inline-size: min(100%, calc(var(--n) * 5px)); background-image: repeating-linear-gradient(to right, var(--tick) 0 2px, transparent 2px 5px); }
+[dir='rtl'] .ts-ticks__run { background-image: repeating-linear-gradient(to left, var(--tick) 0 2px, transparent 2px 5px); }
+.ts-cat__rows { list-style: none; margin: 0; padding: 0; font-size: var(--fs-sm); }
+.ts-cat__row { display: grid; grid-template-columns: 5.5rem minmax(0, 1fr) auto; align-items: baseline; gap: var(--space-3); padding-block: 2px; font-variant-numeric: tabular-nums; }
+.ts-cat__row strong { font-weight: 600; }
+.ts-cat__foot { display: flex; justify-content: space-between; gap: var(--space-3); font-size: var(--fs-sm); color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+.ts-cat__foot strong { color: var(--ink); font-weight: 600; }
+.ts-card__note { margin: 0; font-size: var(--fs-xs); }
+
+.ts-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-5) var(--space-7); margin-block-start: var(--space-6); align-items: start; }
+@media (max-width: 1099px) { .ts-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 639px) { .ts-facts { grid-template-columns: minmax(0, 1fr); } }
+.ts-fact__title { margin: 0; padding-block-end: 8px; border-block-end: 1px solid var(--hairline); }
+.ts-fact__list { margin: 0; }
+.ts-fact__none { margin: 0; padding-block: 7px; font-size: var(--fs-sm); }
+.ts-metric { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-3); padding-block: 7px; border-block-end: 1px solid var(--hairline-soft); font-size: var(--fs-sm); }
+.ts-metric dt { color: var(--ink-muted); }
+.ts-metric dd { margin: 0; display: grid; justify-items: end; text-align: end; font-variant-numeric: tabular-nums; }
+.ts-metric dd strong { font-weight: 600; }
+.ts-metric__hint { font-size: var(--fs-xs); }
+.ts-fact .ts-card__note { padding-block-start: 6px; }
+.ts-previous { margin-block-start: var(--space-5); font-size: var(--fs-sm); }
+
+/* ---------------------------------------------- the daily queue and desks */
+
+/* What is waiting, as a ruled row of counts; a count filters the page to its queue. */
+.ts-flow { margin-block-end: var(--space-5); }
+.ts-flow .ledger__cell { cursor: pointer; }
+.ts-flow .ledger__label { white-space: normal; line-height: 1.35; }
+@media (min-width: 768px) { .ts-flow { grid-auto-columns: minmax(0, 190px); } }
+
+.ts-section { margin-block-end: var(--space-6); }
+.card.ts-section, .page section.card:has(> .ts-card__title) { padding-block-start: var(--space-3); }
+.ts-section__head { display: flex; align-items: baseline; gap: var(--space-2); padding-block-end: 8px; border-block-end: 1px solid var(--hairline); }
+.ts-card__title { margin: 0; font-size: 12.5px; font-weight: 500; color: var(--ink-muted); }
+.ts-section__count { font-size: 12.5px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; direction: ltr; unicode-bidi: isolate; }
+.ts-section--late .ts-section__count { color: var(--terracotta); }
+.ts-section__hint { margin: 8px 0 0; font-size: var(--fs-sm); max-inline-size: 76ch; }
+.ts-rows { display: grid; gap: 0; list-style: none; margin: 0; padding: 0; }
+.ts-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-4); padding: 10px 2px; border: 0; border-block-end: 1px solid var(--hairline-soft); border-radius: 0; font-size: var(--fs-sm); }
+.ts-row__main { display: grid; gap: 1px; min-inline-size: 0; flex: 1 1 18rem; }
+.ts-row__main > strong { font-size: var(--fs-md); font-weight: 600; }
+/* A note typed in another script still starts where the row starts. */
+.ts-row__main > [dir='auto'] { justify-self: start; }
+.ts-row__actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+/* A request whose time was taken since: a terracotta edge, and the words say why. */
+.ts-row--stale { box-shadow: inset 2px 0 0 var(--terracotta); padding-inline-start: var(--space-3); }
+[dir='rtl'] .ts-row--stale { box-shadow: inset -2px 0 0 var(--terracotta); }
+.ts-stale { margin: 4px 0 0; padding: 0; background: none; color: var(--terracotta); font-size: var(--fs-sm); font-weight: 500; }
+
+.ts-diff { display: grid; grid-template-columns: max-content 1fr; gap: 1px var(--space-3); margin: 2px 0; }
+.ts-diff dt { color: var(--ink-muted); }
+.ts-diff dd { margin: 0; font-variant-numeric: tabular-nums; }
+.ts-diff__slots, .ts-preview__slots { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
+.ts-diff__slots { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.ts-slot--free { color: var(--success); }
+.ts-slot--busy { color: var(--terracotta); }
+.ts-slot--free .sp, .ts-slot--busy .sp, .ts-preview__slots .btn { color: var(--ink); }
+.ts-slot__flag { font-size: var(--fs-xs); font-weight: 600; }
+
+/* Tables whose first cell is a row header. */
+.ts-plain-rows th[scope='row'] { position: static; background: transparent; font-size: var(--fs-sm); font-weight: 600; color: var(--ink); padding-block: 9px; border-block-end: 1px solid var(--hairline-soft); }
+.ts-plain-rows th[scope='row'] .badge { font-weight: 500; }
+/* A row's actions read as quiet words, not a wall of boxes. */
 .ts-actions-cell { white-space: nowrap; }
-.ts-actions-cell .btn + .btn { margin-inline-start: var(--space-2); }
+.ts-actions-cell .btn { min-block-size: 30px; padding-inline: 8px; border-color: transparent; background: transparent; color: var(--teal); }
+.ts-actions-cell .btn:hover:not(:disabled) { background: var(--surface-hover); border-color: transparent; color: var(--teal-dark); }
+.ts-actions-cell .btn + .btn { margin-inline-start: 2px; }
+@media (max-width: 767px), (pointer: coarse) { .ts-actions-cell .btn { min-block-size: 40px; } }
+
+/* Working hours: one line a window. */
+.ts-windows { display: grid; gap: 0; margin-block: var(--space-2); }
+.ts-window { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); padding-block: 6px; border-block-end: 1px solid var(--hairline-soft); }
+.ts-window .ss, .ts-window > .input { inline-size: auto; }
+.ts-window .input, .ts-window .ss input { min-block-size: 34px; }
+.ts-window > .btn, .ts-daysoff .btn { border-color: transparent; background: none; color: var(--teal); }
+.ts-section > .field { margin-block-start: var(--space-3); }
+.ts-section > .ts-row__actions { margin-block-start: var(--space-3); }
+.ts-daysoff { list-style: none; padding: 0; margin: 0 0 var(--space-2); }
+.ts-daysoff li { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); padding-block: 6px; border-block-end: 1px solid var(--hairline-soft); font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
+
+/* --------------------------------------------------------------- dialogs */
 
 /* PD-31: weekly times, moving lessons, changing the teacher. Colour is never the
    only signal: every free / busy flag also says it in words. */
-.ts-weekly { list-style: none; margin: 0 0 var(--space-2); padding: 0; display: grid; gap: var(--space-2); }
-.ts-weekly__card { display: grid; gap: var(--space-2); padding: var(--space-2) var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); }
-.ts-weekly__card--changed, .ts-weekly__card--added { border-color: var(--brand-700); }
-.ts-weekly__card--removed { background: var(--surface-sunken); }
+.ts-weekly { list-style: none; margin: 0 0 var(--space-3); padding: 0; border-block-start: 1px solid var(--hairline); }
+.ts-weekly__card { display: grid; gap: var(--space-2); padding: 9px 0; border: 0; border-block-end: 1px solid var(--hairline-soft); border-radius: 0; background: none; }
+.ts-weekly__card--changed, .ts-weekly__card--added { box-shadow: inset 2px 0 0 var(--teal); padding-inline-start: var(--space-3); }
+[dir='rtl'] :is(.ts-weekly__card--changed, .ts-weekly__card--added) { box-shadow: inset -2px 0 0 var(--teal); }
+.ts-weekly__card--removed { color: var(--ink-muted); }
 .ts-weekly__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); }
-.ts-weekly__time { font-variant-numeric: tabular-nums; }
-.ts-weekly__old { color: var(--text-muted); text-decoration: line-through; }
-.ts-summary { margin-block: var(--space-3); padding: var(--space-2) var(--space-3); border-inline-start: 3px solid var(--accent-line); background: var(--surface-sunken); border-radius: var(--radius-sm); }
-.ts-summary p { margin: var(--space-1) 0; }
-.ts-summary .ts-subtitle { margin-block-start: 0; }
-.ts-fieldset { border: none; padding: 0; margin: 0 0 var(--space-3); display: grid; gap: var(--space-1); }
-.ts-teacher-list { display: grid; gap: 2px; max-block-size: 14rem; overflow-y: auto; padding: var(--space-1); border: 1px solid var(--border); border-radius: var(--radius-md); }
-.ts-teacher { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-1) var(--space-2); border-radius: var(--radius-sm); cursor: pointer; }
+.ts-weekly__time { font-variant-numeric: tabular-nums; font-weight: 500; }
+.ts-weekly__old { color: var(--ink-muted); text-decoration: line-through; }
+/* What will happen, before the one button that does it. */
+.ts-summary { margin-block: var(--space-4) 0; padding: var(--space-2) 0; padding-inline-start: var(--space-3); border-inline-start: 2px solid var(--gold-line); background: none; border-radius: 0; font-size: var(--fs-sm); }
+.ts-summary p { margin: 2px 0; }
+.ts-summary .ts-subtitle { margin-block: 0 2px; }
+.ts-fieldset { border: none; padding: 0; margin: 0 0 var(--space-3); display: grid; gap: 4px; min-inline-size: 0; }
+.ts-teacher-list { display: grid; gap: 0; max-block-size: 14rem; overflow-y: auto; padding: 0; border: 1px solid var(--hairline); border-radius: var(--radius); }
+.ts-teacher { display: flex; align-items: center; gap: var(--space-2); min-block-size: 36px; padding: 4px var(--space-3); border-block-end: 1px solid var(--hairline-soft); cursor: pointer; font-size: var(--fs-sm); }
+.ts-teacher:last-child { border-block-end: 0; }
 .ts-teacher:hover { background: var(--surface-hover); }
-.ts-teacher--off { color: var(--text-muted); cursor: not-allowed; }
-.ts-teacher__why { font-size: var(--fs-sm); }
-.ts-preview { display: grid; gap: var(--space-3); margin-block: var(--space-3); }
-.ts-preview__learner { display: grid; gap: var(--space-2); padding: var(--space-2) var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.ts-teacher:has(input:checked) { background: var(--teal-tint); }
+.ts-teacher input { accent-color: var(--teal); }
+.ts-teacher--off { color: var(--ink-muted); cursor: not-allowed; }
+.ts-teacher__why { font-size: var(--fs-xs); }
+.ts-preview { display: grid; gap: 0; margin-block: var(--space-3); }
+.ts-preview__learner { display: grid; gap: var(--space-2); padding: var(--space-3) 0; border: 0; border-block-end: 1px solid var(--hairline-soft); border-radius: 0; }
 .ts-preview__learner > p { margin: 0; }
-.ts-preview__slots, .ts-diff__slots { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
 .ts-preview__slots li { display: grid; gap: var(--space-2); }
 .ts-preview__slots li > span { font-variant-numeric: tabular-nums; }
 .ts-preview__unmovable { margin: var(--space-1) 0 0; padding-inline-start: var(--space-4); }
-.ts-slot--free { color: var(--ok); }
-.ts-slot--busy { color: var(--danger); }
-.ts-slot--free .sp, .ts-slot--busy .sp, .ts-preview__slots .btn { color: var(--text); }
-.ts-diff { display: grid; grid-template-columns: max-content 1fr; gap: 2px var(--space-3); margin: var(--space-1) 0; }
-.ts-diff dt { color: var(--text-muted); }
-.ts-diff dd { margin: 0; font-variant-numeric: tabular-nums; }
-.ts-diff__slots { display: flex; flex-wrap: wrap; gap: var(--space-2); }
-.ts-slot__flag { font-size: var(--fs-sm); font-weight: var(--fw-semibold); }
-.ts-row--stale { border-color: var(--warn); }
-.ts-stale { margin: var(--space-1) 0 0; }
+.ts-lessons { border-block-start: 1px solid var(--hairline); }
