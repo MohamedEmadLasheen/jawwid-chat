@@ -195,6 +195,7 @@ export const S = {
     ar: 'الدولة وباقة الاشتراك تحددان من تصل إليه الحالة الموجّهة. سيملؤها نظام جوّد الأساسي تلقائيًا، وحتى ذلك الحين يمكنك تعيينها هنا.',
   },
   family: { en: 'Family', ar: 'العائلة' },
+  families: { en: 'Families', ar: 'العائلات' },
   childCount: { en: 'Children', ar: 'الأبناء' },
   onlyMissing: { en: 'Only missing data', ar: 'البيانات الناقصة فقط' },
   searchFamilies: { en: 'Search families', ar: 'ابحث عن عائلة' },

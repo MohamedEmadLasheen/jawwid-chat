@@ -29,7 +29,7 @@ export function conversationLabel(c: ChatConversation, selfId: string | undefine
   if (c.title) return c.title
   if (c.learner?.name) return c.learner.name
   const others = (c.members ?? []).filter((m) => m.actorId !== selfId && m.displayName)
-  if (others.length > 0) return others.map((m) => m.displayName).join('، ')
+  if (others.length > 0) return others.map((m) => m.displayName).join(chat.listSeparator)
   return chat.kind[c.type] ?? c.type
 }
 
@@ -60,7 +60,7 @@ export function historyName(
   const isGroup = row.type === 'group' || isGroupConversation(conversation)
   if (isGroup) {
     if (conversation) return conversationLabel(conversation, selfId, chat)
-    return others.join('، ') || chat.kind.student_group || ''
+    return others.join(chat.listSeparator) || chat.kind.student_group || ''
   }
   if (others.length > 0) return others[0]!
   if (conversation) return conversationLabel(conversation, selfId, chat)

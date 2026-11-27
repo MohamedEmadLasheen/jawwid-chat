@@ -156,10 +156,11 @@ function Agenda({ tab, onShowAll }: { tab: InboxTab; onShowAll: () => void }) {
   const clock = new Intl.DateTimeFormat(LOCALE_TAG[locale], {
     hour: 'numeric',
     minute: '2-digit',
+    hour12: true,
   })
   const dayLabel = (key: string) => (key === today ? tx(N.today) : key === yesterday ? tx(N.yesterday) : dayFmt.format(new Date(`${key}T12:00:00`)))
 
-  const row = (entry: InboxEntryDto) => {
+  const row = (entry: InboxEntryDto, inAsks = false) => {
     const to = routeFor(entry.action)
     const waiting = entry.requiresAction && !entry.acted
     // Time to breach, where the server gives a due time: amber in the last day, red once it has passed.
@@ -182,7 +183,8 @@ function Agenda({ tab, onShowAll }: { tab: InboxTab; onShowAll: () => void }) {
           )}
           {waiting && (
             <p className={`nc-item__due${breach ? ` nc-item__due--${breach}` : ''}`}>
-              <span className="nc-item__ask">{tx(TABS.action)}</span>
+              {/* Inside the group that already says it, only the time to breach. */}
+              {!inAsks && <span className="nc-item__ask">{tx(TABS.action)}</span>}
               {entry.dueAt && (
                 <span>
                   {fill(tx(breach === 'late' ? N.wasDue : N.dueBy), {
@@ -194,6 +196,8 @@ function Agenda({ tab, onShowAll }: { tab: InboxTab; onShowAll: () => void }) {
           )}
         </div>
         <time className="nc-item__time" dateTime={entry.at}>
+          {/* Out of the day agenda a time needs its day. */}
+          {inAsks && dayKey(new Date(entry.at)) !== today ? `${dayLabel(dayKey(new Date(entry.at)))} ` : ''}
           {clock.format(new Date(entry.at))}
         </time>
         <div className="nc-item__actions">
@@ -212,8 +216,18 @@ function Agenda({ tab, onShowAll }: { tab: InboxTab; onShowAll: () => void }) {
   }
 
   return (
-    <div className="sheet nc-sheet">
-      <QueryBoundary isLoading={list.isLoading} error={list.error} onRetry={() => void list.refetch()}>
+    <QueryBoundary isLoading={list.isLoading} error={list.error} onRetry={() => void list.refetch()}>
+      {/* What asks for action stands on its own sheet, before the agenda. */}
+      {asks.length > 0 && (
+        <section className="sheet nc-sheet nc-asks" aria-labelledby="nc-asks">
+          <h2 className="nc-asks__head" id="nc-asks">
+            {tx(N.asks)}
+            <span className="count count--urgent">{asks.length}</span>
+          </h2>
+          <ul className="nc-list">{asks.map((e) => row(e, true))}</ul>
+        </section>
+      )}
+      <div className="sheet nc-sheet">
         {entries.length === 0 && (
           <EmptyState
             title={tx(tab === 'all' ? N.empty : N.emptyTab)}
@@ -227,21 +241,12 @@ function Agenda({ tab, onShowAll }: { tab: InboxTab; onShowAll: () => void }) {
             }
           />
         )}
-        {asks.length > 0 && (
-          <section className="nc-day nc-day--asks" aria-labelledby="nc-asks">
-            <h2 className="nc-day__head" id="nc-asks">
-              <span>{tx(N.asks)}</span>
-              <span className="count count--urgent">{asks.length}</span>
-            </h2>
-            <ul className="nc-list">{asks.map(row)}</ul>
-          </section>
-        )}
         {days.map((day) => (
           <section key={day.key} className="nc-day" aria-labelledby={`nc-day-${day.key}`}>
             <h2 className="nc-day__head" id={`nc-day-${day.key}`}>
               <span>{dayLabel(day.key)}</span>
             </h2>
-            <ul className="nc-list">{day.entries.map(row)}</ul>
+            <ul className="nc-list">{day.entries.map((e) => row(e))}</ul>
           </section>
         ))}
         {list.hasNextPage && (
@@ -251,8 +256,8 @@ function Agenda({ tab, onShowAll }: { tab: InboxTab; onShowAll: () => void }) {
             </button>
           </div>
         )}
-      </QueryBoundary>
-    </div>
+      </div>
+    </QueryBoundary>
   )
 }
 
@@ -262,13 +267,10 @@ const fromClock = (v: string): number | null => {
   return h !== undefined && m !== undefined && Number.isInteger(h) && Number.isInteger(m) ? h * 60 + m : null
 }
 
-type Group = 'push' | 'quiet'
-
-/** Settings: the groups at the start, one group's sheet beside them. */
+/** Settings: the two groups stacked, each on its own sheet; every change is applied as it is made. */
 function SettingsPanel() {
   const tx = useCopy()
   const client = useQueryClient()
-  const [group, setGroup] = useState<Group>('push')
   const settings = useQuery({
     queryKey: inboxKeys.settings,
     queryFn: inboxApi.settings,
@@ -278,7 +280,7 @@ function SettingsPanel() {
     onSuccess: (next) => client.setQueryData(inboxKeys.settings, next),
   })
   const s = settings.data
-  const groups: Array<{ key: Group; label: string; icon: IconName }> = [
+  const groups: Array<{ key: 'push' | 'quiet'; label: string; icon: IconName }> = [
     { key: 'push', label: tx(N.pushHeading), icon: 'notifications' },
     { key: 'quiet', label: tx(N.quietHours), icon: 'bellOff' },
   ]
@@ -288,25 +290,23 @@ function SettingsPanel() {
       <h2 id="nc-settings-title" className="sr-only">
         {tx(N.settings)}
       </h2>
-      <nav className="nc-settings__nav" aria-label={tx(N.settings)}>
-        {groups.map((g) => (
-          <button key={g.key} type="button" className="nc-settings__link" aria-current={group === g.key ? 'true' : undefined} onClick={() => setGroup(g.key)}>
-            <Icon name={g.icon} size={18} />
-            {g.label}
-          </button>
-        ))}
-      </nav>
-      <div className="sheet nc-settings__sheet">
-        <div className="sheet__head">
-          <h3 className="sheet__title">{groups.find((g) => g.key === group)!.label}</h3>
+      {groups.map((g) => (
+        <div key={g.key} className="sheet nc-settings__sheet">
+          <div className="sheet__head">
+            <h3 className="sheet__title">
+              <Icon name={g.icon} size={18} />
+              {g.label}
+            </h3>
+            {save.isPending && <span className="nc-settings__state">{tx(N.saving)}</span>}
+          </div>
+          <div className="sheet__body">
+            <QueryBoundary isLoading={settings.isLoading} error={settings.error} onRetry={() => void settings.refetch()} compact>
+              {s && g.key === 'push' && <PushForm settings={s} saving={save.isPending} onSave={(body) => save.mutate(body)} />}
+              {s && g.key === 'quiet' && <QuietForm settings={s} saving={save.isPending} onSave={(body) => save.mutate(body)} />}
+            </QueryBoundary>
+          </div>
         </div>
-        <div className="sheet__body">
-          <QueryBoundary isLoading={settings.isLoading} error={settings.error} onRetry={() => void settings.refetch()} compact>
-            {s && group === 'push' && <PushForm settings={s} saving={save.isPending} onSave={(body) => save.mutate(body)} />}
-            {s && group === 'quiet' && <QuietForm settings={s} saving={save.isPending} onSave={(body) => save.mutate(body)} />}
-          </QueryBoundary>
-        </div>
-      </div>
+      ))}
     </section>
   )
 }

@@ -20,7 +20,9 @@
 .nc-page .mast__tabs .seg { flex-wrap: nowrap; }
 
 /* An agenda: one sheet, a band per day, a line per notification. */
-.nc-sheet { max-inline-size: 960px; overflow: hidden; }
+.nc-sheet { overflow: hidden; }
+/* The page is one reading column: the header and its tabs end where the list does. */
+.nc-page .page__inner { max-inline-size: 960px; margin-inline: 0 auto; }
 .nc-sheet > .state { padding: var(--space-6) var(--space-5); }
 .nc-day__head {
   display: flex;
@@ -36,8 +38,9 @@
   color: var(--ink-2);
 }
 .nc-day:first-child .nc-day__head { border-block-start: 0; }
-/* What asks for action leads; its titles keep weight whether read or not. */
-.nc-day--asks .nc-item__title { font-weight: 600; color: var(--ink); }
+/* What asks for action: its own sheet, its head a title rather than a day band. */
+.nc-asks { margin-block-end: var(--space-5); }
+.nc-asks__head { display: flex; align-items: center; gap: 10px; margin: 0; padding: 14px var(--space-5) 10px; border-block-end: 1px solid var(--line-2); font-family: var(--font-head); font-size: var(--fs-lg); font-weight: 700; color: var(--ink); }
 .nc-item__open.btn--ghost { color: var(--teal); }
 .nc-list { list-style: none; margin: 0; padding: 0; }
 .nc-item {
@@ -87,12 +90,13 @@
 .nc-item__ask { font-weight: 500; color: var(--ink-2); }
 .nc-item__due--soon { color: var(--waiting); }
 .nc-item__due--late { color: var(--urgent); }
-.nc-item__time { padding-block-start: 8px; font-size: var(--fs-sm); color: var(--ink-muted); white-space: nowrap; font-variant-numeric: tabular-nums; unicode-bidi: isolate; }
+.nc-item__time { padding-block-start: 8px; justify-self: start; font-size: var(--fs-sm); color: var(--ink-muted); white-space: nowrap; font-variant-numeric: tabular-nums; unicode-bidi: isolate; }
 .nc-item__actions { display: flex; justify-content: flex-end; padding-block-start: 2px; }
 .nc-more { display: flex; justify-content: center; padding: var(--space-3); border-block-start: 1px solid var(--line-2); }
 
-/* Settings: the groups at the start, one group's sheet beside them. */
-.nc-settings { display: grid; grid-template-columns: 240px minmax(0, 600px); gap: var(--space-6); align-items: start; }
+/* Settings: the two groups stacked. */
+.nc-settings { display: grid; gap: var(--space-5); max-inline-size: 640px; }
+.nc-settings__state { font-size: var(--fs-sm); color: var(--ink-muted); }
 .nc-settings__nav { display: grid; gap: 2px; }
 .nc-settings__link {
   display: flex;

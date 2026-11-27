@@ -30,7 +30,9 @@
 @media (max-width: 1099px) {
   .cp-cols { grid-template-columns: minmax(0, 1fr); }
 }
+.cp-search { flex: 0 1 280px; min-inline-size: 0; }
 .cp-search .search { max-inline-size: none; }
+.cp-search .input { min-block-size: var(--control-h-sm); }
 .cp-search .input { background-color: var(--surface); }
 
 .cp-section { min-inline-size: 0; overflow: hidden; }
@@ -125,7 +127,7 @@
 }
 .cp-row__badges { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px var(--space-2); }
 .cp-row__end { display: inline-flex; align-items: center; gap: var(--space-1); flex: none; }
-.cp-row__time { font-size: var(--fs-sm); color: var(--ink-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.cp-row__time { font-size: var(--fs-sm); color: var(--ink-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .cp-row__call { gap: 6px; }
 .cp-row__call .icon { color: var(--ink-2); }
 .cp-row__icon { color: var(--teal); display: inline-flex; }
@@ -135,7 +137,7 @@
 /* A past call: which way it went, who, how it ended, how long, when, and Call. */
 .cp-recent {
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) 56px minmax(72px, auto) minmax(84px, auto);
+  grid-template-columns: 34px minmax(0, 1fr) 72px minmax(80px, auto) 150px;
   align-items: center;
   gap: var(--space-3);
   min-block-size: 60px;
@@ -150,12 +152,13 @@
   block-size: 34px;
   color: var(--ink-muted);
 }
-.cp-recent--missed .cp-recent__dir { color: var(--urgent); }
+.cp-recent--missed .cp-recent__dir { color: var(--ink-2); }
 .cp-recent__who { display: flex; align-items: center; gap: 8px; min-inline-size: 0; }
 .cp-recent__facts { display: flex; flex-wrap: wrap; align-items: center; gap: 2px var(--space-3); font-size: var(--fs-sm); color: var(--ink-muted); }
 .cp-recent__facts .badge { font-size: var(--fs-sm); }
-.cp-recent__len { font-size: var(--fs-sm); color: var(--ink-muted); font-variant-numeric: tabular-nums; text-align: end; }
-.cp-recent .cp-row__time { text-align: end; }
+.cp-recent__len { display: inline-flex; align-items: center; justify-content: flex-end; gap: 4px; font-size: var(--fs-sm); color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+.cp-recent__outcome { color: var(--ink-2); }
+.cp-recent .cp-row__time { text-align: start; }
 .cp-recent .row-actions2 { justify-self: end; }
 @media (max-width: 767px) {
   .cp-recent { grid-template-columns: 34px minmax(0, 1fr) auto; padding-inline: var(--space-3); row-gap: 4px; }

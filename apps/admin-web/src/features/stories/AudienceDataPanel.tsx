@@ -36,7 +36,7 @@ export function AudienceDataPanel() {
       {facts.data && (
         <section className="kpi-strip kpi-strip--compact" aria-label={tx(S.tabAudience)}>
           <div className="kpi">
-            <span className="kpi__label">{tx(S.family)}</span>
+            <span className="kpi__label">{tx(S.families)}</span>
             <span className="kpi__value">{number(facts.data.families)}</span>
           </div>
           <div className="kpi">

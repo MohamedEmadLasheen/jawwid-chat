@@ -165,7 +165,15 @@
 .story-card .story-phone--thumb .story-phone__content { padding: 8px; }
 .story-card .story-phone--thumb .story-phone__text { font-size: 9.5px; line-height: 1.35; -webkit-line-clamp: 9; }
 .story-card .story-phone__glyph .icon { inline-size: 28px; block-size: 28px; }
+/* What it is and how far it reached come first; who made it and when follow. */
 .story-card__body { display: flex; flex-direction: column; gap: 3px; min-inline-size: 0; }
+.story-card__top { order: 0; }
+.story-row__name { order: 1; }
+.story-card .story-row__perf { order: 2; margin-block: 4px 6px; padding-block-start: 0; }
+.story-row__audience { order: 3; }
+.story-row__meta { order: 4; margin-block-end: auto; }
+.story-card__actions, .story-row__error { order: 5; }
+.story-row__views { font-family: var(--font-head); font-weight: 600; color: var(--ink); }
 .story-card__top { display: flex; flex-wrap: wrap; align-items: center; gap: 4px var(--space-3); margin-block-end: 3px; font-size: var(--fs-xs); color: var(--ink-muted); }
 .story-row__name {
   align-self: flex-start; max-inline-size: 100%;
@@ -454,7 +462,9 @@ html[lang='ar'] .compose-step__title { font-weight: 700; }
    start and two sheets beside it. */
 .stories-studio .mast__tabs:has(.si-figures) { margin-block-start: 0; }
 .si-figures .figures { border-block-end: 0; }
-.insights { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: var(--space-5); align-items: start; }
+/* The figures lead (the start column); the story itself is a narrower panel at the end. */
+.insights { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: var(--space-5); align-items: start; }
+.insights__aside { order: 2; }
 .insights__aside { display: grid; gap: var(--space-4); position: sticky; inset-block-start: var(--space-4); padding: var(--space-4); }
 .insights__main { display: grid; gap: var(--space-4); min-inline-size: 0; }
 .insight-sheet { min-inline-size: 0; }
@@ -484,8 +494,8 @@ html[lang='ar'] .compose-step__title { font-weight: 700; }
 /* One hue, stepping lighter as the funnel narrows: no gold, no second colour. */
 .funnel__step:nth-child(2) .funnel__fill { background: var(--brand-500); }
 .funnel__step:nth-child(3) .funnel__fill { background: var(--brand-200); }
-.funnel__value { font-family: var(--font-head); font-size: var(--fs-lg); font-variant-numeric: tabular-nums lining-nums; font-weight: 600; min-inline-size: 72px; text-align: end; }
-.funnel__value small { margin-inline-start: 8px; font-family: var(--font); font-size: var(--fs-xs); font-weight: 400; color: var(--ink-muted); }
+.funnel__value { font-family: var(--font-head); font-size: var(--fs-lg); font-variant-numeric: tabular-nums lining-nums; font-weight: 600; min-inline-size: 120px; text-align: end; white-space: nowrap; }
+.funnel__value small { display: inline-block; min-inline-size: 48px; margin-inline-start: 10px; text-align: end; font-family: var(--font); font-size: var(--fs-xs); font-weight: 400; color: var(--ink-muted); }
 
 .daily { display: grid; gap: var(--space-2); }
 .daily__legend { display: flex; gap: var(--space-4); font-size: var(--fs-xs); color: var(--ink-muted); }
@@ -568,4 +578,15 @@ html[lang='ar'] .compose-step__title { font-weight: 700; }
   .insights__aside .story-phone--full { inline-size: min(100%, 200px); }
   .funnel__step { grid-template-columns: 1fr auto; }
   .funnel__track { grid-column: 1 / -1; grid-row: 2; }
+}
+
+/* The audience facts: a strip of figures, the missing ones in the waiting colour. */
+.audience-data .kpi-strip { display: flex; flex-wrap: wrap; padding: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); }
+.audience-data .kpi { flex: 1 1 160px; display: grid; gap: 2px; padding: 12px 16px; }
+.audience-data .kpi + .kpi { border-inline-start: 1px solid var(--line-2); }
+.audience-data .kpi__label { font-size: var(--fs-sm); color: var(--ink-muted); }
+.audience-data .kpi__value { font-family: var(--font-head); font-size: var(--fs-xl); font-weight: 700; font-variant-numeric: tabular-nums; color: var(--ink); }
+.audience-data .kpi + .kpi .kpi__value { color: var(--waiting); }
+@media (max-width: 1100px) {
+  .insights__aside { order: 0; }
 }

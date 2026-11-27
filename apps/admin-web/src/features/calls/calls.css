@@ -36,8 +36,9 @@
   overflow: hidden;
   touch-action: none;
 }
-/* Ringing: a dot that breathes beside the words. */
+/* Ringing is said in words; the Answer control is the only green. */
 .call-window--incoming .call-window__status::before {
+  display: none;
   content: '';
   display: inline-block;
   inline-size: 7px;
@@ -98,7 +99,7 @@
   /* Decline stays on one side and Answer on the other, whatever the language. */
   direction: ltr;
   display: flex;
-  align-items: flex-start;
+  align-items: flex-end;
   justify-content: space-evenly;
   gap: var(--space-3, 12px);
   padding: var(--space-4, 16px) var(--space-4, 16px) var(--space-4, 16px);
@@ -114,7 +115,7 @@
 }
 
 .call-window__action { display: flex; flex-direction: column; align-items: center; gap: 5px; min-inline-size: 60px; }
-.call-window__action-label { color: var(--call-muted); font-size: var(--fs-xs, 13px); text-align: center; max-inline-size: 84px; unicode-bidi: plaintext; }
+.call-window__action-label { color: #d5e3e4; font-size: var(--fs-xs, 13px); text-align: center; max-inline-size: 84px; unicode-bidi: plaintext; }
 
 .call-window__round {
   display: inline-flex;
@@ -163,3 +164,12 @@
   color: var(--ink-muted);
 }
 .call-history li:last-child { border-block-end: 0; }
+
+/* A phone: docked across the screen above the tab bar, never over it. */
+@media (max-width: 767px) {
+  .call-window {
+    inset-inline: var(--space-4, 16px);
+    inline-size: auto;
+    inset-block-end: calc(56px + var(--space-3, 12px) + env(safe-area-inset-bottom));
+  }
+}

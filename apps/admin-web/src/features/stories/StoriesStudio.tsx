@@ -176,7 +176,7 @@ export function StoriesStudio({ basePath, eyebrow }: { basePath: string; eyebrow
                   aria-current={tab === 'stories' && stateFilter === t.key ? 'true' : undefined}
                 >
                   {t.label}
-                  <span className="seg__count">{number(t.count)}</span>
+                  {t.count > 0 && <span className="seg__count">{number(t.count)}</span>}
                 </Link>
               ))}
               {canManageData && (
@@ -375,7 +375,7 @@ function StoryCard({
 
         <div className="story-row__perf">
           {rate === null ? (
-            <span className="cell-muted">{tx(S.notPublished)}</span>
+            s.state === 'draft' ? null : <span className="cell-muted">{tx(S.notPublished)}</span>
           ) : (
             <>
               <span className="story-row__views">

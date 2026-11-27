@@ -69,14 +69,13 @@ function InsightsBody({
     ? [
         { key: 'reach', label: tx(S.reached), value: number(a.reach.total), tone: 'key' },
         { key: 'views', label: tx(S.viewed), value: number(a.views.total), note: fill(tx(S.ofReach), { pct: pct(a.rates.view) }) },
-        {
-          key: 'tapped',
-          label: tx(S.tapped),
-          value: a.cta.kind ? number(a.cta.tappers) : tx(S.noButton),
-          note: a.cta.kind ? fill(tx(S.ofViews), { pct: pct(a.rates.tapOfViews) }) : undefined,
-          tone: a.cta.kind ? undefined : 'quiet',
-        },
-        ...(a.cta.kind ? [{ key: 'taps', label: tx(S.totalTapsLabel), value: number(a.cta.taps) }] : []),
+        // A story without a button has no taps to count: its figures stop at views.
+        ...(a.cta.kind
+          ? [
+              { key: 'tapped', label: tx(S.tapped), value: number(a.cta.tappers), note: fill(tx(S.ofViews), { pct: pct(a.rates.tapOfViews) }) },
+              { key: 'taps', label: tx(S.totalTapsLabel), value: number(a.cta.taps) },
+            ]
+          : []),
       ]
     : []
 
