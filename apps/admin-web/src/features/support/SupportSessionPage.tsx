@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { newIdempotencyKey } from '@/core/api/client'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Badge } from '@/shared/components/Badge'
+import { Icon } from '@/shared/components/Icon'
 import { FilterChips } from '@/shared/components/FilterChips'
 import { EmptyState, LoadingState } from '@/shared/components/States'
 import { bySeq, type ChatConversation } from '@/features/chat/chatApi'
@@ -226,7 +227,11 @@ function Thread({
               {m.sentBySupport && <Badge tone="internal">{tx(S.sentBySupport)}</Badge>}
             </div>
             <div dir="auto" className="support-message__body">
-              {m.deletedForAll ? '—' : m.body ?? (m.attachments.length ? `📎 ${m.attachments.length}` : '')}
+              {m.deletedForAll ? '—' : m.body ?? (m.attachments.length ? (
+                <>
+                  <Icon name="paperclip" size={15} /> <span className="ltr">{m.attachments.length}</span>
+                </>
+              ) : '')}
             </div>
           </li>
         ))}

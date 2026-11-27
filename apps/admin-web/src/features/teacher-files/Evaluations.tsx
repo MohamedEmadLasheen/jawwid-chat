@@ -158,7 +158,7 @@ export function EvaluationsSection({ teacherId, canWrite, canEditCriteria }: { t
           {data?.plans.map((p) => (
             <li key={p.id} className="tf-eval__item">
               <div className="tf-eval__head">
-                <strong dir="auto">🎯 {p.title}</strong>
+                <strong dir="auto">{p.title}</strong>
                 {p.sharedAt ? <Badge tone="ok" dot>{tx(E.shared)}</Badge> : <Badge tone="outline">{tx(E.notShared)}</Badge>}
                 {canWrite && !p.sharedAt && (
                   <button type="button" className="btn btn--sm btn--primary" disabled={act.isPending} onClick={() => act.mutate(() => evaluationsApi.sharePlan(p.id))}>

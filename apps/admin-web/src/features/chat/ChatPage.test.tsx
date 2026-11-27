@@ -1881,7 +1881,7 @@ describe('A card far up the thread (owner report 2026-10-29)', () => {
     )
     renderChat('/chat/c1')
     fireEvent.click(await screen.findByRole('button', { name: 'Show older messages' }))
-    const group = await screen.findByRole('group', { name: '🙏 Child Alpha has an excuse and will not attend the lesson' })
+    const group = await screen.findByRole('group', { name: 'Child Alpha has an excuse and will not attend the lesson' })
     expect(group).not.toHaveTextContent('Make-up lesson')
 
     // The make-up is booked: the server now joins it onto the card, and names the card's seq.

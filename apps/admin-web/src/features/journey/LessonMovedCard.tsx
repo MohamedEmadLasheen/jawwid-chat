@@ -1,5 +1,6 @@
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { ACADEMY_ZONE, whenIn } from '@/core/time/academyTime'
+import { Icon } from '@/shared/components/Icon'
 import './journey.css'
 
 /** PD-31: the `lesson_moved` card's payload, reduced to what is drawn; null when it cannot be (then the body is shown). */
@@ -34,7 +35,7 @@ export function readLessonMovedCard(payload: Record<string, unknown> | null | un
 }
 
 const COPY = {
-  title: { en: "📅 {learner}'s lesson was moved", ar: '📅 تغيّر موعد حصة {learner}' },
+  title: { en: "{learner}'s lesson was moved", ar: 'تغيّر موعد حصة {learner}' },
   by: {
     family: { en: 'Moved by the family', ar: 'نقلتها الأسرة' },
     teacher: { en: 'Moved by the teacher', ar: 'نقلها المعلم' },
@@ -54,7 +55,9 @@ export function LessonMovedCard({ card }: { card: LessonMovedPayload }) {
   const title = tx(COPY.title).replace('{learner}', card.learnerName)
   return (
     <div className="jr-moved" data-card-kind="lesson_moved" role="group" aria-label={title}>
-      <strong className="jr-moved__title" dir="auto">{title}</strong>
+      <strong className="jr-moved__title" dir="auto">
+        <Icon name="calendar" size={16} /> {title}
+      </strong>
       <div className="jr-moved__line">
         <s className="jr-moved__old">{whenIn(card.previousStartsAt, ACADEMY_ZONE, locale)}</s>
         <span aria-hidden="true">{locale === 'ar' ? ' ← ' : ' → '}</span>

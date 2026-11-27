@@ -20,7 +20,7 @@ describe('the lesson_moved card', () => {
   it('reads previous → new in Cairo, with the teacher, the length and who moved it', () => {
     const card = readLessonMovedCard(PAYLOAD)!
     renderWithProviders(<LessonMovedCard card={card} />)
-    const group = screen.getByRole('group', { name: "📅 Child Alpha's lesson was moved" })
+    const group = screen.getByRole('group', { name: "Child Alpha's lesson was moved" })
     expect(group).toHaveTextContent('Mon 2 Nov 17:00 → Wed 4 Nov 18:30')
     expect(group).toHaveTextContent('Teacher One · 30 min')
     expect(group).toHaveTextContent('Moved by the family')
@@ -28,7 +28,7 @@ describe('the lesson_moved card', () => {
 
   it('in Arabic', () => {
     renderWithProviders(<LessonMovedCard card={readLessonMovedCard(PAYLOAD)!} />, { locale: 'ar' })
-    expect(screen.getByRole('group', { name: '📅 تغيّر موعد حصة Child Alpha' })).toHaveTextContent('نقلتها الأسرة')
+    expect(screen.getByRole('group', { name: 'تغيّر موعد حصة Child Alpha' })).toHaveTextContent('نقلتها الأسرة')
   })
 
   it('opens its lesson record like the other lesson cards; an unreadable payload falls back to the body', () => {
