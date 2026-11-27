@@ -51,6 +51,11 @@ export const S = {
   viewInsights: { en: 'View insights', ar: 'عرض الأداء' },
   moreActions: { en: 'More actions: {name}', ar: 'إجراءات أخرى: {name}' },
   reachWeek: { en: '{n} in the last 7 days', ar: '{n} في آخر 7 أيام' },
+  // The studio's figures: delivered is not seen, so the two never share a word.
+  deliveredTo: { en: 'Delivered to', ar: 'وصلت إلى' },
+  viewedShare: { en: '{pct} of those it reached', ar: '{pct} ممن وصلتهم' },
+  draftsWaiting: { en: 'Not published yet:', ar: 'لم تُنشر بعد:' },
+  showDrafts: { en: 'Show drafts', ar: 'عرض المسودات' },
 
   // composer
   composeTitle: { en: 'New story', ar: 'حالة جديدة' },

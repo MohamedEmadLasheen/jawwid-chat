@@ -105,7 +105,6 @@ const WEEK_MS = 7 * 86_400_000
 export function StoriesStudio({ basePath, eyebrow }: { basePath: string; eyebrow?: string }) {
   const tx = useText()
   const { number } = useI18n()
-  const plural = usePlural()
   const [params, setParams] = useSearchParams()
   const [search, setSearch] = useState('')
   const canManageData = useCanManageAudienceData()
@@ -135,18 +134,31 @@ export function StoriesStudio({ basePath, eyebrow }: { basePath: string; eyebrow
   const reachWeek = counted
     .filter((st) => st.publishedAt && now - new Date(st.publishedAt).getTime() < WEEK_MS)
     .reduce((n, st) => n + st.recipientCount, 0)
+  const views = counted.reduce((n, st) => n + st.viewCount, 0)
   // The audience data tab is about families, not reach: no figures over it.
   const figures: MastFigure[] | undefined = query.isLoading || query.error || (params.get('tab') === 'audience' && canManageData)
     ? undefined
     : [
-        // How far the stories went; how many are live or drafts is said by the tabs below.
-        { key: 'reach', label: tx(S.totalReach), value: number(reach), tone: 'key', note: fill(tx(S.reachWeek), { n: number(reachWeek) }) },
+        // How far the stories went: delivered, then seen (a share of delivered, so the two
+        // never read as one number). How many are live or drafts is said by the tabs below.
+        {
+          key: 'reach',
+          label: tx(S.deliveredTo),
+          value: number(reach),
+          tone: 'key',
+          // The week's share only when it says something the figure does not.
+          note: reachWeek !== reach ? fill(tx(S.reachWeek), { n: number(reachWeek) }) : undefined,
+        },
         {
           key: 'views',
           label: tx(S.totalViews),
-          value: number(counted.reduce((n, st) => n + st.viewCount, 0)),
-          note: plural(COUNT.taps, counted.reduce((n, st) => n + st.ctaTapCount, 0)),
+          value: number(views),
+          note: reach > 0 ? fill(tx(S.viewedShare), { pct: `${number(Math.round((100 * Math.min(views, reach)) / reach))}%` }) : undefined,
         },
+        // Taps only exist where a story carries a button.
+        ...(counted.some((st) => st.cta)
+          ? [{ key: 'taps', label: tx(S.totalTaps), value: number(counted.reduce((n, st) => n + st.ctaTapCount, 0)) }]
+          : []),
       ]
   const tabs = [
     { key: 'all', label: tx(S.all), count: stories.length },
@@ -221,6 +233,7 @@ function StoryList({
 }) {
   const tx = useText()
   const query = useStudioStories()
+  const { locale } = useI18n()
   const summary = useAudienceSummary()
   const [deleting, setDeleting] = useState<string | null>(null)
   const now = Date.now()
@@ -249,6 +262,7 @@ function StoryList({
   else if (sort === 'reach') visible.sort((a, b) => b.recipientCount - a.recipientCount)
   else if (sort === 'taps') visible.sort((a, b) => b.ctaTapCount - a.ctaTapCount)
   const filtered = search !== '' || stateFilter !== 'all'
+  const drafts = stories.filter((s) => effectiveState(s, now) === 'draft')
 
   return (
     <QueryBoundary
@@ -285,6 +299,21 @@ function StoryList({
             </SearchableSelect>
           </div>
         </div>
+
+        {/* A draft reaches nobody until it is published: named above the grid, wherever the
+            list is filtered, so it is not lost among the live ones. */}
+        {drafts.length > 0 && stateFilter !== 'draft' && (
+          <p className="story-drafts" role="note">
+            <Icon name="send" size={16} />
+            <span className="story-drafts__text">
+              <span className="story-drafts__label">{tx(S.draftsWaiting)}</span>{' '}
+              <bdi>{drafts.map((d) => storyName(d, tx(S.untitled))).join(locale === 'ar' ? '، ' : ', ')}</bdi>
+            </span>
+            <Link className="story-drafts__go" to={{ search: withParam('state', 'draft').toString() }} replace>
+              {tx(S.showDrafts)}
+            </Link>
+          </p>
+        )}
 
         {visible.length === 0 ? (
           <EmptyState
