@@ -214,7 +214,7 @@ html[lang='ar'] {
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
     color-scheme: dark;
-    --canvas: #0e1a1d; --surface: #17282c; --surface-2: #122226; --surface-hover: #1f3439; --surface-raised: #253e44;
+    --canvas: #0e1a1d; --surface: #17282c; --surface-2: #0f1d20; --surface-hover: #1f3439; --surface-raised: #253e44;
     --line: rgba(190,232,236,0.09); --line-2: rgba(190,232,236,0.06); --line-strong: rgba(190,232,236,0.18); --border-control: #52696d;
     --sidebar-bg: #0a1416; --sidebar-active: #16262a; --sidebar-line: rgba(190,232,236,0.07); --sidebar-hover: rgba(255, 255, 255, 0.045);
     --sidebar-fg: #e6eeee; --sidebar-muted: #c7d4d5; --sidebar-subtle: #a6b7b9;
@@ -223,7 +223,7 @@ html[lang='ar'] {
     --teal-solid: #2f7d88; --teal-solid-hover: #378b97;
     --gold: #d8ab5e; --gold-tint: #363325; --gold-text: #e4c182;
     --urgent: #e8968b; --urgent-tint: #3a2d2f; --urgent-line: #5e3c3c; --urgent-solid: #a5504a;
-    --waiting: #e5a56e; --waiting-tint: #3a3329;
+    --waiting: #ea9356; --waiting-tint: #3a2f27;
     --done: #88c9a4; --done-tint: #1f3a33;
     --lilac-tint: #2e3a46; --lilac-text: #cbbff0;
     --avatar-bg: #243b40; --paper-dark: #122226; --chat-bg: #0e1a1d;
@@ -248,7 +248,7 @@ html[lang='ar'] {
 /* The same, when the person chose Dark (the theme switch; data-theme on <html>). */
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --canvas: #0e1a1d; --surface: #17282c; --surface-2: #122226; --surface-hover: #1f3439; --surface-raised: #253e44;
+  --canvas: #0e1a1d; --surface: #17282c; --surface-2: #0f1d20; --surface-hover: #1f3439; --surface-raised: #253e44;
   --line: rgba(190,232,236,0.09); --line-2: rgba(190,232,236,0.06); --line-strong: rgba(190,232,236,0.18); --border-control: #52696d;
   --sidebar-bg: #0a1416; --sidebar-active: #16262a; --sidebar-line: rgba(190,232,236,0.07); --sidebar-hover: rgba(255, 255, 255, 0.045);
   --sidebar-fg: #e6eeee; --sidebar-muted: #c7d4d5; --sidebar-subtle: #a6b7b9;
@@ -257,7 +257,7 @@ html[lang='ar'] {
   --teal-solid: #2f7d88; --teal-solid-hover: #378b97;
   --gold: #d8ab5e; --gold-tint: #363325; --gold-text: #e4c182;
   --urgent: #e8968b; --urgent-tint: #3a2d2f; --urgent-line: #5e3c3c; --urgent-solid: #a5504a;
-  --waiting: #e5a56e; --waiting-tint: #3a3329;
+  --waiting: #ea9356; --waiting-tint: #3a2f27;
   --done: #88c9a4; --done-tint: #1f3a33;
   --lilac-tint: #2e3a46; --lilac-text: #cbbff0;
   --avatar-bg: #243b40; --paper-dark: #122226; --chat-bg: #0e1a1d;
@@ -1299,13 +1299,13 @@ button.side__item.is-current::before { content: none; }
 /* The wordmark on a dark surface: the logo's own colours on the light plate they were drawn for
    (not recoloured, not swapped for a lighter variant). The folded rail's gold book reads on dark as it is. */
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) .brand { display: inline-flex; padding: 5px 9px; border-radius: 9px; background: #fbf8f1; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06); }
+  :root:not([data-theme='light']) .brand { display: inline-flex; padding: 5px 9px; border-radius: 9px; background: #ece6d8; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06); }
   :root:not([data-theme='light']) .brand > .brand-logo--light { display: block; }
   :root:not([data-theme='light']) .brand > .brand-logo--dark { display: none; }
 }
 
 /* The same, when the person chose Dark (the theme switch; data-theme on <html>). */
-:root[data-theme='dark'] .brand { display: inline-flex; padding: 5px 9px; border-radius: 9px; background: #fbf8f1; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06); }
+:root[data-theme='dark'] .brand { display: inline-flex; padding: 5px 9px; border-radius: 9px; background: #ece6d8; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06); }
 :root[data-theme='dark'] .brand > .brand-logo--light { display: block; }
 :root[data-theme='dark'] .brand > .brand-logo--dark { display: none; }
 
@@ -1328,9 +1328,9 @@ button.side__item.is-current::before { content: none; }
 /* Dark, component by component (direction A3). */
 @media (prefers-color-scheme: dark) {
   /* Cards separate from the page: a hairline, a soft shadow and a faint top light. */
-  :root:not([data-theme='light']) :is(.sheet, .figures, .dash-group--needs, .sc-sheet, .sc-attn) { box-shadow: var(--shadow-lift), inset 0 1px 0 rgba(255, 255, 255, 0.025); }
+  :root:not([data-theme='light']) :is(.sheet:not(.sheet-bar), .figures, .dash-group--needs, .sc-sheet, .sc-attn) { box-shadow: var(--shadow-lift), inset 0 1px 0 rgba(255, 255, 255, 0.025); }
   /* Inputs sit into the card: one step darker, a readable edge. */
-  :root:not([data-theme='light']) :is(.input, .select, textarea.input, .ss__input, .search > input, .field input, .field select) { background-color: color-mix(in srgb, var(--canvas) 55%, var(--surface)); border-color: var(--border-control); }
+  :root:not([data-theme='light']) :is(.input, input.select, select.select, textarea.input, input.ss__input, .search > input, .field input, .field select) { background-color: color-mix(in srgb, var(--canvas) 55%, var(--surface)); border-color: var(--border-control); }
   /* Table heads and section strips are the inset level. */
   :root:not([data-theme='light']) :is(.table thead th, .tx-day > *) { background: var(--surface-2); }
   /* Secondary text reads larger in dark (light on dark reads thinner). */
@@ -1342,13 +1342,20 @@ button.side__item.is-current::before { content: none; }
   :root:not([data-theme='light']) :is(.side__count--urgent, .nc-bell__count, .side__badge) { background: var(--urgent-solid); color: #fff; }
   /* On a raised panel the selected row needs more than the card's tint. */
   :root:not([data-theme='light']) :is(.palette__row[aria-selected='true'], .menu__item:hover, .ss__option[aria-selected='true']) { background: var(--teal-tint-2); }
+  /* Second dark critic round. */
+  :root:not([data-theme='light']) :is(.tx-day > *, .dash-group--needs .dash-group__title) { border-block: 1px solid var(--line); }
+  :root:not([data-theme='light']) :is(.dialog, .menu__popover, .palette) :is(.input, input.select, select.select, textarea, .ss__input, .field input, .field select) { background-color: color-mix(in srgb, var(--surface-raised) 55%, var(--canvas)); }
+  :root:not([data-theme='light']) :is(.figure--urgent .figure__n, .metric--alert .metric__value) { color: #ef8b7b; }
+  :root:not([data-theme='light']) :is(.sc-cell--off, .sc-dayhead--off, .sc-heat--none, .sc-heat--off) { background: var(--surface-2); }
+  :root:not([data-theme='light']) .sc-heat--1 { background: #27444a; } :root:not([data-theme='light']) .sc-heat--2 { background: #2a5860; } :root:not([data-theme='light']) .sc-heat--3 { background: #2e6c76; } :root:not([data-theme='light']) .sc-heat--4 { background: #2f7f8b; color: #fff; }
+  :root:not([data-theme='light']) :is(.sc-row__head-end, .sc-row__sub .badge, .sc-dayhead--month, .sc-dayhead--month .sc-dayhead__n, .sc-dayhead--off .sc-dayhead__n, .sc-heat) { font-size: max(13px, var(--fs-xs)); }
 }
 
 /* The same, when the person chose Dark (the theme switch; data-theme on <html>). */
 /* Cards separate from the page: a hairline, a soft shadow and a faint top light. */
-:root[data-theme='dark'] :is(.sheet, .figures, .dash-group--needs, .sc-sheet, .sc-attn) { box-shadow: var(--shadow-lift), inset 0 1px 0 rgba(255, 255, 255, 0.025); }
+:root[data-theme='dark'] :is(.sheet:not(.sheet-bar), .figures, .dash-group--needs, .sc-sheet, .sc-attn) { box-shadow: var(--shadow-lift), inset 0 1px 0 rgba(255, 255, 255, 0.025); }
 /* Inputs sit into the card: one step darker, a readable edge. */
-:root[data-theme='dark'] :is(.input, .select, textarea.input, .ss__input, .search > input, .field input, .field select) { background-color: color-mix(in srgb, var(--canvas) 55%, var(--surface)); border-color: var(--border-control); }
+:root[data-theme='dark'] :is(.input, input.select, select.select, textarea.input, input.ss__input, .search > input, .field input, .field select) { background-color: color-mix(in srgb, var(--canvas) 55%, var(--surface)); border-color: var(--border-control); }
 /* Table heads and section strips are the inset level. */
 :root[data-theme='dark'] :is(.table thead th, .tx-day > *) { background: var(--surface-2); }
 /* Secondary text reads larger in dark (light on dark reads thinner). */
@@ -1359,3 +1366,13 @@ html[lang='ar'][data-theme='dark'] { --fs-xs: 14.5px; --fs-sm: 15px; }
 /* A badge on the rail or the bell must be seen at a glance: solid, but the softened red. */
 :root[data-theme='dark'] :is(.side__count--urgent, .nc-bell__count, .side__badge) { background: var(--urgent-solid); color: #fff; }
 :root[data-theme='dark'] :is(.palette__row[aria-selected='true'], .menu__item:hover, .ss__option[aria-selected='true']) { background: var(--teal-tint-2); }
+/* Second dark critic round (forced Dark). */
+:root[data-theme='dark'] :is(.tx-day > *, .dash-group--needs .dash-group__title) { border-block: 1px solid var(--line); }
+:root[data-theme='dark'] :is(.dialog, .menu__popover, .palette) :is(.input, input.select, select.select, textarea, .ss__input, .field input, .field select) { background-color: color-mix(in srgb, var(--surface-raised) 55%, var(--canvas)); }
+:root[data-theme='dark'] :is(.figure--urgent .figure__n, .metric--alert .metric__value) { color: #ef8b7b; }
+:root[data-theme='dark'] :is(.sc-cell--off, .sc-dayhead--off, .sc-heat--none, .sc-heat--off) { background: var(--surface-2); }
+:root[data-theme='dark'] .sc-heat--1 { background: #27444a; } :root[data-theme='dark'] .sc-heat--2 { background: #2a5860; } :root[data-theme='dark'] .sc-heat--3 { background: #2e6c76; } :root[data-theme='dark'] .sc-heat--4 { background: #2f7f8b; color: #fff; }
+:root[data-theme='dark'] :is(.sc-row__head-end, .sc-row__sub .badge, .sc-dayhead--month, .sc-dayhead--month .sc-dayhead__n, .sc-dayhead--off .sc-dayhead__n, .sc-heat) { font-size: max(13px, var(--fs-xs)); }
+
+/* An open menu sits above the next row's controls (each row's controls stack on their own layer). */
+.menu:has(> .menu__popover) { z-index: 40 !important; }

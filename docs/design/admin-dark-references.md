@@ -55,3 +55,18 @@ The two small sizes are half a step larger in dark (14 and 14.5px; Arabic 14.5 a
 - Info, the teal #86c7cf
 
 Gold #d8ab5e stays the one warm "now" accent. Counts inside the page are tinted pills. Only the alert badges on the rail and the bell stay solid, in a muted red (#a5504a) with white text (5.9:1).
+
+## Critic round on the chosen direction, all fixed
+- **Inset level.** It is clearly recessed (#0f1d20); table heads, day strips and dashboard section bands have hairline edges.
+- **Schedule.**
+  - Off-shift cells read recessed against working cells.
+  - The month heat starts visible (#27444a) and steps to #2f7f8b, where white reads.
+  - The schedule's small labels follow the dark size step (at least 13px).
+- **Waiting.** It moved to orange (#ea9356) so it no longer reads as the gold "now".
+- **Raised panels.** Dialog and menu inputs sit on the panel rather than looking like holes.
+- **Large late figures.** They read warm red (#ef8b7b), not pink.
+- **Logo plate.** It is toned to #ece6d8, so it no longer glares; the logo itself is unchanged.
+- **Bugs fixed:**
+  - A transparent toolbar no longer casts a card shadow (the dark band on Stories).
+  - An open row menu now sits above the next row's controls. This was a bug in both themes.
+- **Keeping the two dark forms in step.** Every dark rule exists twice: once for the device setting and once for the switch. `core/theme/darkTwins.test.ts` fails if they ever differ.
