@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { AppRoutes } from '@/app/AppRoutes'
 import { tokenStore } from '@/core/auth/tokens'
 import { destinationsFor, entriesOf } from '@/app/navigation'
@@ -48,13 +49,15 @@ describe('Student schedules page', () => {
     renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/schedule/students' })
     const students = await screen.findByRole('region', { name: 'Students' })
     const alpha = within(students).getByText('Child Alpha').closest('tr')!
-    expect(within(alpha).getByText('Teacher One')).toBeInTheDocument()
+    expect(within(within(students).getByRole('group', { name: 'Teacher One' })).getByText('Child Alpha')).toBeInTheDocument()
     expect(within(alpha).getByText('Monday 17:00 (30 min)')).toBeInTheDocument()
     expect(within(students).getByText('Child Beta')).toBeInTheDocument()
     // A student with no teacher is shown, not dropped.
     expect(within(students).getByText('Child Gamma')).toBeInTheDocument()
     // The same actions as the Teachers' schedules desk.
-    expect(within(alpha).getByRole('button', { name: 'Change teacher' })).toBeInTheDocument()
+    // The row states one action; Change teacher is behind its menu.
+    await userEvent.click(within(alpha).getByRole('button', { name: /^More actions/ }))
+    expect(within(alpha).getByRole('menuitem', { name: 'Change teacher' })).toBeInTheDocument()
   })
 
   it('narrows to one student, to one teacher, or to students with no teacher, by link', async () => {
@@ -79,8 +82,11 @@ describe('Student schedules page', () => {
 
 describe('Scheduling navigation', () => {
   it('holds the academy calendar, the Teachers\' and the Student schedules, and only for the Teachers department', () => {
+    // The calendars: Schedule & lessons also holds the follow-up of lessons (once the Operations icon), in its own group.
     const paths = (role: 'super_admin' | 'admin' | 'manager', access = {}) =>
-      entriesOf(destinationsFor(role, access).find((d) => d.key === 'scheduling') ?? { key: 'scheduling', icon: 'calendar', label: { en: '', ar: '' }, groups: [] }).map((e) => e.path)
+      entriesOf(destinationsFor(role, access).find((d) => d.key === 'scheduling') ?? { key: 'scheduling', icon: 'calendar', label: { en: '', ar: '' }, groups: [] })
+        .map((e) => e.path)
+        .filter((p) => ['/schedule', '/teachers/schedules', '/schedule/students'].includes(p))
     expect(paths('super_admin')).toEqual(['/schedule', '/teachers/schedules', '/schedule/students'])
     expect(paths('admin', { calendar: true, lessonManager: true })).toEqual(['/schedule', '/teachers/schedules', '/schedule/students'])
     // Operations has the calendar only; the desks wait for the Teachers department.
@@ -97,9 +103,9 @@ describe('Scheduling navigation', () => {
     expect(sales({ sales: true })).toEqual(['/sales/pipeline', '/trials', '/trials/new-students'])
     expect(sales({ operations: true })).toEqual(['/trials', '/trials/new-students'])
     // The Teachers department sees the teachers' trials, not the new-student set-up.
-    // ...nor a Sales icon: its Trial lessons page is listed under Operations (PD-59 owner decision).
+    // ...nor a Sales icon: its Trial lessons page is listed with the lessons, under Schedule & lessons (PD-59 owner decision).
     expect(sales({ lessonManager: true })).toEqual([])
-    const ops = destinationsFor('admin', { lessonManager: true }).find((x) => x.key === 'operations')
+    const ops = destinationsFor('admin', { lessonManager: true }).find((x) => x.key === 'scheduling')
     expect(ops ? entriesOf(ops).map((e) => e.path) : []).toContain('/trials')
     expect(sales({})).toEqual([])
   })

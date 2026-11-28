@@ -1,37 +1,186 @@
-/* PD-40 PR-5: staff accounts and roles. Uses the design system's table, toolbar and badges. */
-.sa-tabs { display: flex; gap: var(--space-1); flex-wrap: wrap; border-block-end: 1px solid var(--border); margin-block-end: var(--space-3); }
-.sa-tab { padding: var(--space-2) var(--space-3); color: var(--text-muted); text-decoration: none; border-block-end: 2px solid transparent; }
-.sa-tab--active { color: var(--text-link); border-block-end-color: var(--accent); font-weight: 600; }
+/*
+ * PD-40 PR-5: staff accounts and roles.
+ *
+ * A list and the open item's sheet on one screen. The list is a directory's
+ * sheet (.dir-*) with compact rows; the sheet beside it is headed by who or
+ * what it is and its actions, then facts, then parts with grouped checklists.
+ *
+ *   .sa-tabs / .sa-tab     the Accounts area's tabs, set on the masthead
+ *   .md / .md__list / .md__detail   the two panes (one at a time below 1100px)
+ *   .md-sheet / .md-table / .md-row   the list: its bar and its rows
+ *   .md-pane               the open item's sheet: head, facts, parts
+ *   .md-part / .md-groups / .md-checks   a headed part, its groups, its checked lines
+ *   .sa-*                  what a role and an account add (a key tag, a member count) and the dialogs' pieces
+ */
+@import '../profiles/record.css';
+@import '../profiles/directory.css';
 
-.sa-name { background: none; border: 0; padding: 0; font: inherit; font-weight: 600; color: var(--text-link); cursor: pointer; text-align: start; }
-.sa-name:hover { text-decoration: underline; }
-.sa-chips { display: flex; flex-wrap: wrap; gap: var(--space-1); }
-.sa-filters { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: flex-end; }
-.sa-step { color: var(--text-muted); margin: 0 0 var(--space-3); }
-.sa-fixed { display: grid; grid-template-columns: max-content 1fr; gap: var(--space-1) var(--space-4); margin: var(--space-2) 0; }
-.sa-fixed dt { color: var(--text-muted); }
-.sa-fixed dd { margin: 0; }
+.sa-tabs { display: flex; gap: var(--space-5); flex-wrap: wrap; border-block-end: 1px solid var(--line); margin-block-end: var(--space-5); }
+.sa-tab { display: inline-flex; align-items: center; min-block-size: 40px; padding: 0; margin-block-end: -1px; color: var(--ink-muted); font-size: var(--fs-sm); font-weight: 500; text-decoration: none; border-block-end: 2px solid transparent; }
+.sa-tab:hover { color: var(--ink); }
+.sa-tab--active { color: var(--text-link); border-block-end-color: var(--accent); font-weight: 600; }
+/* Set as the masthead's tabs, the strip sits on the band's lower edge and needs no rule of its own. */
+.mast__tabs .sa-tabs { margin-block-end: 0; border-block-end: 0; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+.mast__tabs .sa-tabs::-webkit-scrollbar { display: none; }
+.mast__tabs .sa-tab { flex: none; margin-block-end: 0; }
+@media (max-width: 767px) {
+  .mast__tabs .sa-tab { min-block-size: 44px; }
+}
+
+.sa-name { background: none; border: 0; padding: 0; min-block-size: 28px; font: inherit; font-weight: 600; color: var(--text-link); cursor: pointer; text-align: start; overflow-wrap: anywhere; }
+.sa-name:hover { color: var(--teal-dark); text-decoration: underline; text-underline-offset: 3px; }
+.sa-name > strong { font-weight: inherit; }
+/* In the list a name is ink, like every list of people here; the open one takes the accent. */
+.sa-page .md-table .sa-name { justify-self: start; color: var(--ink); }
+.sa-page .md-row:hover .sa-name, .sa-page .md-row--current .sa-name { color: var(--teal); }
+/* The open row is said by its tint; its name is not a link to underline. */
+.sa-page .md-row--current .sa-name { text-decoration: none; }
+
+/* ------------------------------------------------------- list and detail */
+
+.md { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-5); align-items: start; min-inline-size: 0; scroll-margin-block-start: var(--space-4); }
+.md__list, .md__detail { min-inline-size: 0; }
+.md__back { display: none; }
+.md__none { margin: 0; padding: var(--space-5) var(--space-4); font-size: var(--fs-sm); color: var(--ink-muted); }
+@media (min-width: 1100px) {
+  .md { grid-template-columns: minmax(340px, 392px) minmax(0, 1fr); }
+  /* The list stays in view and scrolls on its own, so a long sheet never takes it away. */
+  .md__list { position: sticky; inset-block-start: 0; max-block-size: calc(100dvh - var(--topbar-h) - var(--space-5)); overflow: hidden auto; border-radius: var(--radius-lg); }
+}
+@media (max-width: 1099px) {
+  /* One pane at a time: the list, then the open item as its own screen. */
+  .md--open > .md__list { display: none; }
+  .md:not(.md--open) > .md__detail { display: none; }
+  .md__back { display: inline-flex; align-items: center; gap: 6px; min-block-size: 44px; margin-block-end: 4px; padding: 0; border: 0; background: none; color: var(--teal); font: inherit; font-size: var(--fs-sm); font-weight: 500; cursor: pointer; }
+  .md__back:hover { text-decoration: underline; }
+}
+
+/* The list's bar: the search takes a line, the chips and pickers follow. */
+.md-bar .search { flex: 1 1 100%; max-inline-size: none; }
+.md-bar .chips { flex: 1 1 100%; }
+.md-pickers { display: flex; flex-wrap: wrap; gap: 8px; flex: 1 1 100%; }
+.md-picker { flex: 1 1 150px; min-inline-size: 0; }
+.md-sheet > .state { padding-inline: var(--space-4); }
+
+/* A compact row: who or what, one line under it, the state at the end. The column names are said, not drawn. */
+.md-table > thead { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); }
+.md-table .dir-cell-state { inline-size: 1%; text-align: end; vertical-align: top; padding-block-start: 14px; }
+.md-table .acct-state { justify-content: flex-end; }
+.md-row { position: relative; }
+/* The open row is the selection: the teal tint, its name in the accent. Gold is kept for "now". */
+.md-row--current > td { background: var(--teal-tint); }
+.md-row--current:hover > td { background: var(--teal-tint); }
+.md-row--past .sa-name { color: var(--ink-muted); font-weight: 500; }
+@media (max-width: 767px) {
+  .md-table .dir-cell-state { inline-size: auto; padding-block-start: 0; }
+  .md-row--current { background: var(--teal-tint); }
+  .md-row--current > td { background: none; }
+  .sa-page .md-table .sa-name { min-block-size: 32px; }
+}
+
+/* A role in the list: its name and what kind it is on one line, its key under it. */
+.sa-role { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; }
+.sa-role__key { display: block; line-height: 1.4; }
+.sa-key { display: inline-block; padding: 0 5px; border: 1px solid var(--line); border-radius: var(--radius-sm); font-family: var(--font-mono, ui-monospace, monospace); font-size: var(--fs-xs); line-height: 1.5; color: var(--ink-muted); vertical-align: middle; overflow-wrap: anywhere; }
+.sa-members { display: inline-flex; align-items: center; gap: 5px; font-size: var(--fs-sm); font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ink); white-space: nowrap; }
+.sa-members .icon { color: var(--ink-muted); }
+.sa-members--none { font-weight: 400; color: var(--border-control); }
+.sa-members--none .icon { color: var(--border-control); }
+
+/* ----------------------------------------------------- the open item's sheet */
+
+.md-pane { min-inline-size: 0; }
+.md-pane__head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3) var(--space-4); padding: var(--space-5) var(--space-5) var(--space-4); }
+.md-pane__who { flex: 1 1 220px; display: grid; gap: 6px; min-inline-size: 0; }
+.md-pane__title { margin: 0; font-family: var(--font-head); font-size: var(--fs-2xl); font-weight: 600; line-height: 1.2; overflow-wrap: anywhere; }
+html[lang='ar'] .md-pane__title { line-height: 1.45; }
+.md-pane__actions { flex: none; align-self: flex-start; }
+/* Under the name the tags keep the name's side at every width. */
+.md-pane__who .acct-state { justify-content: flex-start; }
+.md-pane__note { margin: 0; padding: 0 var(--space-5) var(--space-4); max-inline-size: 76ch; font-size: var(--fs-sm); line-height: 1.55; color: var(--ink-muted); }
+.md-pane__note > p { margin: 0; }
+.md-pane__note > p + p { margin-block-start: 2px; }
+.md-pane__facts.rec-facts { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px var(--space-5); margin: 0; padding: var(--space-4) var(--space-5); border-block-start: 1px solid var(--line-2); }
+
+.md-part { padding: var(--space-4) var(--space-5) var(--space-5); border-block-start: 1px solid var(--line-2); }
+.md-part__head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; min-block-size: 28px; }
+.md-part__title { margin: 0; font-size: var(--fs-md); font-weight: 600; line-height: 1.5; }
+.md-part__count { font-size: var(--fs-sm); color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+.md-part__action { margin-inline-start: auto; }
+.md-part__hint, .md-part__none { margin: 2px 0 0; max-inline-size: 76ch; font-size: var(--fs-xs); line-height: 1.5; color: var(--ink-muted); }
+.md-part__none { margin-block-start: 8px; font-size: var(--fs-sm); }
+.md-part__source { margin: 8px 0 0; font-size: var(--fs-sm); color: var(--ink-muted); }
+.md-preview { margin-block: var(--space-3) 0; }
+
+/* Groups of checked lines: the page they belong to on the start side, its lines beside it. */
+.md-groups { list-style: none; margin: var(--space-3) 0 0; padding: 0; display: grid; }
+.md-group { display: grid; grid-template-columns: minmax(120px, 180px) minmax(0, 1fr); gap: 0 var(--space-4); padding-block: 8px; border-block-start: 1px solid var(--line-2); }
+.md-group:first-child { border-block-start: 0; padding-block-start: 0; }
+.md-group__head { display: grid; align-content: start; gap: 2px; min-inline-size: 0; }
+.md-group__title { padding-block-start: 5px; font-size: var(--fs-sm); font-weight: 600; color: var(--ink); overflow-wrap: anywhere; }
+.md-checks { list-style: none; margin: 0; padding: 0; display: grid; min-inline-size: 0; }
+.md-part > .md-checks { margin-block-start: var(--space-2); }
+.md-check { display: flex; align-items: flex-start; gap: 10px; min-block-size: 32px; padding-block: 5px; }
+.md-check > .icon { flex: none; margin-block-start: 3px; color: var(--teal); }
+.md-check > .avatar { flex: none; }
+.md-check__text { flex: 1; display: grid; gap: 1px; min-inline-size: 0; }
+.md-check__label { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; font-size: var(--fs-md); overflow-wrap: anywhere; }
+.md-check__src { font-size: var(--fs-xs); line-height: 1.5; color: var(--ink-muted); overflow-wrap: anywhere; }
+.md-check__act { flex: none; margin-block: -2px; }
+/* A restricted permission is held and switched off: struck through, its mark amber like its "Restricted" tag. */
+.md-check--off > .icon { color: var(--waiting); }
+.md-struck { text-decoration: line-through; color: var(--ink-muted); }
+.md-check--past > .icon { color: var(--border-control); }
+.md-people .md-check { align-items: center; }
+.md-person { justify-self: start; font-weight: 600; color: var(--ink); text-decoration: none; }
+.md-person:hover { color: var(--teal); text-decoration: underline; text-underline-offset: 3px; }
+
+/* Adding a role: the picker and its one button on a line. */
+.md-grant { display: flex; gap: var(--space-2); align-items: flex-end; flex-wrap: wrap; margin-block-start: var(--space-3); padding-block-start: var(--space-3); border-block-start: 1px solid var(--line-2); }
+.md-grant .field { flex: 1 1 220px; max-inline-size: 360px; margin: 0; }
+
+@media (max-width: 767px) {
+  .md-pane__head { padding: var(--space-4); align-items: flex-start; }
+  .md-pane__head > .avatar--lg { inline-size: 44px; block-size: 44px; font-size: 18px; }
+  .md-pane__title { font-size: var(--fs-xl); }
+  .md-pane__actions { flex: 1 1 100%; }
+  .md-pane__actions .row-actions2 { display: flex; }
+  .md-pane__actions .row-actions2 > .btn { flex: 1; justify-content: center; }
+  .md-pane__note, .md-pane__facts.rec-facts, .md-part { padding-inline: var(--space-4); }
+  .md-pane__facts.rec-facts { grid-template-columns: 1fr 1fr; }
+  .md-group { grid-template-columns: minmax(0, 1fr); }
+  .md-group__title { padding-block: 2px 0; font-size: var(--fs-xs); color: var(--ink-muted); }
+  .md-check { min-block-size: 40px; }
+  .md-check__act { min-block-size: 40px; }
+  .md-grant .field { max-inline-size: none; }
+  .md-grant > .btn { flex: 1 1 100%; }
+}
+
+/* ------------------------------------------------------------- the dialogs */
+
+.sa-step { color: var(--ink-muted); margin: 0 0 var(--space-3); font-size: var(--fs-sm); }
+.sa-fixed { display: grid; grid-template-columns: max-content 1fr; gap: 0 var(--space-4); margin: var(--space-2) 0; font-size: var(--fs-sm); }
+.sa-fixed dt, .sa-fixed dd { margin: 0; padding-block: 7px; border-block-end: 1px solid var(--line-2); }
+.sa-fixed dt { color: var(--ink-muted); }
+.sa-fixed dd { font-weight: 500; }
 
 .sa-picker { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
 .sa-check { display: flex; gap: var(--space-2); align-items: flex-start; }
-.sa-preview { margin-block: var(--space-3); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius); }
-.sa-preview__title { font-size: var(--fs-md, 1rem); margin: 0 0 var(--space-2); }
+.sa-check input, .sa-checklist input { accent-color: var(--teal); }
+.sa-preview { margin-block: var(--space-3); padding: 2px var(--space-3) var(--space-2); border: 0; border-inline-start: 2px solid var(--teal); border-radius: 0; }
+.sa-preview__title { font-size: var(--fs-xs); font-weight: 500; color: var(--ink-muted); margin: 0 0 var(--space-2); }
 .sa-preview ul { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
 .sa-preview__keys { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-3); margin-block-start: var(--space-1); }
 
-.sa-section { margin-block: var(--space-4); }
-.sa-section__title { font-size: var(--fs-md, 1rem); margin: 0 0 var(--space-2); }
-.sa-held { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
-.sa-held li { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); }
-.sa-grant { display: flex; gap: var(--space-2); align-items: flex-end; flex-wrap: wrap; margin-block-start: var(--space-2); }
+.sa-section__title { margin: var(--space-5) 0 var(--space-2); padding-block-end: 6px; border-block-end: 1px solid var(--line); font-size: var(--fs-sm); font-weight: 600; color: var(--ink-muted); }
 
-.sa-checklist { display: grid; gap: var(--space-3); margin-block: var(--space-2); }
-.sa-checklist fieldset { border: 1px solid var(--border); border-radius: var(--radius); padding: var(--space-2) var(--space-3); margin: 0; }
-.sa-checklist legend { font-weight: 600; padding-inline: var(--space-1); }
-.sa-checklist label { display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; padding-block: var(--space-1); }
+.sa-checklist { display: grid; gap: var(--space-4); margin-block: var(--space-2); }
+.sa-checklist fieldset { border: 0; border-block-start: 1px solid var(--line); border-radius: 0; padding: var(--space-2) 0 0; margin: 0; }
+.sa-checklist legend { font-weight: 600; font-size: var(--fs-sm); padding-inline: 0 var(--space-2); }
+.sa-checklist label { display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; padding-block: var(--space-1); font-size: var(--fs-sm); }
 
 /* The first sign-in code: the PD-43 code sheet's layout. */
 .sa-code { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 12px 0; }
-.sa-code dt { color: var(--text-muted, inherit); }
+.sa-code dt { color: var(--ink-muted); }
 .sa-code dd { margin: 0; }
-.sa-code__value { font-family: var(--font-mono, ui-monospace, monospace); font-size: 1.5rem; letter-spacing: 0.2em; user-select: all; }
+.sa-code__value { font-family: var(--font-head); font-size: var(--fs-2xl); font-weight: 600; letter-spacing: 0.2em; font-variant-numeric: tabular-nums lining-nums; user-select: all; }

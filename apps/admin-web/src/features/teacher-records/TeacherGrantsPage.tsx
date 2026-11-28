@@ -1,13 +1,13 @@
 import { useSearchParams } from 'react-router-dom'
 import { FilterChips } from '@/shared/components/FilterChips'
 import { PageHeader } from '@/shared/components/PageHeader'
-import { EmptyState, LoadingState } from '@/shared/components/States'
+import { LoadingState } from '@/shared/components/States'
 import { RewardsSection } from '@/features/teacher-supervision/RewardsAndComplaints'
 import '@/features/teacher-supervision/teacher-supervision.css'
 import { R, useCopy } from './copy'
 import { useTeacherRecordsAccess } from './hooks'
 import { TestimonialsSection } from './Testimonials'
-import { TeacherPicker, TeacherStrip } from './TeacherStrip'
+import { Denied, TeacherPicker, useTeacherFacts } from './TeacherStrip'
 import './teacher-records.css'
 
 export type GrantsSection = 'grants' | 'testimonials'
@@ -40,6 +40,7 @@ export function TeacherGrantsPage({ basePath, eyebrow }: { basePath: string; eye
       { replace: true },
     )
 
+  const facts = useTeacherFacts(teacher || null, basePath)
   const a = access.data
   if (access.isLoading) return <LoadingState />
   if (!a || !a.grants.view) {
@@ -47,7 +48,7 @@ export function TeacherGrantsPage({ basePath, eyebrow }: { basePath: string; eye
       <div className="page">
         <div className="page__inner">
           <PageHeader eyebrow={eyebrow} title={tx(R.grantsTitle)} />
-          <EmptyState icon="lock" title={tx(R.denied)} />
+          <Denied text={tx(R.denied)} />
         </div>
       </div>
     )
@@ -56,7 +57,17 @@ export function TeacherGrantsPage({ basePath, eyebrow }: { basePath: string; eye
   return (
     <div className="page">
       <div className="page__inner">
-        <PageHeader eyebrow={eyebrow ?? tx(R.group)} title={tx(R.grantsTitle)} subtitle={tx(R.grantsSubtitle)} />
+        <PageHeader
+          title={tx(R.grantsTitle)}
+          status={facts.status}
+          figures={facts.figures}
+          actions={
+            <>
+              <TeacherPicker value={teacher} onChange={(id) => set({ teacher: id })} />
+              {facts.action}
+            </>
+          }
+          tabs={
         <FilterChips<GrantsSection>
           variant="tabs"
           label={tx(R.sections)}
@@ -67,10 +78,8 @@ export function TeacherGrantsPage({ basePath, eyebrow }: { basePath: string; eye
             { value: 'testimonials', label: tx(R.testimonials) },
           ]}
         />
-        <div className="tr-toolbar">
-          <TeacherPicker value={teacher} onChange={(id) => set({ teacher: id })} />
-        </div>
-        <TeacherStrip teacherId={teacher || null} basePath={basePath} />
+          }
+        />
         <div className="th-body">
           {/* PD-52 PR-5: Sales names the student or trial of every grant and testimonial. */}
           {section === 'grants' && <RewardsSection basePath={basePath} canRecord={a.grants.record} requireAbout={a.basis === 'sales'} />}

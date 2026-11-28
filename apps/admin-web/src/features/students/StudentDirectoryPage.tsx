@@ -1,23 +1,26 @@
 import { useDeferredValue, useEffect, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Avatar } from '@/shared/components/Avatar'
 import { Badge } from '@/shared/components/Badge'
 import { PageHeader } from '@/shared/components/PageHeader'
+import { RowActions } from '@/shared/components/RowActions'
 import { SearchField } from '@/shared/components/SearchField'
 import { SearchableSelect } from '@/shared/components/SearchableSelect'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
+import { countWords, type CountForms } from '@/features/instalments/copy'
 import { studentPath } from '@/features/profiles/api'
 import { describeError, isProfileRefusal, useCopy, type Pair } from '@/features/profiles/copy'
-import { STUDENTS_PAGE_SIZE, type StudentQuery, type StudentStatus } from './api'
+import { STUDENTS_PAGE_SIZE, type StudentQuery, type StudentRow, type StudentStatus } from './api'
 import { useStudentList } from './hooks'
+import { useRememberWalk } from '@/features/profiles/RecordHead'
 import '@/features/profiles/profiles.css'
 
 const S = {
   title: { en: 'Students', ar: 'الطلاب' },
   subtitle: {
-    en: 'Every student you may open, with their family, teacher and weekly times. Open a student for the full profile.',
-    ar: 'كل طالب يحق لك فتح ملفه، مع عائلته ومعلمه ومواعيده الأسبوعية. افتح الطالب لعرض ملفه كاملًا.',
+    en: 'Every student you may open, with family, teacher and weekly times.',
+    ar: 'كل طالب يحق لك فتح ملفه، مع عائلته ومعلمه ومواعيده الأسبوعية.',
   },
   search: { en: 'Search by student or family name', ar: 'ابحث باسم الطالب أو العائلة' },
   teacher: { en: 'Teacher', ar: 'المعلم' },
@@ -25,8 +28,8 @@ const S = {
   noTeacherFilter: { en: 'No teacher yet', ar: 'بلا معلم بعد' },
   supervisor: { en: 'Supervisor', ar: 'المشرف' },
   allSupervisors: { en: 'All supervisors', ar: 'كل المشرفين' },
+  noSupervisor: { en: 'No supervisor', ar: 'بلا مشرف' },
   status: { en: 'Status', ar: 'الحالة' },
-  allStatuses: { en: 'All statuses', ar: 'كل الحالات' },
   active: { en: 'Active', ar: 'نشط' },
   paused: { en: 'Paused', ar: 'متوقف مؤقتًا' },
   stopped: { en: 'Stopped', ar: 'متوقف نهائيًا' },
@@ -34,27 +37,67 @@ const S = {
   family: { en: 'Family', ar: 'العائلة' },
   noTeacher: { en: 'No teacher', ar: 'بلا معلم' },
   weekly: { en: 'Weekly times', ar: 'المواعيد الأسبوعية' },
+  noWeekly: { en: 'None yet', ar: 'لا مواعيد بعد' },
   until: { en: 'back {day}', ar: 'يعود {day}' },
   none: { en: 'No students match.', ar: 'لا يوجد طلاب مطابقون.' },
-  total: { en: '{n} students', ar: '{n} طالب' },
+  noneHint: { en: 'Clear the search or a filter to widen the list.', ar: 'امسح البحث أو أحد عوامل التصفية لتوسيع القائمة.' },
+  all: { en: 'All', ar: 'الكل' },
+  onThisPage: { en: '{n} on this page', ar: '{n} في هذه الصفحة' },
+  open: { en: 'Open', ar: 'فتح' },
+  more: { en: 'More actions: {name}', ar: 'إجراءات أخرى: {name}' },
   pageOf: { en: 'Page {page} of {pages}', ar: 'صفحة {page} من {pages}' },
   prev: { en: 'Previous', ar: 'السابق' },
   next: { en: 'Next', ar: 'التالي' },
   pager: { en: 'Pages', ar: 'الصفحات' },
 } satisfies Record<string, Pair>
 
-const TONE = { active: 'ok', paused: 'warn', stopped: 'danger' } as const
+const STUDENTS_COUNT: CountForms = { en: ['{n} student', '{n} students'], ar: ['طالب واحد', 'طالبان', '{n} طلاب', '{n} طالبًا'] }
+const WEEKLY_COUNT: CountForms = {
+  en: ['{n} weekly time', '{n} weekly times'],
+  ar: ['موعد أسبوعي واحد', 'موعدان أسبوعيان', '{n} مواعيد أسبوعية', '{n} موعدًا أسبوعيًا'],
+}
+
+// Active is the usual state, so it is a quiet word with no colour; paused waits on a return day (amber);
+// stopped is a fact (outline). Colour is kept for the rows that differ.
+const TONE = { paused: 'warn', stopped: 'outline' } as const
+const STATUSES: ReadonlyArray<StudentStatus | ''> = ['', 'active', 'paused', 'stopped']
+
+interface Group {
+  key: string
+  teacher: StudentRow['teacher']
+  rows: StudentRow[]
+}
+
+/** The loaded page under its teachers: those with no teacher first, then each teacher by name. */
+function byTeacher(rows: StudentRow[], locale: string): Group[] {
+  const groups = new Map<string, Group>()
+  for (const row of rows) {
+    const key = row.teacher?.id ?? ''
+    const group = groups.get(key) ?? { key, teacher: row.teacher, rows: [] }
+    group.rows.push(row)
+    groups.set(key, group)
+  }
+  return [...groups.values()].sort((a, b) => {
+    if (!a.teacher || !b.teacher) return a.teacher ? 1 : b.teacher ? -1 : 0
+    return a.teacher.name.localeCompare(b.teacher.name, locale)
+  })
+}
 
 /**
  * PD-60: People -> Students. A paginated, searchable list of the students the
  * server lets this viewer open (the same rule as the Student Profile); each row
  * links to that profile. Filters and paging are the server's: this page asks,
  * the API decides and bounds.
+ *
+ * A directory: the masthead counts the list, one sheet holds it with the
+ * search and filters that narrow it, and the loaded page is set out under each
+ * teacher, those still without a teacher first.
  */
 export function StudentDirectoryPage() {
   const tx = useCopy()
-  const { locale, t } = useI18n()
+  const { locale, t, number } = useI18n()
   const [params, setParams] = useSearchParams()
+  const navigate = useNavigate()
   const [q, setQ] = useState(() => params.get('q') ?? '')
   const deferred = useDeferredValue(q.trim())
   const teacher = params.get('teacher') ?? ''
@@ -87,98 +130,148 @@ export function StudentDirectoryPage() {
   const list = useStudentList(query)
   const data = list.data
   const pages = data ? Math.max(1, Math.ceil(data.total / (data.limit || STUDENTS_PAGE_SIZE))) : 1
+  const groups = byTeacher(data?.students ?? [], locale)
+  // A student's file walks this page of the list in the order it is shown: teacher by teacher.
+  useRememberWalk('students', data ? groups.flatMap((g) => g.rows) : undefined)
+
 
   return (
-    <div className="page">
+    <div className="page dir">
       <div className="page__inner">
-        <PageHeader title={tx(S.title)} subtitle={tx(S.subtitle)} />
-        <div className="toolbar">
-          <SearchField value={q} onChange={setQ} label={tx(S.search)} clearLabel={t('common.cancel')} />
-          <label>
-            <span className="field__label">{tx(S.teacher)}</span>
-            <SearchableSelect className="select" value={teacher} onValueChange={(v) => set({ teacher: v })} aria-label={tx(S.teacher)}>
-              <option value="">{tx(S.allTeachers)}</option>
-              <option value="none">{tx(S.noTeacherFilter)}</option>
-              {(data?.filters.teachers ?? []).map((x) => (
-                <option key={x.id} value={x.id}>{x.name}</option>
+        <PageHeader title={tx(S.title)} />
+        <section className="sheet dir-sheet">
+          <div className="sheet-bar">
+            <SearchField value={q} onChange={setQ} label={tx(S.search)} clearLabel={t('common.cancel')} />
+            <div className="chips" role="group" aria-label={tx(S.status)}>
+              {STATUSES.map((s) => (
+                <button key={s || 'all'} type="button" className="chip" aria-pressed={status === s} onClick={() => set({ status: s })}>
+                  {tx(s ? S[s] : S.all)}
+                </button>
               ))}
-            </SearchableSelect>
-          </label>
-          <label>
-            <span className="field__label">{tx(S.supervisor)}</span>
-            <SearchableSelect className="select" value={supervisor} onValueChange={(v) => set({ supervisor: v })} aria-label={tx(S.supervisor)}>
-              <option value="">{tx(S.allSupervisors)}</option>
-              {(data?.filters.supervisors ?? []).map((x) => (
-                <option key={x.id} value={x.id}>{x.name}</option>
-              ))}
-            </SearchableSelect>
-          </label>
-          <label>
-            <span className="field__label">{tx(S.status)}</span>
-            <SearchableSelect className="select" value={status} onValueChange={(v) => set({ status: v })} aria-label={tx(S.status)}>
-              <option value="">{tx(S.allStatuses)}</option>
-              <option value="active">{tx(S.active)}</option>
-              <option value="paused">{tx(S.paused)}</option>
-              <option value="stopped">{tx(S.stopped)}</option>
-            </SearchableSelect>
-          </label>
-        </div>
-        {isProfileRefusal(list.error) ? (
-          <EmptyState icon="lock" title={describeError(list.error, locale)} />
-        ) : (
-          <QueryBoundary
-            isLoading={list.isLoading}
-            error={list.error}
-            isEmpty={(data?.students.length ?? 0) === 0}
-            emptyTitle={tx(S.none)}
-            onRetry={() => void list.refetch()}
-          >
-            <p className="field__hint">{tx(S.total, { n: String(data?.total ?? 0) })}</p>
-            <div className="table-wrap">
-              <table className="table">
+            </div>
+            <div className="sheet-bar__end dir-pickers">
+              <SearchableSelect className="select" value={teacher} onValueChange={(v) => set({ teacher: v })} aria-label={tx(S.teacher)}>
+                <option value="">{tx(S.allTeachers)}</option>
+                <option value="none">{tx(S.noTeacherFilter)}</option>
+                {(data?.filters.teachers ?? []).map((x) => (
+                  <option key={x.id} value={x.id}>{x.name}</option>
+                ))}
+              </SearchableSelect>
+              <SearchableSelect className="select" value={supervisor} onValueChange={(v) => set({ supervisor: v })} aria-label={tx(S.supervisor)}>
+                <option value="">{tx(S.allSupervisors)}</option>
+                {(data?.filters.supervisors ?? []).map((x) => (
+                  <option key={x.id} value={x.id}>{x.name}</option>
+                ))}
+              </SearchableSelect>
+            </div>
+          </div>
+          {isProfileRefusal(list.error) ? (
+            <EmptyState icon="lock" title={describeError(list.error, locale)} />
+          ) : (
+            <QueryBoundary
+              isLoading={list.isLoading}
+              error={list.error}
+              isEmpty={(data?.students.length ?? 0) === 0}
+              emptyTitle={tx(S.none)}
+              emptyHint={tx(S.noneHint)}
+              onRetry={() => void list.refetch()}
+            >
+              <table className="dir-table dir-table--grouped dir-table--students">
                 <thead>
                   <tr>
                     <th scope="col">{tx(S.student)}</th>
-                    <th scope="col">{tx(S.family)}</th>
-                    <th scope="col">{tx(S.teacher)}</th>
                     <th scope="col">{tx(S.supervisor)}</th>
-                    <th scope="col">{tx(S.status)}</th>
                     <th scope="col">{tx(S.weekly)}</th>
+                    <th scope="col">{tx(S.status)}</th>
+                    <th scope="col" className="cell-actions" aria-hidden="true" />
                   </tr>
                 </thead>
-                <tbody>
-                  {(data?.students ?? []).map((s) => (
-                    <tr key={s.id}>
-                      <td>
-                        <Link to={studentPath(s.id)} className="pf-person">
-                          <Avatar name={s.name} seed={s.id} size="sm" />
-                          <span dir="auto">{s.name}</span>
-                        </Link>
-                      </td>
-                      <td dir="auto">{s.family.displayName}</td>
-                      <td dir="auto">{s.teacher ? s.teacher.name : <span className="muted">{tx(S.noTeacher)}</span>}</td>
-                      <td dir="auto">{s.supervisor ? s.supervisor.name : '—'}</td>
-                      <td>
-                        <Badge tone={TONE[s.status]} dot>{tx(S[s.status])}</Badge>
-                        {s.status === 'paused' && s.returnOn && <> <span className="muted">{tx(S.until, { day: s.returnOn })}</span></>}
-                      </td>
-                      <td>{s.weeklySlots}</td>
+                {groups.map((g) => (
+                  <tbody key={g.key || 'none'} className={g.teacher ? 'dir-group' : 'dir-group dir-group--unplaced'}>
+                    <tr className="dir-group__head">
+                      <th colSpan={5} scope="rowgroup">
+                        <span className="dir-group__title">
+                          {g.teacher ? (
+                            <>
+                              <span className="dir-group__label">{tx(S.teacher)}</span>
+                              <bdi>{g.teacher.name}</bdi>
+                            </>
+                          ) : (
+                            <Badge tone="waiting">{tx(S.noTeacher)}</Badge>
+                          )}
+                          <span className="dir-group__count" title={tx(S.onThisPage, { n: number(g.rows.length) })}>
+                            {countWords(g.rows.length, STUDENTS_COUNT, locale)}
+                          </span>
+                        </span>
+                      </th>
                     </tr>
-                  ))}
-                </tbody>
+                    {g.rows.map((s) => (
+                      <tr
+                        key={s.id}
+                        className="dir-row"
+                        onClick={(e) => {
+                          // The whole row opens the file; the name is the link the keyboard uses.
+                          if (!(e.target as HTMLElement).closest('a, button, input')) navigate(studentPath(s.id))
+                        }}
+                      >
+                        <td className="dir-cell-who">
+                          <span className="dir-who">
+                            <Avatar name={s.name} seed={s.id} />
+                            <span className="dir-who__text">
+                              <Link to={studentPath(s.id)} className="dir-name">
+                                <bdi>{s.name}</bdi>
+                              </Link>
+                              <span className="dir-sub">
+                                <bdi>{s.family.displayName}</bdi>
+                              </span>
+                            </span>
+                          </span>
+                        </td>
+                        <td className="dir-cell-quiet" data-label={tx(S.supervisor)}>
+                          {s.supervisor ? <bdi>{s.supervisor.name}</bdi> : <span className="dir-none">{tx(S.noSupervisor)}</span>}
+                        </td>
+                        <td className={s.weeklySlots > 0 ? 'dir-cell-quiet' : 'dir-cell-quiet dir-cell-quiet--none'} data-label={tx(S.weekly)}>
+                          {s.weeklySlots > 0 ? countWords(s.weeklySlots, WEEKLY_COUNT, locale) : <span className="dir-none">{tx(S.noWeekly)}</span>}
+                        </td>
+                        <td className="dir-cell-state">
+                          {s.status === 'active' ? (
+                            <span className="dir-state-quiet">{tx(S.active)}</span>
+                          ) : (
+                            <Badge tone={TONE[s.status]}>{tx(S[s.status])}</Badge>
+                          )}
+                          {s.status === 'paused' && s.returnOn && <span className="dir-state__note">{tx(S.until, { day: s.returnOn })}</span>}
+                        </td>
+                        <td className="cell-actions">
+                          <RowActions
+                            label={tx(S.more, { name: s.name })}
+                            primary={
+                              // The name is the link; this is only a larger target for the pointer.
+                              <Link to={studentPath(s.id)} className="btn btn--sm" tabIndex={-1} aria-hidden="true">
+                                {tx(S.open)}
+                              </Link>
+                            }
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                ))}
               </table>
-            </div>
-            <nav className="toolbar" aria-label={tx(S.pager)}>
-              <button type="button" className="btn btn--sm" disabled={page <= 1} onClick={() => set({ page: String(page - 1) }, true)}>
-                {tx(S.prev)}
-              </button>
-              <span>{tx(S.pageOf, { page: String(page), pages: String(pages) })}</span>
-              <button type="button" className="btn btn--sm" disabled={page >= pages} onClick={() => set({ page: String(page + 1) }, true)}>
-                {tx(S.next)}
-              </button>
-            </nav>
-          </QueryBoundary>
-        )}
+              <nav className="dir-foot" aria-label={tx(S.pager)}>
+                <span className="dir-total">{countWords(data?.total ?? 0, STUDENTS_COUNT, locale)}</span>
+                <span className="dir-pager">
+                  <button type="button" className="btn btn--sm" disabled={page <= 1} onClick={() => set({ page: String(page - 1) }, true)}>
+                    {tx(S.prev)}
+                  </button>
+                  <span>{tx(S.pageOf, { page: String(page), pages: String(pages) })}</span>
+                  <button type="button" className="btn btn--sm" disabled={page >= pages} onClick={() => set({ page: String(page + 1) }, true)}>
+                    {tx(S.next)}
+                  </button>
+                </span>
+              </nav>
+            </QueryBoundary>
+          )}
+        </section>
       </div>
     </div>
   )

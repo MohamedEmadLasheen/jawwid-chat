@@ -1,3 +1,4 @@
+import type { CountedNoun } from '@/core/i18n/counts'
 import { ApiError } from '@/core/api/errors'
 import type { Pair } from '@/features/organization/copy'
 
@@ -11,12 +12,35 @@ export { useCopy, type Pair } from '@/features/organization/copy'
 export const T = {
   title: { en: 'Teachers', ar: 'المعلمون' },
   subtitle: {
-    en: 'Each teacher’s file: personal information, assigned students and supervision notes. Visible to administration only — never to parents or teachers.',
-    ar: 'ملف كل معلم: البيانات الشخصية والطلاب المسندون وملاحظات الإشراف. للإدارة فقط، ولا يراه أولياء الأمور ولا المعلمون.',
+    en: 'For administration only: parents and teachers never see a teacher’s file.',
+    ar: 'للإدارة فقط: لا يرى أولياء الأمور ولا المعلمون ملف المعلم.',
   },
   search: { en: 'Search a teacher', ar: 'ابحث عن معلم' },
   count: { en: '{n} teachers', ar: '{n} معلمًا' },
-  noTeachers: { en: 'No teachers to show.', ar: 'لا يوجد معلمون للعرض.' },
+  filesTitle: { en: 'Teacher files', ar: 'ملفات المعلمين' },
+  // The roster
+  rosterTeachers: { en: 'Teachers', ar: 'المعلمون' },
+  rosterAll: { en: 'All', ar: 'الكل' },
+  oneOpenComplaint: { en: 'An open complaint', ar: 'شكوى مفتوحة' },
+  nOpenComplaints: { en: '{n} open complaints', ar: 'شكاوى مفتوحة: {n}' },
+  rowSupervisedBy: { en: 'Supervisor:', ar: 'المشرف:' },
+  openFile: { en: 'Open file', ar: 'فتح الملف' },
+  rowStats: { en: 'This month’s statistics', ar: 'إحصائيات هذا الشهر' },
+  rowSchedule: { en: 'Schedule', ar: 'الجدول' },
+  moreFor: { en: 'More actions: {name}', ar: 'إجراءات أخرى: {name}' },
+  // The file, as a record with tabs
+  fileSections: { en: 'Parts of the file', ar: 'أقسام الملف' },
+  tabOverview: { en: 'Overview', ar: 'نظرة عامة' },
+  tabStudents: { en: 'Students', ar: 'الطلاب' },
+  tabPay: { en: 'Pay', ar: 'الأجر' },
+  tabLeave: { en: 'Leave', ar: 'الإجازات' },
+  tabEvaluations: { en: 'Evaluations', ar: 'التقييمات' },
+  tabRecords: { en: 'Records', ar: 'السجلات' },
+  finishSetup: { en: 'Finish set-up', ar: 'إكمال التجهيز' },
+  stepsLeftLabel: { en: 'Set-up steps left', ar: 'خطوات التجهيز المتبقية' },
+  escalate: { en: 'Escalate', ar: 'تصعيد' },
+  noTeachers: { en: 'No teacher matches.', ar: 'لا معلم يطابق.' },
+  noTeachersHint: { en: 'Clear the search or the filters to see every teacher.', ar: 'امسح البحث أو عوامل التصفية لعرض كل المعلمين.' },
   name: { en: 'Teacher', ar: 'المعلم' },
   students: { en: 'Students', ar: 'الطلاب' },
   openComplaints: { en: 'Open complaints', ar: 'شكاوى مفتوحة' },
@@ -35,6 +59,7 @@ export const T = {
   teachingMarket: { en: 'Teaching market', ar: 'سوق التدريس' },
   notRecorded: { en: 'Not recorded', ar: 'غير مسجّل' },
   lastEdit: { en: 'Last changed by {name}, {date}', ar: 'آخر تعديل: {name}، {date}' },
+  lastEditBy: { en: 'Last changed by ', ar: 'آخر تعديل: ' },
   edit: { en: 'Edit', ar: 'تعديل' },
   editPersonal: { en: 'Edit personal information', ar: 'تعديل البيانات الشخصية' },
   personalHint: {
@@ -135,13 +160,65 @@ export const T = {
   kpiAttendance: { en: 'Student attendance', ar: 'حضور الطلاب' },
   kpiReliability: { en: 'Teacher reliability', ar: 'التزام المعلم' },
   kpiReportsOnTime: { en: 'Reports on time', ar: 'التقارير في موعدها' },
-  kpiReplies: { en: 'Family messages answered', ar: 'الرد على رسائل الأسر' },
+  kpiReplies: { en: 'Family replies', ar: 'الرد على رسائل الأسر' },
   kpiRepliesHint: { en: 'of {n} messages', ar: 'من {n} رسالة' },
   kpiWorkload: { en: 'Scheduled hours', ar: 'الساعات المجدولة' },
   kpiWorkloadHint: { en: 'of {h} available', ar: 'من {h} متاحة' },
   kpiTrials: { en: 'Trial conversion', ar: 'تحويل الحصص التجريبية' },
   fullStats: { en: 'Full statistics for this month', ar: 'الإحصائيات الكاملة لهذا الشهر' },
   comments: { en: 'Supervisor comments', ar: 'تعليقات المشرف' },
+
+  // The record's head: who, in one sentence; six highlights; one callout.
+  idActiveSince: { en: 'Active since {date}', ar: 'نشط منذ {date}' },
+  idActive: { en: 'Active', ar: 'نشط' },
+  idInSetup: { en: 'Being set up', ar: 'قيد التجهيز' },
+  hlMissing: { en: 'Missing reports', ar: 'تقارير مفقودة' },
+  hlLateWritten: { en: '{n} written late', ar: '{n} كُتبت متأخرة' },
+  calloutMissingWho: { en: 'Lessons of {names}.', ar: 'حصص {names}.' },
+  idLeft: { en: 'Left the academy', ar: 'غادر الأكاديمية' },
+  idLeftOn: { en: 'Left the academy on {date}', ar: 'غادر الأكاديمية في {date}' },
+  idSupervisedBy: { en: 'supervised by {name}', ar: 'يشرف عليه {name}' },
+  idNoSupervisor: { en: 'no supervisor yet', ar: 'بلا مشرف بعد' },
+  idNotSignedIn: { en: 'has not signed in yet', ar: 'لم يسجّل الدخول بعد' },
+  idNoSignIn: { en: 'has no sign-in', ar: 'بلا حساب دخول' },
+  idSignInSuspended: { en: 'sign-in suspended', ar: 'الدخول موقوف' },
+  highlights: { en: 'At a glance, this month', ar: 'لمحة عن هذا الشهر' },
+  hlStudents: { en: 'Students', ar: 'الطلاب' },
+  hlLessons: { en: 'Lessons this month', ar: 'حصص هذا الشهر' },
+  hlLessonsOf: { en: 'of {n} scheduled', ar: 'من {n} مجدولة' },
+  hlLate: { en: 'Late reports', ar: 'تقارير متأخرة' },
+  hlLateMissing: { en: '{n} with no report', ar: 'منها {n} بلا تقرير' },
+  hlLateNone: { en: 'all on time', ar: 'كلها في موعدها' },
+  hlAttendance: { en: 'Student attendance', ar: 'حضور الطلاب' },
+  hlReliability: { en: 'Reliability', ar: 'الالتزام' },
+  hlReliabilityNote: { en: 'lessons not lost by the teacher', ar: 'حصص لم يُضِعها المعلم' },
+  hlSetup: { en: 'Set-up steps left', ar: 'خطوات التجهيز المتبقية' },
+  hlSetupOf: { en: 'of {n}', ar: 'من {n}' },
+  noRate: { en: 'No lessons yet', ar: 'لا حصص بعد' },
+  calloutSetupTitle: { en: 'Set-up is not finished', ar: 'لم يكتمل تجهيز الملف' },
+  calloutSetupBody: { en: 'Still to do: {steps}.', ar: 'المتبقي: {steps}.' },
+  calloutSetupMore: { en: '{steps} and {n} more', ar: '{steps} و{n} أخرى' },
+  calloutMissingTitle: { en: '{n} lessons this month have no report', ar: '{n} حصص هذا الشهر بلا تقرير' },
+  calloutMissingOne: { en: 'One lesson this month has no report', ar: 'حصة واحدة هذا الشهر بلا تقرير' },
+  calloutMissingBody: {
+    en: 'A report is missing once its lesson ended more than the grace period ago. Ask the teacher, or record what happened.',
+    ar: 'يُعدّ التقرير مفقودًا إذا انتهت الحصة وتجاوزت مهلة الكتابة. اطلبه من المعلم أو سجّل ما حدث.',
+  },
+  calloutMissingAction: { en: 'See the lessons', ar: 'عرض الحصص' },
+  calloutComplaintsTitle: { en: '{n} open complaints', ar: 'شكاوى مفتوحة: {n}' },
+  calloutComplaintsOne: { en: 'One open complaint', ar: 'شكوى واحدة مفتوحة' },
+  calloutComplaintsBody: { en: 'Resolve it, or uphold it to act on the teacher.', ar: 'عالجها، أو أثبتها لاتخاذ إجراء.' },
+  calloutComplaintsAction: { en: 'Open the complaints', ar: 'فتح الشكاوى' },
+  todoSignedIn: { en: 'first sign-in', ar: 'أول تسجيل دخول' },
+  todoSupervisor: { en: 'a supervisor', ar: 'تعيين مشرف' },
+  todoContact: { en: 'contact details', ar: 'بيانات التواصل' },
+  todoPayTerms: { en: 'pay terms', ar: 'شروط الأجر' },
+  todoPayoutAccount: { en: 'payout account', ar: 'حساب الصرف' },
+  todoLeaveAllowance: { en: 'leave allowance', ar: 'رصيد الإجازات' },
+  todoShift: { en: 'shift category', ar: 'فئة الدوام' },
+  todoAvailability: { en: 'availability', ar: 'أوقات الإتاحة' },
+  todoProfile: { en: 'profile', ar: 'الملف التعريفي' },
+  calloutLeftBody: { en: 'The file is kept for the record. Reactivating gives the teacher their sign-in back.', ar: 'يبقى الملف للسجل. إعادة التفعيل تعيد للمعلم حساب الدخول.' },
 
 
   // Forms
@@ -324,6 +401,8 @@ export const T = {
     ar: 'نوع الأجر لا يطابق فئة الدوام (الأجر بالساعة يطابق فئة الساعة).',
   },
   setupIncomplete: { en: 'Setup incomplete', ar: 'التجهيز غير مكتمل' },
+  /** Round 3: the roster tag says how much is left, not only that something is. */
+  setupLeft: { en: 'Setup incomplete: {steps} left', ar: 'التجهيز غير مكتمل: بقي {steps}' },
   setupIncompleteOnly: { en: 'Setup incomplete only', ar: 'غير المكتمل فقط' },
   // PD-43 §3.7: teachers no supervisor holds; the Teachers Manager covers them
   noSupervisorBadge: { en: 'No supervisor', ar: 'بلا مشرف' },
@@ -430,4 +509,10 @@ export function describeError(error: unknown, locale: 'ar' | 'en'): string {
     return error.localized(locale)
   }
   return pick({ en: 'Something went wrong. Try again.', ar: 'حدث خطأ. حاول مرة أخرى.' })
+}
+
+/** "10 معلمين", "11 معلمًا": the noun agrees with its number (core/i18n/counts). */
+export const TEACHERS: CountedNoun = {
+  en: { one: 'teacher', other: 'teachers' },
+  ar: { one: 'معلم واحد', two: 'معلمان', few: 'معلمين', many: 'معلمًا' },
 }

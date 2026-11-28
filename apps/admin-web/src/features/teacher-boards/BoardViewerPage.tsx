@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { ApiError } from '@/core/api/errors'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { useSession } from '@/core/auth/SessionProvider'
@@ -7,15 +7,15 @@ import { holdsAny } from '@/core/permissions/capabilities'
 import { Badge } from '@/shared/components/Badge'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
 import { PageHeader } from '@/shared/components/PageHeader'
+import { Icon } from '@/shared/components/Icon'
 import { SearchableSelect } from '@/shared/components/SearchableSelect'
 import { EmptyState, ErrorState, QueryBoundary } from '@/shared/components/States'
-import { TeachersTabs } from '@/features/supervision/TeachersTabs'
 import type { Pair } from '@/features/organization/copy'
 import { newIdempotencyKey } from '@/core/api/client'
 import { RETENTION_KEYS, type BoardDetail } from './api'
 import { parsePage, type BoardElement, type BoardPage, type VerseLookup } from './board'
 import { BoardCanvas } from './BoardCanvas'
-import { ACTION, B, BASIS, useCopy } from './copy'
+import { ACTION, B, BASIS, isolate, useCopy, useDay } from './copy'
 import { useAccessLog, useBoardImages, useBoardTeachers, useCopyBoard, useTeacherBoard, useVerseTexts } from './hooks'
 import type { ImageLookup } from './render'
 import './teacher-boards.css'
@@ -40,8 +40,7 @@ export function BoardViewerPage({ basePath }: { basePath: string }) {
           <Viewer board={board.data} basePath={basePath} />
         ) : (
           <>
-            <PageHeader title={tx(B.title)} />
-            <TeachersTabs basePath={basePath} />
+            <PageHeader back={{ to: `${basePath}/boards`, label: tx(B.allBoards) }} title={tx(B.title)} />
             {missing ? (
               <EmptyState title={tx(B.boardNotFound)} hint={tx(B.notYoursHint)} />
             ) : (
@@ -58,7 +57,7 @@ export function BoardViewerPage({ basePath }: { basePath: string }) {
 
 function Viewer({ board, basePath }: { board: BoardDetail; basePath: string }) {
   const tx = useCopy()
-  const { date } = useI18n()
+  const date = useDay()
   const { staff } = useSession()
   const retention = holdsAny(staff, RETENTION_KEYS)
   // Only the page on view is decoded (its strokes can be large); the rest wait until they are shown.
@@ -99,45 +98,43 @@ function Viewer({ board, basePath }: { board: BoardDetail; basePath: string }) {
   return (
     <>
       <PageHeader
-        eyebrow={teacherName}
+        back={{ to: `${basePath}/boards?teacher=${encodeURIComponent(board.teacherId)}`, label: teacherName ? tx(B.boardsOf, { name: isolate(teacherName) }) : tx(B.allBoards) }}
         title={board.title}
         status={<Badge tone="outline">{tx(B.readOnly)}</Badge>}
-        subtitle={tx(B.subtitle)}
+        subtitle={tx(B.viewerSubtitle)}
         actions={
-          <>
-            <Link className="btn btn--ghost btn--sm" to={`${basePath}/boards?teacher=${encodeURIComponent(board.teacherId)}`}>
-              {tx(B.allBoards)}
-            </Link>
-            {retained && retention && (
-              <button type="button" className="btn btn--primary btn--sm" onClick={() => setCopying(true)}>
-                {tx(B.copy)}
-              </button>
-            )}
-          </>
+          retained && retention ? (
+            <button type="button" className="btn btn--primary" onClick={() => setCopying(true)}>
+              {tx(B.copy)}
+            </button>
+          ) : undefined
         }
       />
-      <TeachersTabs basePath={basePath} />
       {retained && (
-        <p className="tb-kept">
-          <Badge tone="warn" dot>
-            {tx(B.kept, { date: date(board.retainedUntil as string) })}
-          </Badge>{' '}
+        <p className="tb-kept" role="note">
           {tx(B.keptHint, { date: date(board.retainedUntil as string) })}
         </p>
       )}
       {page ? (
-        <section className="tb-viewer">
-          <BoardCanvas page={page} verse={verse} image={image} label={label} ariaLabel={tx(B.canvasLabel, { n: index + 1, title: board.title })} />
-          <PageText page={page} />
-          <div className="tb-pager">
-            <button type="button" className="btn btn--ghost btn--sm" disabled={index === 0} onClick={() => setIndex((i) => i - 1)}>
-              {tx(B.previousPage)}
-            </button>
-            <span aria-live="polite">{tx(B.pageOf, { n: index + 1, m: pages.length })}</span>
-            <button type="button" className="btn btn--ghost btn--sm" disabled={index >= pages.length - 1} onClick={() => setIndex((i) => i + 1)}>
-              {tx(B.nextPage)}
-            </button>
+        <section className="sheet tb-viewer">
+          {/* On a phone the page keeps a readable width and pans sideways. */}
+          <div className="tb-stage">
+            <BoardCanvas page={page} verse={verse} image={image} label={label} ariaLabel={tx(B.canvasLabel, { n: index + 1, title: board.title })} />
           </div>
+          <PageText page={page} />
+          {pages.length > 1 && (
+            <div className="tb-pager">
+              <button type="button" className="btn btn--sm" disabled={index === 0} onClick={() => setIndex((i) => i - 1)}>
+                <Icon name="caretLeft" size={16} />
+                {tx(B.previousPage)}
+              </button>
+              <span aria-live="polite">{tx(B.pageOf, { n: index + 1, m: pages.length })}</span>
+              <button type="button" className="btn btn--sm" disabled={index >= pages.length - 1} onClick={() => setIndex((i) => i + 1)}>
+                {tx(B.nextPage)}
+                <Icon name="chevronForward" size={16} />
+              </button>
+            </div>
+          )}
           {sources.map((s) => (
             <p key={s} className="tb-source">
               {tx(B.quranSource, { source: s })}
@@ -161,13 +158,13 @@ function AccessHistory({ boardId }: { boardId: string }) {
   // A value this build has no words for is shown as it came, never hidden.
   const named = (pair: Pair | undefined, raw: string) => (pair ? tx(pair) : raw)
   return (
-    <section className="card tb-history">
-      <div className="card__header">
-        <h2 className="card__title">{tx(B.history)}</h2>
+    <section className="sheet tb-history">
+      <div className="sheet__head tb-history__head">
+        <h2 className="sheet__title">{tx(B.history)}</h2>
       </div>
       {!open ? (
         <p>
-          <button type="button" className="btn btn--ghost btn--sm" onClick={() => setOpen(true)}>
+          <button type="button" className="btn btn--sm" onClick={() => setOpen(true)}>
             {tx(B.showHistory)}
           </button>{' '}
           <span className="tb-muted">{tx(B.historyNote)}</span>
@@ -208,9 +205,11 @@ function AccessHistory({ boardId }: { boardId: string }) {
   )
 }
 
-function CopyDialog({ board, onClose }: { board: BoardDetail; onClose: () => void }) {
+/** The Teachers Manager's copy of a departed teacher's board; offered here and from the board's row. */
+export function CopyDialog({ board, onClose }: { board: Pick<BoardDetail, 'id' | 'title' | 'teacherId' | 'retainedUntil'>; onClose: () => void }) {
   const tx = useCopy()
-  const { date, t } = useI18n()
+  const { t } = useI18n()
+  const date = useDay()
   const directory = useBoardTeachers()
   const copy = useCopyBoard(board.id)
   const [target, setTarget] = useState('')

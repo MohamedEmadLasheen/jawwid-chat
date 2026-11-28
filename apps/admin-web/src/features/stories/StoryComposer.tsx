@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useState, type InputHTMLAttributes, type ReactNode } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
 import { Icon, type IconName } from '@/shared/components/Icon'
@@ -167,14 +167,10 @@ export function StoryComposer({ basePath }: { basePath: string }) {
   return (
     <div className="page stories-studio">
       <div className="page__inner">
-        <Link to={basePath} className="back-link">
-          <Icon name="arrowBack" size={16} />
-          {tx(S.back)}
-        </Link>
-        <PageHeader title={tx(S.composeTitle)} />
+        <PageHeader back={{ to: basePath, label: tx(S.back) }} title={tx(S.composeTitle)} />
 
         <div className="composer">
-          <div className="composer__form">
+          <div className="composer__form sheet">
             {/* 1 · Content */}
             <Step n={1} title={tx(S.stepContent)}>
               <div className="type-cards" role="radiogroup" aria-label={tx(S.storyType)}>
@@ -254,7 +250,7 @@ export function StoryComposer({ basePath }: { basePath: string }) {
             {/* 2 · Button */}
             <Step n={2} title={tx(S.stepButton)}>
               <div className="cta-choices" role="radiogroup" aria-label={tx(S.stepButton)}>
-                <CtaChoice selected={ctaKind === null} onSelect={() => setCtaKind(null)} icon="close" label={tx(S.ctaNone)} />
+                <CtaChoice selected={ctaKind === null} onSelect={() => setCtaKind(null)} label={tx(S.ctaNone)} />
                 {(Object.keys(CTA_LABEL) as CtaKind[]).map((k) => (
                   <CtaChoice key={k} selected={ctaKind === k} onSelect={() => setCtaKind(k)} icon={CTA_ICON[k]} label={tx(CTA_LABEL[k])} />
                 ))}
@@ -316,6 +312,7 @@ export function StoryComposer({ basePath }: { basePath: string }) {
                 dir="auto"
               />
             </Step>
+
           </div>
 
           <aside className="composer__aside">
@@ -327,25 +324,28 @@ export function StoryComposer({ basePath }: { basePath: string }) {
                 estimate={estimate.data}
                 error={estimate.error as Error | null}
               />
-              {create.error && (
-                <p className="field__error" role="alert">{(create.error as Error).message}</p>
-              )}
-              <div className="composer__actions">
-                <button type="button" className="btn" onClick={() => submit(false)} disabled={create.isPending}>
-                  {tx(S.saveDraft)}
-                </button>
-                <button
-                  type="button"
-                  className="btn btn--primary"
-                  onClick={() => submit(true)}
-                  disabled={create.isPending || (attempted && !ready)}
-                >
-                  <Icon name="send" size={16} />
-                  {tx(S.publishNow)}
-                </button>
-              </div>
             </div>
           </aside>
+
+          {/* The stepper ends in its one action; saving a draft is beside it. It follows the
+              preview in the document, so a phone reads the form, the preview, then the action. */}
+          <div className="composer__foot">
+            {create.error && (
+              <p className="field__error composer__error" role="alert">{(create.error as Error).message}</p>
+            )}
+            <button type="button" className="btn" onClick={() => submit(false)} disabled={create.isPending}>
+              {tx(S.saveDraft)}
+            </button>
+            <button
+              type="button"
+              className="btn btn--primary"
+              onClick={() => submit(true)}
+              disabled={create.isPending || (attempted && !ready)}
+            >
+              <Icon name="send" size={16} />
+              {tx(S.publishNow)}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -410,13 +410,14 @@ function CtaChoice({
 }: {
   selected: boolean
   onSelect: () => void
-  icon: IconName
+  /** None for "No button": a cross there read as "remove". */
+  icon?: IconName
   label: string
 }) {
   return (
     <label className={`cta-choice${selected ? ' is-selected' : ''}`}>
       <input type="radio" name="story-cta" className="sr-only" checked={selected} onChange={onSelect} />
-      <Icon name={icon} size={16} />
+      {icon && <Icon name={icon} size={16} />}
       <span>{label}</span>
     </label>
   )
@@ -537,13 +538,13 @@ function ReachCard({
 }) {
   const tx = useText()
   const plural = usePlural()
-  const { number } = useI18n()
+  const { number, locale } = useI18n()
   if (!hasAudience) return null
   return (
     <div className="reach-card" aria-live="polite">
       <span className="reach-card__label">{tx(S.willReach)}</span>
       {loading || !estimate ? (
-        <span className="reach-card__value reach-card__value--muted">{error ? '—' : tx(S.estimating)}</span>
+        <span className="reach-card__value reach-card__value--muted">{error ? tx(S.none) : tx(S.estimating)}</span>
       ) : (
         <>
           <span className="reach-card__value">{plural(COUNT.people, estimate.recipients)}</span>
@@ -554,7 +555,7 @@ function ReachCard({
               estimate.families > 0 && plural(COUNT.families, estimate.families),
             ]
               .filter(Boolean)
-              .join(' · ')}
+              .join(locale === 'ar' ? '، ' : ', ')}
           </span>
           {estimate.recipients === 0 && <span className="field__error">{tx(S.emptyAudience)}</span>}
           {estimate.excludedByReplyScope > 0 && (

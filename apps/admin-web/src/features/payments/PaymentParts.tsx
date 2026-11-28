@@ -2,6 +2,7 @@ import { useId, useState, type ReactNode } from 'react'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Badge, type Tone } from '@/shared/components/Badge'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
+import { RowActions } from '@/shared/components/RowActions'
 import { packageLabel } from '@/features/subscriptions/copy'
 import type { InvoiceStatus, Payment, PaymentRequest, ReceiptStatus, RequestStatus } from './api'
 import {
@@ -19,6 +20,7 @@ import {
   whatsappUrl,
 } from './copy'
 import { useDownloadInvoice } from './hooks'
+import { FailedTag } from './Money'
 import './payments.css'
 
 /**
@@ -27,9 +29,15 @@ import './payments.css'
  * lists, status chips, and the small form helpers their dialogs use.
  */
 
-const REQUEST_TONE: Record<RequestStatus, Tone> = { open: 'info', paid: 'ok', cancelled: 'outline', expired: 'outline' }
-const RECEIPT_TONE: Record<ReceiptStatus, Tone> = { pending: 'warn', approved: 'ok', rejected: 'danger' }
-const INVOICE_TONE: Record<InvoiceStatus, Tone> = { paid: 'ok', partially_refunded: 'warn', refunded: 'outline', void: 'outline' }
+/*
+ * Colour is state, three states only: waiting (amber: sent and unpaid, to
+ * confirm), done (green), and red for what went wrong. A request's own status
+ * (is its link alive) and its payment's status (how much came in) are two
+ * facts and are said apart.
+ */
+const REQUEST_TONE: Record<RequestStatus, Tone> = { open: 'info', paid: 'ok', cancelled: 'neutral', expired: 'neutral' }
+const RECEIPT_TONE: Record<Exclude<ReceiptStatus, 'rejected'>, Tone> = { pending: 'warn', approved: 'ok' }
+const INVOICE_TONE: Record<InvoiceStatus, Tone> = { paid: 'ok', partially_refunded: 'info', refunded: 'neutral', void: 'neutral' }
 
 export function RequestStatusBadge({ status }: { status: RequestStatus }) {
   const tx = useCopy()
@@ -40,8 +48,19 @@ export function RequestStatusBadge({ status }: { status: RequestStatus }) {
   )
 }
 
+/** What came in against a request, apart from whether its link still works: nothing yet, or a part. Paid in full is the request's own status. */
+function RequestPaymentBadge({ request: r }: { request: PaymentRequest }) {
+  const tx = useCopy()
+  if (r.status === 'paid') return null
+  if (r.paidMinor > 0) return <Badge tone="waiting">{tx(PAY.partiallyPaid)}</Badge>
+  if (r.status === 'open') return <Badge tone="waiting">{tx(PAY.notPaidYet)}</Badge>
+  return null
+}
+
 export function ReceiptStatusBadge({ status }: { status: ReceiptStatus }) {
   const tx = useCopy()
+  // A rejected receipt is final and asks nothing more: the failed mark, not the urgent tag.
+  if (status === 'rejected') return <FailedTag>{tx(RECEIPT_STATUS.rejected)}</FailedTag>
   return (
     <Badge tone={RECEIPT_TONE[status]} dot>
       {tx(RECEIPT_STATUS[status])}
@@ -62,17 +81,20 @@ export function Field({
   label,
   hint,
   error,
+  wide,
   children,
 }: {
   label: string
   hint?: string
   error?: string | null
+  /** In a two-column form: take the whole row. */
+  wide?: boolean
   children: (id: string, describedBy?: string) => ReactNode
 }) {
   const id = useId()
   const describedBy = [hint ? `${id}-hint` : '', error ? `${id}-err` : ''].filter(Boolean).join(' ') || undefined
   return (
-    <div className="field">
+    <div className={wide ? 'field field--wide' : 'field'}>
       <label className="field__label" htmlFor={id}>
         {label}
       </label>
@@ -199,7 +221,8 @@ export function LinkPanel({ request }: { request: PaymentRequest }) {
         {tx(PAY.linkReady)}
       </p>
       <p className="pay-link__what">
-        <strong dir="auto">{request.label}</strong> · {formatMoney(owed(request), request.currency, locale)}
+        <strong dir="auto">{request.label}</strong>{' '}
+        <bdi className="pf-amount">{formatMoney(owed(request), request.currency, locale)}</bdi>
       </p>
       <label className="field__label" htmlFor={id}>
         {tx(PAY.link)}
@@ -236,6 +259,7 @@ function RequestItem({ request: r, canCancel, onCancel }: { request: PaymentRequ
     <li className={open ? 'pf-entry' : 'pf-entry pf-entry--closed'}>
       <div className="pf-entry__head">
         <RequestStatusBadge status={r.status} />
+        <RequestPaymentBadge request={r} />
         <strong dir="auto">{r.label}</strong>
         <span className="tf-muted">{tx(PURPOSE_LABEL[r.purpose])}</span>
         {open && r.payableInApp === false && <Badge tone="neutral">{tx(PAY.notPayableInApp)}</Badge>}
@@ -256,13 +280,17 @@ function RequestItem({ request: r, canCancel, onCancel }: { request: PaymentRequ
       )}
       {open && (r.link || canCancel) && (
         <div className="tf-actions">
-          {r.link && <CopyLinkButton link={r.link} />}
-          {r.link && <WhatsAppLink request={r} />}
-          {canCancel && (
-            <button type="button" className="btn btn--sm btn--ghost" onClick={onCancel} aria-label={tx(PAY.cancelRequestNamed, { label: r.label })}>
-              {tx(PAY.cancelRequest)}
-            </button>
-          )}
+          {/* One stated action (copy the link); sending and cancelling wait behind "⋯". */}
+          <RowActions
+            label={tx(PAY.moreForRequest, { label: r.label })}
+            primary={r.link ? <CopyLinkButton link={r.link} /> : undefined}
+            more={[
+              ...(r.link
+                ? [{ key: 'whatsapp', label: tx(PAY.whatsapp), icon: 'whatsapp' as const, onSelect: () => void window.open(whatsappUrl(r), '_blank', 'noopener,noreferrer') }]
+                : []),
+              ...(canCancel ? [{ key: 'cancel', label: tx(PAY.cancelRequestNamed, { label: r.label }), icon: 'xCircle' as const, danger: true, onSelect: onCancel }] : []),
+            ]}
+          />
         </div>
       )}
     </li>
@@ -339,7 +367,7 @@ function PaymentItem({ payment: p, onVoid, onRefund }: { payment: Payment; onVoi
   return (
     <li className={p.voided ? 'pf-entry pf-entry--voided' : 'pf-entry'}>
       <div className="pf-entry__head">
-        <Badge tone={p.voided ? 'outline' : 'ok'} dot>
+        <Badge tone={p.voided ? 'neutral' : 'ok'} dot>
           {tx(METHOD[p.method])}
         </Badge>
         <span className="pf-amount">{money(p.amountMinor)}</span>
@@ -375,16 +403,18 @@ function PaymentItem({ payment: p, onVoid, onRefund }: { payment: Payment; onVoi
       )}
       {(onVoid || onRefund) && (
         <div className="tf-actions">
-          {onRefund && (
-            <button type="button" className="btn btn--sm" onClick={onRefund}>
-              {tx(PAY.refund)}
-            </button>
-          )}
-          {onVoid && (
-            <button type="button" className="btn btn--sm btn--ghost" onClick={onVoid}>
-              {tx(PAY.voidPayment)}
-            </button>
-          )}
+          {/* One stated action (Refund); Void, which undoes the record, waits behind "⋯". */}
+          <RowActions
+            label={tx(PAY.moreForPayment, { amount: money(p.amountMinor) })}
+            primary={
+              onRefund ? (
+                <button type="button" className="btn btn--sm" onClick={onRefund}>
+                  {tx(PAY.refund)}
+                </button>
+              ) : undefined
+            }
+            more={onVoid ? [{ key: 'void', label: tx(PAY.voidPayment), icon: 'xCircle', danger: true, onSelect: onVoid }] : []}
+          />
         </div>
       )}
     </li>

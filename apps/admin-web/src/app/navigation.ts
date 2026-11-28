@@ -1,6 +1,6 @@
 import { ATTENDANCE_PATH, GRANTS_PATH } from '@/features/teacher-records/paths'
 import { SALES_PIPELINE_PATH } from '@/features/sales-pipeline/paths'
-import { isSuperAdmin, navAreas, type DepartmentAccess, type NavArea } from '@/core/permissions/capabilities'
+import { isManager, isSuperAdmin, navAreas, type DepartmentAccess, type NavArea } from '@/core/permissions/capabilities'
 import type { StaffRole } from '@/shared/types/domain'
 import {
   ADMIN_GROUPS,
@@ -25,9 +25,7 @@ export type DestinationKey =
   | 'people'
   | 'sales'
   | 'scheduling'
-  | 'operations'
   | 'certificates'
-  | 'materials'
   | 'finance'
   | 'communication'
   | 'admin'
@@ -74,18 +72,18 @@ export const DESTINATIONS: readonly { key: DestinationKey; icon: IconName; label
   { key: 'conversations', icon: 'conversations', label: { en: 'Conversations', ar: 'المحادثات' } },
   // PD-44: a manager's Dashboard is one click from anywhere, beside the chats it counts.
   { key: 'dashboard', icon: 'dashboard', label: { en: 'Dashboard', ar: 'لوحة المتابعة' } },
-  { key: 'people', icon: 'users', label: { en: 'People & Organization', ar: 'الأشخاص والهيكل التنظيمي' } },
-  { key: 'sales', icon: 'chart', label: { en: 'Sales', ar: 'المبيعات' } },
-  { key: 'scheduling', icon: 'calendar', label: { en: 'Scheduling', ar: 'الجدولة' } },
-  { key: 'operations', icon: 'academy', label: { en: 'Operations', ar: 'التشغيل' } },
-  // Their own icons: the Marketing designer's whole workspace is Certificates, and the
-  // educational materials are used by Teachers and Operations alike, so neither sits inside one department's menu.
-  { key: 'certificates', icon: 'star', label: { en: 'Certificates', ar: 'الشهادات' } },
-  { key: 'materials', icon: 'book', label: { en: 'Educational materials', ar: 'المواد التعليمية' } },
-  { key: 'finance', icon: 'banknote', label: { en: 'Finance', ar: 'المالية' } },
-  { key: 'communication', icon: 'notifications', label: { en: 'Communication', ar: 'التواصل' } },
+  { key: 'people', icon: 'people', label: { en: 'People & Organization', ar: 'الأشخاص والهيكل التنظيمي' } },
+  { key: 'sales', icon: 'sales', label: { en: 'Sales', ar: 'المبيعات' } },
+  // The lessons' place: the calendars, and the follow-up of lessons (Needs action, Lesson audio) that
+  // was its own Operations icon. Fewer icons on the folded rail, each easier to tell apart.
+  { key: 'scheduling', icon: 'calendar', label: { en: 'Schedule & lessons', ar: 'الجدولة والحصص' } },
+  // What the academy hands out: certificates and the educational materials (once two icons). The
+  // Marketing designer's whole workspace is Certificates: alone, it is a direct link with its own name.
+  { key: 'certificates', icon: 'certificates', label: { en: 'Certificates & materials', ar: 'الشهادات والمواد' } },
+  { key: 'finance', icon: 'finance', label: { en: 'Finance', ar: 'المالية' } },
+  { key: 'communication', icon: 'communication', label: { en: 'Communication', ar: 'التواصل' } },
   // Last, at the foot of the rail, apart from the everyday destinations.
-  { key: 'admin', icon: 'settings', label: { en: 'Admin & Settings', ar: 'الإدارة والإعدادات' } },
+  { key: 'admin', icon: 'admin', label: { en: 'Admin & Settings', ar: 'الإدارة والإعدادات' } },
 ]
 
 /**
@@ -141,12 +139,12 @@ export const AREA_DESTINATION: Record<NavArea, DestinationKey | null> = {
   schedule: 'scheduling',
   'teacher-schedules': 'scheduling',
   'student-schedules': 'scheduling',
-  'needs-action': 'operations',
+  'needs-action': 'scheduling',
   // Escalations are the Escalations tab of Tasks (PAGE_OF): a page, but no entry of its own in the rail.
   cases: null,
   certificates: 'certificates',
-  'lesson-audio': 'operations',
-  materials: 'materials',
+  'lesson-audio': 'scheduling',
+  materials: 'certificates',
   instalments: 'finance',
   payments: 'finance',
   calls: 'communication',
@@ -187,32 +185,41 @@ export const AREA_PATH: Record<OperatorArea, string> = {
 const AREA_ICON: Record<OperatorArea, IconName> = {
   chat: 'conversations',
   calls: 'calls',
-  organization: 'teams',
-  teachers: 'academy',
-  instalments: 'calendar',
-  parents: 'users',
-  students: 'users',
-  payments: 'tag',
-  'sales-pipeline': 'chart',
-  trials: 'calendar',
-  'new-students': 'users',
-  'needs-action': 'alert',
-  'teacher-schedules': 'calendar',
-  'student-schedules': 'calendar',
+  organization: 'organization',
+  teachers: 'teachers',
+  instalments: 'instalments',
+  parents: 'parents',
+  students: 'students',
+  payments: 'payments',
+  'sales-pipeline': 'pipeline',
+  trials: 'trials',
+  'new-students': 'newStudents',
+  'needs-action': 'needsAction',
+  'teacher-schedules': 'teacherSchedules',
+  'student-schedules': 'studentSchedules',
   tasks: 'tasks',
   dashboard: 'dashboard',
   stories: 'stories',
-  'teacher-profiles': 'approvals',
-  accounts: 'lock',
-  materials: 'book',
+  'teacher-profiles': 'credentials',
+  accounts: 'accounts',
+  materials: 'materials',
   schedule: 'calendar',
   cases: 'tasks',
-  certificates: 'star',
-  'lesson-audio': 'approvals',
-  moderation: 'alert',
-  'teacher-attendance': 'calendar',
-  'teacher-grants': 'star',
+  certificates: 'certificates',
+  'lesson-audio': 'lessonAudio',
+  moderation: 'moderation',
+  'teacher-attendance': 'attendance',
+  'teacher-grants': 'grants',
 }
+
+/**
+ * Team: the staff a manager (or the super admin) may list, each opening their
+ * profile. Not an area: like /profile it has no gate of its own, and the
+ * server's /staff-profiles answers decide what the page shows.
+ */
+export const TEAM_PATH = '/team'
+export const TEAM_LABEL: Bilingual = { en: 'Team', ar: 'الفريق' }
+const TEAM_ENTRY: NavEntry = { key: 'team', path: TEAM_PATH, icon: 'staff', label: { text: TEAM_LABEL }, inDevelopment: false }
 
 /** The super admin's name for /chat, distinct from the read-only section's. */
 export const ADMIN_CHAT_LABEL: Bilingual = { en: 'Chat', ar: 'الدردشة' }
@@ -270,13 +277,13 @@ const ADMIN_AREA_ENTRIES: readonly AdminAreaEntry[] = [
   // Teacher Profile V2: the credential review queue.
   { area: 'teacher-profiles', destination: 'people', label: ADMIN_TEACHER_CREDENTIALS_LABEL },
   // The supervisors' daily queue.
-  { area: 'needs-action', destination: 'operations' },
+  { area: 'needs-action', destination: 'scheduling' },
   // PD-29: the Materials library.
-  { area: 'materials', destination: 'materials', label: ADMIN_MATERIALS_LABEL },
+  { area: 'materials', destination: 'certificates', label: ADMIN_MATERIALS_LABEL },
   // PD-41: the Certificates page and its types.
   { area: 'certificates', destination: 'certificates' },
   // PD-48: lesson voice-over review.
-  { area: 'lesson-audio', destination: 'operations' },
+  { area: 'lesson-audio', destination: 'scheduling' },
   // PD-57: the moderation queue.
   { area: 'moderation', destination: 'conversations' },
 ]
@@ -337,6 +344,7 @@ function adminDestinations(): Map<DestinationKey, NavEntryGroup[]> {
       inDevelopment: false,
     })
   }
+  out.get('people')?.[0]?.entries.push({ ...TEAM_ENTRY })
   organizePeople(out)
   // A destination with one group needs no heading.
   for (const groups of out.values()) {
@@ -352,29 +360,51 @@ function adminDestinations(): Map<DestinationKey, NavEntryGroup[]> {
  * pages alone).
  */
 export const PEOPLE_GROUPS: readonly { key: string; label: Bilingual; members: readonly string[] }[] = [
-  { key: 'accounts', label: { en: 'Staff & accounts', ar: 'الموظفون والحسابات' }, members: ['accounts', 'users'] },
+  { key: 'accounts', label: { en: 'Staff & accounts', ar: 'الموظفون والحسابات' }, members: ['accounts', 'users', 'team'] },
   { key: 'teachers', label: { en: 'Teachers', ar: 'المعلمون' }, members: ['teachers', 'teacher-profiles', 'teacher-attendance', 'teacher-grants'] },
   { key: 'families', label: { en: 'Families', ar: 'العائلات' }, members: ['parents', 'students'] },
   { key: 'organization', label: { en: 'Organization', ar: 'الهيكل التنظيمي' }, members: ['teams', 'organization'] },
 ]
 
-function organizePeople(out: Map<DestinationKey, NavEntryGroup[]>): void {
-  const groups = out.get('people')
+/** Schedule & lessons: the calendars, then the follow-up of lessons (once the Operations icon). */
+export const SCHEDULING_GROUPS: readonly { key: string; label: Bilingual; members: readonly string[] }[] = [
+  { key: 'calendars', label: { en: 'Calendars', ar: 'التقاويم' }, members: ['schedule', 'teacher-schedules', 'student-schedules'] },
+  { key: 'lessons', label: { en: 'Lesson follow-up', ar: 'متابعة الحصص' }, members: ['needs-action', 'lesson-audio', 'trials'] },
+]
+
+/** Certificates & materials: the certificates, then the library (once two icons). */
+export const CONTENT_GROUPS: readonly { key: string; label: Bilingual; members: readonly string[] }[] = [
+  { key: 'certificates', label: { en: 'Certificates', ar: 'الشهادات' }, members: ['certificates'] },
+  { key: 'materials', label: { en: 'Educational materials', ar: 'المواد التعليمية' }, members: ['materials'] },
+]
+
+function organize(
+  out: Map<DestinationKey, NavEntryGroup[]>,
+  key: DestinationKey,
+  plan: readonly { key: string; label: Bilingual; members: readonly string[] }[],
+): void {
+  const groups = out.get(key)
   if (!groups) return
   const entries = groups.flatMap((g) => g.entries)
-  const bucketed: NavEntryGroup[] = PEOPLE_GROUPS.map((g) => ({ key: g.key, label: g.label, entries: [] }))
+  const bucketed: NavEntryGroup[] = plan.map((g) => ({ key: g.key, label: g.label, entries: [] }))
   for (const e of entries) {
-    const i = PEOPLE_GROUPS.findIndex((g) => g.members.includes(e.key))
+    const i = plan.findIndex((g) => g.members.includes(e.key))
     // A page nobody placed lands in the last group rather than vanishing.
     bucketed[i === -1 ? bucketed.length - 1 : i]!.entries.push(e)
   }
   for (const [i, g] of bucketed.entries()) {
-    const order = PEOPLE_GROUPS[i]!.members
+    const order = plan[i]!.members
     g.entries.sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key))
   }
   const kept = bucketed.filter((g) => g.entries.length > 0)
   if (kept.length === 1) kept[0]!.label = null
-  out.set('people', kept)
+  out.set(key, kept)
+}
+
+function organizePeople(out: Map<DestinationKey, NavEntryGroup[]>): void {
+  organize(out, 'people', PEOPLE_GROUPS)
+  organize(out, 'scheduling', SCHEDULING_GROUPS)
+  organize(out, 'certificates', CONTENT_GROUPS)
 }
 
 function operatorDestinations(role: StaffRole, access: DepartmentAccess): Map<DestinationKey, NavEntryGroup[]> {
@@ -382,9 +412,9 @@ function operatorDestinations(role: StaffRole, access: DepartmentAccess): Map<De
   // navAreas, not visibleAreas: some areas wait for the server to confirm them.
   for (const area of navAreas(role, access)) {
     // A Teachers-department account (the server confirms `lessonManager` only: neither `sales` nor
-    // `operations`) keeps its Trial lessons page, but it is listed under Operations: the Sales icon is
+    // `operations`) keeps its Trial lessons page, but it is listed with the lessons: the Sales icon is
     // for Sales, Operations and the super admin.
-    const dest = area === 'trials' && access.sales !== true && access.operations !== true ? 'operations' : AREA_DESTINATION[area]
+    const dest = area === 'trials' && access.sales !== true && access.operations !== true ? 'scheduling' : AREA_DESTINATION[area]
     if (dest === null || area === 'settings') continue
     const groups = out.get(dest) ?? [{ key: dest, label: null, entries: [] }]
     groups[0]!.entries.push({
@@ -395,6 +425,12 @@ function operatorDestinations(role: StaffRole, access: DepartmentAccess): Map<De
       inDevelopment: false,
     })
     out.set(dest, groups)
+  }
+  // A manager lists their own team.
+  if (isManager(role)) {
+    const groups = out.get('people') ?? [{ key: 'people', label: null, entries: [] }]
+    groups[0]!.entries.push({ ...TEAM_ENTRY })
+    out.set('people', groups)
   }
   organizePeople(out)
   return out
@@ -428,12 +464,35 @@ export function soleEntry(destination: Destination): NavEntry | null {
 /** Pages reached from another page's tab strip rather than from the rail: the rail item they belong to. */
 const PAGE_OF: Readonly<Record<string, string>> = { '/cases': '/tasks' }
 
-/** Which destination the current page belongs to, if any. */
-export function destinationForPath(destinations: Destination[], pathname: string): DestinationKey | null {
+/**
+ * The entry the current page belongs to: the entry whose path it sits under most
+ * closely, so `/teachers/needs-action` is Needs action and not Teachers. A super admin
+ * reaches operator pages (`/teachers/files`, `/tasks`) under the names its own places
+ * link to (`/admin/teachers`, `/admin/tasks`): the entry is the same.
+ */
+export function entryForPath(
+  destinations: Destination[],
+  pathname: string,
+): { destination: DestinationKey; entry: string } | null {
   const host = Object.entries(PAGE_OF).find(([p]) => pathname === p || pathname.startsWith(`${p}/`))
   if (host) pathname = host[1]
-  for (const d of destinations) {
-    if (entriesOf(d).some((e) => pathname === e.path || pathname.startsWith(`${e.path}/`))) return d.key
+  const closest = (path: string) => {
+    let found: { destination: DestinationKey; entry: string } | null = null
+    let length = -1
+    for (const d of destinations) {
+      for (const e of entriesOf(d)) {
+        if ((path === e.path || path.startsWith(`${e.path}/`)) && e.path.length > length) {
+          found = { destination: d.key, entry: e.key }
+          length = e.path.length
+        }
+      }
+    }
+    return found
   }
-  return null
+  return closest(pathname) ?? (pathname.startsWith('/admin/') ? null : closest(`/admin${pathname}`))
+}
+
+/** Which destination the current page belongs to, if any. */
+export function destinationForPath(destinations: Destination[], pathname: string): DestinationKey | null {
+  return entryForPath(destinations, pathname)?.destination ?? null
 }

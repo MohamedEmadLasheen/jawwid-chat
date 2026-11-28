@@ -18,6 +18,7 @@ import type { SupervisedComplaint } from './api'
 import { H, useCopy } from './copy'
 import { useDeductionDefaults, useRecordReward, useRewards, useSetDeductionDefault, useSupervisedComplaints } from './hooks'
 import { SectionIntro } from './SectionIntro'
+import '@/features/teachers/stack-table.css'
 import { SearchableSelect } from '@/shared/components/SearchableSelect'
 import { AboutPicker } from '@/features/teacher-records/AboutPicker'
 import { aboutFields } from '@/features/teacher-records/api'
@@ -48,11 +49,15 @@ export function RewardsSection({
   const rows = list.data?.rewards ?? []
   return (
     <>
+      <section className="sheet" aria-label={tx(H.rewards)}>
+      {/* With nothing recorded yet, the one action sits with the empty line; with rows, in the sheet's head. */}
       <SectionIntro
+        title={tx(H.rewards)}
         hint={tx(H.rewardsHint)}
         actions={
-          canRecord && (
-            <button type="button" className="btn btn--sm" onClick={() => setRecording(true)}>
+          canRecord &&
+          rows.length > 0 && (
+            <button type="button" className="btn btn--sm btn--primary" onClick={() => setRecording(true)}>
               {tx(H.recordReward)}
             </button>
           )
@@ -63,10 +68,20 @@ export function RewardsSection({
       ) : (
         <QueryBoundary isLoading={list.isLoading} error={null} onRetry={() => void list.refetch()}>
           {rows.length === 0 ? (
-            <EmptyState title={tx(H.empty)} />
+            <EmptyState
+              title={tx(H.emptyRewards)}
+              hint={tx(H.emptyRewardsHint)}
+              action={
+                canRecord && (
+                  <button type="button" className="btn btn--sm btn--primary" onClick={() => setRecording(true)}>
+                    {tx(H.recordReward)}
+                  </button>
+                )
+              }
+            />
           ) : (
             <div className="table-wrap">
-              <table className="table">
+              <table className="table stack-table">
                 <thead>
                   <tr>
                     <th scope="col">{tx(H.teacher)}</th>
@@ -79,15 +94,15 @@ export function RewardsSection({
                 <tbody>
                   {rows.map((r) => (
                     <tr key={r.id}>
-                      <td dir="auto">
+                      <td>
                         <TeacherName basePath={basePath} teacher={r.teacher} />
                       </td>
-                      <td dir="auto">{r.reason}</td>
+                      <td className="stack-wide" data-label={tx(H.reason)}><bdi>{r.reason}</bdi></td>
                       {canViewAmounts && (
-                        <td>{r.amount ? money(r.amount.amount, r.amount.currency) : <span className="th-muted">{tx(H.awaitingAmount)}</span>}</td>
+                        <td className="th-money" data-label={tx(H.amount)}>{r.amount ? <bdi dir="ltr">{money(r.amount.amount, r.amount.currency)}</bdi> : <span className="th-muted">{tx(H.awaitingAmount)}</span>}</td>
                       )}
-                      <td>{dateTime(r.recordedAt)}</td>
-                      <td dir="auto">{r.recordedBy.name}</td>
+                      <td data-label={tx(H.date)}>{dateTime(r.recordedAt)}</td>
+                      <td data-label={tx(H.recordedBy)}><bdi>{r.recordedBy.name}</bdi></td>
                     </tr>
                   ))}
                 </tbody>
@@ -96,6 +111,7 @@ export function RewardsSection({
           )}
         </QueryBoundary>
       )}
+      </section>
       {canViewAmounts && <DeductionDefaults />}
       {recording && <RewardDialog withAmount={canViewAmounts && !requireAbout} requireAbout={requireAbout} onClose={() => setRecording(false)} />}
     </>
@@ -195,10 +211,15 @@ function RewardDialog({ withAmount, requireAbout, onClose }: { withAmount: boole
 function DeductionDefaults() {
   const tx = useCopy()
   const { locale } = useI18n()
-  const money = useMoney()
   const defaults = useDeductionDefaults(true)
   const save = useSetDeductionDefault()
   const [extra, setExtra] = useState('')
+  const [typed, setTyped] = useState('')
+  const currencyId = useId()
+  const addCurrency = () => {
+    setExtra(typed)
+    setTyped('')
+  }
   const [draft, setDraft] = useState<Record<string, string>>({})
   const currencies = [...new Set([...(defaults.data?.currencies ?? []), ...(/^[A-Z]{3}$/.test(extra) ? [extra] : [])])]
   if (defaults.error) return null
@@ -206,11 +227,16 @@ function DeductionDefaults() {
     defaults.data?.defaults.find((d) => d.kind === kind && d.currency === currency) ?? null
 
   return (
-    <section className="card panel th-defaults" aria-labelledby="th-defaults">
-      <h2 id="th-defaults" className="th-subtitle">
-        {tx(H.defaultsTitle)}
-      </h2>
-      <p className="field__hint">{tx(H.defaultsHint)}</p>
+    <section className="sheet th-defaults" aria-labelledby="th-defaults">
+      <header className="sheet__head">
+        <div className="sheet__heading">
+          <h2 id="th-defaults" className="sheet__title">
+            {tx(H.defaultsTitle)}
+          </h2>
+          <p className="sheet__hint">{tx(H.defaultsHint)}</p>
+        </div>
+      </header>
+      <div className="sheet__body th-defaults__body">
       {currencies.length === 0 && <p className="th-muted">{tx(H.noCurrencies)}</p>}
       {currencies.length > 0 && (
         <div className="table-wrap">
@@ -228,16 +254,17 @@ function DeductionDefaults() {
                   <td dir="ltr">{cur}</td>
                   {(['deduction_1', 'deduction_2'] as const).map((kind) => {
                     const key = `${kind}|${cur}`
-                    const value = draft[key] ?? ''
                     const now = current(kind, cur)
+                    // Round 3: the field holds the amount in force (it was an empty box beside it); Set wakes on a change.
+                    const value = draft[key] ?? now?.amount ?? ''
                     return (
                       <td key={kind}>
                         <div className="th-default-cell">
-                          <span>{now ? money(now.amount, cur) : <span className="th-muted">{tx(H.notSet)}</span>}</span>
                           <input
                             className="input th-amount"
                             inputMode="decimal"
                             dir="ltr"
+                            placeholder={tx(H.notSet)}
                             aria-label={`${tx(kind === 'deduction_1' ? H.first : H.second)} ${cur}`}
                             value={value}
                             onChange={(e) => setDraft((d) => ({ ...d, [key]: e.target.value }))}
@@ -245,11 +272,11 @@ function DeductionDefaults() {
                           <button
                             type="button"
                             className="btn btn--sm"
-                            disabled={save.isPending || !MONEY.test(value.trim())}
+                            disabled={save.isPending || !MONEY.test(value.trim()) || value.trim() === (now?.amount ?? '')}
                             onClick={() =>
                               save.mutate(
                                 { kind, currency: cur, amount: value.trim() },
-                                { onSuccess: () => setDraft((d) => ({ ...d, [key]: '' })) },
+                                { onSuccess: () => setDraft((d) => { const next = { ...d }; delete next[key]; return next }) },
                               )
                             }
                           >
@@ -265,15 +292,35 @@ function DeductionDefaults() {
           </table>
         </div>
       )}
-      <label className="field th-currency">
-        <span className="field__label">{tx(H.addCurrency)}</span>
-        <input className="input" dir="ltr" maxLength={3} value={extra} onChange={(e) => setExtra(e.target.value.toUpperCase())} />
-      </label>
+      <div className="th-currency">
+        <label className="field__label" htmlFor={currencyId}>
+          {tx(H.addCurrency)}
+        </label>
+        <div className="th-currency__row">
+          <input
+            id={currencyId}
+            className="input"
+            dir="ltr"
+            maxLength={3}
+            value={typed}
+            aria-describedby={`${currencyId}-hint`}
+            onChange={(e) => setTyped(e.target.value.toUpperCase())}
+            onKeyDown={(e) => e.key === 'Enter' && /^[A-Z]{3}$/.test(typed) && addCurrency()}
+          />
+          <button type="button" className="btn btn--sm" disabled={!/^[A-Z]{3}$/.test(typed)} onClick={addCurrency}>
+            {tx(H.addCurrencyAction)}
+          </button>
+        </div>
+        <span id={`${currencyId}-hint`} className="field__hint">
+          {tx(H.addCurrencyHint)}
+        </span>
+      </div>
       {save.error ? (
         <div className="banner banner--danger" role="alert">
           {describeError(save.error, locale)}
         </div>
       ) : null}
+      </div>
     </section>
   )
 }
@@ -305,7 +352,9 @@ export function ComplaintsSection({ canDecide = true, requireAbout = false }: { 
 
   return (
     <>
+      <section className="sheet" aria-label={tx(H.complaints)}>
       <SectionIntro
+        title={tx(H.complaints)}
         hint={tx(H.complaintsHint)}
         actions={
           canWrite && (
@@ -322,7 +371,7 @@ export function ComplaintsSection({ canDecide = true, requireAbout = false }: { 
           )
         }
       />
-      <div className="toolbar">
+      <div className="sheet-bar">
         <FilterChips<Source>
           label={tx(H.complaints)}
           value={source}
@@ -340,7 +389,7 @@ export function ComplaintsSection({ canDecide = true, requireAbout = false }: { 
       ) : (
         <QueryBoundary isLoading={list.isLoading} error={null} onRetry={() => void list.refetch()}>
           {rows.length === 0 ? (
-            <EmptyState title={tx(H.empty)} />
+            <EmptyState title={tx(H.emptyComplaints)} hint={tx(H.emptyComplaintsHint)} />
           ) : (
             <ul className="tf-entries th-complaints">
               {rows.map((c) => (
@@ -360,6 +409,7 @@ export function ComplaintsSection({ canDecide = true, requireAbout = false }: { 
           )}
         </QueryBoundary>
       )}
+      </section>
       {intent && <AddEntryDialog teacherId={intent.teacherId} intent={intent.intent} requireAbout={requireAbout} onClose={() => setIntent(null)} />}
       {upholding && <UpholdDialog complaint={upholding} onClose={() => setUpholding(null)} />}
       {deciding && violation && <DecideDialog violation={violation} onClose={() => setDeciding(null)} />}

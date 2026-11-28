@@ -77,12 +77,19 @@ describe('the Students page', () => {
     expect(link).toHaveAttribute('href', '/students/k-1')
     const row = link.closest('tr')!
     expect(within(row).getByText('Family Alpha')).toBeInTheDocument()
-    expect(within(row).getByText('Teacher Omega')).toBeInTheDocument()
+    // The page is set out under each teacher: the teacher is the heading of the row's group.
+    const group = row.closest('tbody')!
+    expect(within(within(group).getByRole('rowheader')).getByText('Teacher Omega')).toBeInTheDocument()
+    expect(within(row).getByText('Supervisor Nine')).toBeInTheDocument()
+    expect(within(row).getByText('2 weekly times')).toBeInTheDocument()
     expect(within(row).getByText('Active')).toBeInTheDocument()
     const paused = screen.getByRole('link', { name: 'Child Two' }).closest('tr')!
     expect(within(paused).getByText('Paused')).toBeInTheDocument()
     expect(within(paused).getByText('back 2026-12-01')).toBeInTheDocument()
-    expect(within(paused).getByText('No teacher')).toBeInTheDocument()
+    const unplaced = paused.closest('tbody')!
+    expect(within(within(unplaced).getByRole('rowheader')).getByText('No teacher')).toBeInTheDocument()
+    // Those still without a teacher come first.
+    expect(screen.getAllByRole('rowgroup').indexOf(unplaced)).toBeLessThan(screen.getAllByRole('rowgroup').indexOf(group))
     expect(screen.getByText('60 students')).toBeInTheDocument()
     expect(asked()[0]!.searchParams.get('limit')).toBe('25')
     expect(asked()[0]!.searchParams.get('page')).toBe('1')
@@ -103,7 +110,8 @@ describe('the Students page', () => {
     await screen.findByRole('link', { name: 'Child One' })
     await userEvent.type(screen.getByRole('searchbox', { name: 'Search by student or family name' }), 'alpha')
     await waitFor(() => expect(asked().some((u) => u.searchParams.get('q') === 'alpha')).toBe(true))
-    await chooseOption(userEvent, screen.getByRole('combobox', { name: 'Status' }), 'paused')
+    // The status filter is a row of chips on the sheet's bar: the same filter, one click.
+    await userEvent.click(within(screen.getByRole('group', { name: 'Status' })).getByRole('button', { name: 'Paused' }))
     await waitFor(() => expect(asked().some((u) => u.searchParams.get('status') === 'paused')).toBe(true))
     await chooseOption(userEvent, screen.getByRole('combobox', { name: 'Teacher' }), 'none')
     await waitFor(() => expect(asked().some((u) => u.searchParams.get('teacher') === 'none')).toBe(true))

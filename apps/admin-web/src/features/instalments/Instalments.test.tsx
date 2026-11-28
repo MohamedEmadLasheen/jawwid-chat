@@ -104,22 +104,29 @@ describe('the instalments page', () => {
       ),
     )
     renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/instalments' })
-    const rows = (await screen.findAllByRole('row')).slice(1)
+    // The page is grouped by the server's status: what is overdue is the "Late" section, and it comes first.
+    const late = await screen.findByRole('region', { name: 'Late' })
+    const due = screen.getByRole('region', { name: 'Due today' })
+    expect(late.compareDocumentPosition(due) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    const rows = [...within(late).getAllByRole('listitem'), ...within(due).getAllByRole('listitem')]
     expect(rows).toHaveLength(2)
+    expect(within(late).getAllByRole('listitem')).toHaveLength(1)
     expect(within(rows[0]!).getByText('Parent Alpha')).toBeInTheDocument()
-    expect(within(rows[0]!).getByText('The family')).toBeInTheDocument()
-    expect(within(rows[0]!).getByText('Overdue')).toBeInTheDocument()
+    expect(within(rows[0]!).getByText('The whole family')).toBeInTheDocument()
     expect(within(rows[0]!).getByText('9 days late')).toBeInTheDocument()
     expect(within(rows[0]!).getByText(/1,500/)).toBeInTheDocument()
     expect(within(rows[0]!).getByText('Not set')).toBeInTheDocument()
-    expect(within(rows[0]!).getByRole('link', { name: 'Open conversation' })).toHaveAttribute('href', '/chat/c-1')
-    // A supervisor cannot set a billing supervisor: no button is offered.
-    expect(within(rows[0]!).queryByRole('button', { name: 'Set' })).not.toBeInTheDocument()
     expect(within(rows[1]!).getByText('Child Beta')).toBeInTheDocument()
-    expect(within(rows[1]!).getByText('Due today')).toBeInTheDocument()
     expect(within(rows[1]!).getByText('Supervisor One')).toBeInTheDocument()
     expect(within(rows[1]!).getByText('No conversation you can open')).toBeInTheDocument()
+    // The row with no conversation and nothing to set has no menu at all.
+    expect(within(rows[1]!).queryByRole('button', { name: /More actions/ })).not.toBeInTheDocument()
     expect(screen.getByText(/^1 overdue/)).toHaveTextContent('1 overdue · 1 due today · 0 upcoming · 1 without a responsible supervisor')
+    // The conversation is in the row's menu. A supervisor cannot set a billing supervisor: it is not offered.
+    await userEvent.click(within(rows[0]!).getByRole('button', { name: 'More actions: Parent Alpha' }))
+    expect(within(rows[0]!).queryByRole('menuitem', { name: /billing supervisor/ })).not.toBeInTheDocument()
+    await userEvent.click(within(rows[0]!).getByRole('menuitem', { name: 'Open conversation' }))
+    await waitFor(() => expect(fetchMock.mock.calls.some(([u]) => /\/conversations\/c-1(\/|\?|$)/.test(String(u)))).toBe(true))
   })
 
   it('filters by responsibility and asks for paid invoices only when shown', async () => {
@@ -168,7 +175,8 @@ describe('the instalments page', () => {
     )
     on('POST', /\/families\/f-1\/billing-supervisor$/, () => json({ familyId: 'f-1', supervisorId: 's-2', changed: true }))
     renderWithProviders(<AppRoutes />, { staff: manager, route: '/instalments' })
-    await userEvent.click(await screen.findByRole('button', { name: 'Set' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'More actions: Parent Alpha' }))
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Set billing supervisor' }))
     const dialog = await screen.findByRole('dialog')
     expect(within(dialog).getByText('supervises Child Beta, Child Gamma')).toBeInTheDocument()
     await userEvent.click(within(dialog).getByRole('radio', { name: /Supervisor Two/ }))

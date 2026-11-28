@@ -103,7 +103,7 @@ describe('composing', () => {
     await userEvent.click(screen.getByRole('radio', { name: /Everyone/ }))
     // The audience size is shown BEFORE anything is published.
     expect(await screen.findByText('8 people')).toBeInTheDocument()
-    expect(screen.getByText('5 parents · 3 teachers · 4 families')).toBeInTheDocument()
+    expect(screen.getByText('5 parents, 3 teachers, 4 families')).toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: /Publish now/ }))
     const dialog = await screen.findByRole('dialog', { name: 'Publish this story?' })
@@ -238,7 +238,7 @@ describe('insights', () => {
     expect(within(byCountry).getByText(/United Arab Emirates/)).toBeInTheDocument()
     expect(within(byCountry).getByText('Not set')).toBeInTheDocument()
     // The audience is described in words, and the story never expires.
-    expect(screen.getAllByText(/Parents & students · United Arab Emirates · 6 months/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/Parents & students; United Arab Emirates; 6 months/).length).toBeGreaterThan(0)
     expect(screen.getByText('Stays up until deleted')).toBeInTheDocument()
   })
 
@@ -276,7 +276,9 @@ describe('insights', () => {
       }),
     )
     renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/admin/stories/st1' })
-    await userEvent.click(await screen.findByRole('button', { name: 'Delete story' }))
+    // Deleting is behind the masthead's "⋯", last and marked as destructive.
+    await userEvent.click(await screen.findByRole('button', { name: /^More actions/ }))
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Delete story' }))
     const dialog = screen.getByRole('dialog', { name: 'Delete this story?' })
     const confirm = within(dialog).getByRole('button', { name: 'Delete story' })
     expect(confirm).toBeDisabled()
@@ -353,7 +355,7 @@ describe('in Arabic', () => {
     vi.stubGlobal('fetch', server({ 'GET /stories': { stories: [story()] } }))
     renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/admin/stories', locale: 'ar' })
     expect(await screen.findByRole('link', { name: 'حالة جديدة' })).toBeInTheDocument()
-    expect(await screen.findByText(/أولياء الأمور والطلاب · الإمارات العربية المتحدة · 6 أشهر/)).toBeInTheDocument()
+    expect(await screen.findByText(/أولياء الأمور والطلاب؛ الإمارات العربية المتحدة؛ 6 أشهر/)).toBeInTheDocument()
     expect(screen.getAllByText('منشورة').length).toBeGreaterThan(0)
   })
 })

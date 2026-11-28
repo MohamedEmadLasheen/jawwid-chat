@@ -1,18 +1,45 @@
-/* PD-26 Teacher Supervision page. Tokens only; the tables and chips are the shared ones. */
-.th-body { display: flex; flex-direction: column; gap: var(--space-3); margin-block-start: var(--space-3); }
-.th-intro { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: var(--space-3); }
-.th-intro .field__hint { flex: 1 1 24rem; margin: 0; }
+/* PD-26 / PD-52: the teacher-records sections. Tokens only; the tables and chips are the shared ones. */
+.th-body { display: grid; gap: var(--space-5); min-inline-size: 0; }
+.th-body .sheet + .sheet { margin-block-start: 0; }
+.th-intro { flex-wrap: wrap; }
+.th-body .table-wrap { border: 0; border-radius: 0; }
+.th-body .sheet > .table-wrap:last-child, .th-body .sheet > .rowlist:last-child { border-end-start-radius: var(--radius-lg); border-end-end-radius: var(--radius-lg); overflow: hidden; }
+.th-defaults__body { display: grid; gap: var(--space-3); }
+/* Round 3: one surface, not a bordered table inside a bordered sheet. */
+.th-defaults__body .table-wrap { border: 0; border-radius: 0; }
 .th-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
-.th-muted { color: var(--text-muted); }
-.th-subtitle { font-size: var(--fs-md); font-weight: 600; margin: var(--space-3) 0 var(--space-1); }
-.th-defaults { display: flex; flex-direction: column; gap: var(--space-2); }
-.th-default-cell { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
-.th-amount { inline-size: 7rem; }
-.th-currency { max-inline-size: 16rem; }
-.th-complaints { margin: 0; }
+.th-muted { color: var(--ink-muted); }
+.th-subtitle { margin: var(--space-6) 0 0; padding-block-end: 8px; border-block-end: 1px solid var(--hairline); }
+.th-money { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.th-defaults { display: flex; flex-direction: column; gap: var(--space-3); }
+.th-defaults > .th-muted { margin: 0; font-size: var(--fs-sm); }
+.th-defaults .th-rule { flex: none; }
+.th-defaults .table-wrap { border-block-start: 0; }
+.th-default-cell { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); font-variant-numeric: tabular-nums; }
+.th-amount { inline-size: 7rem; min-block-size: 34px; }
+.th-nowrap { white-space: nowrap; }
+/* Adding a currency sits under the list it adds a row to. */
+.th-currency { display: grid; gap: 5px; justify-items: start; padding-block-start: var(--space-2); }
+.th-currency .field__label { margin: 0; }
+.th-currency__row { display: flex; align-items: center; gap: var(--space-2); }
+.th-currency__row .input { inline-size: 6.5rem; }
+.th-currency .field__hint { margin: 0; }
+.th-complaints { margin: 0; padding-inline: var(--space-4); }
 /* PD-32 parent feedback (ParentFeedback.tsx). Logical properties only: the page is Arabic-first. */
-.th-filters { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); }
-.th-check { display: flex; align-items: flex-start; gap: var(--space-2); margin-block-start: var(--space-2); }
-.th-check input[type='checkbox'] { inline-size: 16px; block-size: 16px; margin-block-start: 3px; accent-color: var(--accent); flex: none; }
+.th-filters { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); }
+.th-check { display: flex; align-items: flex-start; gap: var(--space-2); margin-block-start: var(--space-2); font-size: var(--fs-sm); }
+.th-filters .th-check { margin-block-start: 0; align-items: center; }
+.th-check input[type='checkbox'] { inline-size: 16px; block-size: 16px; margin-block-start: 3px; accent-color: var(--teal); flex: none; }
+.th-filters .th-check input[type='checkbox'] { margin-block-start: 0; }
 .th-reply-note { display: grid; gap: var(--space-2); margin-block-start: var(--space-2); }
 .th-reply-note .field__hint { margin: 0; }
+
+/* Round 3, phone: a stacked record inside a sheet keeps the sheet's inner margin (it sat 2px from the edge). */
+@media (max-width: 767px) {
+  .th-body .sheet .table.stack-table tbody tr { padding-inline: var(--space-4); }
+}
+/* The sections shrink to the page's column (a grid item's min-content would otherwise widen it past
+   the page, and its end was cut off beside an open sidebar); their rows then wrap as designed. */
+.th-body > * { min-inline-size: 0; }
+/* A tag in a narrow row wraps inside its cell rather than running past the sheet's edge. */
+.th-body .rw-tags .badge { white-space: normal; text-align: start; }

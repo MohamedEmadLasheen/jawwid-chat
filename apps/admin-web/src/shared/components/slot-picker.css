@@ -36,6 +36,10 @@
   :root:not([data-theme='light']) .sp-chip[aria-checked='true'] { background: var(--accent); border-color: var(--accent); }
   :root:not([data-theme='light']) .sp-day--has-choice[aria-checked='false'] { border-color: var(--accent); }
 }
+/* The same, when the person chose Dark (the theme switch; data-theme on <html>). */
+:root[data-theme='dark'] .sp-chip[aria-checked='true'] { background: var(--accent); border-color: var(--accent); }
+:root[data-theme='dark'] .sp-day--has-choice[aria-checked='false'] { border-color: var(--accent); }
+
 @media (pointer: coarse) {
   .sp-chip { min-block-size: var(--tap); }
 }

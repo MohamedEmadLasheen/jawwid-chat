@@ -13,7 +13,7 @@ import { Icon } from '@/shared/components/Icon'
 import { QueryBoundary } from '@/shared/components/States'
 import { chatApi, chatKeys, type ChatConversation } from './chatApi'
 import { chatCopyFor } from './copy'
-import { ConversationAvatar, conversationName, isGroup, isMuted } from './chatView'
+import { conversationName, isGroup, isMuted, toneOfKind } from './chatView'
 import { useConversationPreferences } from './useChatActions'
 import { GroupChildren } from '@/features/journey/GroupChildren'
 import { journeyKeys } from '@/features/journey/api'
@@ -23,8 +23,10 @@ import { useMayChangeTeacher } from '@/features/teachers/hooks'
 import { Link } from 'react-router-dom'
 import { parentPath } from '@/features/profiles/api'
 import { useMayOpenParentProfiles } from '@/features/profiles/hooks'
-import { TrialBadge, isTrialGroup } from '@/shared/components/TrialBadge'
 import { ROLE_LABEL } from '@/features/profile/copy'
+import { FamilyTab, useFamily } from './FamilyContext'
+import { FilterChips } from '@/shared/components/FilterChips'
+import { LabelChip } from './LabelsDialog'
 
 /**
  * Contact info / group info: who is in the conversation, and this viewer's
@@ -42,19 +44,86 @@ export function ConversationInfo({ c }: { c: ChatConversation }) {
   const group = isGroup(c)
   const muted = isMuted(c)
   const members = c.members ?? []
+  const lessonGroup = c.type === 'student_group' || c.type === 'family_group'
+
+  // Two tabs: the family (money, children, the parent), which leads when this
+  // viewer is offered it, and the conversation itself. Where the server
+  // refuses the family there is no Family tab at all.
+  const family = useFamily(c)
+  const hasFamily = family.offered && (family.pending || !!family.parent || !!family.billing)
+  const [chosen, setChosen] = useState<'family' | 'conversation' | null>(null)
+  const tab = hasFamily ? chosen ?? 'family' : 'conversation'
 
   return (
     <div className="cw-info">
-      <div className="dp-hero">
-        <ConversationAvatar c={c} name={name} size="lg" selfId={staff?.id} />
-        <div className="dp-hero__text">
-          <span className="dp-hero__name" dir="auto">{name}</span>
-          {isTrialGroup(c) && <TrialBadge />}
-          <span className="thread-head__sub">
-            {copy.kind[c.type] ?? c.type} · {copy.membersCount(members.length)}
-          </span>
+      {hasFamily && (
+        <div className="cw-info__tabs">
+          <FilterChips
+            variant="tabs"
+            label={copy.panelTabs}
+            value={tab}
+            onChange={setChosen}
+            options={[
+              { value: 'family' as const, label: copy.panelFamily },
+              { value: 'conversation' as const, label: copy.panelConversation },
+            ]}
+          />
         </div>
-      </div>
+      )}
+
+      {tab === 'family' && !family.pending && <FamilyTab parent={family.parent} billing={family.billing} />}
+
+      {tab === 'conversation' && <>
+      <section className="dp-section">
+        <div className="cw-info__members-head">
+          <h3 className="dp-section__title">{copy.members}</h3>
+          {group && c.familyId && (
+            <button type="button" className="btn btn--sm" onClick={() => setAdding(true)}>
+              <Icon name="plus" size={14} />
+              {copy.addMember}
+            </button>
+          )}
+        </div>
+        <ul className="cw-members">
+          {/* PD-36: asked in, not (yet) a member -- at the top, highlighted, with who asked and when. */}
+          {(c.summoned ?? []).map((x) => (
+            <li key={`summoned-${x.actorId}`} className="cw-member cw-member--summoned">
+              <span className="cw-who cw-who--staff">
+                <Avatar name={x.displayName || '?'} seed={x.actorId} size="sm" />
+              </span>
+              <span className="cw-member__name">
+                <span dir="auto">{x.displayName}</span>
+                <span className="cw-member__note">
+                  {copy.mentionWaiting}
+                  {copy.listSeparator}
+                  {copy.mentionedBy(x.mentionedByName ?? copy.mentionSomeoneHere, dateTime(x.at))}
+                </span>
+              </span>
+              <span className="kind-chip kind-chip--staff">
+                {ROLE_LABEL[x.staffRole]?.[locale === 'ar' ? 'ar' : 'en'] ?? copy.role.staff}
+              </span>
+            </li>
+          ))}
+          {members.map((m) => (
+            <li key={m.actorId} className="cw-member">
+              <span className={`cw-who cw-who--${toneOfKind(m.actorKind)}`}>
+                <Avatar name={m.displayName || '?'} seed={m.actorId} size="sm" src={m.avatarUrl} />
+              </span>
+              <span className="cw-member__name" dir="auto">
+                {m.actorKind === 'contact' && mayOpenParents ? (
+                  // PD-17: a parent opens their Parent Profile -- offered only to the administration.
+                  <Link to={parentPath(m.actorId)}>{m.displayName}</Link>
+                ) : m.actorId === staff?.id ? (
+                  `${m.displayName} (${copy.you})`
+                ) : (
+                  m.displayName
+                )}
+              </span>
+              <span className={`kind-chip kind-chip--${m.actorKind}`}>{copy.role[m.actorKind] ?? m.actorKind}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
 
       <section className="dp-section">
         <h3 className="dp-section__title">{copy.notifications}</h3>
@@ -75,56 +144,22 @@ export function ConversationInfo({ c }: { c: ChatConversation }) {
         </div>
       </section>
 
-      {(c.type === 'student_group' || c.type === 'family_group') && <GroupChildren conversationId={c.id} />}
-      {(c.type === 'student_group' || c.type === 'family_group') && <GroupSupervisor c={c} name={name} />}
-      {(c.type === 'student_group' || c.type === 'family_group') && <GroupTeacher c={c} name={name} />}
+      {(c.labels ?? []).length > 0 && (
+        <section className="dp-section">
+          <h3 className="dp-section__title">{copy.labels}</h3>
+          <span className="cw-row__labels">
+            {c.labels!.map((l) => (
+              <LabelChip key={l.id} label={l} />
+            ))}
+          </span>
+        </section>
+      )}
 
-      <section className="dp-section">
-        <div className="cw-info__members-head">
-          <h3 className="dp-section__title">{copy.members}</h3>
-          {group && c.familyId && (
-            <button type="button" className="btn btn--sm" onClick={() => setAdding(true)}>
-              <Icon name="plus" size={14} />
-              {copy.addMember}
-            </button>
-          )}
-        </div>
-        <ul className="cw-members">
-          {/* PD-36: asked in, not (yet) a member -- at the top, highlighted, with who asked and when. */}
-          {(c.summoned ?? []).map((x) => (
-            <li key={`summoned-${x.actorId}`} className="cw-member cw-member--summoned">
-              <Avatar name={x.displayName || '?'} seed={x.actorId} size="sm" />
-              <span className="cw-member__name">
-                <span dir="auto">{x.displayName}</span>
-                <span className="cw-member__note">
-                  {copy.mentionWaiting}
-                  {' · '}
-                  {copy.mentionedBy(x.mentionedByName ?? copy.mentionSomeoneHere, dateTime(x.at))}
-                </span>
-              </span>
-              <span className="kind-chip kind-chip--staff">
-                {ROLE_LABEL[x.staffRole]?.[locale === 'ar' ? 'ar' : 'en'] ?? copy.role.staff}
-              </span>
-            </li>
-          ))}
-          {members.map((m) => (
-            <li key={m.actorId} className="cw-member">
-              <Avatar name={m.displayName || '?'} seed={m.actorId} size="sm" src={m.avatarUrl} />
-              <span className="cw-member__name" dir="auto">
-                {m.actorKind === 'contact' && mayOpenParents ? (
-                  // PD-17: a parent opens their Parent Profile -- offered only to the administration.
-                  <Link to={parentPath(m.actorId)}>{m.displayName}</Link>
-                ) : m.actorId === staff?.id ? (
-                  `${m.displayName} (${copy.you})`
-                ) : (
-                  m.displayName
-                )}
-              </span>
-              <span className={`kind-chip kind-chip--${m.actorKind}`}>{copy.role[m.actorKind] ?? m.actorKind}</span>
-            </li>
-          ))}
-        </ul>
-      </section>
+      {/* A lesson group's children in full: course, weekly times, package, teacher; edited here. */}
+      {lessonGroup && <GroupChildren conversationId={c.id} />}
+      {lessonGroup && <GroupSupervisor c={c} name={name} />}
+      {lessonGroup && <GroupTeacher c={c} name={name} />}
+      </>}
 
       {adding && c.familyId && <AddMemberDialog c={c} familyId={c.familyId} onClose={() => setAdding(false)} />}
     </div>
@@ -290,7 +325,9 @@ function AddMemberDialog({ c, familyId, onClose }: { c: ChatConversation; family
                 onClick={() => add.mutate(p)}
               >
                 <span className="cw-member">
-                  <Avatar name={p.name} seed={p.id} size="sm" />
+                  <span className={`cw-who cw-who--${toneOfKind(p.kind)}`}>
+                    <Avatar name={p.name} seed={p.id} size="sm" />
+                  </span>
                   <span dir="auto" className="dc-person__name">{p.name}</span>
                 </span>
                 <span className="dc-person__kind">{add.isPending ? copy.adding : copy.role[p.kind]}</span>

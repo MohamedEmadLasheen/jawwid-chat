@@ -58,7 +58,9 @@ export function TestimonialsSection({
 
   return (
     <>
+      <section className="sheet" aria-label={tx(R.testimonials)}>
       <SectionIntro
+        title={tx(R.testimonials)}
         hint={tx(R.testimonialsHint)}
         actions={
           canRecord && (
@@ -68,7 +70,7 @@ export function TestimonialsSection({
           )
         }
       />
-      <div className="toolbar th-filters">
+      <div className="sheet-bar th-filters">
         <FilterChips<Origin>
           label={tx(R.origin)}
           value={origin}
@@ -94,7 +96,7 @@ export function TestimonialsSection({
       ) : (
         <QueryBoundary isLoading={list.isLoading} error={null} onRetry={() => void list.refetch()}>
           {rows.length === 0 ? (
-            <EmptyState title={tx(R.empty)} />
+            <EmptyState title={tx(R.empty)} hint={tx(R.emptyHint)} />
           ) : (
             <ul className="tf-entries th-complaints">
               {rows.map((t) => (
@@ -131,7 +133,7 @@ export function TestimonialsSection({
                         </button>
                       )}
                       {t.origin === 'parent' && (
-                        <button type="button" className="btn btn--primary btn--sm" onClick={() => setReplying(t)}>
+                        <button type="button" className="btn btn--sm" onClick={() => setReplying(t)}>
                           {t.response ? tx(R.changeReply) : tx(R.reply)}
                         </button>
                       )}
@@ -153,6 +155,7 @@ export function TestimonialsSection({
           )}
         </QueryBoundary>
       )}
+      </section>
       {recording && <RecordTestimonialDialog initialTeacher={teacher ?? ''} requireAbout={requireAbout} onClose={() => setRecording(false)} />}
       {replying && replying.parent && (
         <ReplyDialog

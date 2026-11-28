@@ -5,8 +5,8 @@ export const R = {
   group: { en: 'Teacher records', ar: 'سجلات المعلمين' },
   attendanceTitle: { en: 'Attendance & complaints', ar: 'الحضور والتأخير والأعذار والشكاوى' },
   attendanceSubtitle: {
-    en: 'Leave, lateness, excuses and absences, and complaints about teachers. A parent’s complaint from the app appears here by itself.',
-    ar: 'الإجازات والتأخير والأعذار والغياب والشكاوى المتعلقة بالمعلمين. تظهر شكوى ولي الأمر من التطبيق هنا تلقائيًا.',
+    en: 'A parent’s complaint from the app appears here by itself.',
+    ar: 'تظهر شكوى ولي الأمر من التطبيق هنا تلقائيًا.',
   },
   grantsTitle: { en: 'Grants & testimonials', ar: 'المنح والشهادات الطيبة' },
   sections: { en: 'Sections', ar: 'الأقسام' },
@@ -20,14 +20,14 @@ export const R = {
   denied: { en: 'This page is not part of your work.', ar: 'هذه الصفحة ليست ضمن عملك.' },
   // Page B
   grantsSubtitle: {
-    en: 'Grants and testimonials about teachers. A parent’s praise from the app appears here by itself; staff record the rest.',
-    ar: 'المنح والشهادات الطيبة عن المعلمين. يظهر ثناء ولي الأمر من التطبيق هنا تلقائيًا، ويسجّل الفريق ما سواه.',
+    en: 'A parent’s praise from the app appears here by itself; staff record the rest.',
+    ar: 'يظهر ثناء ولي الأمر من التطبيق هنا تلقائيًا، ويسجّل الفريق ما سواه.',
   },
   grants: { en: 'Grants', ar: 'المنح' },
   testimonials: { en: 'Testimonials', ar: 'الشهادات الطيبة' },
   testimonialsHint: {
-    en: 'Kind words about a teacher. A parent’s praise is read here as the parent sent it; a testimonial staff record says how it reached the academy. The teacher does not see them.',
-    ar: 'كلمات طيبة عن المعلم. يُعرض ثناء ولي الأمر كما أرسله، وتذكر الشهادة التي يسجّلها الفريق كيف وصلت إلى الأكاديمية. لا يراها المعلم.',
+    en: 'A parent’s praise is shown as sent; a staff entry says how it reached the academy. The teacher does not see them.',
+    ar: 'يُعرض ثناء ولي الأمر كما أرسله، وتذكر شهادة الفريق كيف وصلت. لا يراها المعلم.',
   },
   recordTestimonial: { en: 'Record a testimonial', ar: 'تسجيل شهادة طيبة' },
   allOrigins: { en: 'All', ar: 'الكل' },
@@ -57,7 +57,8 @@ export const R = {
   reason: { en: 'Reason', ar: 'السبب' },
   corrected: { en: 'Corrected: {reason}', ar: 'صُحِّح: {reason}' },
   required: { en: 'Required.', ar: 'مطلوب.' },
-  empty: { en: 'Nothing here.', ar: 'لا شيء هنا.' },
+  empty: { en: 'No testimonials yet.', ar: 'لا شهادات طيبة بعد.' },
+  emptyHint: { en: 'A parent’s praise from the app appears here by itself.', ar: 'يظهر ثناء ولي الأمر من التطبيق هنا تلقائيًا.' },
   take: { en: 'I’m on it', ar: 'سأتولّاها' },
   reply: { en: 'Reply to the parent', ar: 'الرد على ولي الأمر' },
   changeReply: { en: 'Change the reply', ar: 'تعديل الرد' },
@@ -70,6 +71,12 @@ export const R = {
   yearGrants: { en: '{n} grants in {year}', ar: 'المنح في {year}: {n}' },
   yearTestimonials: { en: '{n} testimonials in {year}', ar: 'الشهادات الطيبة في {year}: {n}' },
   openFile: { en: 'Open the Teacher File', ar: 'فتح ملف المعلم' },
+  // The chosen teacher's figures, in the masthead
+  figLadder: { en: 'Counted this month', ar: 'المحسوبة هذا الشهر' },
+  figNext: { en: 'next step: {step}', ar: 'الخطوة التالية: {step}' },
+  figOpenComplaints: { en: 'Open complaints', ar: 'شكاوى مفتوحة' },
+  figGrants: { en: 'Grants in {year}', ar: 'المنح في {year}' },
+  figTestimonials: { en: 'Testimonials in {year}', ar: 'الشهادات الطيبة في {year}' },
   // PD-52 PR-5
   about: { en: 'Student or trial', ar: 'الطالب أو الحصة التجريبية' },
   trialOf: { en: '{name} (trial)', ar: '{name} (تجريبية)' },

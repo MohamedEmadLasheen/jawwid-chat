@@ -113,10 +113,18 @@ afterEach(() => {
   tokenStore.clear()
 })
 
+/** A row states one action; the others are behind its "⋯" menu: open it, then choose. */
+async function viaMenu(scope: HTMLElement, name: string) {
+  await userEvent.click(within(scope).getByRole('button', { name: /^More actions/ }))
+  await userEvent.click(await within(scope).findByRole('menuitem', { name }))
+}
+
+/** "Edit times" is the row's stated action; every other one is in its menu. */
 async function openRow(button: string) {
   renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/teachers/schedules?teacher=t-1' })
   const row = (await screen.findByText('Child Alpha')).closest('tr')!
-  await userEvent.click(within(row).getByRole('button', { name: button }))
+  if (button === 'Edit times') await userEvent.click(within(row).getByRole('button', { name: button }))
+  else await viaMenu(row, button)
   return screen.findByRole('dialog')
 }
 
@@ -434,13 +442,14 @@ describe('Needs action (PD-31)', () => {
     renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/teachers/needs-action' })
     const section = await screen.findByRole('region', { name: 'Regular-time requests' })
     const stale = within(section).getByText('Child Alpha').closest('[data-request]') as HTMLElement
-    expect(within(stale).getByText('Asked by the family (Parent Alpha) · Teacher: Teacher One')).toBeInTheDocument()
-    expect(within(stale).getByText('Mon 17:00 · Thu 17:00')).toBeInTheDocument()
+    expect(stale).toHaveTextContent('Asked by the family (Parent Alpha), with Teacher One')
+    expect(within(stale).getByText('Mon 17:00, Thu 17:00')).toBeInTheDocument()
     expect(within(stale).getByText('Tue 18:00').closest('li')).toHaveTextContent('Tue 18:00 (no longer free)')
     expect(within(stale).getByText('Thu 17:00', { selector: 'li' })).toHaveTextContent('(free)')
     expect(within(stale).getByText('3 Nov')).toBeInTheDocument()
     expect(within(stale).getByRole('note')).toHaveTextContent('No longer free')
-    expect(within(stale).getByRole('button', { name: 'Approve' })).toBeDisabled()
+    // Round 3: a request that can no longer be approved offers no Approve; Reject is its stated action.
+    expect(within(stale).queryByRole('button', { name: 'Approve' })).toBeNull()
     await userEvent.click(within(stale).getByRole('button', { name: 'Reject' }))
     const dialog = await screen.findByRole('dialog')
     await userEvent.type(within(dialog).getByLabelText('Note'), 'that time is gone')
@@ -448,7 +457,7 @@ describe('Needs action (PD-31)', () => {
     await waitFor(() => expect(sent('POST', /q-1\/decide$/)).toEqual([{ decision: 'rejected', note: 'that time is gone' }]))
 
     const fresh = within(section).getByText('Child Beta').closest('[data-request]') as HTMLElement
-    expect(within(fresh).getByText('Asked by the teacher (Teacher Two) · Teacher: Teacher Two')).toBeInTheDocument()
+    expect(fresh).toHaveTextContent('Asked by the teacher (Teacher Two), with Teacher Two')
     expect(within(fresh).getByRole('button', { name: 'Approve' })).toBeEnabled()
   })
 
@@ -459,7 +468,7 @@ describe('Needs action (PD-31)', () => {
     on('POST', /\/lessons\/blocked\/b-1\/dismiss$/, () => json({ ok: true }, 201))
     renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/teachers/needs-action' })
     const section = await screen.findByRole('region', { name: 'Weekly lessons not scheduled' })
-    expect(section).toHaveTextContent('Teacher One · Mon 9 Nov 17:00 · 30 min')
+    expect(section).toHaveTextContent('with Teacher One, Mon 9 Nov 17:00, 30 min')
     expect(section).toHaveTextContent('Blocked by a make-up lesson at 17:00–17:30')
 
     await userEvent.click(within(section).getByRole('button', { name: 'Schedule at another time' }))
@@ -470,7 +479,7 @@ describe('Needs action (PD-31)', () => {
     await waitFor(() => expect(sent('POST', /blocked\/b-1\/schedule$/)).toEqual([{ startsAt: '2026-11-10T07:00:00Z' }]))
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
 
-    await userEvent.click(within(section).getByRole('button', { name: 'Dismiss' }))
+    await viaMenu(section, 'Dismiss')
     await userEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(sent('POST', /blocked\/b-1\/dismiss$/)).toEqual([{}]))
   })

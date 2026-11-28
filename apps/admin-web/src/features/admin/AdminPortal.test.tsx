@@ -148,7 +148,8 @@ describe('Admin Portal registry and navigation', () => {
     // PD-41: plus Certificates under People; PD-48: Lesson audio under More;
     // PD-52: the two teacher-records pages, their own group under People.
     // PD-59: plus the Sales pipeline, first page of Sales. PD-60: plus Students under People.
-    expect(within(nav).getAllByRole('link')).toHaveLength(38)
+    // Plus Team (the staff directory) under People.
+    expect(within(nav).getAllByRole('link')).toHaveLength(39)
     // PD-57: plus the moderation queue (Reports) under More.
     const inDevelopment = ADMIN_SECTIONS.filter((s) => s.status === 'in_development').length
     expect(within(nav).getAllByText('In development')).toHaveLength(inDevelopment)
@@ -196,7 +197,9 @@ describe('Admin Portal registry and navigation', () => {
     const fetchMock = vi.fn(async (_url: string) => jsonResponse({ ok: true }))
     vi.stubGlobal('fetch', fetchMock)
     renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/admin/teams' })
-    await userEvent.click(await screen.findByRole('button', { name: 'Sign out' }))
+    // Sign out lives in the account menu, behind the avatar in the top bar.
+    await userEvent.click(await screen.findByRole('button', { name: 'Account' }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Sign out' }))
 
     expect(await screen.findByLabelText('Password')).toBeInTheDocument()
     expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/auth/logout'))).toBe(true)
@@ -215,7 +218,7 @@ describe('Dashboard', () => {
     // 2 staff + 3 teachers + 9 contacts
     expect(screen.getByText('14')).toBeInTheDocument()
 
-    const attention = screen.getByRole('region', { name: 'Needs attention' })
+    const attention = screen.getByRole('region', { name: 'Conversations and stories' })
     const waiting = await within(attention).findByRole('link', { name: /waiting on a reply from us/ })
     expect(waiting).toHaveAttribute('href', '/admin/conversations?state=waiting_on_jawwid')
     expect(within(attention).getByRole('link', { name: /still in draft/ })).toHaveAttribute(
@@ -236,7 +239,7 @@ describe('Dashboard', () => {
     renderWithProviders(<AppRoutes />, { staff: { ...superAdmin, permissions: ['chat.use'] }, route: '/admin/dashboard' })
     const chats = await screen.findByRole('region', { name: 'Chats' })
     expect(await within(chats).findByRole('link', { name: /Chats waiting for our reply/ })).toHaveAttribute('href', '/chat?view=waiting')
-    const attention = await screen.findByRole('region', { name: 'Needs attention' })
+    const attention = await screen.findByRole('region', { name: 'Conversations and stories' })
     // The sections come first; the inventory stays below them.
     expect(chats.compareDocumentPosition(attention) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(screen.getByText('QA Academy')).toBeInTheDocument()
@@ -261,7 +264,7 @@ describe('Conversations', () => {
     renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/admin/conversations' })
     expect(await screen.findByText('Family Two')).toBeInTheDocument()
     expect(screen.getAllByText('Waiting on us').length).toBeGreaterThan(0)
-    expect(screen.getByText('Student group · 5 members')).toBeInTheDocument()
+    expect(screen.getByText('Student group, 5 members')).toBeInTheDocument()
     expect(screen.queryByText('waiting_on_jawwid')).not.toBeInTheDocument()
     expect(screen.queryByText('direct')).not.toBeInTheDocument()
   })
@@ -448,7 +451,7 @@ describe('Arabic', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'المحادثات' })).toBeInTheDocument()
     expect(document.documentElement.dir).toBe('rtl')
     // Two members is the Arabic dual, not "٢ عضو".
-    expect((await screen.findAllByText('مباشرة · عضوان')).length).toBeGreaterThan(0)
+    expect((await screen.findAllByText('مباشرة، عضوان')).length).toBeGreaterThan(0)
     // The top bar speaks Arabic too (its read-only chip is gone since 2026-10-17).
     expect(screen.getAllByText('بوابة الإدارة').length).toBeGreaterThan(0)
     expect(screen.queryByText('وصول للقراءة فقط')).not.toBeInTheDocument()

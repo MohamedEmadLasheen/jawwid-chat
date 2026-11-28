@@ -38,12 +38,15 @@ export interface ReplyTarget {
 }
 
 const MAX_LINES_PX = 160
+/** Below this the bar holds the short placeholder only. */
+const HINT_MIN_WIDTH = 460
 
 /**
  * The message box: one bar -- attach, the text, send -- like every messaging
  * app, with the Message / Internal note choice above it. Internal is staff-only
- * by construction (the server refuses it for parents and teachers), and the bar
- * is tinted while it is on so a note is never sent to a family by mistake.
+ * by construction (the server refuses it for parents and teachers), and while
+ * it is on the whole composer turns gold paper, under the lock-note mark and
+ * its words, so a note is never sent to a family by mistake.
  */
 export function ChatComposer({
   onSend,
@@ -90,6 +93,19 @@ export function ChatComposer({
     if (isInternal) stopTyping()
   }, [isInternal, stopTyping])
   const input = useRef<HTMLTextAreaElement>(null)
+  // The placeholder says how to send only where the bar has room for the sentence;
+  // on a phone or beside an open panel it would be cut under the buttons.
+  const bar = useRef<HTMLDivElement>(null)
+  const [roomy, setRoomy] = useState(true)
+  useEffect(() => {
+    const el = bar.current
+    if (!el || typeof ResizeObserver !== 'function') return
+    const measure = () => setRoomy(el.clientWidth === 0 || el.clientWidth >= HINT_MIN_WIDTH)
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
   const media = useRef<HTMLInputElement>(null)
   const doc = useRef<HTMLInputElement>(null)
   const [quickOpen, setQuickOpen] = useState(false)
@@ -241,6 +257,8 @@ export function ChatComposer({
         </div>
       )}
       {!editing && (
+        <div className="cw-composer__top">
+        {/* A segmented switch on the sheet's top edge: what is sent to the family, or kept inside Jawwid. */}
         <div className="cw-composer__modes" role="group" aria-label={copy.sendAs}>
           <button
             type="button"
@@ -256,9 +274,17 @@ export function ChatComposer({
             aria-pressed={isInternal}
             onClick={() => setVisibility('internal')}
           >
-            <Icon name="lock" size={14} />
+            <Icon name="lock" size={16} />
             {copy.internal}
           </button>
+        </div>
+          {/* Said in words too, beside the switch: the gold paper alone must not carry it. */}
+          {isInternal && (
+            <span className="cw-composer__flag">
+              <Icon name="lock" size={14} />
+              {copy.staffOnly}
+            </span>
+          )}
         </div>
       )}
 
@@ -366,7 +392,7 @@ export function ChatComposer({
         </ul>
       )}
 
-      <div className="cw-composer__bar">
+      <div className="cw-composer__bar" ref={bar}>
         {!editing && (
           <Menu
             label={copy.attach}
@@ -386,7 +412,6 @@ export function ChatComposer({
                 icon: 'paperclip',
                 onSelect: () => doc.current?.click(),
               },
-              { key: 'quick', label: copy.quickReplies, icon: 'bolt', onSelect: () => setQuickOpen(true) },
               ...extraItems,
             ]}
           />
@@ -419,7 +444,8 @@ export function ChatComposer({
           rows={1}
           className="cw-composer__input"
           value={body}
-          dir="auto"
+          // Empty, the box reads in the UI's direction (so does its placeholder); with text, in the text's own.
+          dir={body === '' ? (locale === 'ar' ? 'rtl' : 'ltr') : 'auto'}
           onChange={(e) => {
             setBody(e.target.value)
             if (!editing && !isInternal) typing.typed(e.target.value)
@@ -428,7 +454,11 @@ export function ChatComposer({
             setActive(0)
           }}
           onSelect={(e) => setCaret(e.currentTarget.selectionStart ?? 0)}
-          placeholder={isInternal ? copy.internalPlaceholder : copy.placeholder}
+          placeholder={
+            isInternal
+              ? roomy ? copy.internalPlaceholder : copy.internalPlaceholderShort
+              : roomy ? copy.placeholder : copy.placeholderShort
+          }
           aria-label={editing ? copy.editing : isInternal ? copy.internal : copy.customer}
           role="combobox"
           aria-autocomplete="list"
@@ -498,6 +528,17 @@ export function ChatComposer({
           }}
         />
         {!editing && (
+          <button
+            type="button"
+            className="btn btn--ghost btn--icon cw-composer__quick"
+            aria-label={copy.quickReplies}
+            title={copy.quickReplies}
+            onClick={() => setQuickOpen(true)}
+          >
+            <Icon name="bolt" size={20} />
+          </button>
+        )}
+        {!editing && (
           <VoiceRecorder
             conversationId={conversationId}
             visibility={visibility}
@@ -523,7 +564,7 @@ export function ChatComposer({
           disabled={!canSend}
           onClick={submit}
           aria-label={editing ? copy.saveEdit : copy.send}
-          title={editing ? copy.saveEdit : copy.send}
+          title={editing ? copy.saveEdit : copy.sendHint}
         >
           <Icon name={editing ? 'check' : 'send'} size={18} />
         </button>

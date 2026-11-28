@@ -1,52 +1,57 @@
-import { useMemo, type CSSProperties } from 'react'
+import { useLayoutEffect, useMemo, useRef, type CSSProperties } from 'react'
 import { useI18n } from '@/core/i18n/I18nProvider'
-import { ACADEMY_ZONE, clock12In, hour12Label, isoToAcademyWallClock } from '@/core/time/academyTime'
-import type { CalendarDay, CalendarLesson, CalendarSummary, CalendarTeacher, CalendarWindow, Interval } from './api'
-import { CATEGORY_LABEL, S, WEEKDAYS, dayLabel, hoursOf, notTaught, percentOf, statusOf, useScheduleText } from './copy'
+import { ACADEMY_ZONE, clock12In, hour12Label } from '@/core/time/academyTime'
+import { Badge } from '@/shared/components/Badge'
+import { Icon } from '@/shared/components/Icon'
+import type { CalendarDay, CalendarLesson, CalendarTeacher, CalendarWindow, Interval } from './api'
+import { CATEGORY_LABEL, KIND_LABEL, S, hoursOf, joinList, notTaught, percentOf, statusOf, useScheduleText } from './copy'
+import { dayOfLesson, laneMap, type Findings } from './issues'
 import { swatchClass } from './palette'
-import { daysOf, isoWeekday, minuteOfDay } from './viewState'
+import { minuteOfDay } from './viewState'
 
 /**
- * PD-38 grids. Custom CSS grid on the academy's clock (no calendar library:
- * the academy view is teachers x time, and the layers -- shift band, red empty
- * time, grey out-of-shift, hatched leave, supervisor fill with solid / dashed /
- * dotted borders -- are ours). Positions use inset-inline-start, so under
- * dir="rtl" the time axis runs right to left with no override.
+ * The day: a resource timeline. Teachers are rows, hours run across with the
+ * page (right to left in Arabic: positions use inset-inline-start, so dir="rtl"
+ * mirrors the axis with no override). Custom CSS grid on the academy's clock, no
+ * calendar library.
  *
- * Rows use `content-visibility: auto` (schedule.css): a hundred teachers cost
- * only the rows on screen.
+ * A lane is the teacher's day: their working hours a faint teal band, leave
+ * hatched, and the rest plain. A lesson says its state by shape, never by hue
+ * alone (the hue is the supervisor's, PD-38):
+ *   booked        a tint with an edge at its start
+ *   trial         a dashed edge all round
+ *   make-up       a small mark after the name
+ *   paused        muted, with a pause mark
+ *   moved away / called off   muted, its time struck through
+ *   payment hold  an urgent edge
+ *   over          greyed text
+ *   outside working hours   an amber dot
+ *   clash         two lessons in half-height lanes, each with an urgent outline
+ *   needs a substitute (teacher on leave)   a ghost: dashed urgent outline
+ * The now line is gold, on today only.
  *
- * Every time is on the 12-hour clock (clock12In / hour12Label: the one shared
- * formatter). The day view gives each hour a fixed width (DAY_HOUR_PX) and
- * scrolls sideways when the day is long, so axis labels never collide and a
- * lesson has room for its name and time.
+ * Every time is on the 12-hour clock (clock12In / hour12Label). Each hour has a
+ * minimum width (DAY_HOUR_PX), so a long day scrolls instead of squeezing its
+ * labels together; the axis runs from the earliest working hour to the latest
+ * end plus half an hour, so it never clips.
  */
 
-/** Width of one hour in the day view: a one-hour lesson shows its name and its time. */
-export const DAY_HOUR_PX = 120
+/** The narrowest an hour may be: a half-hour lesson keeps room for its name and its start. */
+export const DAY_HOUR_PX = 96
 
-/** The hours shown: everything the data holds, at least 10:00-22:00. */
+/** The hours shown: the earliest working hour (or lesson) to the latest end plus 30 minutes. */
 export function hourRange(days: CalendarDay[], lessons: CalendarLesson[]): { lo: number; hi: number } {
-  let lo = 10 * 60
-  let hi = 22 * 60
+  let lo = Infinity
+  let hi = -Infinity
   const see = (from: string, to: string, day: string) => {
     lo = Math.min(lo, minuteOfDay(from, day))
     hi = Math.max(hi, minuteOfDay(to, day))
   }
   for (const d of days) for (const [a, b] of [...d.shift, ...d.work]) see(a, b, d.day)
   for (const l of lessons) see(l.startsAt, l.endsAt, dayOfLesson(l))
-  return { lo: Math.floor(lo / 60) * 60, hi: Math.min(1440, Math.ceil(hi / 60) * 60) }
-}
-
-const dayCache = new Map<string, string>()
-/** A lesson's academy day (memoized: thousands of lessons in a month). */
-function dayOfLesson(l: CalendarLesson): string {
-  let d = dayCache.get(l.startsAt)
-  if (!d) {
-    d = isoToAcademyWallClock(l.startsAt).date
-    dayCache.set(l.startsAt, d)
-  }
-  return d
+  // Nothing to place: the academy's usual afternoon and evening.
+  if (!Number.isFinite(lo)) return { lo: 12 * 60, hi: 21 * 60 }
+  return { lo: Math.floor(lo / 60) * 60, hi: Math.min(1440, Math.ceil((hi + 30) / 30) * 30) }
 }
 
 function place(from: string, to: string, day: string, lo: number, hi: number): CSSProperties | null {
@@ -57,39 +62,70 @@ function place(from: string, to: string, day: string, lo: number, hi: number): C
   return { insetInlineStart: `${((a - lo) / span) * 100}%`, inlineSize: `${((b - a) / span) * 100}%` }
 }
 
-/** Lanes for overlapping lessons in one track: overlap is drawn, never hidden. */
-function lanes(lessons: CalendarLesson[]): Map<string, { lane: number; of: number }> {
-  const sorted = [...lessons].sort((a, b) => a.startsAt.localeCompare(b.startsAt))
-  const ends: string[] = []
-  const at = new Map<string, number>()
-  for (const l of sorted) {
-    let lane = ends.findIndex((e) => e <= l.startsAt)
-    if (lane === -1) lane = ends.length
-    ends[lane] = l.endsAt
-    at.set(l.id, lane)
-  }
-  const of = Math.max(1, ends.length)
-  return new Map([...at].map(([id, lane]) => [id, { lane, of }]))
-}
+type Tx = ReturnType<typeof useScheduleText>
 
-function lessonName(l: CalendarLesson, tx: ReturnType<typeof useScheduleText>): string {
+export function lessonName(l: CalendarLesson, tx: Tx): string {
   if (l.anonymous) return tx(S.booked)
   return l.learner?.name ?? l.prospect?.name ?? tx(S.booked)
 }
 
-/** What a lesson block says to a screen reader and in its tooltip: who, when, status. */
+/** The name a narrow block has room for: the first name ("Abd al-", "Abu" keep the word after them). */
+export function shortName(name: string): string {
+  const parts = name.trim().split(/\s+/)
+  if (parts.length < 2) return name
+  const joined = /^(عبد|عبدال|أبو|ابو|abd|abu|el|al)$/i.test(parts[0]!) ? 2 : 1
+  return parts.slice(0, joined).join(' ')
+}
+
+/** "5:30": a start for a narrow block, the hour and minutes only (the axis says morning or evening). */
+export function clockShort(iso: string): string {
+  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: ACADEMY_ZONE, hour: 'numeric', minute: '2-digit', hour12: true }).formatToParts(new Date(iso))
+  const pick = (t: string) => parts.find((p) => p.type === t)?.value ?? ''
+  return `${pick('hour')}:${pick('minute')}`
+}
+
+/** "1:00 PM – 2:00 PM", on the academy's clock. */
 export function lessonTime(l: { startsAt: string; endsAt: string }, locale: 'ar' | 'en'): string {
   return `${clock12In(l.startsAt, ACADEMY_ZONE, locale)} – ${clock12In(l.endsAt, ACADEMY_ZONE, locale)}`
 }
 
-export function lessonLabel(l: CalendarLesson, tx: ReturnType<typeof useScheduleText>, locale: 'ar' | 'en', miss = false): string {
+/** What a lesson block says to a screen reader and in its tooltip: who, when, its state. */
+export function lessonLabel(
+  l: CalendarLesson,
+  tx: Tx,
+  locale: 'ar' | 'en',
+  miss = false,
+  flags: { clash?: boolean; uncovered?: boolean } = {},
+): string {
   const parts = [lessonName(l, tx), lessonTime(l, locale), tx(statusOf(l))]
+  if (l.kind === 'makeup') parts.push(tx(KIND_LABEL.makeup))
+  if (!l.anonymous && l.suspendedFor === 'payment') parts.push(tx(S.paymentHold))
   if (l.outsideShift) parts.push(tx(S.outsideMark))
+  if (flags.clash) parts.push(tx(S.clash))
+  if (flags.uncovered) parts.push(tx(S.needsSubstitute))
   if (miss) parts.push(tx(S.otherBooking))
-  return parts.join(' · ')
+  return joinList(parts, locale)
 }
 
-/** One teacher's day: grey track, shift / working-hour bands, leave, red empty time, lessons. */
+/** The classes that draw a lesson's state as a shape. */
+export function lessonClasses(l: CalendarLesson, o: { miss: boolean; past: boolean; clash: boolean; uncovered: boolean }): string {
+  return [
+    'sc-lesson',
+    o.miss ? 'sc-c-none sc-lesson--other' : swatchClass(l.colorKey),
+    `sc-lesson--${l.status}`,
+    l.kind === 'makeup' ? 'sc-lesson--makeup' : '',
+    notTaught(l) ? 'sc-lesson--not-taught' : '',
+    l.outsideShift ? 'sc-lesson--outside' : '',
+    !l.anonymous && l.suspendedFor === 'payment' ? 'sc-lesson--held' : '',
+    o.past ? 'sc-lesson--past' : '',
+    o.clash ? 'sc-lesson--clash' : '',
+    o.uncovered ? 'sc-lesson--ghost' : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
+}
+
+/** One teacher's day: the working-hours band, leave, the server's empty stretches, lessons, and now. */
 export function Track({
   day,
   intervals,
@@ -97,8 +133,11 @@ export function Track({
   lo,
   hi,
   lessonFilter,
-  compact = false,
-  hourPx,
+  findings,
+  highlight,
+  now,
+  showNow,
+  row,
   onLesson,
 }: {
   day: string
@@ -107,80 +146,158 @@ export function Track({
   lo: number
   hi: number
   lessonFilter: boolean
-  compact?: boolean
-  /** The width of an hour, when fixed (the day view): blocks wide enough also show their time. */
-  hourPx?: number
-  onLesson?: (l: CalendarLesson) => void
+  findings: Findings
+  highlight: ReadonlySet<string>
+  /** The instant now: what ended before it is drawn as over. */
+  now: string
+  /** Draw the now line (today's lane only). */
+  showNow: boolean
+  /** The row's index, for moving between blocks with the arrow keys. */
+  row: number
+  onLesson: (l: CalendarLesson) => void
 }) {
   const tx = useScheduleText()
   const { locale } = useI18n()
-  const laneOf = useMemo(() => lanes(lessons), [lessons])
+  const laneOf = useMemo(() => laneMap(lessons), [lessons])
   const band = (list: Interval[] | undefined, cls: string) =>
     (list ?? []).map(([a, b]) => {
       const style = place(a, b, day, lo, hi)
       return style ? <span key={`${cls}-${a}`} className={cls} style={style} aria-hidden="true" /> : null
     })
+  const nowAt = showNow ? minuteOfDay(now, day) : null
+  const nowMs = Date.parse(now)
 
   return (
-    <div className={`sc-track${compact ? ' sc-track--compact' : ''}`}>
+    <div className="sc-track">
       {band(intervals?.shift, 'sc-band sc-band--shift')}
       {band(intervals?.work, 'sc-band sc-band--work')}
       {band(intervals?.leave, 'sc-band sc-band--leave')}
-      {band(intervals?.empty, 'sc-empty')}
+      {/* The server's empty stretches: the lane's plain band, named for a pointer. */}
+      {(intervals?.empty ?? []).map(([a, b]) => {
+        const style = place(a, b, day, lo, hi)
+        return style ? (
+          <span key={`e-${a}`} className="sc-empty" style={style} title={`${tx(S.availableSlot)}, ${lessonTime({ startsAt: a, endsAt: b }, locale)}`} />
+        ) : null
+      })}
       {lessons.map((l) => {
         const style = place(l.startsAt, l.endsAt, day, lo, hi)
         if (!style) return null
         const lane = laneOf.get(l.id) ?? { lane: 0, of: 1 }
         const miss = lessonFilter && !l.matches
-        const label = lessonLabel(l, tx, locale, miss)
-        const cls = [
-          'sc-lesson',
-          miss ? 'sc-c-none sc-lesson--other' : swatchClass(l.colorKey),
-          `sc-lesson--${l.status}`,
-          notTaught(l) ? 'sc-lesson--not-taught' : '',
-          l.outsideShift ? 'sc-lesson--outside' : '',
-        ].join(' ')
-        const box: CSSProperties = { ...style, insetBlockStart: `${(lane.lane / lane.of) * 100}%`, blockSize: `${100 / lane.of}%` }
-        // How much fits: name and time, the name, or nothing (the tooltip and the details still say it all).
-        const width = hourPx ? ((Date.parse(l.endsAt) - Date.parse(l.startsAt)) / 3_600_000) * hourPx : null
-        const room = compact ? 'none' : width === null ? 'name' : width >= 110 ? 'full' : width >= 36 ? 'name' : 'none'
+        const clash = findings.clashing.has(l.id)
+        const uncovered = findings.uncovered.has(l.id)
+        const past = Date.parse(l.endsAt) <= nowMs
+        const label = lessonLabel(l, tx, locale, miss, { clash, uncovered })
+        const box: CSSProperties = { ...style, insetBlockStart: `calc(${(lane.lane / lane.of) * 100}% + 4px)`, blockSize: `calc(${100 / lane.of}% - 8px)` }
+        const cls = `${lessonClasses(l, { miss, past, clash, uncovered })}${lane.of > 1 ? ' sc-lesson--half' : ''}${l.anonymous ? ' sc-lesson--anon' : ''}${highlight.has(l.id) ? ' is-hl' : ''}`
+        // The marks ride on the time line, so a narrow block keeps its first name whole.
+        const marks =
+          l.status === 'paused' || l.kind === 'makeup' || (!l.anonymous && l.suspendedFor === 'payment') ? (
+            <span className="sc-lesson__marks" aria-hidden="true">
+              {l.status === 'paused' && <Icon name="pause" size={12} />}
+              {l.kind === 'makeup' && <Icon name="history" size={12} />}
+              {!l.anonymous && l.suspendedFor === 'payment' && <Icon name="lock" size={12} />}
+            </span>
+          ) : null
         return (
-          <button key={l.id} type="button" className={cls} style={box} title={label} aria-label={label} onClick={() => onLesson?.(l)}>
-            {room !== 'none' && <span className="sc-lesson__name" dir="auto">{lessonName(l, tx)}</span>}
-            {room === 'full' && <span className="sc-lesson__time">{lessonTime(l, locale)}</span>}
+          <button
+            key={l.id}
+            type="button"
+            className={cls}
+            style={box}
+            title={label}
+            aria-label={label}
+            data-nav=""
+            data-row={row}
+            data-lesson={l.id}
+            onClick={() => onLesson(l)}
+          >
+            {/* Another supervisor's child: time and colour only, never a name. */}
+            {!l.anonymous && (
+              <span className="sc-lesson__name">
+                <bdi className="sc-lesson__full">{lessonName(l, tx)}</bdi>
+                <bdi className="sc-lesson__short" aria-hidden="true">{shortName(lessonName(l, tx))}</bdi>
+              </span>
+            )}
+            <span className="sc-lesson__line">
+              {marks}
+              <span className="sc-lesson__time sc-lesson__time--range">{lessonTime(l, locale)}</span>
+              <span className="sc-lesson__time sc-lesson__time--start" aria-hidden="true">{clockShort(l.startsAt)}</span>
+            </span>
           </button>
         )
       })}
+      {nowAt !== null && nowAt > lo && nowAt < hi && (
+        <span className="sc-now" style={{ insetInlineStart: `${((nowAt - lo) / (hi - lo)) * 100}%` }} aria-hidden="true" />
+      )}
     </div>
   )
 }
 
-function TeacherHead({ t }: { t: CalendarTeacher }) {
+export function TeacherHead({
+  t,
+  absent,
+  onLeave,
+  uncovered = 0,
+  outsideDays = 0,
+}: {
+  t: CalendarTeacher
+  absent?: boolean
+  onLeave?: boolean
+  /** Lessons in the teacher's leave that need a substitute: one red count, here. */
+  uncovered?: number
+  /** The week: days with lessons outside working hours, said once for the teacher. */
+  outsideDays?: number
+}) {
   const tx = useScheduleText()
-  const { locale } = useI18n()
+  const { locale, number } = useI18n()
   const shift = t.category === 'full_shift' || t.category === 'part_shift'
   return (
-    <div className="sc-row__head">
+    <div className="sc-row__head" role="rowheader">
       <span className="sc-row__name" dir="auto">{t.name}</span>
-      <span className={`sc-cat sc-cat--${t.category}`}>{tx(CATEGORY_LABEL[t.category])}</span>
-      <span className="sc-row__figure">
-        {shift ? percentOf(t.utilization, locale) : tx(S.hours, { h: hoursOf(t.totals.bookedMinutes, locale) })}
+      <span className="sc-row__sub">
+        {absent || onLeave ? (
+          <Badge tone="neutral">{tx(S.onLeave)}</Badge>
+        ) : outsideDays > 0 ? null : shift ? (
+          tx(CATEGORY_LABEL[t.category])
+        ) : (
+          // "0 h booked" on every idle row is noise: the hours are said only when there are some.
+          t.totals.bookedMinutes > 0
+            ? joinList([tx(CATEGORY_LABEL[t.category]), tx(S.hourlyBooked, { h: hoursOf(t.totals.bookedMinutes, locale) })], locale)
+            : tx(CATEGORY_LABEL[t.category])
+        )}
+        {uncovered > 0 && (
+          <span className="count count--urgent" title={tx(S.withoutTeacher, { n: number(uncovered) })}>
+            {number(uncovered)}
+            <span className="sr-only"> {tx(S.withoutTeacher, { n: '' })}</span>
+          </span>
+        )}
+        {outsideDays > 0 && <span className="sc-mark sc-mark--outside">{tx(S.outsideDays, { n: number(outsideDays) })}</span>}
       </span>
+      <span className="sc-row__figure" title={tx(S.utilization)}>{shift ? percentOf(t.utilization, locale) : '—'}</span>
     </div>
   )
 }
 
-function HourAxis({ lo, hi }: { lo: number; hi: number }) {
+function HourAxis({ lo, hi, now, nowMin }: { lo: number; hi: number; now: string; nowMin: number | null }) {
   const { locale } = useI18n()
+  const tx = useScheduleText()
   const hours: number[] = []
   for (let m = lo; m < hi; m += 60) hours.push(m)
+  const at = (m: number) => `${((m - lo) / (hi - lo)) * 100}%`
   return (
-    <div className="sc-axis" aria-hidden="true">
+    <div className="sc-axis">
       {hours.map((m) => (
-        <span key={m} className="sc-axis__tick" style={{ insetInlineStart: `${((m - lo) / (hi - lo)) * 100}%` }}>
+        <span key={m} className="sc-axis__tick" style={{ insetInlineStart: at(m) }} aria-hidden="true" data-hour={m}>
           <bdi>{hour12Label(m / 60, locale)}</bdi>
         </span>
       ))}
+      {nowMin !== null && (
+        <span className="sc-now-label" style={{ insetInlineStart: at(nowMin) }}>
+          <span className="sr-only">{tx(S.nowLine)} </span>
+          <bdi>{clock12In(now, ACADEMY_ZONE, locale)}</bdi>
+        </span>
+      )}
     </div>
   )
 }
@@ -189,156 +306,114 @@ function byTeacherDay(days: CalendarDay[]): Map<string, CalendarDay> {
   return new Map(days.map((d) => [`${d.teacherId}|${d.day}`, d]))
 }
 
-function lessonsByTeacherDay(lessons: CalendarLesson[]): Map<string, CalendarLesson[]> {
+export function lessonsByTeacherDay(lessons: CalendarLesson[]): Map<string, CalendarLesson[]> {
   const out = new Map<string, CalendarLesson[]>()
   for (const l of lessons) {
     const k = `${l.teacherId}|${dayOfLesson(l)}`
-    out.set(k, [...(out.get(k) ?? []), l])
+    const list = out.get(k)
+    if (list) list.push(l)
+    else out.set(k, [l])
   }
   return out
 }
 
-export function DayView({ data, day, onLesson }: { data: CalendarWindow; day: string; onLesson: (l: CalendarLesson) => void }) {
-  const tx = useScheduleText()
-  const { lo, hi } = useMemo(() => hourRange(data.days, data.lessons), [data])
-  const days = useMemo(() => byTeacherDay(data.days), [data.days])
-  const lessons = useMemo(() => lessonsByTeacherDay(data.lessons), [data.lessons])
-  // A fixed width per hour: a long day scrolls instead of squeezing its labels together.
-  const width = { '--sc-day-w': `${((hi - lo) / 60) * DAY_HOUR_PX}px` } as CSSProperties
-  return (
-    <div className="sc-grid sc-grid--day" role="table" aria-label={tx(S.title)} style={width} data-hours={(hi - lo) / 60}>
-      <div className="sc-row sc-row--axis" role="row">
-        <div className="sc-row__head" role="columnheader">{tx(S.teacher)}</div>
-        <div role="columnheader"><HourAxis lo={lo} hi={hi} /></div>
-      </div>
-      {data.teachers.map((t) => (
-        <div key={t.id} className="sc-row" role="row" aria-label={t.name}>
-          <TeacherHead t={t} />
-          <div role="cell">
-            <Track
-              day={day}
-              intervals={days.get(`${t.id}|${day}`)}
-              lessons={lessons.get(`${t.id}|${day}`) ?? []}
-              lo={lo}
-              hi={hi}
-              lessonFilter={data.lessonFilter}
-              hourPx={DAY_HOUR_PX}
-              onLesson={onLesson}
-            />
-          </div>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-export function WeekView({
+export function DayView({
   data,
+  day,
+  findings,
+  highlight,
+  highlightTeacher,
+  now,
+  isToday,
   onLesson,
-  onOpenDay,
 }: {
   data: CalendarWindow
+  day: string
+  findings: Findings
+  highlight: ReadonlySet<string>
+  highlightTeacher: string | null
+  /** The instant now. */
+  now: string
+  /** The day shown is today: the now line is drawn. */
+  isToday: boolean
   onLesson: (l: CalendarLesson) => void
-  onOpenDay: (day: string) => void
 }) {
   const tx = useScheduleText()
-  const { locale } = useI18n()
   const { lo, hi } = useMemo(() => hourRange(data.days, data.lessons), [data])
   const days = useMemo(() => byTeacherDay(data.days), [data.days])
   const lessons = useMemo(() => lessonsByTeacherDay(data.lessons), [data.lessons])
-  const week = daysOf(data.from, data.to)
+  const nowIn = isToday ? minuteOfDay(now, day) : null
+  const nowMin = nowIn !== null && nowIn > lo && nowIn < hi ? nowIn : null
+  // A minimum width per hour: a long day scrolls instead of squeezing its labels together.
+  const width = { '--sc-day-w': `${((hi - lo) / 60) * DAY_HOUR_PX}px`, '--sc-hour': `${(60 / (hi - lo)) * 100}%` } as CSSProperties
+
+  // Open on the part of the day that matters: now on today, else the first lesson.
+  const anchor = useRef<HTMLSpanElement>(null)
+  const first = useMemo(() => data.lessons.reduce<string | null>((m, l) => (m === null || l.startsAt < m ? l.startsAt : m), null), [data.lessons])
+  const anchorMin = Math.floor((nowMin !== null ? Math.max(lo, nowMin - 60) : first ? Math.max(lo, minuteOfDay(first, day) - 30) : lo) / 60) * 60
+  useLayoutEffect(() => {
+    const el = anchor.current
+    const scroller = el?.closest<HTMLElement>('.sc-scroll')
+    if (!el || !scroller || typeof scroller.scrollBy !== 'function') return
+    const head = scroller.querySelector<HTMLElement>('.sc-row__head')
+    const a = el.getBoundingClientRect()
+    const s = scroller.getBoundingClientRect()
+    const rtl = getComputedStyle(scroller).direction === 'rtl'
+    const headW = head?.getBoundingClientRect().width ?? 0
+    // Bring the anchor to just past the sticky teacher column.
+    // A whole hour just past the sticky teacher column and the edge control.
+    const gutter = scroller.scrollWidth > scroller.clientWidth + 1 ? 34 : 0
+    const delta = rtl ? -(s.right - headW - gutter - a.right) : a.left - (s.left + headW + gutter)
+    scroller.scrollBy({ left: delta })
+    // Only when the day changes: a re-read keeps where the person scrolled to.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [day, lo, hi])
+
   return (
-    <div className="sc-grid sc-grid--week" role="table" aria-label={tx(S.title)}>
+    <div className={`sc-grid sc-grid--day${highlight.size > 0 ? ' has-hl' : ''}`} role="table" aria-label={tx(S.title)} style={width} data-hours={(hi - lo) / 60}>
       <div className="sc-row sc-row--axis" role="row">
-        <div className="sc-row__head" role="columnheader">{tx(S.teacher)}</div>
-        {week.map((d) => (
-          <div key={d} role="columnheader" className="sc-dayhead">
-            <button type="button" className="sc-link" onClick={() => onOpenDay(d)}>
-              {tx(WEEKDAYS.find((w) => w.iso === isoWeekday(d))!.short)} {dayLabel(d, locale, { day: 'numeric', month: 'short' })}
-            </button>
-          </div>
-        ))}
-      </div>
-      {data.teachers.map((t) => (
-        <div key={t.id} className="sc-row" role="row" aria-label={t.name}>
-          <TeacherHead t={t} />
-          {week.map((d) => {
-            const cell = days.get(`${t.id}|${d}`)
-            const mine = lessons.get(`${t.id}|${d}`) ?? []
-            const empty = (cell?.empty ?? []).reduce((n, [a, b]) => n + (Date.parse(b) - Date.parse(a)) / 60_000, 0)
-            return (
-              <div key={d} role="cell" className="sc-weekcell">
-                <Track day={d} intervals={cell} lessons={mine} lo={lo} hi={hi} lessonFilter={data.lessonFilter} compact onLesson={onLesson} />
-                <span className="sc-weekcell__note">
-                  {mine.length > 0 && <span>{mine.length}</span>}
-                  {empty > 0 && <span className="sc-weekcell__empty">{tx(S.hours, { h: hoursOf(empty, locale) })}</span>}
-                </span>
-              </div>
-            )
-          })}
+        <div className="sc-row__head" role="columnheader">
+          <span>{tx(S.teacher)}</span>
+          <span className="sc-row__head-end">{tx(S.colUsed)}</span>
         </div>
-      ))}
-    </div>
-  )
-}
-
-/** Utilization (shift teachers) or booked hours (hourly) as a five-step heat. */
-function heat(cell: { utilization: number | null; shiftMinutes: number; bookedMinutes: number; workMinutes: number }): number {
-  if (cell.shiftMinutes > 0 && cell.utilization !== null) return Math.min(4, Math.floor(cell.utilization * 5))
-  const base = cell.workMinutes || 480
-  return cell.bookedMinutes === 0 ? 0 : Math.min(4, Math.floor((cell.bookedMinutes / base) * 5))
-}
-
-export function MonthView({ data, onOpenDay }: { data: CalendarSummary; onOpenDay: (day: string, teacherId: string) => void }) {
-  const tx = useScheduleText()
-  const { locale } = useI18n()
-  const month = daysOf(data.from, data.to)
-  const cells = useMemo(() => new Map(data.cells.map((c) => [`${c.teacherId}|${c.day}`, c])), [data.cells])
-  return (
-    <>
-      <p className="sc-hint">{tx(S.monthHint)}</p>
-      <div className="sc-grid sc-grid--month" role="table" aria-label={tx(S.title)} style={{ '--sc-days': month.length } as CSSProperties}>
-        <div className="sc-row sc-row--axis" role="row">
-          <div className="sc-row__head" role="columnheader">{tx(S.teacher)}</div>
-          {month.map((d) => (
-            <div key={d} role="columnheader" className={`sc-dayhead sc-dayhead--narrow${isoWeekday(d) === 5 ? ' sc-dayhead--off' : ''}`}>
-              <span>{Number(d.slice(8))}</span>
+        <div role="columnheader" className="sc-axis-cell">
+          <HourAxis lo={lo} hi={hi} now={now} nowMin={nowMin} />
+          <span ref={anchor} className="sc-anchor" style={{ insetInlineStart: `${((anchorMin - lo) / (hi - lo)) * 100}%` }} aria-hidden="true" />
+        </div>
+      </div>
+      {data.teachers.map((t, i) => {
+        const k = `${t.id}|${day}`
+        const absent = findings.absent.has(k)
+        const onLeave = (days.get(k)?.leave.length ?? 0) > 0
+        const uncovered = (lessons.get(k) ?? []).filter((l) => findings.uncovered.has(l.id)).length
+        return (
+          <div
+            key={t.id}
+            className={`sc-row${absent ? ' sc-row--absent' : ''}${highlightTeacher === t.id ? ' is-hl' : ''}`}
+            role="row"
+            aria-label={t.name}
+            data-teacher={t.id}
+          >
+            <TeacherHead t={t} absent={absent} onLeave={onLeave} uncovered={uncovered} />
+            <div role="cell" className="sc-lane">
+              <Track
+                day={day}
+                intervals={days.get(k)}
+                lessons={lessons.get(k) ?? []}
+                lo={lo}
+                hi={hi}
+                lessonFilter={data.lessonFilter}
+                findings={findings}
+                highlight={highlight}
+                now={now}
+                showNow={nowMin !== null}
+                row={i}
+                onLesson={onLesson}
+              />
             </div>
-          ))}
-        </div>
-        {data.teachers.map((t) => (
-          <div key={t.id} className="sc-row" role="row" aria-label={t.name}>
-            <TeacherHead t={t} />
-            {month.map((d) => {
-              const c = cells.get(`${t.id}|${d}`)
-              if (!c) return <div key={d} role="cell" className="sc-heat sc-heat--none" />
-              const shift = c.shiftMinutes > 0
-              const day = dayLabel(d, locale, { weekday: 'long', day: 'numeric', month: 'long' })
-              const figure = shift ? percentOf(c.utilization, locale) : c.lessons > 0 ? String(c.lessons) : ''
-              const summary = [
-                day,
-                shift ? `${tx(S.utilization)} ${percentOf(c.utilization, locale)}` : null,
-                c.emptyMinutes > 0 ? `${tx(S.emptyHours)} ${tx(S.hours, { h: hoursOf(c.emptyMinutes, locale) })}` : null,
-                c.leaveMinutes > 0 ? tx(S.leaveHours) : null,
-                `${c.lessons}`,
-              ].filter(Boolean).join(' · ')
-              return (
-                <div key={d} role="cell">
-                  <button
-                    type="button"
-                    className={`sc-heat sc-heat--${c.shiftMinutes === 0 && c.workMinutes === 0 && c.lessons === 0 ? 'off' : heat(c)}${c.inShiftLeaveMinutes > 0 && c.inShiftLeaveMinutes >= c.shiftMinutes ? ' sc-heat--leave' : ''}${c.emptyMinutes > 0 ? ' sc-heat--has-empty' : ''}${data.lessonFilter && c.matching > 0 ? ' sc-heat--match' : ''}`}
-                    title={summary}
-                    aria-label={`${tx(S.openDay, { teacher: t.name, day })}: ${summary}`}
-                    onClick={() => onOpenDay(d, t.id)}
-                  >
-                    {figure}
-                  </button>
-                </div>
-              )
-            })}
           </div>
-        ))}
-      </div>
-    </>
+        )
+      })}
+    </div>
   )
 }

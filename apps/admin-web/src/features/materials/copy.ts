@@ -12,8 +12,8 @@ import type { Pair } from '@/features/organization/copy'
 export const M = {
   title: { en: 'Materials', ar: 'المواد التعليمية' },
   subtitle: {
-    en: 'The academy’s existing Quran, Arabic and Islamic-studies materials, played in the app. Families see published items by subject and age; teachers attach them to lesson reports.',
-    ar: 'مواد الأكاديمية الموجودة في القرآن واللغة العربية والتربية الإسلامية، تُعرض داخل التطبيق. ترى الأسر المواد المنشورة حسب المادة والعمر، ويرفقها المعلمون بتقارير الحصص.',
+    en: 'Families see published items by subject and age; teachers attach them to lesson reports.',
+    ar: 'ترى الأسر المواد المنشورة حسب المادة والعمر، ويرفقها المعلمون بتقارير الحصص.',
   },
   tabs: { en: 'Sections', ar: 'الأقسام' },
   tabLibrary: { en: 'Library', ar: 'المكتبة' },
@@ -41,7 +41,7 @@ export const M = {
   sortOrder: { en: 'Order', ar: 'الترتيب' },
   sortOrderHint: {
     en: 'Its place in the list: 1 comes first. Set from the import row; Quran always lists Al-Fatihah first, then by surah from An-Nas down.',
-    ar: 'مكانها في القائمة: ١ أولًا. يُؤخذ من صف الاستيراد؛ والقرآن يُعرض دائمًا بالفاتحة أولًا ثم بالسور من الناس نزولًا.',
+    ar: 'مكانها في القائمة: 1 أولًا. يُؤخذ من صف الاستيراد؛ والقرآن يُعرض دائمًا بالفاتحة أولًا ثم بالسور من الناس نزولًا.',
   },
   sortOrderShort: { en: 'Order {n}', ar: 'الترتيب {n}' },
   source: { en: 'Source', ar: 'المصدر' },
@@ -60,8 +60,11 @@ export const M = {
     en: 'Audio, video, PDF or image -- or an HTML5 activity as a .zip with index.html at the top (H5P exported as HTML works; a raw .h5p does not).',
     ar: 'صوت أو فيديو أو PDF أو صورة -- أو نشاط HTML5 في ملف .zip يحتوي index.html في أعلاه (يعمل H5P المُصدَّر بصيغة HTML، ولا يعمل ملف .h5p الخام).',
   },
-  empty: { en: 'No items match.', ar: 'لا توجد مواد مطابقة.' },
-  emptyLibrary: { en: 'The library is empty. Add an item or import a manifest.', ar: 'المكتبة فارغة. أضف مادة أو استورد قائمة.' },
+  empty: { en: 'No item matches.', ar: 'لا مادة تطابق.' },
+  emptyHint: { en: 'Clear the search or the filters to see the subject’s items.', ar: 'امسح البحث أو عوامل التصفية لعرض مواد هذه المادة.' },
+  emptyLibrary: { en: 'The library is empty.', ar: 'المكتبة فارغة.' },
+  moreFor: { en: 'More actions: {name}', ar: 'إجراءات أخرى: {name}' },
+  emptyLibraryHint: { en: 'Add an item or import a manifest.', ar: 'أضف مادة أو استورد قائمة.' },
   edit: { en: 'Edit', ar: 'تعديل' },
   preview: { en: 'Preview', ar: 'معاينة' },
   backToLibrary: { en: 'Back to the library', ar: 'العودة إلى المكتبة' },
@@ -92,8 +95,8 @@ export const M = {
 
   // Import
   importIntro: {
-    en: 'Bring existing materials in at once: a CSV or JSON manifest (one row per item) and the files it names. Check first -- nothing is written until you import. Rows with the same ref update the same item, so importing again never duplicates.',
-    ar: 'أدخل المواد الموجودة دفعة واحدة: قائمة CSV أو JSON (صف لكل مادة) والملفات التي تذكرها. افحص أولًا -- لا يُكتب شيء حتى تضغط استيراد. الصفوف التي تحمل المرجع نفسه تحدّث المادة نفسها، فلا يتكرر شيء عند إعادة الاستيراد.',
+    en: 'A CSV or JSON manifest, one row per item, with the files it names. Nothing is written until you import; the same ref updates the same item.',
+    ar: 'قائمة CSV أو JSON، صف لكل مادة، مع الملفات التي تذكرها. لا يُكتب شيء حتى تضغط استيراد، والمرجع نفسه يحدّث المادة نفسها.',
   },
   template: { en: 'Download the CSV template', ar: 'تنزيل قالب CSV' },
   manifest: { en: 'Manifest (.csv or .json)', ar: 'القائمة (‎.csv أو ‎.json)' },
@@ -119,8 +122,8 @@ export const M = {
 
   // Recitations
   recitationIntro: {
-    en: 'Recitations come from a source the academy is authorized to use. A source’s link pattern covers every surah ({surah} = 1–114, {surah3} = 001–114); a surah can be given its own link or file instead.',
-    ar: 'تأتي التلاوات من مصدر مأذون للأكاديمية باستخدامه. نمط رابط المصدر يغطي كل السور ({surah} = 1–114، {surah3} = 001–114)، ويمكن إعطاء سورة رابطًا أو ملفًا خاصًا بها بدلًا منه.',
+    en: 'Only a source the academy is authorized to use. Its link pattern covers every surah ({surah} = 1–114, {surah3} = 001–114); one surah can have its own link or file.',
+    ar: 'مصدر مأذون للأكاديمية باستخدامه فقط. نمط رابطه يغطي كل السور ({surah} = 1–114، {surah3} = 001–114)، ويمكن إعطاء سورة رابطًا أو ملفًا خاصًا بها.',
   },
   sourceName: { en: 'Source name', ar: 'اسم المصدر' },
   urlTemplate: { en: 'Link pattern (https)', ar: 'نمط الرابط (https)' },
@@ -167,11 +170,11 @@ export const STATUS_LABEL: Record<ItemStatus, Pair> = {
 }
 
 export const AGE_LABEL: Record<AgeGroup, Pair> = {
-  '4-6': { en: '4–6 years', ar: '٤–٦ سنوات' },
-  '7-9': { en: '7–9 years', ar: '٧–٩ سنوات' },
-  '10-12': { en: '10–12 years', ar: '١٠–١٢ سنة' },
-  '13-17': { en: '13–17 years', ar: '١٣–١٧ سنة' },
-  '18+': { en: '18+', ar: '١٨ فأكثر' },
+  '4-6': { en: '4–6 years', ar: '4–6 سنوات' },
+  '7-9': { en: '7–9 years', ar: '7–9 سنوات' },
+  '10-12': { en: '10–12 years', ar: '10–12 سنة' },
+  '13-17': { en: '13–17 years', ar: '13–17 سنة' },
+  '18+': { en: '18+', ar: '18 فأكثر' },
 }
 
 const BY_CODE: Record<string, Pair> = {

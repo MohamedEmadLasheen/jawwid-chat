@@ -1,10 +1,11 @@
-import { useId, useState } from 'react'
+import { useEffect, useId, useState, type ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
-import { Badge } from '@/shared/components/Badge'
 import { Icon } from '@/shared/components/Icon'
+import type { MenuItem } from '@/shared/components/Menu'
+import { DetailCallout, DetailSection, FlowSteps, type FlowStep, sentence } from '@/shared/components/RequestQueue'
 import { useStructure } from '@/features/organization/hooks'
 import { describeOpsError } from '../teachers/opsCopy'
 import type { Pair } from '../teachers/copy'
@@ -12,7 +13,7 @@ import { trialKeys, trialsApi, type AssignResult, type NewStudentDto } from './a
 import { ChangeSupervisorDialog, transferNotice } from '@/features/organization/ChangeSupervisorDialog'
 import { useCopy } from '@/features/organization/copy'
 import { orgKeys } from '@/features/organization/api'
-import { NS } from './newStudentsCopy'
+import { NS, STATUS } from './newStudentsCopy'
 import { ApiError } from '@/core/api/errors'
 import { OP } from '@/features/intake/opsCopy'
 import { groupNotice } from '@/features/intake/OpsDialogs'
@@ -20,7 +21,7 @@ import { SearchableSelect } from '@/shared/components/SearchableSelect'
 
 const S: Record<string, Pair> = {
   setup: { en: 'Setup', ar: 'التجهيز' },
-  assign: { en: 'Assign', ar: 'تعيين' },
+  assign: { en: 'Assign supervisor', ar: 'تعيين مشرف' },
   change: { en: 'Change', ar: 'تغيير' },
   assignTitle: { en: 'Assign a supervisor', ar: 'تعيين مشرف' },
   assignHint: {
@@ -43,10 +44,11 @@ const S: Record<string, Pair> = {
   openGroup: { en: 'Open group', ar: 'فتح المجموعة' },
   group: { en: 'Group', ar: 'المجموعة' },
   noGroup: { en: 'Not created yet', ar: 'لم تُنشأ بعد' },
+  groupMade: { en: 'Created', ar: 'أُنشئت' },
   parent: { en: 'Parent\'s account', ar: 'حساب ولي الأمر' },
   notStarted: {
-    en: 'Not signed up yet. Ask the parent to download the app and choose "I\'m a new parent" with their e-mail.',
-    ar: 'لم يُنشئ حسابه بعد. اطلب من ولي الأمر تنزيل التطبيق واختيار «ولي أمر جديد» ببريده الإلكتروني.',
+    en: 'Ask the parent to download the app and choose "I\'m a new parent" with their e-mail.',
+    ar: 'اطلب من ولي الأمر تنزيل التطبيق واختيار «ولي أمر جديد» ببريده الإلكتروني.',
   },
   codeWaiting: {
     en: 'The parent asked for a code. Send it to them on WhatsApp:',
@@ -59,13 +61,42 @@ const S: Record<string, Pair> = {
   },
 }
 
+/** What a family's card can ask of its setup directly: the next step, without hunting for it in the inspector. */
+export type SetupIntent = 'assign' | 'group'
+
 /**
- * PD-16: a new student's setup, on their New Students card. The Operations
+ * PD-16: a new student's setup, in the family's inspector. The Operations
  * manager assigns the responsible supervisor; the supervisor creates the
  * family's group; the parent signs up in the app with a code the supervisor
  * relays on WhatsApp. Every step is decided by the server.
+ *
+ * Read top to bottom: the state callout (where the setup stands, in one
+ * sentence, the code to send or the lock to clear, and the one step that moves
+ * the family on), then `children` (the record's facts), then the steps from the
+ * trial to the parent's sign-up -- `before` is what led here. What only adjusts
+ * a step (change the supervisor) stays beside that step; `more` is what the
+ * callout keeps behind "⋯"; `status` is its tag and age.
  */
-export function NewStudentSetup({ s, canAssign }: { s: NewStudentDto; canAssign: boolean }) {
+export function NewStudentSetup({
+  s,
+  canAssign,
+  before = [],
+  intent = null,
+  onIntentDone,
+  more = [],
+  status,
+  children,
+}: {
+  s: NewStudentDto
+  status?: ReactNode
+  canAssign: boolean
+  before?: FlowStep[]
+  /** The step the family's card asked for; it is taken once, then `onIntentDone` clears it. */
+  intent?: SetupIntent | null
+  onIntentDone?: () => void
+  more?: MenuItem[]
+  children?: ReactNode
+}) {
   const { locale, number } = useI18n()
   const tx = (p: Pair | undefined) => (p ? (locale === 'ar' ? p.ar : p.en) : '')
   const qc = useQueryClient()
@@ -110,112 +141,153 @@ export function NewStudentSetup({ s, canAssign }: { s: NewStudentDto; canAssign:
   const signup = e?.parentSignup
   const attempts = signup && signup.state !== 'signed_up' ? signup.attempts : undefined
 
-  return (
-    <section className="ns-block ns-block--setup" aria-label={tx(S.setup)}>
-      <h3 className="ns-block__title">{tx(NS.setup)}</h3>
-      <dl className="ns-pairs">
-        <div>
-          <dt>{tx(S.supervisor)}</dt>
-          <dd className="ns-inline">
-            {e?.supervisor ? (
-              <>
-                <span dir="auto">{e.supervisor.name}</span>
-                {canAssign && (
-                  // PD-24: the Operations manager changes the supervisor at any time after Assign.
-                  <button type="button" className="btn btn--sm" onClick={() => setChanging(true)}>
-                    {tx(S.change)}
-                  </button>
-                )}
-              </>
-            ) : canAssign ? (
-              <button type="button" className="btn btn--sm btn--primary" onClick={() => setAssigning(true)}>
-                {tx(S.assign)}
+  // What moves the family on now, offered only where the server would accept it.
+  const next: SetupIntent | 'open' | null = !e?.supervisor && canAssign ? 'assign' : e && !e.groupConversationId && e.canCreateGroup ? 'group' : e?.groupConversationId ? 'open' : null
+
+  // The card asked for the next step: take it here, once, where its dialog and its notices live.
+  useEffect(() => {
+    if (!intent) return
+    if (intent === 'assign' && next === 'assign') setAssigning(true)
+    if (intent === 'group' && next === 'group') void createGroup()
+    onIntentDone?.()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- taken once per request from the card
+  }, [intent])
+
+  const steps: FlowStep[] = [
+    ...before,
+    {
+      key: 'supervisor',
+      label: tx(S.supervisor),
+      state: e?.supervisor ? 'done' : 'current',
+      meta: e?.supervisor ? <bdi>{e.supervisor.name}</bdi> : tx(S.notAssigned),
+      children:
+        e?.supervisor && canAssign ? (
+          // PD-24: the Operations manager changes the supervisor at any time after Assign.
+          <button type="button" className="btn btn--sm" onClick={() => setChanging(true)}>
+            {tx(S.change)}
+          </button>
+        ) : undefined,
+    },
+    {
+      key: 'group',
+      label: tx(S.group),
+      state: !e ? 'todo' : e.groupConversationId ? 'done' : 'current',
+      meta: !e ? undefined : e.groupConversationId ? tx(S.groupMade) : tx(S.noGroup),
+    },
+    {
+      key: 'parent',
+      label: tx(S.parent),
+      state: !e || !signup ? 'todo' : signup.state === 'signed_up' ? 'done' : attempts?.locked ? 'problem' : 'current',
+      meta: signup?.state === 'signed_up' ? tx(S.signedUp) : attempts?.locked ? tx(STATUS.locked.label) : signup?.state === 'code_waiting' ? tx(NS.codeAsked) : undefined,
+    },
+  ]
+
+  // What the parent's sign-up needs in place: the code to read out, or the lock to clear.
+  const signupNow =
+    e && signup && signup.state !== 'signed_up' ? (
+      <>
+        {signup.state === 'code_waiting' && signup.code && (
+          <div className="ns-code">
+            <strong className="ns-code__value" dir="ltr" aria-live="polite" aria-label={`${tx(NS.codeLabel)} ${signup.code.split('').join(' ')}`}>
+              {signup.code}
+            </strong>
+            <span className="rq-note">{tx(NS.codeValid)}</span>
+            <button
+              type="button"
+              className="btn btn--sm btn--ghost"
+              disabled={pending}
+              title={tx(NS.invalidateHint)}
+              onClick={() => void signupAction(() => trialsApi.invalidateSignupCode(s.trialId), tx(NS.invalidated))}
+            >
+              {tx(NS.invalidate)}
+            </button>
+          </div>
+        )}
+        {attempts && attempts.wrong > 0 && (
+          <div className={attempts.locked ? 'ns-lock ns-lock--on' : 'ns-lock'} role={attempts.locked ? 'status' : undefined}>
+            <span className="rq-note">
+              {attempts.locked && <Icon name="lock" size={16} />} {tx(NS.wrongTries)}: <bdi className="ltr">{number(attempts.wrong)} / {number(attempts.cap)}</bdi>
+            </span>
+            {!attempts.locked && (
+              <button
+                type="button"
+                className="btn btn--sm btn--ghost"
+                disabled={pending}
+                onClick={() => void signupAction(() => trialsApi.resetSignupAttempts(s.trialId), tx(NS.resetDone))}
+              >
+                {tx(NS.reset)}
               </button>
-            ) : (
-              <span className="ts-muted">{tx(S.notAssigned)}</span>
             )}
-          </dd>
-        </div>
-        {e && (
-          <div>
-            <dt>{tx(S.group)}</dt>
-            <dd className="ns-inline">
-              {e.groupConversationId ? (
-                <button type="button" className="btn btn--sm" onClick={() => navigate(`/chat/${e.groupConversationId}`)}>
-                  <Icon name="messages" size={14} />
-                  {tx(S.openGroup)}
-                </button>
-              ) : e.canCreateGroup ? (
-                <button type="button" className="btn btn--sm btn--primary" disabled={pending} onClick={() => void createGroup()}>
-                  <Icon name="plus" size={14} />
-                  {pending ? tx(S.creating) : tx(S.createGroup)}
-                </button>
-              ) : (
-                <span className="ts-muted">{tx(S.noGroup)}</span>
-              )}
-            </dd>
           </div>
         )}
-        {e && signup && (
-          <div>
-            <dt>{tx(S.parent)}</dt>
-            <dd>
-              {signup.state === 'signed_up' && (
-                <Badge tone="ok">
-                  <Icon name="check" size={12} /> {tx(S.signedUp)}
-                </Badge>
-              )}
-              {signup.state === 'not_started' && !attempts?.locked && <span className="ts-muted ns-note">{tx(S.notStarted)}</span>}
-              {signup.state === 'code_waiting' && (
-                <div className="ns-code">
-                  <span className="ns-note">{tx(S.codeWaiting)}</span>
-                  {signup.code && (
-                    <strong className="ns-code__value" dir="ltr" aria-live="polite" aria-label={`${tx(NS.codeLabel)} ${signup.code.split('').join(' ')}`}>
-                      {signup.code}
-                    </strong>
-                  )}
-                  <span className="ts-muted ns-note">{tx(NS.codeValid)}</span>
-                  {signup.code && (
-                    <button
-                      type="button"
-                      className="btn btn--sm"
-                      disabled={pending}
-                      title={tx(NS.invalidateHint)}
-                      onClick={() => void signupAction(() => trialsApi.invalidateSignupCode(s.trialId), tx(NS.invalidated))}
-                    >
-                      {tx(NS.invalidate)}
-                    </button>
-                  )}
-                </div>
-              )}
-              {attempts && attempts.wrong > 0 && (
-                <div className={attempts.locked ? 'ns-lock ns-lock--on' : 'ns-lock'} role={attempts.locked ? 'status' : undefined}>
-                  {attempts.locked ? (
-                    <span>
-                      <Icon name="lock" size={14} /> {tx(NS.lockedNote)}
-                    </span>
-                  ) : (
-                    <span className="ts-muted">
-                      {tx(NS.wrongTries)}: {number(attempts.wrong)} / {number(attempts.cap)}
-                    </span>
-                  )}
-                  <button
-                    type="button"
-                    className={attempts.locked ? 'btn btn--sm btn--primary' : 'btn btn--sm'}
-                    disabled={pending}
-                    onClick={() => void signupAction(() => trialsApi.resetSignupAttempts(s.trialId), tx(NS.resetDone))}
-                  >
-                    {tx(NS.reset)}
-                  </button>
-                </div>
-              )}
-            </dd>
-          </div>
-        )}
-      </dl>
-      {notice && <p className="banner banner--warning" role="status">{notice}</p>}
-      {done && <p className="banner banner--info" role="status">{done}</p>}
-      {error ? <p className="banner banner--danger" role="alert">{describeOpsError(error, locale)}</p> : null}
+      </>
+    ) : null
+
+  // Where the setup stands, in one sentence: what moves the family on, or whose turn it is.
+  const supervisorName = e?.supervisor?.name ?? tx(NS.itsSupervisor)
+  const state: ReactNode = !e?.supervisor
+    ? tx(canAssign ? NS.stateUnassigned : NS.stateUnassignedOther)
+    : attempts?.locked
+      ? tx(NS.stateLocked)
+      : signup?.state === 'code_waiting'
+        ? tx(NS.stateCode)
+        : signup?.state === 'signed_up'
+          ? tx(NS.stateSignedUp)
+          : !e.groupConversationId && e.canCreateGroup
+            ? sentence(tx(NS.stateNoGroup), { supervisor: supervisorName })
+            : sentence(tx(NS.stateNotStarted), { supervisor: supervisorName })
+
+  // A locked sign-up is what stops the family now: clearing it is the one action, the group waits behind "⋯".
+  const locked = !!attempts?.locked
+  const primary =
+    locked ? (
+      <button
+        type="button"
+        className="btn btn--primary"
+        disabled={pending}
+        onClick={() => void signupAction(() => trialsApi.resetSignupAttempts(s.trialId), tx(NS.resetDone))}
+      >
+        {tx(NS.reset)}
+      </button>
+    ) : next === 'assign' ? (
+      <button type="button" className="btn btn--primary" onClick={() => setAssigning(true)}>
+        {tx(S.assign)}
+      </button>
+    ) : next === 'group' ? (
+      <button type="button" className="btn btn--primary" disabled={pending} onClick={() => void createGroup()}>
+        <Icon name="plus" size={18} />
+        {pending ? tx(S.creating) : tx(S.createGroup)}
+      </button>
+    ) : next === 'open' ? (
+      <button type="button" className="btn" onClick={() => navigate(`/chat/${e!.groupConversationId}`)}>
+        <Icon name="conversations" size={18} />
+        {tx(S.openGroup)}
+      </button>
+    ) : undefined
+
+  return (
+    <>
+      <DetailCallout
+        status={status}
+        state={state}
+        note={e?.supervisor && signup?.state === 'not_started' && !attempts?.locked ? tx(S.notStarted) : undefined}
+        primary={primary}
+        more={
+          locked && next === 'open'
+            ? [{ key: 'group', label: tx(S.openGroup), icon: 'conversations' as const, onSelect: () => navigate(`/chat/${e!.groupConversationId}`) }, ...more]
+            : more
+        }
+        label={`${tx(NS.moreActions)}: ${s.parent.name}`}
+      >
+        {signupNow}
+        {notice && <p className="banner banner--warn" role="status">{notice}</p>}
+        {done && <p className="banner banner--info" role="status">{done}</p>}
+        {error ? <p className="banner banner--danger" role="alert">{describeOpsError(error, locale)}</p> : null}
+      </DetailCallout>
+      {children}
+      <DetailSection title={tx(NS.setup)}>
+        <FlowSteps steps={steps} label={tx(S.setup)} />
+      </DetailSection>
       {changing && e && (
         <ChangeSupervisorDialog
           name={s.parent.name}
@@ -242,11 +314,11 @@ export function NewStudentSetup({ s, canAssign }: { s: NewStudentDto; canAssign:
             // PD-42 PR-3: a trial sibling went to the family the parent is already in.
             if (result.attached) setDone(groupNotice(orgTx, result.group, familyName ?? s.parent.name))
             const missing = result.schedules.filter((x) => !x.set)
-            if (missing.length > 0) setNotice(`${tx(S.timesNotSet)} ${[...new Set(missing.map((m) => m.reason))].join(' · ')}`)
+            if (missing.length > 0) setNotice(`${tx(S.timesNotSet)} ${[...new Set(missing.map((m) => m.reason))].join(locale === 'ar' ? '، ' : ', ')}`)
           }}
         />
       )}
-    </section>
+    </>
   )
 }
 

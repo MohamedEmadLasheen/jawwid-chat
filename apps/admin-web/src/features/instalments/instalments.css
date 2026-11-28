@@ -1,11 +1,146 @@
-/* PD-12 S3 instalments. Layout reuses .page / .table / .toolbar from the design system. */
-.in-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
-.in-check { display: inline-flex; align-items: center; gap: var(--space-2); }
-.in-summary { color: var(--text-muted); font-size: var(--fs-sm); margin: 0 0 var(--space-3); }
-.in-table-wrap { overflow-x: auto; }
-.in-cell { display: grid; gap: var(--space-1); justify-items: start; min-inline-size: 8rem; }
-.in-muted { color: var(--text-muted); font-size: var(--fs-sm); }
-.in-amount { font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* PD-12 S3 instalments: a masthead of figures, one bar of filters, then a sheet
+   per state, late first. Colour is state only: red for late (the age and the
+   solid count), amber for due today, green for paid; the rest is ink. */
+
+/* The bar the sections share: who is responsible, what to include. */
+.in-bar { margin-block-end: var(--space-5); }
+.in-bar .sheet-bar { border-block-end: 0; gap: 8px var(--space-5); }
+.in-check { display: inline-flex; align-items: center; gap: var(--space-2); min-block-size: 34px; font-size: var(--fs-sm); color: var(--ink-2); cursor: pointer; }
+.in-check input { inline-size: 17px; block-size: 17px; margin: 0; accent-color: var(--teal); }
+.in-bar__note { margin: 0; padding: 10px var(--space-4); border-block-start: 1px solid var(--line-2); font-size: var(--fs-sm); color: var(--ink-muted); }
+
+/* One state, one sheet. Its name, a count (solid red when it asks for action), its sum. */
+.in-group { margin-block-end: var(--space-5); overflow: hidden; }
+.in-group .sheet__head { min-block-size: 56px; }
+.in-group__title { display: flex; align-items: center; gap: 10px; }
+/* The group's sum stands in the amount column: clear of the action column (its width, then the gap). */
+.in-group { --in-act: 136px; }
+.in-group__sum { box-sizing: content-box; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 2px var(--space-4); inline-size: 140px; padding-inline-end: calc(var(--in-act) + var(--space-4)); }
+/* Amounts to the column's physical right edge, digits on the decimal point (numbers run left to right). */
+[dir='rtl'] .in-group__sum { justify-content: flex-start; }
+[dir='ltr'] :is(.in-group__sum, .in-row__amount) .money__c { display: inline-block; min-inline-size: 2.4em; text-align: left; }
+.in-group__sum .money__n { font-size: 17px; color: var(--ink-2); }
+.in-group--overdue .in-group__title { font-size: var(--fs-xl); font-weight: 700; }
+.in-group--overdue .in-group__sum .money__n { font-weight: 700; color: var(--ink); }
+.in-group--paid .money__n { color: var(--ink-muted); font-weight: 500; }
+.in-group__more {
+  display: block;
+  inline-size: 100%;
+  min-block-size: 44px;
+  padding: 0 var(--space-4);
+  border: 0;
+  border-block-start: 1px solid var(--line-2);
+  background: none;
+  color: var(--teal);
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  text-align: start;
+  cursor: pointer;
+}
+.in-group__more:hover { background: var(--teal-tint); color: var(--teal-dark); }
+.in-group__more:focus-visible { outline-offset: -2px; }
+
+/* A row: who and what for, the plan, who follows it, its age, the amount, the one action. */
+.in-rows { margin: 0; padding: 0; list-style: none; }
+.in-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 150px minmax(0, 168px) 140px 140px var(--in-act);
+  align-items: center;
+  gap: 4px var(--space-4);
+  min-block-size: 64px;
+  padding: 10px var(--space-4);
+  border-block-end: 1px solid var(--line-2);
+  font-size: var(--fs-sm);
+  transition: background var(--dur-fast) var(--ease-out);
+}
+.in-row:last-child { border-block-end: 0; }
+.in-row:hover { background: var(--surface-hover); }
+.in-row .entity { gap: 10px; min-inline-size: 0; }
+.in-row .entity__text { display: grid; gap: 1px; min-inline-size: 0; }
+.in-row .entity__name { font-size: var(--fs-md); }
+.in-row .entity__sub { font-size: var(--fs-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.in-sub { display: block; font-size: var(--fs-xs); color: var(--ink-muted); }
+.in-unset, .in-row__sup .in-unset { color: var(--ink-muted); }
+.in-row__sup { min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); }
+.in-row__sup .in-sub { overflow: hidden; text-overflow: ellipsis; }
+
+/* The age, said the way a person would say it. On a late row it is the value that breached. */
+.in-when { display: block; font-weight: 500; white-space: nowrap; color: var(--ink-2); }
+.in-row__when .in-sub { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.in-row--overdue .in-when { color: var(--urgent); font-size: var(--fs-md); font-weight: 600; }
+.in-row--due .in-when { color: var(--waiting); font-weight: 600; }
+.in-row--paid .in-when { font-weight: 500; color: var(--done); }
+.in-row__flag { margin-inline-start: 8px; }
+
+/* The amount ends the row, the heaviest thing on it. */
+.in-row__amount { justify-self: right; white-space: nowrap; }
+.in-row__act { justify-self: end; }
+
+/* The plan in words: which of how many (or how many open), then what is left on it. */
+.plan { display: grid; gap: 2px; min-inline-size: 0; }
+.plan__line { display: inline-flex; align-items: center; min-block-size: 22px; }
+.plan__at { font-size: var(--fs-sm); color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.plan__left { display: flex; flex-wrap: wrap; gap: 0 8px; font-size: var(--fs-xs); color: var(--ink-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+/* The billing supervisor dialog. */
 .in-options { display: grid; gap: var(--space-2); margin: var(--space-2) 0 0; padding: 0; border: none; }
 .in-option { display: flex; align-items: baseline; gap: var(--space-2); }
+.in-option input { accent-color: var(--teal); }
+.in-muted { color: var(--ink-muted); font-size: var(--fs-sm); }
 .in-textarea { min-block-size: 4rem; resize: vertical; }
+
+/* Beside less room the supervisor gives way first: it is in the row's menu. */
+@media (max-width: 1439px) {
+  .in-row { grid-template-columns: minmax(0, 1fr) 140px 132px 132px var(--in-act); }
+  .in-row__sup { display: none; }
+}
+
+/* Phone width: who and how much; how late and the plan; who follows it; then
+   the one action, the width of the row, under the thumb. */
+@media (max-width: 767px) {
+  .in-bar .sheet-bar { gap: 4px var(--space-4); }
+  .in-check { min-block-size: 44px; }
+  /* What is left on the plan waits in the file; the row keeps to three lines. */
+  .plan__left { display: none; }
+  .in-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: 'who amount' 'when plan' 'sup act';
+    align-items: start;
+    gap: 8px var(--space-3);
+    padding: 14px var(--space-4);
+  }
+  .in-row:hover { background: none; }
+  .in-row__who { grid-area: who; }
+  .in-row__amount { grid-area: amount; }
+  .in-row__when { grid-area: when; padding-inline-start: 38px; }
+  .in-row__plan { grid-area: plan; justify-self: end; }
+  .in-row__plan .plan { justify-items: end; }
+  /* Three lines: who and how much; how late and the plan; who follows it and the action. */
+  .in-row__when .in-sub, .in-row__sup .in-sub { display: none; }
+  .in-row__sup { grid-area: sup; display: flex; flex-wrap: wrap; align-items: baseline; align-self: center; gap: 0 8px; padding-inline-start: 38px; white-space: normal; }
+  .in-row__act { grid-area: act; justify-self: end; }
+  .in-group__sum { padding-inline-end: 0; inline-size: auto; }
+  .in-row__amount { justify-self: end; }
+  .in-group__more { min-block-size: 48px; }
+  .in-group__sum { display: none; }
+  .in-group--overdue .in-group__sum { display: flex; }
+}
+
+/* The room a row gets depends on the sidebar (folded or open), not only on the window:
+   below ~840px of list the plan moves under the name and its "left" line waits in the file. */
+.in-rows { container: in-rows / inline-size; }
+@container in-rows (max-width: 840px) and (min-width: 600px) {
+  .in-row {
+    grid-template-columns: minmax(180px, 1fr) 128px 116px var(--in-act);
+    grid-template-areas: 'who when amount act' 'plan when amount act';
+    row-gap: 2px;
+  }
+  .in-row__who { grid-area: who; }
+  .in-row__plan { grid-area: plan; padding-inline-start: 38px; }
+  .in-row__when { grid-area: when; }
+  .in-row__amount { grid-area: amount; }
+  .in-row__act { grid-area: act; }
+  .in-row__sup { display: none; }
+  .in-row .plan__left { display: none; }
+}

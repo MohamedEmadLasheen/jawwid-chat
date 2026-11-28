@@ -138,25 +138,43 @@ const bodyOf = (call: unknown[]) => JSON.parse(String((call[1] as RequestInit).b
 
 const adminSession = makeStaff({ id: 'admin_a', name: 'Admin A', role: 'admin' })
 
+/** One of the masthead's key numbers, by its label. */
+const figure = (label: string) => screen.getByText(label, { selector: '.figure__label' }).closest('.figure') as HTMLElement
+/** The record's tabs: the masthead names whose file it is ("My profile", "Staff profile"). */
+const openTab = async (name: string) => userEvent.click(await screen.findByRole('tab', { name }))
+
 describe('an admin\'s own profile', () => {
   it('shows personal, account, responsibilities and verified workload -- and no management controls', async () => {
     on('GET', /\/staff-profiles\/me$/, () => json(profile()))
     renderWithProviders(<AppRoutes />, { staff: adminSession, route: '/profile' })
 
-    expect(await screen.findByRole('heading', { name: 'My profile' })).toBeInTheDocument()
+    // The record's heading is the person; the masthead's tabs say whose file it is.
+    expect(await screen.findByRole('heading', { level: 1, name: /^Admin A/ })).toBeInTheDocument()
+    expect(screen.getByRole('tablist', { name: 'My profile' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByRole('heading', { name: 'Personal profile' })).toBeInTheDocument()
     expect(screen.getByText('Supervises 3 assigned families')).toBeInTheDocument()
     expect(screen.getByText('admin_a@example.test')).toBeInTheDocument()
 
+    // The counts that matter most are the head's highlights; chats waiting for a reply are flagged as waiting.
+    expect(within(figure('Assigned families')).getByText('3')).toBeInTheDocument()
+    expect(within(figure('Awaiting reply')).getByText('2')).toBeInTheDocument()
+    expect(figure('Awaiting reply')).toHaveClass('rec-hl__item--waiting')
+    expect(screen.queryByText('Direct reports', { selector: '.figure__label' })).not.toBeInTheDocument()
     const workload = screen.getByRole('region', { name: 'My responsibilities at a glance' })
-    expect(within(workload).getByText('Assigned families').previousSibling).toHaveTextContent('3')
-    expect(within(workload).getByText('Awaiting our reply').previousSibling).toHaveTextContent('2')
     // Untracked metrics are named, not shown as zeros.
     expect(within(workload).getByText('Not tracked in Jawwid Chat')).toBeInTheDocument()
     expect(within(workload).queryByText('Direct reports')).not.toBeInTheDocument()
 
     expect(screen.queryByRole('button', { name: 'Assign responsibility' })).not.toBeInTheDocument()
+    // The file's menu holds the photo here, and nothing about the reporting line.
+    await userEvent.click(screen.getByRole('button', { name: 'More actions: Admin A' }))
+    expect(screen.getByRole('menuitem', { name: 'Choose a photo' })).toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: 'Change reporting manager' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Change reporting manager' })).not.toBeInTheDocument()
+    // No tab for a team or the organization, and neither is asked for.
+    expect(screen.queryByRole('tab', { name: 'My team' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: 'Organization' })).not.toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'My team' })).not.toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Organization overview' })).not.toBeInTheDocument()
     expect(calls('GET', /\/staff-profiles\/(team|organization)/)).toHaveLength(0)
@@ -229,7 +247,58 @@ describe('an admin\'s own profile', () => {
     await screen.findByRole('heading', { name: 'Personal profile' })
     expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument()
     expect(screen.queryByLabelText('Choose a photo')).not.toBeInTheDocument()
+    // The photo lives in the file's menu: with nothing offered, there is no menu.
+    expect(screen.queryByRole('button', { name: /More actions/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: 'Organization' })).not.toBeInTheDocument()
     expect(calls('GET', /\/staff-profiles\/organization/)).toHaveLength(0)
+  })
+})
+
+describe('the staff profile is a record: a masthead and tabs', () => {
+  it('one\'s own file offers Devices & sessions as a tab, asked for only when opened', async () => {
+    on('GET', /\/staff-profiles\/me$/, () => json(profile()))
+    on('GET', /\/me\/sessions$/, () =>
+      json({ sessions: [{ id: 'cur', current: true, platform: 'web', deviceName: 'Chrome on macOS', appVersion: null, signedInAt: '2026-10-20T08:00:00.000Z', lastSeenAt: null, expiresAt: '2026-10-29T08:00:00.000Z', remembered: false }] }),
+    )
+    renderWithProviders(<AppRoutes />, { staff: adminSession, route: '/profile' })
+    await screen.findByRole('heading', { level: 1, name: /^Admin A/ })
+    expect(calls('GET', /\/me\/sessions$/)).toHaveLength(0)
+
+    await openTab('Devices & sessions')
+    expect(screen.getByRole('tab', { name: 'Devices & sessions' })).toHaveAttribute('aria-selected', 'true')
+    const row = (await screen.findByText('This browser')).closest('tr')!
+    expect(within(row).getByText('Chrome on macOS')).toBeInTheDocument()
+    expect(within(row).getByRole('button', { name: 'Sign out' })).toBeInTheDocument()
+    expect(calls('GET', /\/me\/sessions$/)).toHaveLength(1)
+  })
+
+  it('the open tab is in the address, and a hash that names a section opens its tab', async () => {
+    on('GET', /\/staff-profiles\/me$/, () => json(profile()))
+    on('GET', /\/staff\/admin_a\/action-log/, () => json({ entries: [], nextCursor: null }))
+    renderWithProviders(<AppRoutes />, { staff: adminSession, route: '/profile#action-log' })
+    expect(await screen.findByRole('tab', { name: 'Activity' })).toHaveAttribute('aria-selected', 'true')
+    expect(await screen.findByRole('heading', { name: 'Action log' })).toBeInTheDocument()
+  })
+
+  it('offers no Activity tab when the server lets the viewer read neither the log nor the audit records', async () => {
+    on('GET', /\/staff-profiles\/me$/, () => json(profile()))
+    renderWithProviders(<AppRoutes />, { staff: adminSession, route: '/profile' })
+    await screen.findByRole('heading', { level: 1, name: /^Admin A/ })
+    await waitFor(() => expect(screen.queryByRole('tab', { name: 'Activity' })).not.toBeInTheDocument())
+    expect(screen.queryByRole('heading', { name: 'Action log' })).not.toBeInTheDocument()
+  })
+
+  it('"Change reporting manager" is in the file\'s menu, only when the server allows it', async () => {
+    const sa = makeStaff({ id: 'owner_s', name: 'Owner S', role: 'super_admin' })
+    on('GET', /\/staff-profiles\/admin_a$/, () =>
+      json(profile({ access: { ...profile().access, relation: 'organization', canEditPhoto: false, canManageReportingLine: true } })),
+    )
+    on('GET', /\/staff-profiles\/organization$/, () => json({ directory: [], directoryTruncated: false }))
+    renderWithProviders(<AppRoutes />, { staff: sa, route: '/profile/admin_a' })
+    await userEvent.click(await screen.findByRole('button', { name: 'More actions: Admin A' }))
+    expect(screen.queryByRole('menuitem', { name: 'Choose a photo' })).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Change reporting manager' }))
+    expect(screen.getByRole('dialog', { name: 'Change reporting manager' })).toBeInTheDocument()
   })
 })
 
@@ -303,6 +372,8 @@ describe('a manager', () => {
     on('GET', /\/staff-profiles\/team$/, () => json(team))
     renderWithProviders(<AppRoutes />, { staff: managerSession, route: '/profile' })
 
+    // My team is a tab of the manager's own file.
+    await openTab('My team')
     const section = await screen.findByRole('region', { name: 'My team' })
     expect(await within(section).findByRole('link', { name: 'Admin A' })).toHaveAttribute('href', '/profile/admin_a')
     const totals = within(section).getByLabelText('Team totals')
@@ -317,6 +388,7 @@ describe('a manager', () => {
     )
     on('GET', /\/staff-profiles\/team$/, () => json(team))
     renderWithProviders(<AppRoutes />, { staff: managerSession, route: '/profile' })
+    await openTab('My team')
     const section = await screen.findByRole('region', { name: 'My team' })
     await within(section).findByRole('link', { name: 'Admin A' })
 
@@ -348,13 +420,20 @@ describe('a manager', () => {
     )
     renderWithProviders(<AppRoutes />, { staff: managerSession, route: '/profile/admin_a' })
 
-    expect(await screen.findByRole('heading', { name: 'Staff profile' })).toBeInTheDocument()
-    expect(screen.getByText('You are editing Admin A’s profile. This change is recorded with your name.')).toBeInTheDocument()
+    // The record's heading is the person; the masthead's tabs say it is a staff profile.
+    expect(await screen.findByRole('heading', { level: 1, name: /^Admin A/ })).toBeInTheDocument()
+    expect(screen.getByRole('tablist', { name: 'Staff profile' })).toBeInTheDocument()
+    expect(screen.getByText('Changes to Admin A’s profile are recorded with your name.')).toBeInTheDocument()
     expect(screen.queryByLabelText('Choose a photo')).not.toBeInTheDocument()
+    // The photo and the reporting line live in the file's menu: with neither offered, there is no menu.
+    expect(screen.queryByRole('button', { name: /More actions/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Change reporting manager' })).not.toBeInTheDocument()
+    // The audit records are on the Activity tab.
+    await openTab('Activity')
     expect(await screen.findByText('annual review')).toBeInTheDocument()
     expect(screen.queryByText('admin_a@example.test')).not.toBeInTheDocument()
 
+    await openTab('Overview')
     await userEvent.click(screen.getByRole('button', { name: 'Assign responsibility' }))
     const dialog = screen.getByRole('dialog', { name: 'Assign responsibility' })
     await chooseOption(userEvent, within(dialog).getByLabelText('Area'), 'customer_support')
@@ -408,6 +487,10 @@ describe('the super admin master profile', () => {
 
   it('shows the organization overview with unique totals kept apart from summed team figures', async () => {
     renderWithProviders(<AppRoutes />, { staff: sa, route: '/profile' })
+    // The organization overview is a tab of the super admin's own file, asked for when opened.
+    await screen.findByRole('heading', { level: 1, name: /^Owner S/ })
+    expect(calls('GET', /\/staff-profiles\/organization$/)).toHaveLength(0)
+    await openTab('Organization')
     const panel = await screen.findByRole('region', { name: 'Organization overview' })
     expect(await within(panel).findByText('Managers')).toBeInTheDocument()
     expect(within(panel).getByRole('link', { name: 'Manager C' })).toHaveAttribute('href', '/profile/manager_c')
@@ -420,6 +503,7 @@ describe('the super admin master profile', () => {
 
   it('navigates from a summary to the directory and to health, and quick actions link to real screens', async () => {
     renderWithProviders(<AppRoutes />, { staff: sa, route: '/profile' })
+    await openTab('Organization')
     const panel = await screen.findByRole('region', { name: 'Organization overview' })
     await userEvent.click(await within(panel).findByText('Admins & supervisors'))
     expect(within(panel).getByRole('tab', { name: 'Team directory' })).toHaveAttribute('aria-selected', 'true')
@@ -438,6 +522,7 @@ describe('the super admin master profile', () => {
 
   it('tabs are keyboard operable', async () => {
     renderWithProviders(<AppRoutes />, { staff: sa, route: '/profile' })
+    await openTab('Organization')
     const panel = await screen.findByRole('region', { name: 'Organization overview' })
     const first = within(panel).getByRole('tab', { name: 'Organization' })
     first.focus()
@@ -456,7 +541,10 @@ describe('Arabic', () => {
   it('renders the page right-to-left with Arabic labels', async () => {
     on('GET', /\/staff-profiles\/me$/, () => json(profile()))
     renderWithProviders(<AppRoutes />, { staff: adminSession, route: '/profile', locale: 'ar' })
-    expect(await screen.findByRole('heading', { name: 'ملفي الشخصي' })).toBeInTheDocument()
+    // The heading is the person; the masthead's tabs carry the page's Arabic name.
+    expect(await screen.findByRole('heading', { level: 1, name: /^Admin A/ })).toBeInTheDocument()
+    expect(screen.getByRole('tablist', { name: 'ملفي الشخصي' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'نظرة عامة' })).toHaveAttribute('aria-selected', 'true')
     expect(document.documentElement.dir).toBe('rtl')
     expect(screen.getByText('يشرف على 3 من الأسر المسندة')).toBeInTheDocument()
     expect(screen.getByText('غير متتبَّع في جوّد شات')).toBeInTheDocument()

@@ -10,6 +10,10 @@
  *     solid active, dashed trial, dotted paused).
  * A lesson is never identified by color alone: the supervisor's name is in the
  * legend and in the lesson's details, and the status is a line style.
+ *
+ * The twelve are quiet, slightly greyed tones chosen to sit on the paper beside
+ * the teal and the gold: same keys and names, measured again (and on the paper
+ * itself each border is above 4:1).
  */
 
 export const PALETTE_KEYS = [
@@ -26,18 +30,18 @@ export interface Swatch {
 }
 
 export const PALETTE: Record<PaletteKey, { light: Swatch; dark: Swatch; name: { en: string; ar: string } }> = {
-  sky: { light: { fill: '#dbeafe', border: '#2563eb', text: '#1e3a8a' }, dark: { fill: '#1b3354', border: '#60a5fa', text: '#dbeafe' }, name: { en: 'Light blue', ar: 'أزرق فاتح' } },
-  red: { light: { fill: '#fee2e2', border: '#dc2626', text: '#7f1d1d' }, dark: { fill: '#4a1d1d', border: '#f87171', text: '#fee2e2' }, name: { en: 'Red', ar: 'أحمر' } },
-  peach: { light: { fill: '#fde7d4', border: '#c2410c', text: '#7a3e0c' }, dark: { fill: '#4a2c16', border: '#fb923c', text: '#fde7d4' }, name: { en: 'Peach', ar: 'خوخي' } },
-  green: { light: { fill: '#dcfce7', border: '#15803d', text: '#14532d' }, dark: { fill: '#183d27', border: '#4ade80', text: '#dcfce7' }, name: { en: 'Green', ar: 'أخضر' } },
-  purple: { light: { fill: '#ede9fe', border: '#7c3aed', text: '#4c1d95' }, dark: { fill: '#33255a', border: '#a78bfa', text: '#ede9fe' }, name: { en: 'Purple', ar: 'بنفسجي' } },
-  teal: { light: { fill: '#ccfbf1', border: '#0f766e', text: '#134e4a' }, dark: { fill: '#123d3a', border: '#2dd4bf', text: '#ccfbf1' }, name: { en: 'Teal', ar: 'فيروزي' } },
-  amber: { light: { fill: '#fef3c7', border: '#b45309', text: '#78350f' }, dark: { fill: '#45330f', border: '#fbbf24', text: '#fef3c7' }, name: { en: 'Amber', ar: 'كهرماني' } },
-  pink: { light: { fill: '#fce7f3', border: '#be185d', text: '#831843' }, dark: { fill: '#4a1a33', border: '#f472b6', text: '#fce7f3' }, name: { en: 'Pink', ar: 'وردي' } },
-  indigo: { light: { fill: '#e0e7ff', border: '#4f46e5', text: '#312e81' }, dark: { fill: '#262a5c', border: '#818cf8', text: '#e0e7ff' }, name: { en: 'Indigo', ar: 'نيلي' } },
-  olive: { light: { fill: '#eef2d6', border: '#65731f', text: '#3f4716' }, dark: { fill: '#2e3414', border: '#b5c44f', text: '#eef2d6' }, name: { en: 'Olive', ar: 'زيتوني' } },
-  brown: { light: { fill: '#f0e4da', border: '#8b5e3c', text: '#4a2e1a' }, dark: { fill: '#3a2a1e', border: '#c79a73', text: '#f0e4da' }, name: { en: 'Brown', ar: 'بني' } },
-  slate: { light: { fill: '#e2e8f0', border: '#475569', text: '#1e293b' }, dark: { fill: '#273241', border: '#94a3b8', text: '#e2e8f0' }, name: { en: 'Slate', ar: 'رمادي' } },
+  sky: { light: { fill: '#dde9f1', border: '#3f7193', text: '#234a66' }, dark: { fill: '#1c3242', border: '#7fb0cf', text: '#dbe9f2' }, name: { en: 'Light blue', ar: 'أزرق فاتح' } },
+  red: { light: { fill: '#f3ddd6', border: '#a44a36', text: '#6c2a1d' }, dark: { fill: '#40221b', border: '#dc8f7b', text: '#f6e0d9' }, name: { en: 'Red', ar: 'أحمر' } },
+  peach: { light: { fill: '#f6e4d2', border: '#a9652f', text: '#6a3b15' }, dark: { fill: '#3f2a19', border: '#dba071', text: '#f7e6d6' }, name: { en: 'Peach', ar: 'خوخي' } },
+  green: { light: { fill: '#dfeadb', border: '#47774d', text: '#284a2d' }, dark: { fill: '#1d3523', border: '#86bb8c', text: '#e0ecdd' }, name: { en: 'Green', ar: 'أخضر' } },
+  purple: { light: { fill: '#e8e1ef', border: '#765a99', text: '#463367' }, dark: { fill: '#2f2542', border: '#b39ad3', text: '#ebe4f2' }, name: { en: 'Purple', ar: 'بنفسجي' } },
+  teal: { light: { fill: '#d9eae8', border: '#2a7371', text: '#164746' }, dark: { fill: '#163533', border: '#6fb9b5', text: '#dbecea' }, name: { en: 'Teal', ar: 'فيروزي' } },
+  amber: { light: { fill: '#f6eac4', border: '#8f6a18', text: '#59400d' }, dark: { fill: '#3b2f10', border: '#d4ae55', text: '#f7ecc9' }, name: { en: 'Amber', ar: 'كهرماني' } },
+  pink: { light: { fill: '#f2dfe5', border: '#a25273', text: '#682c46' }, dark: { fill: '#40212e', border: '#d993b0', text: '#f4e2e8' }, name: { en: 'Pink', ar: 'وردي' } },
+  indigo: { light: { fill: '#dfe2f0', border: '#505a98', text: '#2d3565' }, dark: { fill: '#232844', border: '#9aa3d8', text: '#e2e5f2' }, name: { en: 'Indigo', ar: 'نيلي' } },
+  olive: { light: { fill: '#e9ecd4', border: '#687330', text: '#3e4718' }, dark: { fill: '#2c3115', border: '#b1bb70', text: '#ebeed8' }, name: { en: 'Olive', ar: 'زيتوني' } },
+  brown: { light: { fill: '#ece1d4', border: '#845f42', text: '#4c3420' }, dark: { fill: '#35281d', border: '#c59d7d', text: '#eee4d8' }, name: { en: 'Brown', ar: 'بني' } },
+  slate: { light: { fill: '#e1e5e6', border: '#56656a', text: '#2c383d' }, dark: { fill: '#242d31', border: '#9eb0b6', text: '#e3e7e8' }, name: { en: 'Slate', ar: 'رمادي' } },
 }
 
 export function isPaletteKey(v: unknown): v is PaletteKey {

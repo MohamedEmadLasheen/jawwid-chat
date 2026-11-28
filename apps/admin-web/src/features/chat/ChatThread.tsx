@@ -27,10 +27,11 @@ import { ExportDialog } from './ExportDialog'
 import { ThemeDialog } from './ThemeDialog'
 import { ThreadSearch } from './ThreadSearch'
 import { Highlighted, searchable } from './search'
-import { ConversationAvatar, conversationName, isGroup, isMuted } from './chatView'
+import { ConversationAvatar, callWhen, cardFallbackText, conversationName, isGroup, isMuted, toneOfKind, westernDigits } from './chatView'
 import { useConversationPreferences } from './useChatActions'
 import { VoiceNotePlayer } from './VoiceRecorder'
-import { ConversationCallControls } from '@/features/calls/ConversationCallControls'
+import { CallButton, CallHistoryDialog } from './ThreadCalls'
+import { FamilyFact } from './FamilyContext'
 import { useCallCapability } from '@/features/calls/useCallCapability'
 import { ScheduleCallDialog } from '@/features/calls-page/ScheduleCallDialog'
 import { TrialCardDialog, TrialGroupBar } from '@/features/trials/TrialCardDialog'
@@ -51,6 +52,37 @@ import {
 } from '@/features/calls-page/ScheduledCallCard'
 import { TrialBadge, isTrialGroup } from '@/shared/components/TrialBadge'
 import { CaseEscalatedCard, readCaseEscalatedCard } from '@/features/cases/CaseEscalatedCard'
+
+export { callWhen } from './chatView'
+
+/** A booked trial's card, reduced to what is drawn; null when it does not carry its instant (then its words are shown). */
+export function readTrialBookedCard(
+  payload: Record<string, unknown> | null | undefined,
+): { startsAt: string; who: string | null; students: string[]; minutes: number | null; level: string | null } | null {
+  const p = payload ?? {}
+  if (typeof p.startsAt !== 'string' || Number.isNaN(new Date(p.startsAt).getTime())) return null
+  const students = Array.isArray(p.students) ? p.students.filter((x): x is string => typeof x === 'string' && x !== '') : []
+  return {
+    startsAt: p.startsAt,
+    // The server's own name for them where it gave one; else the students, joined when drawn.
+    who: typeof p.prospectName === 'string' && p.prospectName !== '' ? p.prospectName : null,
+    students,
+    minutes: typeof p.durationMinutes === 'number' ? p.durationMinutes : null,
+    level: typeof p.level === 'string' && p.level !== '' ? p.level : null,
+  }
+}
+
+/**
+ * A reference card's start edge: teal for what is simply so, gold for what
+ * asks someone to act (join a call, answer a request), terracotta for what
+ * reports a problem (an escalated case, an absence, paused lessons).
+ */
+export function cardEdge(kind: string | null | undefined): 'info' | 'act' | 'problem' {
+  if (!kind) return 'info'
+  if (kind === 'case_escalated' || /absent|absence|no_show|paused|locked|refus|failed/.test(kind)) return 'problem'
+  if (kind === 'call_scheduled' || kind === 'call_link' || /request|apology|excuse|owed|pending/.test(kind)) return 'act'
+  return 'info'
+}
 
 /** The quick reactions, the same six as the mobile app. */
 export const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏'] as const
@@ -78,10 +110,10 @@ type Side = 'in' | 'out' | 'internal' | 'system'
  */
 function sideOf(m: ChatMessage, selfId: string | undefined): Side {
   if (m.visibility === 'internal') return 'internal'
-  // A lesson card Jawwid posted itself (a teacher's absence, an accepted late
-  // apology, a card recorded by staff outside the group) is still a card to
-  // draw -- the reason, the make-up's time -- not a one-line system note.
-  if (m.authorKind === 'system' && m.type === 'card' && m.card && readLessonExcuseCard(m.card.kind, m.card.payload)) return 'in'
+  // A card Jawwid posted itself (a teacher's absence, an accepted late apology,
+  // a case escalated to a department's room, a booked trial, "lessons are
+  // paused") is still a card to draw, not a one-line system note.
+  if (m.authorKind === 'system' && m.type === 'card') return 'in'
   if (m.authorKind === 'system' || m.type === 'system') return 'system'
   return m.authorId === selfId ? 'out' : 'in'
 }
@@ -94,13 +126,6 @@ function sideOf(m: ChatMessage, selfId: string | undefined): Side {
  * other person is the header.
  */
 type Identity = 'lead' | 'follow' | 'none'
-
-/** One of eight name colours, stable per sender (as WhatsApp colours names in a group). */
-function nameTone(seed: string): number {
-  let h = 0
-  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) | 0
-  return (Math.abs(h) % 8) + 1
-}
 
 const SIDE_CLASS: Record<Side, string> = {
   in: 'bubble-row--contact',
@@ -201,6 +226,7 @@ export function ChatThread({
   // A trial group's "+ -> Trial" card (trial journey).
   const [trialCard, setTrialCard] = useState(false)
   const [theming, setTheming] = useState(false)
+  const [callHistory, setCallHistory] = useState(false)
   // PD-15: the supervisor's lesson cards under "+", and a lesson card's record.
   const lessonGroup = details.data?.type === 'student_group' || details.data?.type === 'family_group'
   const lessonCards = useLessonCards(conversationId, lessonGroup)
@@ -218,6 +244,17 @@ export function ChatThread({
     setSelecting(false)
     setSelected([])
   }
+  // Escape leaves select mode first; only then does it go back to the list (useWorkspaceKeys).
+  useEffect(() => {
+    if (!selecting) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || document.querySelector('[role="dialog"], [role="alertdialog"], [role="menu"]')) return
+      setSelecting(false)
+      setSelected([])
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [selecting])
   const flash = (text: string) => {
     setNotice(text)
     setTimeout(() => setNotice(null), 2500)
@@ -256,6 +293,18 @@ export function ChatThread({
       socket.off('message.updated', onUpdated)
     }
   }, [socket, conversationId])
+
+  // Where the viewer had read up to when the chat was opened: a "New" rule sits
+  // above the first message after it, for this visit. Fixed once, from the
+  // unread count the server gave with the conversation; never moved by reading.
+  const [firstNewId, setFirstNewId] = useState<string | null | undefined>(undefined)
+  const unreadAtOpen = details.data?.unreadCount
+  useEffect(() => {
+    if (firstNewId !== undefined || !details.data || !latest.data) return
+    const n = unreadAtOpen ?? 0
+    const first = n > 0 ? messages[messages.length - n] : undefined
+    setFirstNewId(first && first.authorId !== staff?.id ? first.id : null)
+  }, [firstNewId, details.data, latest.data, messages, unreadAtOpen, staff?.id])
 
   // A pending send disappears once the server's copy (same clientMessageId) is
   // in the thread: one message, never an echo plus a copy.
@@ -374,6 +423,21 @@ export function ChatThread({
     }
     lastCount.current = count
   }, [messages.length, shownPending.length])
+  // What renders late (a font, a photo, a card's live note) grows the thread
+  // after it opened: a reader still at the bottom stays there.
+  const hasThread = latest.data !== undefined
+  useEffect(() => {
+    const el = scroller.current
+    const content = el?.firstElementChild
+    if (!el || !content || typeof ResizeObserver === 'undefined') return
+    const keep = new ResizeObserver(() => {
+      if (atBottom.current) el.scrollTop = el.scrollHeight
+    })
+    // The thread itself shrinks when the composer grows (a second line, a reply, a file).
+    keep.observe(el)
+    for (const child of Array.from(el.children)) keep.observe(child)
+    return () => keep.disconnect()
+  }, [hasThread, messages.length === 0])
 
   const send = useMutation({
     mutationFn: async (p: PendingSend) => {
@@ -493,6 +557,7 @@ export function ChatThread({
 
   return (
     <>
+      {/* One bar: who this is; the family's one urgent fact; ONE primary control (Call); the rest behind "more". */}
       <header className="thread-head">
         <Link to={backTo} className="btn btn--ghost btn--icon thread-head__back" aria-label={copy.back}>
           <Icon name="arrowBack" size={20} />
@@ -509,12 +574,25 @@ export function ChatThread({
                   {typingNow}
                 </span>
               ) : (
-                <span className="thread-head__sub">
+                <span className={peerState?.online ? 'thread-head__sub thread-head__sub--online' : 'thread-head__sub'}>
                   {peerPresence ?? (
                     <>
-                      {copy.kind[conv.type] ?? conv.type}
-                      {memberCount > 0 && ` · ${copy.membersCount(memberCount)}`}
+                      <span className="thread-head__kind">
+                        {copy.kind[conv.type] ?? conv.type}
+                        {memberCount > 0 && copy.listSeparator.trimEnd()}
+                      </span>
+                      {memberCount > 0 && copy.membersCount(memberCount)}
                     </>
+                  )}
+                  {favorite && (
+                    <span className="cw-row__mark cw-row__mark--favorite" title={copy.favoriteMark} aria-label={copy.favoriteMark}>
+                      <Icon name="heart" size={14} />
+                    </span>
+                  )}
+                  {muted && (
+                    <span className="cw-row__mark" title={copy.mutedMark} aria-label={copy.mutedMark}>
+                      <Icon name="bellOff" size={14} />
+                    </span>
                   )}
                 </span>
               )}
@@ -533,45 +611,30 @@ export function ChatThread({
             </span>
           </button>
         )}
+        {conv?.familyId && <FamilyFact familyId={conv.familyId} onOpen={infoShown ? undefined : onToggleInfo} />}
         <div className="cw-head__actions">
-          {conv && <ConversationCallControls conversationId={conversationId} peerLabel={name} isGroup={group} />}
-          {favorite && (
-            <span className="cw-row__mark cw-row__mark--favorite" title={copy.favoriteMark} aria-label={copy.favoriteMark}>
-              <Icon name="heart" size={16} />
-            </span>
+          {conv && <CallButton conversationId={conversationId} peerLabel={name} isGroup={group} />}
+          {/* The context panel (the family's money, the conversation's details), shown or hidden: visible at every width. */}
+          {conv && (
+            <button
+              type="button"
+              className="btn btn--ghost btn--icon cw-head__panel"
+              onClick={onToggleInfo}
+              aria-pressed={infoShown}
+              aria-label={copy.panelTabs}
+              title={copy.panelTabs}
+            >
+              <Icon name="panel" size={20} />
+            </button>
           )}
-          {muted && (
-            <span className="cw-row__mark" title={copy.mutedMark} aria-label={copy.mutedMark}>
-              <Icon name="bellOff" size={16} />
-            </span>
-          )}
-          <button
-            type="button"
-            className="btn btn--ghost btn--icon"
-            onClick={() => setSearching((on) => !on)}
-            aria-pressed={searching}
-            aria-label={copy.searchChat}
-            title={copy.searchChat}
-          >
-            <Icon name="search" />
-          </button>
-          <button
-            type="button"
-            className="btn btn--ghost btn--icon"
-            onClick={onToggleInfo}
-            aria-pressed={infoShown}
-            aria-label={copy.info}
-            title={copy.info}
-          >
-            <Icon name="panel" />
-          </button>
           {conv && (
             <Menu
               label={copy.chatActions}
               items={[
-                { key: 'info', label: group ? copy.groupInfo : copy.contactInfo, icon: 'info', onSelect: onToggleInfo },
-                { key: 'select', label: copy.select, icon: 'checkSquare', onSelect: () => setSelecting(true) },
+                { key: 'info', label: group ? copy.groupInfo : copy.contactInfo, icon: 'panel', onSelect: onToggleInfo },
                 { key: 'search', label: copy.searchChat, icon: 'search', onSelect: () => setSearching(true) },
+                { key: 'calls', label: copy.callHistory, icon: 'history', onSelect: () => setCallHistory(true) },
+                { key: 'select', label: copy.select, icon: 'checkSquare', onSelect: () => setSelecting(true) },
                 ...(canSchedule
                   ? [{ key: 'schedule', label: copy.scheduleCall, icon: 'calendar' as const, onSelect: () => setScheduling(true) }]
                   : []),
@@ -634,13 +697,21 @@ export function ChatThread({
               const side = sideOf(m, staff?.id)
               const runStart =
                 newDay || !prev || prev.authorId !== m.authorId || sideOf(prev, staff?.id) !== side
+              // A card Jawwid posted itself has no sender to picture or name.
+              // The viewer's own internal note sits on their side, unnamed, like their messages.
+              const ownNote = side === 'internal' && m.authorId === staff?.id
               const identity: Identity =
-                side === 'out' || side === 'system' || !showsSenders ? 'none' : runStart ? 'lead' : 'follow'
+                side === 'out' || ownNote || side === 'system' || !showsSenders || m.authorKind === 'system' ? 'none' : runStart ? 'lead' : 'follow'
               return (
                 <Fragment key={m.id}>
                   {newDay && (
                     <li className="athread__day">
                       <span>{dayLabel(m.createdAt, locale)}</span>
+                    </li>
+                  )}
+                  {m.id === firstNewId && (
+                    <li className="athread__new" role="separator" aria-label={copy.newDivider}>
+                      <span>{copy.newDivider}</span>
                     </li>
                   )}
                   <MessageItem
@@ -829,6 +900,7 @@ export function ChatThread({
       {trialCard && <TrialCardDialog conversationId={conversationId} onRecorded={refreshThread} onClose={() => setTrialCard(false)} />}
 
       {theming && conv && <ThemeDialog conversation={conv} onClose={() => setTheming(false)} />}
+      {callHistory && <CallHistoryDialog conversationId={conversationId} onClose={() => setCallHistory(false)} />}
 
       {scheduling && conv && (
         <ScheduleCallDialog
@@ -968,10 +1040,18 @@ function MessageItem({
   const live = !m.deletedForAll
   // PD-13: a scheduled-call card is drawn with its Join button; any other card
   // (or one this client cannot read) keeps showing its plain-text body.
-  const callCard =
+  const readCall =
     live && m.type === 'card' && m.card && SCHEDULED_CALL_CARD_KINDS.has(m.card.kind)
       ? readScheduledCallCard(m.card.payload)
       : null
+  // The card's `when` is a sentence the server wrote once, in one language and
+  // with its own digits. The instant itself is in the payload: it is set here,
+  // on the academy's clock, in the UI language. Without the instant the
+  // server's sentence stays, with its digits folded to Western ones (DD-09).
+  const callCard = readCall && {
+    ...readCall,
+    when: readCall.startsAt ? callWhen(readCall.startsAt, locale) : readCall.when ? westernDigits(readCall.when) : null,
+  }
   // PD-31: a moved lesson's card draws "previous → new" on the academy's clock.
   const movedCard = live && m.type === 'card' && m.card?.kind === 'lesson_moved' ? readLessonMovedCard(m.card.payload) : null
   // An excused lesson's reason and its make-up's time; a make-up's day, date and time.
@@ -982,7 +1062,18 @@ function MessageItem({
     : null
   // PD-35 B6: a case escalated to this department, linked to Escalations.
   const caseCard = live && m.type === 'card' && m.card?.kind === 'case_escalated' ? readCaseEscalatedCard(m.card.payload) : null
+  // A booked trial carries its instant: it is set here in the UI language, like a scheduled call.
+  const trialCard = live && m.type === 'card' && m.card?.kind === 'trial_booked' ? readTrialBookedCard(m.card.payload) : null
   const reactions = summarize(m.reactions ?? [], selfId)
+  // A card is a reference, not something somebody typed: it is drawn as a ruled card, not a bubble.
+  const isCard = live && m.type === 'card'
+  const edge = isCard ? cardEdge(m.card?.kind) : null
+  const tone = toneOfKind(m.authorKind)
+  // What used to be a one-line system note is drawn as a card now, and stays
+  // what it was: a notice. It offers no message actions and is not selectable.
+  // (A lesson's excuse card always was a message, and keeps its menu.)
+  const notice = m.authorKind === 'system' && m.type === 'card' && !excuseCard
+  const selectable = selectMode && !notice
   // A lesson report's card is changed only from its lesson record (PD-15).
   const reportCard = m.type === 'card' && m.card?.kind === 'lesson_report'
   const items: MenuItem[] = live
@@ -1019,13 +1110,13 @@ function MessageItem({
 
   return (
     <li
-      className={`bubble-row ${SIDE_CLASS[side]} cw-msg${runStart ? ' cw-msg--run-start' : ''}${identity !== 'none' ? ' cw-msg--with-sender' : ''}${selectMode ? ' cw-msg--selectable' : ''}${isSelected ? ' cw-msg--selected' : ''}${m.mentionsViewer && !m.deletedForAll ? ' cw-msg--mentions-me' : ''}`}
+      className={`bubble-row ${SIDE_CLASS[side]} cw-msg${mine ? ' cw-msg--mine' : ''}${runStart ? ' cw-msg--run-start' : ''}${identity !== 'none' ? ' cw-msg--with-sender' : ''}${selectable ? ' cw-msg--selectable' : ''}${isSelected ? ' cw-msg--selected' : ''}${m.mentionsViewer && !m.deletedForAll ? ' cw-msg--mentions-me' : ''}${isCard ? ` cw-msg--card cw-msg--card-${edge}` : ''}${notice ? ' cw-msg--notice' : ''}`}
       data-seq={m.seq ?? undefined}
       data-msg-id={m.id}
-      onClick={selectMode ? onToggleSelect : undefined}
+      onClick={selectable ? onToggleSelect : undefined}
     >
       <div className="cw-msg__line">
-        {selectMode && (
+        {selectable && (
           <input
             type="checkbox"
             className="cw-msg__check"
@@ -1036,7 +1127,7 @@ function MessageItem({
           />
         )}
         {identity === 'lead' && (
-          <span className={`cw-msg__avatar cw-tone--${nameTone(m.authorId ?? m.authorKind)}`} title={authorName(m, copy)}>
+          <span className={`cw-msg__avatar cw-who cw-who--${tone}`} title={authorName(m, copy)}>
             <Avatar name={authorName(m, copy)} seed={m.authorId ?? m.authorKind} src={m.authorAvatarUrl} />
           </span>
         )}
@@ -1044,7 +1135,7 @@ function MessageItem({
         <div className="bubble">
           {identity === 'lead' && (
             <span className="cw-sender">
-              <span className={`cw-sender__name cw-sender__name--${nameTone(m.authorId ?? m.authorKind)}`} dir="auto">
+              <span className={`cw-sender__name cw-sender__name--${tone}`} dir="auto">
                 {authorName(m, copy)}
               </span>
               <span className={`kind-chip kind-chip--${m.authorKind}`}>{copy.role[m.authorKind] ?? m.authorKind}</span>
@@ -1064,9 +1155,9 @@ function MessageItem({
             </span>
           )}
           {side === 'internal' && (
-            <span className="bubble__flag">
-              <Icon name="lock" size={12} />
-              {copy.internal}
+            <span className="bubble__flag" title={copy.internal}>
+              <Icon name="lock" size={14} />
+              {copy.staffOnlyShort}
             </span>
           )}
           {quoted !== undefined && live && (
@@ -1087,16 +1178,36 @@ function MessageItem({
             <LessonExcuseCard card={excuseCard} />
           ) : caseCard ? (
             <CaseEscalatedCard payload={caseCard} />
+          ) : trialCard ? (
+            <PlainCard
+              title={[copy.cardTrial, trialCard.who ?? trialCard.students.join(copy.listSeparator)].filter(Boolean).join(': ')}
+              lines={[
+                copy.cardWhen(callWhen(trialCard.startsAt, locale)),
+                ...(trialCard.minutes !== null ? [copy.cardLength(trialCard.minutes)] : []),
+                ...(trialCard.level ? [copy.cardLevel(trialCard.level)] : []),
+              ]}
+              highlight={highlight}
+              tone="act"
+            />
           ) : (
             <>
               {m.attachments.map((a) => (
                 <AttachmentView key={a.id} a={a} copy={copy} />
               ))}
-              {m.body && (
-                <span dir="auto">
-                  {highlight ? <Highlighted text={m.body} query={highlight} /> : <MentionText body={m.body} mentions={m.mentions} selfId={selfId} />}
-                </span>
-              )}
+              {m.body &&
+                (isCard ? (
+                  // A card this client cannot draw: the server's own words for it, its first line as the card's title.
+                  // What Jawwid wrote itself takes Western digits; a person's own words in a card are left as typed.
+                  <FallbackCard
+                    text={m.authorKind === 'system' ? westernDigits(cardFallbackText(m.body)) : cardFallbackText(m.body)}
+                    highlight={highlight}
+                    tone={edge ?? 'info'}
+                  />
+                ) : (
+                  <span dir="auto">
+                    {highlight ? <Highlighted text={m.body} query={highlight} /> : <MentionText body={m.body} mentions={m.mentions} selfId={selfId} />}
+                  </span>
+                ))}
             </>
           )}
           {nowCard && m.conversationId && (
@@ -1121,10 +1232,11 @@ function MessageItem({
               </span>
             )}
             <time dateTime={m.createdAt}>{time(m.createdAt)}</time>
-            {mine && <Ticks status={m.status} />}
+            {/* Delivery ticks tell the family's side; a note or a card has none to tell. */}
+            {mine && side !== 'internal' && !isCard && <Ticks status={m.status} />}
           </span>
         </div>
-        {!selectMode && <Menu
+        {!selectMode && !notice && <Menu
           label={copy.messageActions}
           className="cw-msg__menu"
           align={side === 'out' ? 'end' : 'start'}
@@ -1171,6 +1283,38 @@ function MessageItem({
         </div>
       )}
     </li>
+  )
+}
+
+/** A card drawn from its plain words: the first line is its title, the rest its facts. */
+function FallbackCard({ text, highlight, tone }: { text: string; highlight?: string; tone: CardTone }) {
+  const [title = '', ...lines] = text.split('\n').filter((line) => line.trim() !== '')
+  return <PlainCard title={title} lines={lines} highlight={highlight} tone={tone} />
+}
+
+type CardTone = ReturnType<typeof cardEdge>
+/** What a card is, said by its glyph's colour, never by a stripe: teal information, amber "asks someone to act", red a problem. */
+const CARD_GLYPH: Record<CardTone, 'info' | 'clock' | 'alert'> = { info: 'info', act: 'clock', problem: 'alert' }
+
+/** A reference card in words: its glyph, a title, then its facts line by line. */
+function PlainCard({ title, lines, highlight, tone }: { title: string; lines: string[]; highlight?: string; tone: CardTone }) {
+  const show = (line: string) => (highlight ? <Highlighted text={line} query={highlight} /> : line)
+  return (
+    <span className={`cw-card cw-card--${tone}`}>
+      <span className="cw-card__glyph" aria-hidden="true">
+        <Icon name={CARD_GLYPH[tone]} size={18} />
+      </span>
+      <span className="cw-card__text">
+        <strong className="cw-card__title" dir="auto">
+          {show(title)}
+        </strong>
+        {lines.map((line, i) => (
+          <span key={i} className="cw-card__line" dir="auto">
+            {show(line)}
+          </span>
+        ))}
+      </span>
+    </span>
   )
 }
 

@@ -56,6 +56,7 @@ export const TEXT = {
   yesterday: { en: 'Yesterday', ar: 'أمس' },
 
   // placeholder
+  openSection: { en: 'Open {name}', ar: 'افتح {name}' },
   placeholderTitle: { en: 'This section is in development.', ar: 'هذا القسم قيد التطوير.' },
   availableNow: { en: 'Available now in this group', ar: 'متاح الآن في هذه المجموعة' },
   forbiddenHint: {
@@ -74,7 +75,10 @@ export const TEXT = {
   conversations: { en: 'Conversations', ar: 'المحادثات' },
   messages: { en: 'Messages', ar: 'الرسائل' },
   people: { en: 'People', ar: 'الأشخاص' },
-  needsAttention: { en: 'Needs attention', ar: 'يحتاج إلى متابعة' },
+  // Named for what it holds: the manager sections above already own "Needs you now".
+  needsAttention: { en: 'Conversations and stories', ar: 'المحادثات والحالات' },
+  totals: { en: 'In the academy', ar: 'في الأكاديمية' },
+  willHold: { en: 'What this section will hold', ar: 'ما سيضمه هذا القسم' },
   nothingNeedsAttention: { en: 'Nothing needs attention right now.', ar: 'لا شيء يحتاج إلى متابعة الآن.' },
   waitingOnUsItem: { en: 'Conversations waiting on a reply from us', ar: 'محادثات بانتظار ردّنا' },
   draftStoriesItem: { en: 'Stories still in draft', ar: 'حالات ما زالت مسودة' },
@@ -220,7 +224,7 @@ export const TEXT = {
 
 /**
  * A count with its noun, by the locale's plural rules. Arabic has six forms
- * (zero, one, two, few, many, other); "1 members" and "٣ عضو" are both wrong.
+ * (zero, one, two, few, many, other); "1 members" and "3 عضو" are both wrong.
  */
 export type Plural = {
   en: { one: string; other: string }
@@ -284,6 +288,10 @@ export const CONVERSATION_TYPE: Record<string, Bilingual> = {
   class_group: { en: 'Class group', ar: 'مجموعة صف' },
   family_group: { en: 'Family group', ar: 'مجموعة عائلة' },
   official: { en: 'Official', ar: 'رسمية' },
+  // The chat's own names for these kinds, so no raw key reaches the page.
+  teacher_supervision: { en: 'Supervision chat', ar: 'محادثة الإشراف' },
+  trial_group: { en: 'Trial group', ar: 'مجموعة تجريبية' },
+  department_room: { en: 'Department room', ar: 'غرفة القسم' },
 }
 
 export const CONVERSATION_STATE: Record<string, Bilingual> = {

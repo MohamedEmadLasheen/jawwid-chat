@@ -1,0 +1,34 @@
+/* What Instalments and Payments share: an amount set as the heaviest thing on
+   its row (Readex, tabular) with its currency labelled after it, always on the
+   same side; the "failed" state; the touch sizes of both pages on a phone. */
+
+.money { display: inline-flex; align-items: baseline; gap: 5px; white-space: nowrap; }
+.money__n { font-family: var(--font-head); font-size: 17px; font-weight: 600; line-height: 1.2; font-variant-numeric: tabular-nums lining-nums; color: var(--ink); }
+/* The currency has a slot of its own, so amounts in a column line up on their digits. */
+.money__c { font-size: var(--fs-xs); font-weight: 500; color: var(--ink-muted); }
+.money--sm .money__n { font-size: 15px; font-weight: 600; }
+/* Digits line up on the decimal point in both languages. Numbers run left to right in Arabic too,
+   so an amount column is set to its physical right edge: in English the currency follows on the
+   right (a slot of its own, so the codes keep the digits in line); in Arabic the digits' end is the
+   column's edge and the currency follows on the left, beside its digits.
+   (Physical alignment on purpose: it is the numerals' own direction, not the page's.)
+   Each money column applies this in its own sheet (tx-end, rv-row__end, in-row__amount). */
+.money--lg { gap: 8px; }
+.money--lg .money__n { font-size: var(--fs-kpi); font-weight: 700; line-height: 1.15; }
+.money--lg .money__c { font-size: var(--fs-sm); }
+
+/* Failed: negative, nothing to do. A red dot and the word, never the solid urgent tag. */
+.badge.badge--failed { --dot: var(--urgent); color: var(--ink-2); }
+
+@media (max-width: 767px) {
+  /* The masthead's figures are a strip, not a screen: the lists start above the fold. */
+  :is(.pay-page, .in-page) .figures { margin-block-start: var(--space-3); }
+  :is(.pay-page, .in-page) .figure { padding: 8px 12px; }
+  :is(.pay-page, .in-page) .figure__n { font-size: 22px; }
+  :is(.pay-page, .in-page) .figure__note { display: none; }
+  /* Everything a thumb presses on these two pages is at least 44px tall. */
+  :is(.pay-page, .in-page) :is(.chip, .btn, .btn--sm, .seg__item) { min-block-size: 44px; }
+  :is(.pay-page, .in-page) .btn--icon, :is(.pay-page, .in-page) .btn--icon.btn--sm { min-inline-size: 44px; }
+  /* The last row's actions end clear of the bar along the bottom. */
+  .page.pay-page, .page.in-page { padding-block-end: var(--space-7); }
+}

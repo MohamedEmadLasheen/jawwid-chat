@@ -78,7 +78,7 @@ describe('the cases queue', () => {
     expect(await screen.findByText('Late reports again')).toBeInTheDocument()
     expect(screen.getByText('Teacher T')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('tab', { name: 'Opened by me' }))
-    expect(await screen.findByText('No cases here.')).toBeInTheDocument()
+    expect(await screen.findByText('No open escalations in this list')).toBeInTheDocument()
     expect(sent('GET', /\/cases\?tab=opened/).length).toBeGreaterThan(0)
   })
 

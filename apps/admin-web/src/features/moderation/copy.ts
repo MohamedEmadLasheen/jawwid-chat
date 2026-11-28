@@ -63,7 +63,7 @@ export const MOD = {
   navLabel: { ar: 'البلاغات', en: 'Reports' },
   title: { ar: 'قائمة البلاغات', en: 'Moderation queue' },
   subtitle: {
-    ar: 'الحالات العاجلة أولًا، ثم الأقرب موعدًا. الرد على المُبلِّغ خلال ٢٤ ساعة.',
+    ar: 'الحالات العاجلة أولًا، ثم الأقرب موعدًا. الرد على المُبلِّغ خلال 24 ساعة.',
     en: 'Urgent first, then by time left. The reporter is answered within 24 hours.',
   },
   draftNote: { ar: 'تسميات الأسباب مسودّة بانتظار اعتماد المالك.', en: 'Reason labels are drafts pending owner approval.' },
@@ -83,7 +83,10 @@ export const MOD = {
   targetMessage: { ar: 'رسالة', en: 'Message' },
   targetPerson: { ar: 'شخص', en: 'Person' },
   childSafetyBadge: { ar: 'سلامة طفل: عاجل', en: 'Child safety: urgent' },
+  /** Beside a report whose reason already says "a child's safety": the tag adds only the urgency. */
+  urgentTag: { ar: 'عاجل', en: 'Urgent' },
   overdueBadge: { ar: 'متأخر', en: 'Overdue' },
+  // Shorthand units on purpose: "{h} ساعة و{m} دقيقة" would need Arabic number agreement (4 دقائق, 11 دقيقة).
   left: { ar: 'متبقّي {h} س {m} د', en: '{h} h {m} min left' },
   past: { ar: 'متأخر {h} س {m} د', en: '{h} h {m} min overdue' },
   closed: { ar: 'مغلق', en: 'Closed' },
@@ -121,7 +124,7 @@ export const MOD = {
   childSafetyContinue: { ar: 'متابعة وفتح المرفق', en: 'Continue and open' },
   answerLabel: { ar: 'الرد على المُبلِّغ', en: 'Answer to the reporter' },
   answerHint: {
-    ar: 'مطلوب. سيراه المُبلِّغ وحده، ولن يعرف الشخص المُبلَّغ عنه بوجود بلاغ. حتى ١٠٠٠ حرف.',
+    ar: 'مطلوب. سيراه المُبلِّغ وحده، ولن يعرف الشخص المُبلَّغ عنه بوجود بلاغ. حتى 1000 حرف.',
     en: 'Required. Only the reporter sees it; the reported person is never told. Up to 1000 characters.',
   },
   answerRequired: { ar: 'الرد على المُبلِّغ مطلوب لإغلاق البلاغ.', en: 'An answer to the reporter is required to close the report.' },

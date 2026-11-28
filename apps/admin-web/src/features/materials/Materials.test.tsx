@@ -100,6 +100,24 @@ afterEach(() => {
   tokenStore.clear()
 })
 
+/**
+ * An item's row states one action (what moves it on, else Preview) and keeps
+ * the rest behind its menu. `offered` opens the menu and names everything the
+ * row offers; `act` presses one of them wherever it is.
+ */
+async function offered(row: HTMLElement): Promise<string[]> {
+  const menu = within(row).queryByRole('button', { name: /^More actions/ })
+  if (menu && menu.getAttribute('aria-expanded') !== 'true') await userEvent.click(menu)
+  return [...within(row).queryAllByRole('button'), ...within(row).queryAllByRole('menuitem')].map((b) => (b.textContent ?? '').trim())
+}
+async function act(row: HTMLElement, name: string) {
+  const stated = within(row).queryByRole('button', { name })
+  if (stated) return userEvent.click(stated)
+  const menu = within(row).getByRole('button', { name: /^More actions/ })
+  if (menu.getAttribute('aria-expanded') !== 'true') await userEvent.click(menu)
+  await userEvent.click(await within(row).findByRole('menuitem', { name }))
+}
+
 describe('Materials > Library', () => {
   it('is offered to the Teachers manager on the server\'s word, and lists items with status, subject, type and ages', async () => {
     renderWithProviders(<AppRoutes />, { staff: teachersManager, route: '/materials' })
@@ -156,7 +174,7 @@ describe('Materials > Library', () => {
     on('POST', /\/materials\/items\/m-1\/open$/, () => json({ itemId: 'm-1', kind: 'activity_package', mode: 'package', presentation: 'frame-isolated', url: playUrl }, 201))
     renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/materials' })
     const list = await screen.findByRole('list', { name: 'Library' })
-    await userEvent.click(within(within(list).getAllByRole('listitem')[0]!).getByRole('button', { name: 'Preview' }))
+    await act(within(list).getAllByRole('listitem')[0]!, 'Preview')
     const dialog = await screen.findByRole('dialog', { name: 'An-Naba game' })
     const frame = await waitFor(() => {
       const f = dialog.querySelector('iframe')
@@ -203,7 +221,7 @@ describe('Materials > Library', () => {
     renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/materials' })
     await showArabic()
     const list = await screen.findByRole('list', { name: 'Library' })
-    await userEvent.click(within(within(list).getAllByRole('listitem')[0]!).getByRole('button', { name: 'Preview' }))
+    await act(within(list).getAllByRole('listitem')[0]!, 'Preview')
     return screen.findByRole('dialog', { name: 'Letters song' })
   }
 
@@ -373,7 +391,7 @@ describe('Materials > Library', () => {
     on('POST', /\/materials\/admin\/items\/m-1$/, (_u, init) => json({ ...item(), ...JSON.parse(String(init.body)) }))
     renderWithProviders(<AppRoutes />, { staff: teachersManager, route: '/materials' })
     const list = await screen.findByRole('list', { name: 'Library' })
-    await userEvent.click(within(within(list).getAllByRole('listitem')[0]!).getByRole('button', { name: 'Edit' }))
+    await act(within(list).getAllByRole('listitem')[0]!, 'Edit')
     const dialog = await screen.findByRole('dialog', { name: 'Edit item' })
     const order = within(dialog).getByLabelText('Order')
     expect(order).toHaveValue(1)
@@ -496,9 +514,9 @@ describe('Materials > the library\'s three jobs (owner decision, 2026-11-22)', (
     renderWithProviders(<AppRoutes />, { staff: author, route: '/materials' })
     const row = await screen.findByRole('listitem', { name: 'My draft' })
     expect(screen.getByRole('button', { name: 'Add item' })).toBeInTheDocument()
-    expect(within(row).getByRole('button', { name: 'Edit' })).toBeInTheDocument()
-    expect(within(row).queryByRole('button', { name: 'Publish' })).not.toBeInTheDocument()
-    expect(within(row).queryByRole('button', { name: 'Retire' })).not.toBeInTheDocument()
+    expect(await offered(row)).toContain('Edit')
+    expect(await offered(row)).not.toContain('Publish')
+    expect(await offered(row)).not.toContain('Retire')
     // Import and recitations are the library managers': the author is not even shown the tabs.
     expect(screen.queryByRole('button', { name: 'Import' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Recitations/ })).not.toBeInTheDocument()
@@ -515,8 +533,8 @@ describe('Materials > the library\'s three jobs (owner decision, 2026-11-22)', (
     expect(within(row).getByText('In review')).toBeInTheDocument()
     expect(String(calls('GET', /\/materials\/admin\/items/)[0]?.[0])).toContain('status=in_review')
     expect(screen.queryByRole('button', { name: 'Add item' })).not.toBeInTheDocument()
-    expect(within(row).queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument()
-    expect(within(row).getByRole('button', { name: 'Return to author' })).toBeInTheDocument()
+    expect(await offered(row)).not.toContain('Edit')
+    expect(await offered(row)).toContain('Return to author')
     on('POST', /\/materials\/admin\/items\/r-1$/, () => json(item({ id: 'r-1', status: 'published', can: reviewerCan('published') })))
     await userEvent.click(within(row).getByRole('button', { name: 'Approve' }))
     await waitFor(() => expect(bodyOf(calls('POST', /\/items\/r-1$/)[0])).toEqual({ status: 'published' }))
@@ -526,8 +544,8 @@ describe('Materials > the library\'s three jobs (owner decision, 2026-11-22)', (
     renderWithProviders(<AppRoutes />, { staff: teachersManager, route: '/materials' })
     const list = await screen.findByRole('list', { name: 'Library' })
     const [row] = within(list).getAllByRole('listitem')
-    expect(within(row!).getByRole('button', { name: 'Edit' })).toBeInTheDocument()
-    expect(within(row!).getByRole('button', { name: 'Retire' })).toBeInTheDocument()
+    expect(await offered(row!)).toContain('Edit')
+    expect(await offered(row!)).toContain('Retire')
     expect(screen.getByRole('button', { name: 'Import' })).toBeInTheDocument()
   })
 

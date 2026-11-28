@@ -18,14 +18,15 @@ import {
 } from './api'
 import { browserPlayer, type ClipPlayer } from './player'
 import { SearchableSelect } from '@/shared/components/SearchableSelect'
+import { Icon } from '@/shared/components/Icon'
 import './lesson-audio.css'
 
 /** PD-48 copy, Arabic and English side by side. */
 const C = {
   title: { en: 'Lesson audio', ar: 'تسجيلات الدروس' },
   subtitle: {
-    en: 'Computer-voice clips for the lessons. Listen to each one to the end next to its text. A clip plays to children only after two different reviewers approved it; one rejection is final.',
-    ar: 'تسجيلات بصوت حاسوبي للدروس. استمع إلى كل تسجيل حتى نهايته بجانب نصه. لا يُسمَع التسجيل للأطفال إلا بعد أن يعتمده مراجعان مختلفان، ورفضٌ واحد نهائي.',
+    en: 'A computer-voice clip plays to children only after two different reviewers approved it; one rejection is final.',
+    ar: 'لا يُسمَع التسجيل الحاسوبي للأطفال إلا بعد أن يعتمده مراجعان مختلفان، ورفضٌ واحد نهائي.',
   },
   lesson: { en: 'Lesson', ar: 'الدرس' },
   unit: { en: 'Unit', ar: 'الوحدة' },
@@ -48,6 +49,16 @@ const C = {
   approvals: { en: '{n} of {of} approvals', ar: '{n} من {of} اعتمادات' },
   attempt: { en: 'Attempt {n}', ar: 'المحاولة {n}' },
   noClip: { en: 'No clip yet.', ar: 'لا يوجد تسجيل بعد.' },
+  noUnits: { en: 'No clips to review yet.', ar: 'لا تسجيلات للمراجعة بعد.' },
+  figPlays: { en: 'Words that play', ar: 'كلمات تُشغَّل' },
+  figOf: { en: 'of {n}', ar: 'من {n}' },
+  figWaiting: { en: 'Waiting for review', ar: 'بانتظار المراجعة' },
+  figDecide: { en: 'Need a decision', ar: 'بحاجة إلى قرار' },
+  noUnitsHint: { en: 'Each unit appears here once its clips are made.', ar: 'تظهر كل وحدة هنا عند صنع تسجيلاتها.' },
+  unitApproved: { en: '{n} of {of} play', ar: 'يُشغَّل {n} من {of}' },
+  unitWaiting: { en: '{n} waiting', ar: 'بانتظار: {n}' },
+  unitDecide: { en: '{n} to decide', ar: 'قرار مطلوب: {n}' },
+  earlier: { en: 'Earlier attempts ({n})', ar: 'المحاولات السابقة ({n})' },
   noAudio: { en: 'Decided: no audio. This word has no play button.', ar: 'تقرّر: بلا صوت. لا يظهر لهذه الكلمة زر تشغيل.' },
   needsDecision: { en: 'Three clips failed. Decide: no audio, or one more round.', ar: 'فشلت ثلاثة تسجيلات. قرّر: بلا صوت، أو جولة أخرى.' },
   decideNoAudio: { en: 'No audio', ar: 'بلا صوت' },
@@ -61,8 +72,8 @@ const STATUS: Record<StringStatus, { label: Pair; tone: Tone }> = {
   approved: { label: { en: 'Plays', ar: 'يُشغَّل' }, tone: 'ok' },
   pending: { label: { en: 'Waiting for review', ar: 'بانتظار المراجعة' }, tone: 'waiting' },
   needsDecision: { label: { en: 'Needs a decision', ar: 'يحتاج إلى قرار' }, tone: 'danger' },
-  noAudio: { label: { en: 'No audio', ar: 'بلا صوت' }, tone: 'internal' },
-  none: { label: { en: 'No clip', ar: 'بلا تسجيل' }, tone: 'internal' },
+  noAudio: { label: { en: 'No audio', ar: 'بلا صوت' }, tone: 'neutral' },
+  none: { label: { en: 'No clip', ar: 'بلا تسجيل' }, tone: 'neutral' },
 }
 
 const CATEGORY: Record<RejectCategory, Pair> = {
@@ -77,6 +88,21 @@ const CATEGORY: Record<RejectCategory, Pair> = {
   other: { en: 'Something else', ar: 'غير ذلك' },
 }
 
+/** A unit is a letter of the alphabet: shown by its name, never its key. An unknown key is shown as it is. */
+const LETTER: Record<string, { ar: string; en: string }> = {
+  alif: { ar: 'ألف', en: 'Alif' }, ba: { ar: 'باء', en: 'Ba' }, ta: { ar: 'تاء', en: 'Ta' }, ta_marbuta: { ar: 'تاء مربوطة', en: 'Ta marbuta' },
+  tha: { ar: 'ثاء', en: 'Tha' }, jim: { ar: 'جيم', en: 'Jim' }, hha: { ar: 'حاء', en: 'Ḥa' }, kha: { ar: 'خاء', en: 'Kha' },
+  dal: { ar: 'دال', en: 'Dal' }, dhal: { ar: 'ذال', en: 'Dhal' }, ra: { ar: 'راء', en: 'Ra' }, zay: { ar: 'زاي', en: 'Zay' },
+  sin: { ar: 'سين', en: 'Sin' }, shin: { ar: 'شين', en: 'Shin' }, sad: { ar: 'صاد', en: 'Sad' }, dad: { ar: 'ضاد', en: 'Dad' },
+  tta: { ar: 'طاء', en: 'Ṭa' }, zza: { ar: 'ظاء', en: 'Ẓa' }, ain: { ar: 'عين', en: 'Ayn' }, ghain: { ar: 'غين', en: 'Ghayn' },
+  fa: { ar: 'فاء', en: 'Fa' }, qaf: { ar: 'قاف', en: 'Qaf' }, kaf: { ar: 'كاف', en: 'Kaf' }, lam: { ar: 'لام', en: 'Lam' },
+  mim: { ar: 'ميم', en: 'Mim' }, nun: { ar: 'نون', en: 'Nun' }, ha: { ar: 'هاء', en: 'Ha' }, waw: { ar: 'واو', en: 'Waw' },
+  ya: { ar: 'ياء', en: 'Ya' }, hamza: { ar: 'همزة', en: 'Hamza' }, alif_maqsura: { ar: 'ألف مقصورة', en: 'Alif maqsura' }, lam_alif: { ar: 'لام ألف', en: 'Lam alif' },
+}
+function unitName(unit: string, locale: 'ar' | 'en'): string {
+  return LETTER[unit]?.[locale] ?? unit
+}
+
 const errorText = (e: unknown) => (e instanceof ApiError ? e.message : String((e as Error)?.message ?? e))
 
 /**
@@ -87,6 +113,7 @@ const errorText = (e: unknown) => (e instanceof ApiError ? e.message : String((e
  */
 export function LessonAudioPage({ player: given }: { player?: ClipPlayer } = {}) {
   const tx = useCopy()
+  const { locale } = useI18n()
   const player = useMemo(() => given ?? browserPlayer(), [given])
   const [lesson] = useState<string>(LESSONS[0])
   const access = useQuery({ queryKey: lessonAudioKeys.access, queryFn: lessonAudioApi.access, staleTime: 60_000, retry: false })
@@ -101,16 +128,44 @@ export function LessonAudioPage({ player: given }: { player?: ClipPlayer } = {})
   })
 
   return (
-    <div className="lesson-audio">
-      <PageHeader title={tx(C.title)} subtitle={tx(C.subtitle)} />
-      <QueryBoundary isLoading={access.isLoading || summary.isLoading} error={access.error ?? summary.error} isEmpty={units.length === 0} emptyTitle={tx(C.noClip)}>
+    <div className="page lesson-audio">
+      <div className="page__inner">
+      <PageHeader
+        title={tx(C.title)}
+        subtitle={tx(C.subtitle)}
+        figures={
+          units.length > 0
+            ? [
+                { key: 'plays', label: tx(C.figPlays), value: units.reduce((n, u) => n + u.approved, 0), unit: tx(C.figOf, { n: units.reduce((n, u) => n + u.strings, 0) }), tone: 'key' },
+                { key: 'waiting', label: tx(C.figWaiting), value: units.reduce((n, u) => n + (u.pending ?? 0), 0) },
+                { key: 'decide', label: tx(C.figDecide), value: units.reduce((n, u) => n + (u.needsDecision ?? 0), 0), tone: units.some((u) => u.needsDecision) ? 'urgent' : 'quiet' },
+              ]
+            : undefined
+        }
+      />
+      <QueryBoundary isLoading={access.isLoading || summary.isLoading} error={access.error ?? summary.error} isEmpty={units.length === 0} emptyTitle={tx(C.noUnits)} emptyHint={tx(C.noUnitsHint)}>
         {summary.data && !summary.data.lessonApproved ? <p className="lesson-audio__note">{tx(C.pendingFile)}</p> : null}
-        <nav className="lesson-audio__units" aria-label={tx(C.unit)}>
+        <div className="lesson-audio__split">
+        {/* The unit index on the start side: how many of each unit's words play, and a mark where something waits. */}
+        <nav className="sheet lesson-audio__units" aria-label={tx(C.unit)}>
           {units.map((u) => (
-            <button key={u.unit} type="button" aria-pressed={u.unit === current} onClick={() => setUnit(u.unit)}>
-              {u.unit} · {u.approved}/{u.strings}
-              {u.pending ? <Badge tone="waiting">{u.pending}</Badge> : null}
-              {u.needsDecision ? <Badge tone="danger">{u.needsDecision}</Badge> : null}
+            <button
+              key={u.unit}
+              type="button"
+              className="lesson-audio__unit-tab"
+              aria-pressed={u.unit === current}
+              title={[tx(C.unitApproved, { n: u.approved, of: u.strings }), u.pending ? tx(C.unitWaiting, { n: u.pending }) : '', u.needsDecision ? tx(C.unitDecide, { n: u.needsDecision }) : ''].filter(Boolean).join(locale === 'ar' ? '، ' : ', ')}
+              onClick={() => setUnit(u.unit)}
+            >
+              <span className="lesson-audio__unit-name">{unitName(u.unit, locale)}</span>
+              <span className="lesson-audio__count">
+                {u.approved}/{u.strings}
+              </span>
+              {u.needsDecision ? (
+                <span className="lesson-audio__mark lesson-audio__mark--decide">{tx(C.unitDecide, { n: u.needsDecision })}</span>
+              ) : u.pending ? (
+                <span className="lesson-audio__mark">{tx(C.unitWaiting, { n: u.pending })}</span>
+              ) : null}
             </button>
           ))}
         </nav>
@@ -122,20 +177,32 @@ export function LessonAudioPage({ player: given }: { player?: ClipPlayer } = {})
             required={view.data.approvalsRequired}
             canReview={access.data?.review === true}
             player={player}
+            title={current ? unitName(current, locale) : ''}
           />
-        ) : null}
+        ) : (
+          <div />
+        )}
+        </div>
       </QueryBoundary>
+      </div>
     </div>
   )
 }
 
-function Unit({ lesson, strings, required, canReview, player }: { lesson: string; strings: StringView[]; required: number; canReview: boolean; player: ClipPlayer }) {
+function Unit({ lesson, strings, required, canReview, player, title }: { lesson: string; strings: StringView[]; required: number; canReview: boolean; player: ClipPlayer; title: string }) {
   const tx = useCopy()
   const [playingAll, setPlayingAll] = useState(false)
   const [heard, setHeard] = useState<Record<string, string>>({})
   const [playing, setPlaying] = useState<string | null>(null)
   const [mismatch, setMismatch] = useState<Record<string, boolean>>({})
   const stopAll = useRef(false)
+  // One hint for the unit, which every gated button points to (round 3: it was repeated under each clip).
+  const hintId = useId()
+  const gated = canReview && strings.some((s) => s.clips.some((c) => (c.canReview || c.state === 'approved') && !heard[c.clipId]))
+  // What needs a person first: a decision, then a review; the rest keeps the lesson's order.
+  const RANK: Partial<Record<StringStatus, number>> = { needsDecision: 0, pending: 1 }
+  const shown = strings.map((s, i) => ({ s, i })).sort((a, b) => (RANK[a.s.status] ?? 2) - (RANK[b.s.status] ?? 2) || a.i - b.i).map((x) => x.s)
+  const plays = strings.filter((s) => s.status === 'approved').length
 
   const listen = async (c: ClipView) => {
     if (!c.url) return false
@@ -169,37 +236,40 @@ function Unit({ lesson, strings, required, canReview, player }: { lesson: string
   }
 
   return (
-    <section className="lesson-audio__unit">
-      <div className="lesson-audio__bar">
+    <section className="sheet lesson-audio__unit">
+      <div className="sheet__head">
+        <h2 className="sheet__title">
+          <bdi>{title}</bdi>
+          <span className="lesson-audio__plays">{tx(C.unitApproved, { n: plays, of: strings.length })}</span>
+        </h2>
         {playingAll ? (
           <button
             type="button"
+            className="btn btn--sm"
             onClick={() => {
               stopAll.current = true
               player.stop()
             }}
           >
+            <Icon name="stop" size={16} />
             {tx(C.stop)}
           </button>
         ) : (
-          <button type="button" onClick={playUnit}>
+          <button type="button" className="btn btn--sm" onClick={playUnit}>
+            <Icon name="play" size={16} />
             {tx(C.playUnit)}
           </button>
         )}
       </div>
+      {gated ? (
+        <p id={hintId} className="lesson-audio__hint lesson-audio__lead">
+          {tx(C.approveHint)}
+        </p>
+      ) : null}
       <ol className="lesson-audio__strings">
-        {strings.map((s) => (
-          <li key={s.id} className={s.clips.some((c) => c.clipId === playing) ? 'is-playing' : undefined}>
-            <div className="lesson-audio__text" lang="ar" dir="rtl">
-              {s.text}
-            </div>
-            <div className="lesson-audio__meta">
-              <code>{s.id}</code> <Badge tone={STATUS[s.status].tone}>{tx(STATUS[s.status].label)}</Badge>
-            </div>
-            {s.status === 'noAudio' ? <p>{tx(C.noAudio)}</p> : null}
-            {s.status === 'needsDecision' && canReview ? <Decision lesson={lesson} s={s} /> : null}
-            {s.clips.length === 0 && s.status === 'none' ? <p>{tx(C.noClip)}</p> : null}
-            {s.clips.map((c) => (
+        {shown.map((s) => {
+          const old = (c: ClipView) => c.state === 'rejected' || c.state === 'withdrawn'
+          const clip = (c: ClipView) => (
               <Clip
                 key={c.clipId}
                 s={s}
@@ -209,11 +279,35 @@ function Unit({ lesson, strings, required, canReview, player }: { lesson: string
                 heard={heard[c.clipId]}
                 mismatch={!!mismatch[c.clipId]}
                 playing={playing === c.clipId}
+                hintId={hintId}
                 onListen={() => void listen(c)}
               />
-            ))}
+          )
+          const earlier = s.clips.filter(old)
+          return (
+          <li key={s.id} className={s.clips.some((c) => c.clipId === playing) ? 'is-playing' : undefined}>
+            <div className="lesson-audio__head">
+              <div className="lesson-audio__text" lang="ar" dir="rtl">
+                {s.text}
+              </div>
+              <div className="lesson-audio__meta">
+                <Badge tone={STATUS[s.status].tone} dot>{tx(STATUS[s.status].label)}</Badge>
+              </div>
+            </div>
+            {s.status === 'noAudio' ? <p className="lesson-audio__hint">{tx(C.noAudio)}</p> : null}
+            {s.status === 'needsDecision' && canReview ? <Decision lesson={lesson} s={s} /> : null}
+            {s.clips.length === 0 && s.status === 'none' ? <p className="lesson-audio__hint">{tx(C.noClip)}</p> : null}
+            {s.clips.filter((c) => !old(c)).map(clip)}
+            {/* Rejected and withdrawn attempts are history: folded, so the current clip is the one in view. */}
+            {earlier.length ? (
+              <details className="lesson-audio__history lesson-audio__earlier">
+                <summary>{tx(C.earlier, { n: earlier.length })}</summary>
+                {earlier.map(clip)}
+              </details>
+            ) : null}
           </li>
-        ))}
+          )
+        })}
       </ol>
     </section>
   )
@@ -242,17 +336,17 @@ function Clip(props: {
   heard: string | undefined
   mismatch: boolean
   playing: boolean
+  hintId: string
   onListen: () => void
 }) {
-  const { s, c, required, canReview, heard, mismatch, playing, onListen } = props
+  const { s, c, required, canReview, heard, mismatch, playing, hintId, onListen } = props
   const tx = useCopy()
-  const { dateTime } = useI18n()
+  const { dateTime, locale } = useI18n()
   const qc = useQueryClient()
   const [form, setForm] = useState<'reject' | 'withdraw' | null>(null)
   // Nothing preselected: the reviewer names what is wrong (review of #254).
   const [category, setCategory] = useState<RejectCategory | ''>('')
   const [reason, setReason] = useState('')
-  const hintId = useId()
   // The text's hash is taken HERE, from the text on screen, and must be the clip's:
   // an approval says "this text", not just "this clip" (review of #254).
   const shownSha = useShownTextSha(s.text)
@@ -274,43 +368,38 @@ function Clip(props: {
     <div className={`lesson-audio__clip is-${c.state}`} data-testid={`clip-${c.clipId}`}>
       <div className="lesson-audio__row">
         {c.url ? (
-          <button type="button" onClick={onListen} disabled={playing}>
+          <button type="button" className="btn btn--sm lesson-audio__listen" onClick={onListen} disabled={playing}>
+            <Icon name="play" size={16} />
             {playing ? tx(C.playing) : tx(C.listen)}
           </button>
         ) : null}
-        <span>{tx(C.attempt, { n: c.attempt })}</span>
-        <span>{tx(C.approvals, { n: c.approvals.length, of: required })}</span>
-        <span className="lesson-audio__voice">
-          {c.vendor} · {c.voice}
+        <span className="lesson-audio__fact">{tx(C.attempt, { n: c.attempt })}</span>
+        <span className="lesson-audio__fact">{tx(C.approvals, { n: c.approvals.length, of: required })}</span>
+        <span className="lesson-audio__decide">
+          {canReview && c.canReview ? (
+            <>
+              <button type="button" className="btn btn--sm" disabled={!ready || approve.isPending} aria-describedby={heard ? undefined : hintId} onClick={() => approve.mutate()}>
+                {tx(C.approve)}
+              </button>
+              <button type="button" className="btn btn--sm" disabled={!ready} aria-describedby={heard ? undefined : hintId} onClick={() => setForm('reject')}>
+                {tx(C.reject)}
+              </button>
+            </>
+          ) : null}
+          {canReview && c.state === 'approved' ? (
+            <button type="button" className="btn btn--sm" disabled={!ready} aria-describedby={heard ? undefined : hintId} onClick={() => setForm('withdraw')}>
+              {tx(C.withdraw)}
+            </button>
+          ) : null}
         </span>
-        {canReview && c.canReview ? (
-          <>
-            <button type="button" className="primary" disabled={!ready || approve.isPending} aria-describedby={heard ? undefined : hintId} onClick={() => approve.mutate()}>
-              {tx(C.approve)}
-            </button>
-            <button type="button" disabled={!ready} aria-describedby={heard ? undefined : hintId} onClick={() => setForm('reject')}>
-              {tx(C.reject)}
-            </button>
-          </>
-        ) : null}
-        {canReview && c.state === 'approved' ? (
-          <button type="button" disabled={!ready} aria-describedby={heard ? undefined : hintId} onClick={() => setForm('withdraw')}>
-            {tx(C.withdraw)}
-          </button>
-        ) : null}
       </div>
-      {canReview && !heard && (c.canReview || c.state === 'approved') ? (
-        <p id={hintId} className="lesson-audio__hint">
-          {tx(C.approveHint)}
-        </p>
-      ) : null}
-      {mismatch ? <p role="alert">{tx(C.mismatch)}</p> : null}
-      {shownSha !== null && !textMatches ? <p role="alert">{tx(C.textMismatch)}</p> : null}
+      {mismatch ? <p className="lesson-audio__alert" role="alert">{tx(C.mismatch)}</p> : null}
+      {shownSha !== null && !textMatches ? <p className="lesson-audio__alert" role="alert">{tx(C.textMismatch)}</p> : null}
       {form ? (
         <div className="lesson-audio__form">
-          <label>
-            {tx(C.category)}
-            <SearchableSelect value={category} onValueChange={(v) => setCategory(v as RejectCategory | '')}>
+          <label className="field">
+            <span className="field__label">{tx(C.category)}</span>
+            <SearchableSelect className="input" value={category} onValueChange={(v) => setCategory(v as RejectCategory | '')}>
               <option value="" disabled>
                 {tx(C.chooseCategory)}
               </option>
@@ -321,35 +410,40 @@ function Clip(props: {
               ))}
             </SearchableSelect>
           </label>
-          <label>
-            {tx(C.reason)}
-            <textarea value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} />
+          <label className="field">
+            <span className="field__label">{tx(C.reason)}</span>
+            <textarea className="input" rows={2} dir="auto" value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} />
           </label>
-          <button type="button" disabled={!category || !reason.trim() || refuse.isPending} onClick={() => refuse.mutate()}>
-            {tx(C.confirm)}
-          </button>
-          <button type="button" onClick={() => setForm(null)}>
-            {tx(C.cancel)}
-          </button>
+          <div className="lesson-audio__row">
+            <button type="button" className="btn btn--sm btn--primary" disabled={!category || !reason.trim() || refuse.isPending} onClick={() => refuse.mutate()}>
+              {tx(C.confirm)}
+            </button>
+            <button type="button" className="btn btn--sm btn--ghost" onClick={() => setForm(null)}>
+              {tx(C.cancel)}
+            </button>
+          </div>
         </div>
       ) : null}
-      {error ? <p role="alert">{errorText(error)}</p> : null}
+      {error ? <p className="lesson-audio__alert" role="alert">{errorText(error)}</p> : null}
       {c.approvals.length || c.rejections.length ? (
-        <details>
+        <details className="lesson-audio__history">
           <summary>{tx(C.history)}</summary>
           <ul>
+            <li>
+              <bdi className="ltr">{c.vendor}, {c.voice}</bdi>
+            </li>
             {c.approvals.map((a, i) => (
               <li key={`a${i}`}>
-                {tx(C.approvedBy, { by: a.by })} · {dateTime(a.at)}
+                {tx(C.approvedBy, { by: a.by })}{locale === 'ar' ? '، ' : ', '}<bdi>{dateTime(a.at)}</bdi>
               </li>
             ))}
             {c.rejections.map((r, i) => (
               <li key={`r${i}`}>
-                {tx(C.by, { action: tx(r.action === 'withdraw' ? C.withdraw : C.reject), by: r.by, reason: `${r.category ? tx(CATEGORY[r.category as RejectCategory] ?? { en: r.category, ar: r.category }) : ''} ${r.reason ?? ''}`.trim() })} · {dateTime(r.at)}
+                {tx(C.by, { action: tx(r.action === 'withdraw' ? C.withdraw : C.reject), by: r.by, reason: `${r.category ? tx(CATEGORY[r.category as RejectCategory] ?? { en: r.category, ar: r.category }) : ''} ${r.reason ?? ''}`.trim() })}{locale === 'ar' ? '، ' : ', '}<bdi>{dateTime(r.at)}</bdi>
               </li>
             ))}
             <li>
-              <code>{c.audioSha256.slice(0, 12)}</code>
+              <code className="ltr">{c.audioSha256.slice(0, 12)}</code>
             </li>
           </ul>
         </details>
@@ -368,18 +462,20 @@ function Decision({ lesson, s }: { lesson: string; s: StringView }) {
   })
   return (
     <div className="lesson-audio__form">
-      <p>{tx(C.needsDecision)}</p>
-      <label>
-        {tx(C.reason)}
-        <textarea value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} />
+      <p className="lesson-audio__alert">{tx(C.needsDecision)}</p>
+      <label className="field">
+        <span className="field__label">{tx(C.reason)}</span>
+        <textarea className="input" rows={2} dir="auto" value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} />
       </label>
-      <button type="button" disabled={!reason.trim() || decide.isPending} onClick={() => decide.mutate('no_audio')}>
-        {tx(C.decideNoAudio)}
-      </button>
-      <button type="button" disabled={!reason.trim() || decide.isPending} onClick={() => decide.mutate('one_more_round')}>
-        {tx(C.decideAgain)}
-      </button>
-      {decide.error ? <p role="alert">{errorText(decide.error)}</p> : null}
+      <div className="lesson-audio__row">
+        <button type="button" className="btn btn--sm" disabled={!reason.trim() || decide.isPending} onClick={() => decide.mutate('no_audio')}>
+          {tx(C.decideNoAudio)}
+        </button>
+        <button type="button" className="btn btn--sm" disabled={!reason.trim() || decide.isPending} onClick={() => decide.mutate('one_more_round')}>
+          {tx(C.decideAgain)}
+        </button>
+      </div>
+      {decide.error ? <p className="lesson-audio__alert" role="alert">{errorText(decide.error)}</p> : null}
     </div>
   )
 }

@@ -6,11 +6,13 @@ export { useCopy } from '@/features/organization/copy'
 /** PD-35 B5: escalation cases, Arabic and English side by side. */
 export const C = {
   title: { en: 'Escalations', ar: 'التصعيدات' },
-  subtitle: {
-    en: 'What a supervisor could not settle alone, escalated to the Teachers or the Operations department.',
-    ar: 'ما لم يستطع المشرف حله وحده، مُصعَّدًا إلى قسم المعلمين أو قسم العمليات.',
+  sortNeed: { en: 'Overdue first, then soonest due', ar: 'المتأخرة أولًا، ثم الأقرب موعدًا' },
+  empty: { en: 'No open escalations in this list', ar: 'لا تصعيدات مفتوحة في هذه القائمة' },
+  emptyAll: { en: 'No escalations in this list', ar: 'لا تصعيدات في هذه القائمة' },
+  emptyHint: {
+    en: 'A case appears here when a supervisor escalates one from a teacher, a student or a family.',
+    ar: 'تظهر الحالة هنا حين يصعّدها مشرف من صفحة معلم أو طالب أو عائلة.',
   },
-  empty: { en: 'No cases here.', ar: 'لا توجد حالات هنا.' },
   showClosed: { en: 'Show closed', ar: 'عرض المغلقة' },
   owner: { en: 'Owner', ar: 'المسؤول' },
   noOwner: { en: 'No owner', ar: 'بلا مسؤول' },
@@ -21,7 +23,7 @@ export const C = {
   about: { en: 'About', ar: 'بخصوص' },
   history: { en: 'History', ar: 'السجل' },
   start: { en: 'Start working on it', ar: 'بدء العمل عليها' },
-  resolve: { en: 'Resolve', ar: 'حل' },
+  resolve: { en: 'Resolve', ar: 'تمّ الحل' },
   cancel: { en: 'Cancel case', ar: 'إلغاء الحالة' },
   addNote: { en: 'Add a note', ar: 'إضافة ملاحظة' },
   note: { en: 'Note', ar: 'ملاحظة' },
@@ -29,6 +31,13 @@ export const C = {
   save: { en: 'Save', ar: 'حفظ' },
   clearDue: { en: 'Clear', ar: 'مسح' },
   close: { en: 'Close', ar: 'إغلاق' },
+  pastDue: { en: 'Past due', ar: 'تجاوزت موعدها' },
+  // The due day, relative to today: "Due tomorrow", "Was due 3 days ago".
+  dueWhen: { en: 'Due {when}', ar: 'تستحق {when}' },
+  wasDue: { en: 'Was due {when}', ar: 'استحقت {when}' },
+
+  factOpenedBy: { en: 'Opened by', ar: 'فتحها' },
+  moreActions: { en: 'More actions: {name}', ar: 'إجراءات أخرى: {name}' },
   // Opening
   escalate: { en: 'Escalate', ar: 'تصعيد' },
   caseTitle: { en: 'Title', ar: 'العنوان' },
@@ -40,6 +49,17 @@ export const C = {
   ownerIs: { en: 'Owner: {name}.', ar: 'المسؤول: {name}.' },
   openInEscalations: { en: 'Open in Escalations', ar: 'فتح في التصعيدات' },
   sent: { en: 'Sent. It is in Escalations, under "Opened by me".', ar: 'أُرسلت. تجدها في التصعيدات، ضمن "فتحتها أنا".' },
+} satisfies Record<string, Pair>
+
+/** The queue's groups: where a case stands. */
+export const GROUP_LABEL = {
+  past: { en: 'Overdue', ar: 'متأخرة' },
+  today: { en: 'Due today', ar: 'تستحق اليوم' },
+  tomorrow: { en: 'Due tomorrow', ar: 'تستحق غدًا' },
+  week: { en: 'Next 7 days', ar: 'خلال 7 أيام' },
+  later: { en: 'Later', ar: 'لاحقًا' },
+  none: { en: 'No due date', ar: 'بلا موعد' },
+  closed: { en: 'Closed', ar: 'مغلقة' },
 } satisfies Record<string, Pair>
 
 export const TAB_LABEL: Record<CaseTab, Pair> = {

@@ -228,17 +228,22 @@ describe('PD-27 on the Parent Profile', () => {
         payments: [payment(), payment({ id: 'pay-2', method: 'card', recordedBy: null, reference: null, invoice: { id: 'inv-2', number: 'JW-2026-000002' } })],
       }),
     )
-    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1' })
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1#money' })
 
     const requests = await screen.findByRole('region', { name: 'Payment requests' })
+    // The family's ledgers are the Money tab; the link's hash opens it.
+    expect(screen.getByRole('tab', { name: 'Money' })).toHaveAttribute('aria-selected', 'true')
     const r = within(requests).getAllByRole('listitem')[0]!
     expect(within(r).getByText('Open')).toBeInTheDocument()
     expect(within(r).getByText('3-month subscription')).toBeInTheDocument()
-    expect(within(r).getByText(/^Amount .*1,200\.00 · paid .*0\.00 · remaining .*1,200\.00$/)).toBeInTheDocument()
+    expect(within(r).getByText(/^Amount .*1,200\.00, paid .*0\.00, remaining .*1,200\.00$/)).toBeInTheDocument()
     // PD-30 (3): the package reads "3 months" (and "— N lessons" when the request buys lessons).
     expect(within(r).getByText('3 months')).toBeInTheDocument()
-    expect(within(r).getByRole('link', { name: 'Send on WhatsApp' })).toHaveAttribute('target', '_blank')
-    expect(within(r).getByRole('button', { name: 'Cancel the request: 3-month subscription' })).toBeInTheDocument()
+    // One stated action on the row (Copy link); sending and cancelling are in its "⋯" menu.
+    await userEvent.click(within(r).getByRole('button', { name: 'More actions: 3-month subscription' }))
+    expect(within(r).getByRole('menuitem', { name: 'Send on WhatsApp' })).toBeInTheDocument()
+    expect(within(r).getByRole('menuitem', { name: 'Cancel the request: 3-month subscription' })).toBeInTheDocument()
+    await userEvent.keyboard('{Escape}')
 
     const received = screen.getByRole('region', { name: 'Payments received' })
     const [cash, card] = within(received).getAllByRole('listitem')
@@ -246,9 +251,11 @@ describe('PD-27 on the Parent Profile', () => {
     expect(within(cash!).getByText('recorded by Supervisor One')).toBeInTheDocument()
     expect(within(cash!).getByText('Invoice JW-2026-000001')).toBeInTheDocument()
     expect(within(card!).getByText('confirmed by Stripe')).toBeInTheDocument()
-    // A recorder voids (never a card payment); only a verifier refunds.
-    expect(within(cash!).getByRole('button', { name: 'Void' })).toBeInTheDocument()
-    expect(within(card!).queryByRole('button', { name: 'Void' })).not.toBeInTheDocument()
+    // A recorder voids (never a card payment); only a verifier refunds. Void waits in the row's "⋯".
+    await userEvent.click(within(cash!).getByRole('button', { name: /^More actions: the payment of/ }))
+    expect(within(cash!).getByRole('menuitem', { name: 'Void' })).toBeInTheDocument()
+    await userEvent.keyboard('{Escape}')
+    expect(within(card!).queryByRole('button', { name: /^More actions: the payment of/ })).not.toBeInTheDocument()
     expect(within(received).queryByRole('button', { name: 'Refund' })).not.toBeInTheDocument()
 
     const invoices = screen.getByRole('region', { name: 'Invoices' })
@@ -266,10 +273,29 @@ describe('PD-27 on the Parent Profile', () => {
     expect(within(timeline).getByText(/^paid .*400\.00 · remaining .*600\.00$/)).toBeInTheDocument()
   })
 
+  it('Overview lists what waits now: the late instalment, the open request and the receipt nobody has checked', async () => {
+    serve(billing())
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1' })
+    const waiting = await screen.findByRole('region', { name: 'Needs attention now' })
+    const [late, open, pending] = await within(waiting).findAllByRole('listitem')
+    expect(within(late!).getByText('Autumn term')).toBeInTheDocument()
+    expect(within(late!).getByText('20 days late')).toBeInTheDocument()
+    expect(within(late!).getByText('1,000.00')).toHaveAttribute('dir', 'ltr')
+    expect(within(open!).getByText('3-month subscription')).toBeInTheDocument()
+    expect(within(open!).getByText('Open request')).toBeInTheDocument()
+    expect(within(pending!).getByText('Pending verification')).toBeInTheDocument()
+    // Each leads to where it is handled: the requests and the receipts are on Money.
+    expect(within(open!).getByRole('link', { name: 'View' })).toHaveAttribute('href', '/parents/p-1#requests')
+    await userEvent.click(within(pending!).getByRole('link', { name: 'View' }))
+    expect(screen.getByRole('tab', { name: 'Money' })).toHaveAttribute('aria-selected', 'true')
+    // The masthead counts the open requests.
+    expect(within(screen.getByText('Open requests', { selector: '.figure__label' }).closest('.figure') as HTMLElement).getByText('1')).toBeInTheDocument()
+  })
+
   it('W61 S4: a refunded payment says refunds do not remove lessons (neutral: the purpose is not known here); one without a refund says nothing', async () => {
     const card = payment({ id: 'pay-2', method: 'card', amountMinor: 80000, refundedMinor: 30000, recordedBy: null, reference: null })
     serve(billing({ payments: [payment(), card] }))
-    const view = renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1' })
+    const view = renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1#money' })
     const received = await screen.findByRole('region', { name: 'Payments received' })
     const [cash, refunded] = within(received).getAllByRole('listitem')
     expect(within(refunded!).getByText(/^Refunded AED\s300\.00\. Refunds do not remove lessons already credited\.$/)).toBeInTheDocument()
@@ -277,7 +303,7 @@ describe('PD-27 on the Parent Profile', () => {
     expect(within(cash!).queryByText(/^Refunded/)).not.toBeInTheDocument()
     view.unmount()
 
-    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1', locale: 'ar' })
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1#money', locale: 'ar' })
     const arReceived = await screen.findByRole('region', { name: 'الدفعات المستلمة' })
     const arCard = within(arReceived).getAllByRole('listitem')[1]!
     expect(within(arCard).getByText(/^تم استرداد .*300\.00.*\. لا يُلغي الاسترداد الحصص المضافة من قبل\.$/)).toBeInTheDocument()
@@ -285,7 +311,7 @@ describe('PD-27 on the Parent Profile', () => {
 
   it('reads in Arabic, right to left', async () => {
     serve(billing())
-    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1', locale: 'ar' })
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1#money', locale: 'ar' })
     expect(await screen.findByRole('region', { name: 'طلبات الدفع' })).toBeInTheDocument()
     expect(document.documentElement.dir).toBe('rtl')
     expect(screen.getByRole('region', { name: 'الدفعات المستلمة' })).toBeInTheDocument()
@@ -298,7 +324,7 @@ describe('PD-27 on the Parent Profile', () => {
     serve(billing({ requests: [] }))
     const created = request({ id: 'r-9', label: 'Winter package', link: 'https://api.example.test/api/v1/pay/tok_new', amountMinor: 150000, remainingMinor: 150000 })
     on('POST', /\/families\/f-1\/payment-requests$/, () => json({ request: created, billing: billing({ requests: [created] }) }))
-    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1' })
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1#money' })
 
     await userEvent.click(await screen.findByRole('button', { name: 'Request payment' }))
     const dialog = screen.getByRole('dialog', { name: 'Request a payment' })
@@ -361,17 +387,20 @@ describe('PD-27 on the Parent Profile', () => {
     )
     const created = request({ id: 'r-3', purpose: 'instalment', label: 'Autumn term', instalmentId: 'i-1', link: 'https://api.example.test/api/v1/pay/tok_i1' })
     on('POST', /\/families\/f-1\/payment-requests$/, () => json({ request: created, billing: billing() }))
-    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1' })
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1#money' })
 
     const timeline = await screen.findByRole('region', { name: 'Payment timeline' })
     const [first, second] = within(timeline).getAllByRole('listitem')
-    await userEvent.click(within(second!).getByRole('button', { name: 'Payment link' }))
+    // The link is behind each row's menu.
+    await userEvent.click(within(second!).getByRole('button', { name: /More actions/ }))
+    await userEvent.click(within(second!).getByRole('menuitem', { name: 'Payment link' }))
     let dialog = screen.getByRole('dialog', { name: 'Payment link: Spring term' })
     expect(within(dialog).getByRole('textbox', { name: 'Payment link' })).toHaveValue('https://api.example.test/api/v1/pay/tok_i2')
     expect(calls('POST', /\/payment-requests$/)).toHaveLength(0)
     await userEvent.click(within(dialog).getByRole('button', { name: 'Done' }))
 
-    await userEvent.click(within(first!).getByRole('button', { name: 'Payment link' }))
+    await userEvent.click(within(first!).getByRole('button', { name: /More actions/ }))
+    await userEvent.click(within(first!).getByRole('menuitem', { name: 'Payment link' }))
     dialog = screen.getByRole('dialog', { name: 'Payment link: Autumn term' })
     expect(within(dialog).getByText(/still owes: .*1,000\.00/)).toBeInTheDocument()
     await userEvent.click(within(dialog).getByRole('button', { name: 'Create link' }))
@@ -388,8 +417,9 @@ describe('PD-27 on the Parent Profile', () => {
   it('cancels an open request only with a reason', async () => {
     serve(billing())
     on('POST', /\/payment-requests\/r-1\/cancel$/, () => json(billing({ requests: [request({ status: 'cancelled', cancelled: { at: '2026-10-22T10:00:00Z', by: PERSON, reason: 'wrong amount' } })] })))
-    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1' })
-    await userEvent.click(await screen.findByRole('button', { name: 'Cancel the request: 3-month subscription' }))
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1#money' })
+    await userEvent.click(await screen.findByRole('button', { name: 'More actions: 3-month subscription' }))
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Cancel the request: 3-month subscription' }))
     const dialog = screen.getByRole('dialog', { name: 'Cancel the request: 3-month subscription' })
     await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel the request' }))
     expect(within(dialog).getByText('Say why.')).toBeInTheDocument()
@@ -400,13 +430,15 @@ describe('PD-27 on the Parent Profile', () => {
     expect(bodyOf(calls('POST', /\/payment-requests\/r-1\/cancel$/)[0])).toEqual({ reason: 'wrong amount' })
     const requests = screen.getByRole('region', { name: 'Payment requests' })
     expect(await within(requests).findByText('Cancelled by Supervisor One: wrong amount')).toBeInTheDocument()
-    expect(within(requests).queryByRole('link', { name: 'Send on WhatsApp' })).not.toBeInTheDocument()
+    // A cancelled request has no actions left: no link to copy, no menu to send or cancel from.
+    expect(within(requests).queryByRole('button', { name: /More actions/ })).not.toBeInTheDocument()
+    expect(within(requests).queryByRole('button', { name: 'Copy link' })).not.toBeInTheDocument()
   })
 
   it('Record a payment: cash by default; towards a request prefills its remaining amount', async () => {
     serve(billing())
     on('POST', /\/families\/f-1\/payments$/, () => json(billing()))
-    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1' })
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1#money' })
     await userEvent.click(await screen.findByRole('button', { name: 'Record a payment' }))
     const dialog = screen.getByRole('dialog', { name: 'Record a payment' })
     expect(within(dialog).getByLabelText('Method')).toHaveAttribute('data-value', 'cash')
@@ -429,7 +461,7 @@ describe('PD-27 on the Parent Profile', () => {
   it('any recorder (not only a verifier) may record a bank transfer towards an instalment', async () => {
     serve(billing({ canVerify: false }))
     on('POST', /\/families\/f-1\/payments$/, () => json(billing({ canVerify: false })))
-    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1' })
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1#money' })
     await userEvent.click(await screen.findByRole('button', { name: 'Record a payment' }))
     const dialog = screen.getByRole('dialog', { name: 'Record a payment' })
     await chooseOption(userEvent, within(dialog).getByLabelText('Method'), 'bank_transfer')
@@ -454,15 +486,17 @@ describe('PD-27 on the Parent Profile', () => {
     const voided = payment({ voided: { at: '2026-10-22T10:00:00Z', by: PERSON, reason: 'entered twice' } })
     on('POST', /\/payments\/pay-1\/void$/, () => json(billing({ canVerify: true, payments: [voided, card] })))
     on('POST', /\/payments\/pay-2\/refunds$/, () => json(billing({ canVerify: true, payments: [voided, card] })))
-    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1' })
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1#money' })
 
     const received = await screen.findByRole('region', { name: 'Payments received' })
     const [cash] = within(received).getAllByRole('listitem')
     const cardRow = () => within(received).getAllByRole('listitem')[1]!
-    expect(within(cardRow()).queryByRole('button', { name: 'Void' })).not.toBeInTheDocument()
+    // The card payment's only action is Refund: no "⋯", so no Void.
+    expect(within(cardRow()).queryByRole('button', { name: /^More actions: the payment of/ })).not.toBeInTheDocument()
     expect(within(cardRow()).getByRole('button', { name: 'Refund' })).toBeInTheDocument()
 
-    await userEvent.click(within(cash!).getByRole('button', { name: 'Void' }))
+    await userEvent.click(within(cash!).getByRole('button', { name: /^More actions: the payment of/ }))
+    await userEvent.click(within(cash!).getByRole('menuitem', { name: 'Void' }))
     let dialog = screen.getByRole('dialog', { name: /^Void the payment of/ })
     await userEvent.click(within(dialog).getByRole('button', { name: 'Void' }))
     expect(within(dialog).getByText('Say why.')).toBeInTheDocument()
@@ -502,7 +536,7 @@ describe('PD-27 on the Parent Profile', () => {
       }
       return json(billing())
     })
-    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1' })
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1#money' })
     await userEvent.click(await screen.findByRole('button', { name: 'Record a payment' }))
     let dialog = screen.getByRole('dialog', { name: 'Record a payment' })
     await userEvent.type(within(dialog).getByLabelText('Amount'), '75')
@@ -531,9 +565,10 @@ describe('PD-27 on the Parent Profile', () => {
         payments: [payment({ instalmentId: 'i-1', amountMinor: 100000 })],
       }),
     )
-    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1' })
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1#money' })
     const received = await screen.findByRole('region', { name: 'Payments received' })
-    expect(within(received).queryByRole('button', { name: 'Void' })).not.toBeInTheDocument()
+    // Void would wait in the row's "⋯": there is none, Refund is the only action.
+    expect(within(received).queryByRole('button', { name: /^More actions: the payment of/ })).not.toBeInTheDocument()
     expect(within(received).getByRole('button', { name: 'Refund' })).toBeInTheDocument()
   })
 
@@ -541,7 +576,7 @@ describe('PD-27 on the Parent Profile', () => {
     serve(billing())
     on('GET', /\/invoices\/inv-1\/link$/, () => json({ url: 'https://storage.example.test/inv-1.pdf?sig=y' }))
     const open = vi.spyOn(window, 'open').mockReturnValue(null)
-    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1' })
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1#money' })
     await userEvent.click(await screen.findByRole('button', { name: 'Download invoice JW-2026-000001' }))
     await waitFor(() => expect(open).toHaveBeenCalledWith('https://storage.example.test/inv-1.pdf?sig=y', '_blank', 'noopener,noreferrer'))
     expect(calls('GET', /\/invoices\/inv-1\/link$/)).toHaveLength(1)
@@ -561,7 +596,7 @@ describe('PD-27 on the Parent Profile', () => {
       requests: [request({ id: 'r-loose', label: 'Old balance', purpose: 'balance', payableInApp: false })],
     }))
     on('POST', /\/families\/f-1\/instalments$/, () => json(billing()))
-    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1' })
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1#money' })
 
     // What the parent cannot pay in the app is marked, for the instalment and the request.
     expect(await screen.findAllByText('Not payable in the app')).toHaveLength(2)
@@ -589,7 +624,7 @@ describe('PD-27 on the Parent Profile', () => {
     serve(billing({ requests: [] }))
     const created = request({ id: 'r-b', label: 'Balance', purpose: 'balance' })
     on('POST', /\/families\/f-1\/payment-requests$/, () => json({ request: created, billing: billing({ requests: [created] }) }))
-    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1' })
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1#money' })
     await userEvent.click(await screen.findByRole('button', { name: 'Request payment' }))
     const dialog = screen.getByRole('dialog', { name: 'Request a payment' })
     await chooseOption(userEvent, within(dialog).getByLabelText('For'), 'balance')
@@ -606,7 +641,7 @@ describe('PD-27 on the Parent Profile', () => {
   it('a custom schedule sends items, one row per instalment', async () => {
     serve(billing())
     on('POST', /\/families\/f-1\/instalments$/, () => json(billing()))
-    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1' })
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1#money' })
     await userEvent.click(await screen.findByRole('button', { name: 'Add instalments' }))
     const dialog = screen.getByRole('dialog', { name: 'Add instalments' })
     await userEvent.click(within(dialog).getByRole('radio', { name: 'Custom schedule' }))
@@ -638,13 +673,22 @@ describe('PD-27 on the Parent Profile', () => {
 
   it('a viewer the server does not let record sees the money and none of the controls', async () => {
     serve(billing({ canRecord: false }))
-    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1' })
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1#money' })
     const requests = await screen.findByRole('region', { name: 'Payment requests' })
     expect(screen.queryByRole('button', { name: 'Request payment' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Record a payment' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Payment link' })).not.toBeInTheDocument()
+    // Payment link and Void live in a row's menu: no instalment has one, here or on Overview.
+    expect(screen.queryByRole('button', { name: /More actions: Autumn term/ })).not.toBeInTheDocument()
+    // Cancelling is not offered: not on the row, and not in its "⋯" menu.
     expect(within(requests).queryByRole('button', { name: /Cancel the request/ })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Void' })).not.toBeInTheDocument()
+    for (const more of within(requests).queryAllByRole('button', { name: /More actions/ })) {
+      await userEvent.click(more)
+      expect(screen.queryByRole('menuitem', { name: /Cancel the request/ })).not.toBeInTheDocument()
+      await userEvent.keyboard('{Escape}')
+    }
+    // Void would wait in a payment's "⋯": no payment has one.
+    expect(screen.queryByRole('button', { name: /^More actions: the payment of/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Review in Payments' })).not.toBeInTheDocument()
     // Copying a link someone else created is still offered.
     expect(within(requests).getByRole('button', { name: 'Copy link' })).toBeInTheDocument()
@@ -652,15 +696,16 @@ describe('PD-27 on the Parent Profile', () => {
 
   it('a verifier who may not record refunds but does not void', async () => {
     serve(billing({ canRecord: false, canVerify: true }))
-    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1' })
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1#money' })
     const received = await screen.findByRole('region', { name: 'Payments received' })
     expect(within(received).getByRole('button', { name: 'Refund' })).toBeInTheDocument()
-    expect(within(received).queryByRole('button', { name: 'Void' })).not.toBeInTheDocument()
+    // Void would wait in the row's "⋯": there is none.
+    expect(within(received).queryByRole('button', { name: /^More actions: the payment of/ })).not.toBeInTheDocument()
   })
 
   it('a recorder with pending receipts is pointed at the Payments area', async () => {
     serve(billing())
-    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1' })
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1#money' })
     const receipts = await screen.findByRole('region', { name: 'Bank-transfer receipts' })
     expect(within(receipts).getByRole('link', { name: 'Review in Payments' })).toHaveAttribute('href', '/payments')
   })

@@ -71,6 +71,8 @@ export interface AdminSection {
   purpose: Bilingual
   note: Bilingual
   legacy?: readonly LegacyScreen[]
+  /** Where the work is done until this section opens. */
+  meanwhile?: AdminSectionKey
 }
 
 export const ADMIN_GROUPS: readonly { key: AdminGroupKey; label: Bilingual }[] = [
@@ -80,11 +82,6 @@ export const ADMIN_GROUPS: readonly { key: AdminGroupKey; label: Bilingual }[] =
   { key: 'operations', label: { en: 'Operations & performance', ar: 'التشغيل والأداء' } },
   { key: 'administration', label: { en: 'Administration', ar: 'الإدارة' } },
 ]
-
-const NO_BACKEND: Bilingual = {
-  en: 'Its backend has not been built yet.',
-  ar: 'لم تُبنَ واجهته الخلفية بعد.',
-}
 
 export const ADMIN_SECTIONS: readonly AdminSection[] = [
   /* -------------------------------------------------------------- overview */
@@ -99,8 +96,8 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
       ar: 'ما يجري في المؤسسة وما يحتاج إلى متابعة.',
     },
     note: {
-      en: 'Response times and workload metrics are not built yet.',
-      ar: 'مؤشرات أزمنة الرد وعبء العمل لم تُبنَ بعد.',
+      en: 'Response times and workload figures are not available yet.',
+      ar: 'مؤشرات أزمنة الرد وعبء العمل غير متاحة بعد.',
     },
   },
 
@@ -108,7 +105,7 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
   {
     key: 'conversations',
     group: 'communication',
-    icon: 'conversations',
+    icon: 'messages',
     status: 'read_only',
     label: { en: 'Conversations', ar: 'المحادثات' },
     navLabel: { en: 'All conversations', ar: 'كل المحادثات' },
@@ -150,8 +147,8 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
       ar: 'إرسال الإعلانات إلى العائلات والمعلمين والموظفين.',
     },
     note: {
-      en: 'Push delivery works for messages and calls; announcements have no backend yet.',
-      ar: 'الإشعارات تعمل للرسائل والمكالمات؛ الإعلانات لا واجهة خلفية لها بعد.',
+      en: 'Messages and calls already notify people; announcements will be sent from here.',
+      ar: 'الرسائل والمكالمات تُشعر أصحابها حاليًا، وستُرسَل الإعلانات من هنا.',
     },
   },
   {
@@ -168,8 +165,8 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
       ar: 'بدء المكالمات الصوتية وجدولة المكالمات ومشاركة روابط مكالمات للأعضاء فقط.',
     },
     note: {
-      en: 'This account’s own calls. An organization-wide call history and shared media have no backend yet.',
-      ar: 'مكالمات هذا الحساب فقط. لا واجهة خلفية بعد لسجل المكالمات على مستوى المؤسسة ولا للوسائط المشتركة.',
+      en: 'This account’s own calls. An academy-wide call history is not available yet.',
+      ar: 'مكالمات هذا الحساب فقط. سجل المكالمات على مستوى الأكاديمية غير متاح بعد.',
     },
   },
   {
@@ -184,8 +181,8 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
       ar: 'إدارة قناة واتساب للأعمال الخاصة بالمؤسسة.',
     },
     note: {
-      en: 'It needs a product decision before its backend can be built.',
-      ar: 'يحتاج قرار منتج قبل بناء واجهته الخلفية.',
+      en: 'How the academy will use WhatsApp is still being decided.',
+      ar: 'طريقة استخدام الأكاديمية لواتساب ما زالت قيد القرار.',
     },
   },
 
@@ -216,14 +213,14 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
       ar: 'الأقسام، ومشرف كل طفل، والمشرفون البدلاء.',
     },
     note: {
-      en: 'Changes are checked by the server and recorded with their reason. Reporting lines and responsibilities stay in My profile → Organization overview.',
-      ar: 'يتحقق الخادم من التغييرات ويسجّلها مع سببها. تبقى خطوط التبعية والمسؤوليات في ملفي الشخصي ← نظرة عامة على المؤسسة.',
+      en: 'Every change is checked and recorded with its reason. Reporting lines and responsibilities stay in My profile → Organization overview.',
+      ar: 'يُراجَع كل تغيير ويُسجَّل مع سببه. تبقى خطوط التبعية والمسؤوليات في ملفي الشخصي ← نظرة عامة على المؤسسة.',
     },
   },
   {
     key: 'teachers',
     group: 'people',
-    icon: 'users',
+    icon: 'teachers',
     // PD-10: the administration-only Teacher File, against /teacher-files.
     status: 'managed',
     label: { en: 'Teachers', ar: 'المعلمون' },
@@ -241,7 +238,7 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
   {
     key: 'instalments',
     group: 'operations',
-    icon: 'calendar',
+    icon: 'instalments',
     // PD-12 S3 / PD-17: the instalments recorded in Chat, as a queue.
     status: 'read_only',
     label: { en: 'Instalment payments', ar: 'الأقساط' },
@@ -257,7 +254,7 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
   {
     key: 'parents',
     group: 'operations',
-    icon: 'users',
+    icon: 'parents',
     // PD-17: contact information, the internal note, payments. Administration only.
     status: 'managed',
     label: { en: 'Parents', ar: 'أولياء الأمور' },
@@ -273,7 +270,7 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
   {
     key: 'payments',
     group: 'operations',
-    icon: 'tag',
+    icon: 'payments',
     // PD-27: bank-transfer receipts to verify, and the academy's payment settings.
     status: 'managed',
     label: { en: 'Payments', ar: 'المدفوعات' },
@@ -296,7 +293,11 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
       en: 'Review conversation quality and supervise response standards.',
       ar: 'مراجعة جودة المحادثات والإشراف على معايير الرد.',
     },
-    note: NO_BACKEND,
+    note: {
+      en: 'Until it opens, conversations are read under All conversations.',
+      ar: 'وحتى يُفتح، تُقرأ المحادثات من «كل المحادثات».',
+    },
+    meanwhile: 'conversations',
   },
   {
     key: 'academy',
@@ -309,8 +310,8 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
       ar: 'العمليات اليومية للأكاديمية المرتبطة بالتواصل.',
     },
     note: {
-      en: 'Schedules, attendance and subscriptions belong to Jawwid Core and are not shown here.',
-      ar: 'الجداول والحضور والاشتراكات تخص جوّد كور ولا تُعرض هنا.',
+      en: 'Schedules, attendance and subscriptions stay in Jawwid Core.',
+      ar: 'تبقى الجداول والحضور والاشتراكات في نظام جوّد الأساسي.',
     },
   },
   {
@@ -339,7 +340,10 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
       en: 'Collect structured feedback from families and staff.',
       ar: 'جمع ملاحظات منظمة من العائلات والموظفين.',
     },
-    note: NO_BACKEND,
+    note: {
+      en: 'Nothing is collected here for now.',
+      ar: 'لا يُجمع شيء هنا حاليًا.',
+    },
   },
   {
     key: 'reports',
@@ -352,8 +356,8 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
       ar: 'إحصائيات المعلمين: الحصص حسب النتيجة والمدة، والتقارير في موعدها، والرد على الأسر، وعبء العمل.',
     },
     note: {
-      en: 'Counted by the server from the lessons themselves (PD-11). Read-only.',
-      ar: 'يحسبها الخادم من الحصص نفسها (PD-11). للاطلاع فقط.',
+      en: 'Counted from the recorded lessons. Read-only.',
+      ar: 'تُحسب من الحصص المسجّلة. للاطلاع فقط.',
     },
   },
 
@@ -368,7 +372,10 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
       en: 'Connect Jawwid Chat with external services.',
       ar: 'ربط جوّد للمحادثات بالخدمات الخارجية.',
     },
-    note: NO_BACKEND,
+    note: {
+      en: 'No outside service is connected from here for now.',
+      ar: 'لا تُربط أي خدمة خارجية من هنا حاليًا.',
+    },
   },
   {
     key: 'approvals',
@@ -381,8 +388,8 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
       ar: 'مراجعة الطلبات التي تحتاج موافقة الإدارة.',
     },
     note: {
-      en: 'Messages no longer need approval (PD-14): admins edit or delete them in the chat after sending. Administrator approvals are not wired yet.',
-      ar: 'لم تعد الرسائل تحتاج موافقة: يعدّلها المشرفون أو يحذفونها في المحادثة بعد إرسالها. موافقات الإدارة غير موصولة بعد.',
+      en: 'Messages need no approval: supervisors edit or delete them in the chat after sending.',
+      ar: 'الرسائل لا تحتاج موافقة: يعدّلها المشرفون أو يحذفونها في المحادثة بعد إرسالها.',
     },
   },
   {
@@ -396,8 +403,8 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
       ar: 'سجل للإجراءات الحساسة: من فعل ماذا ومتى.',
     },
     note: {
-      en: 'Actions are already being recorded; a screen to read them is not built yet.',
-      ar: 'الإجراءات تُسجَّل بالفعل؛ لم تُبنَ شاشة لقراءتها بعد.',
+      en: 'Actions are already being recorded and will be read here.',
+      ar: 'الإجراءات تُسجَّل بالفعل وستُقرأ من هنا.',
     },
   },
   {
@@ -410,7 +417,10 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
       en: 'Organization-wide configuration.',
       ar: 'إعدادات المؤسسة العامة.',
     },
-    note: NO_BACKEND,
+    note: {
+      en: 'Payment settings are on the Payments page; notification settings on Notifications.',
+      ar: 'إعدادات المدفوعات في صفحة المدفوعات، وإعدادات الإشعارات في صفحة الإشعارات.',
+    },
   },
 ]
 

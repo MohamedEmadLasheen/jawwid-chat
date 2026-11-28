@@ -1,3 +1,4 @@
+import { ACADEMY_ZONE, clock12In, dayMonthIn, weekdayIn, zoneLabel } from '@/core/time/academyTime'
 import { Avatar } from '@/shared/components/Avatar'
 import { Icon, type IconName } from '@/shared/components/Icon'
 import type { ChatConversation, ChatLastMessage } from './chatApi'
@@ -7,22 +8,65 @@ import type { ChatCopy } from './copy'
 
 export const isGroup = (c: Pick<ChatConversation, 'type'>) => c.type !== 'direct'
 
-/** A row's name: the group's own title, else the child, else the other members, else its kind. */
+/**
+ * A row's name: the group's own title, else the child, else the other members,
+ * else its kind. A title the server gave is shown as given; a name composed
+ * here joins the people with the UI language's own separator.
+ */
 export function conversationName(c: ChatConversation, selfId: string | undefined, copy: ChatCopy): string {
   if (c.title) return c.title
   if (c.learner?.name) return c.learner.name
   const others = (c.members ?? []).filter((m) => m.actorId !== selfId && m.displayName)
-  if (others.length > 0) return others.map((m) => m.displayName).join('، ')
+  if (others.length > 0) return others.map((m) => m.displayName).join(copy.listSeparator)
   return copy.kind[c.type] ?? c.type
 }
 
-/** The one-line preview under a row's name, worded by the client (never raw JSON). */
-export function previewText(m: ChatLastMessage | null | undefined, selfId: string | undefined, copy: ChatCopy): string {
-  if (!m) return ''
-  if (m.deleted) return copy.preview.deleted ?? ''
-  const what = m.text ?? (m.systemKind ? (copy.system[m.systemKind] ?? copy.system.fallback)!({}) : copy.preview[m.type] ?? '')
-  return m.authorId && m.authorId === selfId && !m.systemKind ? `${copy.you}: ${what}` : what
+/** False when the row's name is only its kind in words: there is nobody to take initials from. */
+export function hasOwnName(c: ChatConversation, selfId: string | undefined): boolean {
+  return !!c.title || !!c.learner?.name || (c.members ?? []).some((m) => m.actorId !== selfId && m.displayName)
 }
+
+/**
+ * The app writes Western digits everywhere (DD-09). Words the server rendered
+ * ahead of time may carry Arabic-Indic or Extended Arabic-Indic digits: they
+ * are folded to 0-9 when a card Jawwid posted is drawn. Never applied to what
+ * a person typed.
+ */
+export const westernDigits = (text: string) =>
+  text.replace(/[\u0660-\u0669\u06F0-\u06F9]/g, (d) => String(d.charCodeAt(0) - (d.charCodeAt(0) >= 0x06f0 ? 0x06f0 : 0x0660)))
+
+const CARD_FAMILIES = ['call', 'case', 'leave', 'trial', 'lesson'] as const
+
+/**
+ * The one-line preview under a row's name, worded by the client (never raw
+ * JSON): what was said, and "You" when the viewer said it. Kept apart so "You"
+ * leads the line in the pane's direction and what was said follows it, isolated.
+ */
+export function previewParts(
+  m: ChatLastMessage | null | undefined,
+  selfId: string | undefined,
+  copy: ChatCopy,
+  /** A group's members: who else said it is then named, so the line says who is waiting. */
+  members?: ChatConversation['members'],
+): { who: string | null; text: string } {
+  if (!m) return { who: null, text: '' }
+  if (m.deleted) return { who: null, text: copy.preview.deleted ?? '' }
+  // A card has no text of its own: it is named by its family (a call, a lesson, a case...);
+  // one this client does not know leaves the line to the row's fallback.
+  const family = m.type === 'card' ? CARD_FAMILIES.find((f) => m.cardKind?.startsWith(`${f}_`)) : undefined
+  const kind = family ? `card.${family}` : m.type
+  const text = m.text ?? (m.systemKind ? (copy.system[m.systemKind] ?? copy.system.fallback)!({}) : copy.preview[kind] ?? '')
+  if (text === '' || !m.authorId || m.systemKind || m.authorKind === 'system') return { who: null, text }
+  if (m.authorId === selfId) return { who: copy.you, text }
+  const author = members?.find((x) => x.actorId === m.authorId)?.displayName
+  return { who: author || null, text }
+}
+
+export function previewText(m: ChatLastMessage | null | undefined, selfId: string | undefined, copy: ChatCopy): string {
+  const { who, text } = previewParts(m, selfId, copy)
+  return who ? `${who}: ${text}` : text
+}
+
 
 /** A small glyph on the avatar says what kind of conversation it is. */
 const TYPE_GLYPH: Record<string, IconName | undefined> = {
@@ -49,6 +93,34 @@ export function conversationPhoto(c: ChatConversation, selfId: string | undefine
   return c.avatarUrl ?? c.learner?.avatarUrl ?? null
 }
 
+/**
+ * Who a monogram stands for, said by its tint: a parent (gold), a teacher
+ * (teal), a family still on trial (lilac), or Jawwid's own staff and rooms
+ * (neutral). The tint is never the only cue: the kind glyph and the role word
+ * say it too.
+ */
+export type WhoTone = 'parent' | 'teacher' | 'lead' | 'staff'
+
+export const toneOfKind = (actorKind: string): WhoTone =>
+  actorKind === 'contact' ? 'parent' : actorKind === 'teacher' ? 'teacher' : 'staff'
+
+/** `members` is absent from some list rows; the type alone then decides. */
+export function conversationTone(
+  c: { type: string; familyId?: string | null; members?: Array<{ actorId: string; actorKind: string }> },
+  selfId?: string,
+): WhoTone {
+  if (c.type === 'trial_group') return 'lead'
+  if (c.type === 'teacher_supervision') return 'teacher'
+  if (c.type === 'department_room' || c.type === 'official') return 'staff'
+  if (c.type === 'direct') {
+    const kinds = (c.members ?? []).filter((m) => m.actorId !== selfId).map((m) => m.actorKind)
+    if (kinds.includes('contact')) return 'parent'
+    if (kinds.includes('teacher')) return 'teacher'
+    return kinds.length === 0 && c.familyId ? 'parent' : 'staff'
+  }
+  return 'parent'
+}
+
 export function ConversationAvatar({
   c,
   name,
@@ -61,17 +133,47 @@ export function ConversationAvatar({
   selfId?: string
 }) {
   const glyph = TYPE_GLYPH[c.type]
+  const photo = conversationPhoto(c, selfId)
   return (
-    <span className="typed-avatar">
-      <Avatar name={name} seed={c.id} size={size} src={conversationPhoto(c, selfId)} />
+    <span className={`typed-avatar cw-who cw-who--${conversationTone(c, selfId)}`}>
+      {photo || hasOwnName(c, selfId) ? <Avatar name={name} seed={c.id} size={size} src={photo} /> : <BlankMonogram size={size} />}
       {glyph && (
         <span className="typed-avatar__glyph" aria-hidden="true">
-          <Icon name={glyph} size={11} />
+          <Icon name={glyph} size={13} />
         </span>
       )}
     </span>
   )
 }
+
+/** "Sun 29 Nov, 5:00 PM": an instant on the academy's clock, in the UI language, with Western digits. */
+export function lessonWhen(iso: string, locale: 'ar' | 'en'): string {
+  if (Number.isNaN(new Date(iso).getTime())) return ''
+  const day = `${weekdayIn(iso, ACADEMY_ZONE, locale)} ${dayMonthIn(iso, ACADEMY_ZONE, locale)}`
+  return `${day}${locale === 'ar' ? '،' : ','} ${clock12In(iso, ACADEMY_ZONE, locale)}`
+}
+
+/** The same, saying whose clock it is: "Sun 29 Nov, 5:00 PM (Cairo time)", for a card families in other zones also read. */
+export function callWhen(iso: string, locale: 'ar' | 'en'): string {
+  const when = lessonWhen(iso, locale)
+  return when && `${when} (${zoneLabel(ACADEMY_ZONE, locale)})`
+}
+
+/** A conversation with no name of its own: the conversations glyph, never initials of a placeholder. */
+export function BlankMonogram({ size }: { size?: 'sm' | 'md' | 'lg' }) {
+  return (
+    <span className={`avatar avatar--blank${size && size !== 'md' ? ` avatar--${size}` : ''}`} aria-hidden="true">
+      <Icon name="conversations" size={size === 'lg' ? 22 : 18} />
+    </span>
+  )
+}
+
+/**
+ * A card's plain-text body is what the server wrote for clients that cannot
+ * draw the card; it leads with a pictograph. The workspace draws the card
+ * itself, so it shows the words without that leading mark, and changes nothing else.
+ */
+export const cardFallbackText = (body: string) => body.replace(/^[\p{Extended_Pictographic}\uFE0F\u200D]+\s*/u, '')
 
 export const isMuted = (c: ChatConversation, now = Date.now()) => {
   const until = c.viewerState?.mutedUntil

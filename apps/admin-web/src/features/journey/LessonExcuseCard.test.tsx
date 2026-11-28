@@ -50,7 +50,7 @@ describe('an excused lesson\'s card', () => {
       ...base, timing: 'before_start', makeupOwed: true, reason: 'Travelling to Umrah', makeupStartsAt: '2026-11-04T16:30:00Z',
     })!
     renderWithProviders(<LessonExcuseCard card={card} />, { staff })
-    const group = screen.getByRole('group', { name: '🙏 Child Alpha has an excuse and will not attend the lesson' })
+    const group = screen.getByRole('group', { name: 'Child Alpha has an excuse and will not attend the lesson' })
     expect(group).toHaveTextContent('ReasonTravelling to Umrah')
     expect(group).toHaveTextContent('LessonMon 2 Nov 17:00 · Cairo time')
     expect(group).toHaveTextContent('Make-up lessonWed 4 Nov 18:30 · Cairo time')
@@ -96,7 +96,7 @@ describe('an excused lesson\'s card', () => {
   it('a late apology with a category shows the family\'s words from its ruling, for staff and the teacher', async () => {
     ruling = { id: 'r-1', reason: 'Power cut at home', decision: null }
     renderWithProviders(<LessonExcuseCard card={readLessonExcuseCard('lesson_late_apology', { ...base, reasonCategory: 'emergency', rulingId: 'r-1' })!} />, { staff })
-    const group = screen.getByRole('group', { name: "🕊️ Late apology for Child Alpha's lesson" })
+    const group = screen.getByRole('group', { name: "Late apology for Child Alpha's lesson" })
     expect(group).toHaveTextContent('ReasonAn emergency')
     await waitFor(() => expect(group).toHaveTextContent('Details from the family (staff and the teacher only)Power cut at home'))
     expect(group).toHaveTextContent('The supervision team will review it.')
@@ -124,7 +124,7 @@ describe('an excused lesson\'s card', () => {
       ...base, timing: 'before_start', makeupOwed: true, reason: 'سفر', makeupStartsAt: '2026-11-04T16:30:00Z',
     })!
     renderWithProviders(<LessonExcuseCard card={card} />, { staff, locale: 'ar' })
-    const group = screen.getByRole('group', { name: '🙏 لدى Child Alpha عذر ولن يتمكن من حضور الحصة' })
+    const group = screen.getByRole('group', { name: 'لدى Child Alpha عذر ولن يتمكن من حضور الحصة' })
     expect(group).toHaveTextContent('السببسفر')
     expect(group).toHaveTextContent('الحصة التعويضية')
     expect(group).toHaveTextContent('بتوقيت القاهرة')
@@ -138,7 +138,7 @@ describe('the make-up card', () => {
       ...base, startsAt: '2026-11-04T16:30:00Z', makeupFor: 'l-0', missedStartsAt: '2026-11-02T15:00:00Z', missedOutcome: 'student_apology',
     })!
     renderWithProviders(<LessonExcuseCard card={card} />, { staff })
-    const group = screen.getByRole('group', { name: '📅 A make-up lesson is scheduled for Child Alpha' })
+    const group = screen.getByRole('group', { name: 'A make-up lesson is scheduled for Child Alpha' })
     expect(group).toHaveTextContent('Make-up lessonWed 4 Nov 18:30 · Cairo time')
     expect(group).toHaveTextContent('Instead of the lesson onMon 2 Nov 17:00 · Cairo time')
     expect(group).toHaveTextContent('Teacher One · 30 min')

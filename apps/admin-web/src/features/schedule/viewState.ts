@@ -6,8 +6,9 @@ import type { CalendarQuery } from './api'
  * shared and survives a reload. Pure -- every rule here is unit-tested.
  *
  * Days are the academy's calendar days ("2026-10-26"), never the browser's
- * (PD-22). The week runs Saturday to Friday, as the academy's working week
- * (Saturday-Thursday) does.
+ * (PD-22). The week runs Saturday to Friday by default, as the academy's
+ * working week (Saturday-Thursday) does; a person may start it on Sunday or
+ * Monday instead (a choice kept on their browser, see useWeekStart).
  */
 
 export type View = 'day' | 'week' | 'month'
@@ -47,9 +48,19 @@ export function isoWeekday(day: string): number {
   return d === 0 ? 7 : d
 }
 
-/** The Saturday that starts the day's week. */
-export function weekStart(day: string): string {
-  return addDays(day, -((isoWeekday(day) + 1) % 7))
+/** The first day of the week, as an ISO weekday: Saturday, the academy's own week (owner decision, third pass). */
+export const SCHEDULE_WEEK_START = 6
+/** The days a person may start their week on. */
+export const WEEK_STARTS = [6, 7, 1] as const
+export type WeekStart = (typeof WEEK_STARTS)[number]
+
+export function isWeekStart(v: unknown): v is WeekStart {
+  return (WEEK_STARTS as readonly unknown[]).includes(v)
+}
+
+/** The day that starts the day's week (Saturday unless another start is given). */
+export function weekStart(day: string, start: number = SCHEDULE_WEEK_START): string {
+  return addDays(day, -((isoWeekday(day) - start + 7) % 7))
 }
 
 export function monthStart(day: string): string {
@@ -63,10 +74,10 @@ function addMonths(day: string, n: number): string {
 }
 
 /** The view's days, [from, to). */
-export function rangeFor(view: View, date: string): { from: string; to: string } {
+export function rangeFor(view: View, date: string, start: number = SCHEDULE_WEEK_START): { from: string; to: string } {
   if (view === 'day') return { from: date, to: addDays(date, 1) }
   if (view === 'week') {
-    const from = weekStart(date)
+    const from = weekStart(date, start)
     return { from, to: addDays(from, 7) }
   }
   return { from: monthStart(date), to: addMonths(date, 1) }
@@ -116,8 +127,8 @@ export function toParams(s: ViewState): URLSearchParams {
 }
 
 /** The API query for the view: the range plus every filter set. */
-export function apiQuery(s: ViewState): CalendarQuery {
-  const q: CalendarQuery = { ...rangeFor(s.view, s.date) }
+export function apiQuery(s: ViewState, start: number = SCHEDULE_WEEK_START): CalendarQuery {
+  const q: CalendarQuery = { ...rangeFor(s.view, s.date, start) }
   for (const k of LIST_FILTERS) if (s.lists[k].length > 0) q[k] = s.lists[k].join(',')
   for (const k of SCALAR_FILTERS) if (s.scalars[k]) q[k] = s.scalars[k] as string
   return q

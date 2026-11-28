@@ -1,0 +1,405 @@
+/*
+ * People pages: parents, students, staff, accounts.
+ *
+ * One open pattern for a person's file, used by every page in this group:
+ *   .pp-head   who it is: monogram, name in display type, one line of facts
+ *   .pp-strip  a ruled strip of labelled facts (a ledger for words)
+ *   .pp-bar    the index of the file and its primary actions; it stays in view
+ *   .pp-cols   the file (main) and its margin (side), divided by one hairline
+ *   .pp-sec    a ruled section; sections from other features take the same look
+ *   .pp-tl     a timeline with dots
+ *   .pp-meter  a thin progress line
+ * Lists use the shared hairline table with the header stuck to the page.
+ */
+
+.pp { --pp-side: 348px; --pp-bar-h: 52px; }
+
+/* ------------------------------------------------------------------ back */
+
+.pp-back { margin: 0 0 var(--space-4); font-size: var(--fs-sm); }
+.pp-back a { display: inline-flex; align-items: center; gap: 6px; min-block-size: 32px; color: var(--teal); font-weight: 500; text-decoration: none; }
+.pp-back a:hover { color: var(--teal-dark); text-decoration: underline; text-underline-offset: 3px; }
+
+/* ------------------------------------------------------------------ head */
+
+.pp-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3) var(--space-5);
+  margin: 0 0 var(--space-5);
+}
+.pp-head__mark { position: relative; align-self: start; }
+.pp-head__mark .avatar, .pp-head__mark .sp-avatar, .pp-head__mark .pf-photo__img {
+  inline-size: 76px;
+  block-size: 76px;
+  border-radius: var(--radius-lg);
+  font-family: var(--font-head);
+  font-size: 29px;
+  font-weight: 600;
+}
+/* The mark sits on a short gold rule: the one ornament a file's head carries. */
+.pp-head__mark::after {
+  content: '';
+  position: absolute;
+  inset-block-end: -7px;
+  inset-inline-start: 0;
+  inline-size: 26px;
+  border-block-end: 2px solid var(--gold);
+}
+.pp-head__text { min-inline-size: 0; }
+.pp-head__eyebrow { margin: 0 0 2px; font-family: var(--font); font-size: 12.5px; font-weight: 500; line-height: 1.4; color: var(--ink-muted); }
+.pp-head__name {
+  margin: 0;
+  font-family: var(--font-head);
+  font-size: var(--fs-title);
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+html[lang='ar'] .pp-head__name { font-weight: 700; line-height: 1.4; }
+.pp-head__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin: 6px 0 0;
+  font-size: var(--fs-sm);
+  color: var(--ink-muted);
+}
+/* Facts are parted by a short gold rule; a status brings its own dot. The rule trails the
+   fact before it, so a line that wraps never begins with one. */
+.pp-head__meta > :not(.badge):has(+ :not(.badge))::after {
+  content: '';
+  display: inline-block;
+  vertical-align: middle;
+  inline-size: 12px;
+  margin-inline-start: 12px;
+  border-block-start: 1px solid var(--gold-line);
+}
+.pp-head__meta .badge { display: inline-flex; }
+.pp-head__meta strong { font-weight: 600; color: var(--ink); }
+.pp-head__actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--space-2); }
+/* Actions over one quiet line (a hint, a saved notice). */
+.pp-head__actions.pp-head__actions--stack { flex-direction: column; align-items: flex-end; gap: 4px; max-inline-size: 340px; }
+.pp-head__buttons { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: var(--space-2); }
+.pp-head__hint { font-size: var(--fs-xs); color: var(--ink-muted); text-align: end; }
+
+/* Presence: a ring is away, a filled dot is here. */
+.pp-presence { display: inline-flex; align-items: center; gap: 7px; }
+.pp-presence::before { content: ''; inline-size: 8px; block-size: 8px; border-radius: 50%; border: 1.5px solid var(--border-control); }
+.pp-presence--on::before { border-color: var(--done); background: var(--done); }
+
+@media (max-width: 767px) {
+  .pp-head { grid-template-columns: auto minmax(0, 1fr); align-items: start; }
+  .pp-head__mark .avatar, .pp-head__mark .sp-avatar, .pp-head__mark .pf-photo__img { inline-size: 56px; block-size: 56px; font-size: 22px; }
+  /* Two lines hold a four-part name. */
+  .pp-head__name { font-size: 23px; line-height: 1.25; }
+  html[lang='ar'] .pp-head__name { font-size: 24px; line-height: 1.45; }
+  .pp-head__actions { grid-column: 1 / -1; justify-content: flex-start; }
+  .pp-head__actions.pp-head__actions--stack { align-items: flex-start; max-inline-size: none; }
+  .pp-head__buttons { justify-content: flex-start; }
+  .pp-head__hint { text-align: start; }
+}
+
+/* ----------------------------------------------------------------- strip */
+
+/* Labelled facts in a ruled row: each fact a column, hairlines between. */
+.pp-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  margin: 0;
+  padding: 0;
+  border-block: 1px solid var(--line);
+}
+.pp-strip > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-inline-size: 0;
+  padding: 11px var(--space-4) 12px;
+  border-inline-start: 1px solid var(--line);
+  margin-inline-start: -1px;
+}
+.pp-strip dt { font-size: 12.5px; color: var(--ink-muted); }
+.pp-strip dd { margin: 0; font-size: var(--fs-md); font-weight: 500; overflow-wrap: anywhere; }
+/* A fact nobody has recorded is said quietly: it must not weigh what a real value weighs. */
+.pp-strip dd .tf-muted, .pp-strip dd.tf-muted { font-size: var(--fs-sm); font-weight: 400; color: var(--ink-muted); }
+.pp-strip dd.pp-strip__num { font-family: var(--font-head); font-size: var(--fs-xl); font-weight: 600; line-height: 1.2; font-variant-numeric: tabular-nums lining-nums; }
+.pp-strip-wrap { overflow: hidden; }
+.pp-strip-wrap > .pp-strip { margin-inline-start: -1px; }
+.pp-strip > div:first-child { padding-inline-start: 3px; }
+@media (max-width: 767px) {
+  .pp-strip { grid-template-columns: 1fr 1fr; }
+  .pp-strip > div { padding-inline: var(--space-3); border-block-start: 1px solid var(--line-2); margin-block-start: -1px; }
+  .pp-strip > div:nth-child(odd) { padding-inline-start: 3px; }
+}
+
+/* ------------------------------------------------------------------- bar */
+
+/* The file's index and its actions. It stays at the top while the file scrolls. */
+.pp-bar {
+  position: sticky;
+  /* The page scrolls inside its own padding: the bar rises through it to meet the top bar's rule. */
+  inset-block-start: calc(-1 * var(--space-6));
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-block-size: var(--pp-bar-h);
+  margin: 0 calc(-1 * var(--space-6)) var(--space-5);
+  padding: 0 var(--space-6);
+  background: var(--canvas);
+  border-block-end: 1px solid var(--line);
+}
+.pp-bar__index { display: flex; gap: var(--space-5); min-inline-size: 0; flex: 1; overflow-x: auto; scrollbar-width: none; align-self: stretch; }
+.pp-bar__index::-webkit-scrollbar { display: none; }
+.pp-bar__jump {
+  flex: none;
+  min-block-size: var(--pp-bar-h);
+  padding: 0;
+  border: 0;
+  border-block-end: 2px solid transparent;
+  background: none;
+  color: var(--ink-muted);
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+}
+.pp-bar__jump:hover { color: var(--ink); border-block-end-color: var(--line); }
+.pp-bar__jump:focus-visible { outline-offset: -2px; }
+.pp-bar__jump .pp-count { margin-inline-start: 6px; font-size: var(--fs-xs); font-variant-numeric: tabular-nums; color: var(--ink-muted); }
+.pp-bar__jump--late .pp-count { color: var(--urgent); font-weight: 600; }
+.pp-bar__actions { display: flex; align-items: center; gap: var(--space-2); flex: none; padding-block: 7px; }
+@media (max-width: 767px) {
+  .pp-bar { inset-block-start: calc(-1 * var(--space-4)); margin-inline: calc(-1 * var(--space-4)); padding-inline: var(--space-4); flex-wrap: wrap; gap: 0 var(--space-3); }
+  .pp-bar__actions { order: -1; inline-size: 100%; padding-block: 6px; }
+  .pp-bar__actions .btn { flex: 1; }
+}
+
+/* ------------------------------------------------------------------ cols */
+
+.pp-cols { display: grid; grid-template-columns: minmax(0, 1fr) var(--pp-side); gap: 0 var(--space-7); align-items: start; }
+.pp-main { min-inline-size: 0; }
+.pp-side { min-inline-size: 0; padding-inline-start: var(--space-6); border-inline-start: 1px solid var(--line); }
+.pp-cols--even { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+@media (max-width: 1099px) {
+  .pp-cols, .pp-cols--even { grid-template-columns: minmax(0, 1fr); }
+  .pp-side { padding-inline-start: 0; border-inline-start: 0; }
+}
+
+/* ---------------------------------------------------------------- section */
+
+/* A section of the file. The ones other features render (.tf-section) read the same. */
+.pp :is(.pp-sec, .tf-section) {
+  margin: 0 0 var(--space-6);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  scroll-margin-block-start: calc(var(--pp-bar-h) + var(--space-4));
+}
+.pp :is(.pp-sec__head, .tf-section__head) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+  min-block-size: 40px;
+  padding-block-end: 6px;
+  border-block-end: 1px solid var(--line);
+}
+.pp :is(.pp-sec__title, .tf-section__title) {
+  margin: 0;
+  font-family: var(--font-head);
+  font-size: var(--fs-xl);
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--ink);
+}
+html[lang='ar'] .pp :is(.pp-sec__title, .tf-section__title) { font-weight: 700; line-height: 1.5; }
+.pp-sec__title .pp-count { margin-inline-start: 8px; font-family: var(--font); font-size: var(--fs-sm); font-weight: 500; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+/* A rule that protects people stays, in one quiet line under the heading. */
+.pp :is(.pp-sec, .tf-section) > .field__hint, .pp-rule {
+  display: block;
+  margin: 8px 0 0;
+  max-inline-size: 76ch;
+  font-size: var(--fs-xs);
+  line-height: 1.5;
+  color: var(--ink-muted);
+}
+.pp :is(.pp-sec, .tf-section) > .tf-muted, .pp-empty { margin: 12px 0 0; font-size: var(--fs-sm); color: var(--ink-muted); }
+.pp .tf-subtitle { margin: var(--space-5) 0 0; padding-block-end: 6px; border-block-end: 1px solid var(--line-2); font-size: 12.5px; font-weight: 500; color: var(--ink-muted); }
+.pp .tf-byline { margin: 8px 0 0; font-size: var(--fs-xs); color: var(--ink-muted); }
+
+/* In the margin, headings are labels, not titles: the main column speaks louder. */
+.pp-side :is(.pp-sec__title, .tf-section__title) { font-family: var(--font); font-size: 12.5px; font-weight: 500; color: var(--ink-muted); line-height: 1.5; }
+html[lang='ar'] .pp-side :is(.pp-sec__title, .tf-section__title) { font-size: 13.5px; font-weight: 500; }
+.pp-side :is(.pp-sec, .tf-section) { margin-block-end: var(--space-5); }
+.pp-side :is(.pp-sec__head, .tf-section__head) { min-block-size: 34px; }
+
+/* Label and value pairs as ruled lines. */
+.pp .tf-kv { display: grid; grid-template-columns: minmax(7.5rem, max-content) minmax(0, 1fr); gap: 0 var(--space-4); margin: 0; font-size: var(--fs-sm); }
+.pp .tf-kv > dt, .pp .tf-kv > dd { padding-block: 8px; border-block-end: 1px solid var(--line-2); margin: 0; }
+.pp .tf-kv > dt { color: var(--ink-muted); }
+.pp .tf-kv > dd { font-weight: 500; overflow-wrap: anywhere; }
+.pp .tf-kv .tf-muted, .pp .tf-kv .field__hint { font-weight: 400; }
+.pp .tf-kv .btn { margin-inline-start: 6px; }
+.pp .ns-inline { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.pp .ns-inline .btn { margin-inline-start: auto; }
+@media (max-width: 480px) {
+  .pp .tf-kv { grid-template-columns: minmax(0, 1fr); }
+  .pp .tf-kv > dt { padding-block-end: 0; border-block-end: 0; }
+  .pp .tf-kv > dd { padding-block-start: 2px; }
+}
+.pp .banner { margin-block-start: var(--space-3); padding: 6px var(--space-3); border: 0; border-inline-start: 2px solid var(--teal); background: none; color: var(--ink-muted); }
+.pp .banner--danger { border-inline-start-color: var(--urgent); color: var(--urgent); }
+
+/* ------------------------------------------------------------- ruled rows */
+
+.pp-rows { list-style: none; margin: 0; padding: 0; }
+.pp-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px var(--space-3);
+  padding: 10px 2px;
+  border-block-end: 1px solid var(--line-2);
+}
+.pp-row__name { font-weight: 600; color: var(--ink); text-decoration: none; }
+a.pp-row__name:hover { color: var(--teal-dark); text-decoration: underline; text-underline-offset: 3px; }
+.pp-row__sub { font-size: var(--fs-xs); color: var(--ink-muted); }
+.pp-row__end { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--space-3); font-size: var(--fs-sm); }
+
+/* A thin line for how much of something is used. */
+.pp-meter { display: block; inline-size: 100%; block-size: 3px; background: var(--line); overflow: hidden; }
+.pp-meter > span { display: block; block-size: 100%; background: var(--teal-solid); }
+.pp-meter--late > span { background: var(--urgent-solid); }
+.pp-meter--warn > span { background: var(--gold-line); }
+
+/* -------------------------------------------------------------- timeline */
+
+/* A timeline with dots on one hairline. The newest entry's dot is filled. */
+.pp-tl { list-style: none; margin: 12px 0 0; padding: 0; }
+.pp-tl > li {
+  position: relative;
+  margin: 0;
+  padding: 0 0 14px;
+  padding-inline-start: 20px;
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+}
+.pp-tl > li::before {
+  content: '';
+  position: absolute;
+  inset-block: 6px -6px;
+  inset-inline-start: 3px;
+  border-inline-start: 1px solid var(--line);
+}
+.pp-tl > li:last-child::before { display: none; }
+.pp-tl > li::after {
+  content: '';
+  position: absolute;
+  inset-block-start: 6px;
+  inset-inline-start: 0;
+  inline-size: 7px;
+  block-size: 7px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border-control);
+  background: var(--canvas);
+}
+.pp-tl--newest-first > li:first-child::after, .pp-tl--oldest-first > li:last-child::after { border-color: var(--teal); background: var(--teal-solid); }
+.pp-tl strong, .pp-tl a { font-weight: 600; }
+.pp-tl a { color: var(--teal-dark); text-decoration: none; }
+.pp-tl a:hover { text-decoration: underline; text-underline-offset: 3px; }
+.pp-tl :is(.tf-muted, .sp-muted, .pp-tl__when) { font-size: var(--fs-xs); color: var(--ink-muted); }
+.pp-tl p { margin: 2px 0 0; }
+
+/* -------------------------------------------------------------------- tags */
+
+/* A responsibility or a role: a small square-ish tag, never a pill. */
+.pp-tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.pp-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-block-size: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  color: var(--ink);
+}
+.pp-tag--gold { border-color: var(--gold-line); color: var(--gold-text); }
+
+/* ------------------------------------------------------------------- lists */
+
+/* A list page: the table's header sticks to the page, not to a scrolling box. */
+.pp-list .page-header { margin-block-end: var(--space-5); }
+.pp-list .seg { margin-block-end: var(--space-3); padding-inline: 0; }
+.pp-tools { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-2) var(--space-3); margin-block-end: var(--space-3); }
+.pp-tools .search { flex: 1 1 260px; max-inline-size: 380px; }
+.pp-tools__end { margin-inline-start: auto; display: flex; align-items: center; gap: var(--space-3); font-size: var(--fs-sm); color: var(--ink-muted); }
+.pp-tools label { display: flex; flex-direction: column; gap: 3px; flex: 0 1 190px; min-inline-size: 150px; }
+.pp-tools label .field__label { margin: 0; }
+.pp-total { font-variant-numeric: tabular-nums; }
+.pp-tools .chips { align-self: center; }
+@media (max-width: 767px) {
+  /* Stacked controls take the whole line: no half-width picker beside an empty half. */
+  .pp-tools .search, .pp-tools label, .pp-tools .field { flex: 1 1 100%; max-inline-size: none; }
+}
+/* A row that opens a record says so under the pointer. */
+.pp-rowlink { cursor: pointer; }
+@media (min-width: 900px) {
+  .pp-list .table-wrap { overflow: visible; }
+  .pp-list .table th { inset-block-start: calc(-1 * var(--space-6)); }
+}
+.pp-list .table td { vertical-align: middle; }
+.pp-cell-who { display: inline-flex; align-items: center; gap: 10px; min-block-size: 32px; color: var(--ink); text-decoration: none; }
+.pp-cell-who > :last-child { font-weight: 600; }
+.pp-cell-who:hover > :last-child { color: var(--teal-dark); text-decoration: underline; text-underline-offset: 3px; }
+.pp-cell-sub { display: block; font-size: var(--fs-xs); color: var(--ink-muted); font-weight: 400; }
+/* A person and the line under their name (their family, their title). */
+.pp-cell-two { display: inline-flex; align-items: center; gap: 10px; min-inline-size: 0; }
+.pp-cell-name { font-weight: 600; color: var(--ink); text-decoration: none; }
+.pp-cell-name:hover { color: var(--teal-dark); text-decoration: underline; text-underline-offset: 3px; }
+.pp-cell-end { inline-size: 1%; white-space: nowrap; text-align: end; }
+.pp-go { display: inline-grid; place-items: center; inline-size: 32px; block-size: 32px; border-radius: var(--radius); color: var(--teal); }
+.pp-go:hover { background: var(--teal-tint); color: var(--teal-dark); }
+.pp-num { font-variant-numeric: tabular-nums; }
+
+/* On a phone a table row is a small file card without the card: who and their state on
+   the first line, then the labelled facts, three to a line. Nothing scrolls sideways. */
+@media (max-width: 767px) {
+  .pp-list .table-wrap:has(> .pp-stack) { overflow: visible; }
+  .pp-stack thead { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); }
+  .pp-stack, .pp-stack tbody { display: block; }
+  .pp-stack tr { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); align-items: start; gap: 6px var(--space-3); padding: 12px 2px; border-block-end: 1px solid var(--line-2); }
+  .pp-stack td, .pp-stack tbody tr:last-child td { display: block; min-inline-size: 0; padding: 0; border: 0; white-space: normal; overflow-wrap: anywhere; }
+  /* A date that keeps to one line in a wide table wraps here rather than run under its neighbour. */
+  .table.pp-stack td.cell-nowrap { white-space: normal; }
+  .pp-stack td:first-child { grid-column: 1 / -1; }
+  .pp-stack tr:has(> td[data-at='end']) > td:first-child { grid-column: 1 / span 4; }
+  .pp-stack td[data-at='end'] { grid-column: 5 / -1; grid-row: 1; justify-self: end; align-self: center; text-align: end; }
+  .pp-stack td[data-label] { grid-column: span 2; display: flex; flex-direction: column; font-size: var(--fs-sm); overflow-wrap: anywhere; }
+  .pp-stack td[data-label]::before { content: attr(data-label); font-size: var(--fs-xs); color: var(--ink-muted); }
+  .pp-stack td.num, [dir='rtl'] .pp-stack td.num { direction: inherit; unicode-bidi: normal; text-align: start; }
+  .pp-stack td[data-wide], .pp-stack td[data-label][data-wide] { grid-column: 1 / -1; inline-size: auto; white-space: normal; }
+  .pp-stack td.pp-cell-end { display: none; }
+}
+
+/* A removable filter: pressed, it carries a small cross. */
+.pp-chip-x { display: inline-flex; margin-inline-start: 6px; opacity: 0.75; }
+
+.pp-pager { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-block-start: var(--space-4); font-size: var(--fs-sm); color: var(--ink-muted); }
+.pp-pager__nav { display: flex; align-items: center; gap: var(--space-2); }
+
+@media (prefers-reduced-motion: reduce) {
+  .pp-bar__jump { transition: none; }
+}

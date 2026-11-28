@@ -288,9 +288,13 @@ describe('PD-23: an account\'s active devices on the Accounts page', () => {
     )
     renderWithProviders(<AppRoutes />, { staff: admin, route: '/accounts' })
     await screen.findByText('Teacher Omega')
-    expect(screen.getAllByRole('button', { name: 'Devices' })).toHaveLength(1)
+    // "Devices" waits behind a row's "more" menu: only the account the server allows has one.
     const alphaRow = screen.getByText('Parent Alpha').closest('tr')!
-    expect(within(alphaRow).getByRole('button', { name: 'Devices' })).toBeInTheDocument()
+    const omegaRow = screen.getByText('Teacher Omega').closest('tr')!
+    expect(within(omegaRow).queryByRole('button')).not.toBeInTheDocument()
+    await userEvent.click(within(alphaRow).getByRole('button', { name: 'More actions: Parent Alpha' }))
+    expect(screen.getAllByRole('menuitem', { name: 'Devices' })).toHaveLength(1)
+    expect(within(alphaRow).getByRole('menuitem', { name: 'Devices' })).toBeInTheDocument()
   })
 
   it('signs one device out with a reason, then all of them', async () => {
@@ -307,7 +311,8 @@ describe('PD-23: an account\'s active devices on the Accounts page', () => {
     on('POST', /\/admin\/accounts\/a-1\/sessions\/revoke-all$/, () => json({ revoked: 2 }))
     renderWithProviders(<AppRoutes />, { staff: admin, route: '/accounts' })
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Devices' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'More actions: Parent Alpha' }))
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Devices' }))
     let sheet = screen.getByRole('dialog', { name: 'Active devices of Parent Alpha' })
     const iosRow = (await within(sheet).findByText('iPhone 14')).closest('tr')!
     expect(within(sheet).queryByText('This browser')).not.toBeInTheDocument()
@@ -343,7 +348,8 @@ describe('PD-23: an account\'s active devices on the Accounts page', () => {
       json({ error: { code: 'COMM.ACCOUNT_ADMIN_DENIED', message: 'no' } }, 403),
     )
     renderWithProviders(<AppRoutes />, { staff: admin, route: '/accounts' })
-    await userEvent.click(await screen.findByRole('button', { name: 'Devices' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'More actions: Parent Alpha' }))
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Devices' }))
     const sheet = screen.getByRole('dialog', { name: 'Active devices of Parent Alpha' })
     const row = (await within(sheet).findByText('Old phone')).closest('tr')!
     await userEvent.click(within(row).getByRole('button', { name: 'Sign out' }))

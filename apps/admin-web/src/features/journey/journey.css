@@ -6,60 +6,78 @@
 .jr-row > .field { flex: 1 1 10rem; }
 
 .jr-chips { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+/* A choice is a square-ish chip; the chosen one is ink on teal tint. */
 .jr-chip {
-  font: inherit; font-size: var(--fs-sm); padding: var(--space-1) var(--space-3);
-  border: 1px solid var(--border); border-radius: var(--radius-full);
-  background: var(--surface); color: var(--text); cursor: pointer;
+  font: inherit; font-size: var(--fs-sm); font-weight: 500; min-block-size: 32px; padding: 0 var(--space-3);
+  border: 1px solid var(--hairline); border-radius: var(--radius);
+  background: transparent; color: var(--ink-muted); cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
 }
-.jr-chip:hover { background: var(--surface-hover); }
+.jr-chip:hover { border-color: var(--border-control); color: var(--ink); }
 .jr-chip:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .jr-chip[aria-pressed='true'], .jr-chip[aria-checked='true'] {
-  background: var(--accent-soft); border-color: var(--accent); color: var(--text); font-weight: var(--fw-semibold);
+  background: var(--teal-tint); border-color: var(--brand-200); color: var(--teal-dark); font-weight: 600;
 }
+@media (pointer: coarse) { .jr-chip { min-block-size: 40px; } }
 
-.jr-options { display: grid; gap: var(--space-2); }
+/* The options of one decision: ruled lines, the picked one on teal tint. */
+.jr-options { display: grid; gap: 0; border-block-start: 1px solid var(--hairline); }
 .jr-option {
-  display: flex; gap: var(--space-2); align-items: flex-start; padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--border); border-radius: var(--radius-md); cursor: pointer;
+  display: flex; gap: var(--space-2); align-items: flex-start; padding: 9px var(--space-2);
+  border: 0; border-block-end: 1px solid var(--hairline-soft); border-radius: 0; cursor: pointer; font-size: var(--fs-sm);
 }
-.jr-option > span { display: grid; gap: var(--space-1); }
-.jr-option--off { opacity: 0.6; cursor: not-allowed; }
-.jr-option:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.jr-option input { margin-block-start: 3px; accent-color: var(--teal); }
+.jr-option > span { display: grid; gap: 2px; }
+.jr-option--off { color: var(--ink-muted); cursor: not-allowed; }
+.jr-option:has(input:checked) { background: var(--teal-tint); }
 
 .jr-facts { display: grid; grid-template-columns: max-content 1fr; gap: var(--space-1) var(--space-3); margin: 0; }
-.jr-facts dt { color: var(--text-muted); }
+.jr-facts dt { color: var(--ink-muted); }
 .jr-facts dd { margin: 0; overflow-wrap: anywhere; }
 .jr-facts--compact { font-size: var(--fs-sm); }
-.jr-report-view { margin-block-start: var(--space-3); padding-block-start: var(--space-3); border-block-start: 1px solid var(--border); }
+.jr-report-view { margin-block-start: var(--space-3); padding-block-start: var(--space-3); border-block-start: 1px solid var(--hairline); }
 
-.jr-children { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-3); }
-.jr-child { padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); display: grid; gap: var(--space-2); }
+.jr-children { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; border-block-start: 1px solid var(--hairline); }
+.jr-child { padding: var(--space-3) 0; border: 0; border-block-end: 1px solid var(--hairline-soft); border-radius: 0; background: none; display: grid; gap: var(--space-2); }
 .jr-child__head { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); }
 .jr-slots { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
 
 .jr-history { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
-.jr-history li { display: grid; gap: 2px; padding-block-end: var(--space-2); border-block-end: 1px solid var(--border); }
-.jr-history time { font-size: var(--fs-xs); color: var(--text-muted); }
+.jr-history li { display: grid; gap: 2px; padding-block-end: var(--space-2); border-block-end: 1px solid var(--hairline-soft); }
+.jr-history time { font-size: var(--fs-xs); color: var(--ink-muted); }
 
-.jr-summary { display: grid; gap: var(--space-3); grid-template-columns: repeat(auto-fill, minmax(min(100%, 11rem), 1fr)); margin-block: var(--space-3); }
-.jr-stat { padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); display: grid; gap: var(--space-1); }
-.jr-stat__label { font-size: var(--fs-sm); color: var(--text-muted); }
-.jr-stat__value { font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; }
-.jr-stat__split { font-size: var(--fs-sm); color: var(--text-muted); }
+/* The month at a glance: a quiet ruled ledger; every lesson is in exactly one figure. */
+.jr-summary { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 9.5rem), 1fr)); gap: 0 var(--space-5); margin-block: var(--space-3) var(--space-5); }
+.jr-stat { display: grid; align-content: start; gap: 1px; padding: 10px 0 9px; border-block-end: 1px solid var(--hairline-soft); }
+.jr-stat__label { font-size: var(--fs-xs); color: var(--ink-muted); }
+.jr-stat__value { font-family: var(--font-head); font-size: var(--fs-xl); font-weight: 600; line-height: 1.2; font-variant-numeric: tabular-nums lining-nums; direction: ltr; unicode-bidi: isolate; text-align: start; }
+[dir='rtl'] .jr-stat__value { text-align: right; }
+.jr-stat__split { font-size: var(--fs-xs); color: var(--ink-muted); }
 .jr-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 
-/* PD-31: the lesson_moved card in a chat thread. */
-.jr-moved { display: grid; gap: 2px; min-inline-size: 12rem; }
-.jr-moved__title { font-weight: var(--fw-semibold); }
-.jr-moved__line { font-variant-numeric: tabular-nums; }
-.jr-moved__old { color: var(--text-muted); }
-.jr-moved__sub { font-size: var(--fs-sm); color: var(--text-muted); }
+/* The record's facts: a label over its value on a phone, beside it on a desk. */
+.jr-facts dt { font-size: var(--fs-sm); }
+@media (max-width: 559px) {
+  .jr-facts { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .jr-facts dt { margin-block-start: var(--space-2); font-size: var(--fs-xs); }
+}
+/* The record's menu sits beside its one stated action. */
+.jr-more { display: inline-flex; }
+
+/* PD-31: the lesson_moved card in a chat thread: a headed sheet whose one line is the new time. */
+.jr-moved, .jr-excuse { display: grid; gap: 0; min-inline-size: 14rem; }
+.jr-moved__title { display: flex; align-items: flex-start; gap: 8px; padding-block-end: 8px; margin-block-end: 8px; border-block-end: 1px solid var(--hairline); font-weight: 600; }
+.jr-moved__title .icon { flex: none; margin-block-start: 3px; color: var(--teal); }
+.jr-moved__line { display: grid; gap: 2px; font-variant-numeric: tabular-nums; }
+.jr-moved__line > span[aria-hidden] { display: none; }
+.jr-moved__line strong { font-size: var(--fs-md); }
+.jr-moved__old { color: var(--ink-muted); font-size: var(--fs-sm); }
+.jr-moved__sub { margin-block-start: 6px; font-size: var(--fs-sm); color: var(--ink-muted); }
 /* CHATSCHED-002: under an old time card, where its lesson stands now. */
-.jr-now { margin-top: var(--space-1); font-size: var(--fs-sm); font-style: italic; color: var(--text-muted); }
-/* Owner report 2026-10-29: an excused lesson's reason and its make-up's time. */
-.jr-excuse { display: grid; gap: 4px; min-inline-size: 14rem; }
-.jr-excuse__rows { display: grid; gap: 2px; margin: 0; }
-.jr-excuse__row { display: grid; grid-template-columns: minmax(6rem, auto) 1fr; gap: 8px; }
-.jr-excuse__row dt { color: var(--text-muted); font-size: var(--fs-sm); }
+.jr-now { margin-block-start: var(--space-1); font-size: var(--fs-sm); color: var(--ink-muted); }
+/* Owner report 2026-10-29: an excused lesson's reason and its make-up's time, each a label over its value. */
+.jr-excuse__rows { display: grid; gap: 8px; margin: 0; }
+.jr-excuse__row { display: grid; gap: 1px; }
+.jr-excuse__row dt { color: var(--ink-muted); font-size: var(--fs-xs); }
 .jr-excuse__row dd { margin: 0; font-variant-numeric: tabular-nums; white-space: pre-wrap; overflow-wrap: anywhere; }
-.jr-excuse__row--makeup dd { font-weight: var(--fw-semibold); }
+.jr-excuse__row--makeup dd { font-weight: 600; color: var(--teal-dark); }

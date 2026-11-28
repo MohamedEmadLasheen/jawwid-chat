@@ -269,12 +269,11 @@ describe('Calls page layout', () => {
     for (const name of ['Upcoming', 'Favorites', 'Recent']) expect(section(name)).toBeInTheDocument()
 
     const actions = screen.getByRole('region', { name: 'Call actions' })
-    expect(within(actions).getAllByRole('button').map((b) => b.textContent)).toEqual([
-      'Start call',
-      'New call link',
-      'Select a member',
-      'Schedule call',
-    ])
+    // Starting a call is the one stated action, scheduling is beside it, and the other two ways are behind "⋯".
+    expect(within(actions).getAllByRole('button').map((b) => b.textContent)).toEqual(['Start call', 'Schedule call', ''])
+    await userEvent.click(within(actions).getByRole('button', { name: 'More ways to start' }))
+    expect(within(actions).getAllByRole('menuitem').map((m) => m.textContent)).toEqual(['New call link', 'Select a member'])
+    await userEvent.keyboard('{Escape}')
     // Voice only: no video affordance anywhere on the page.
     expect(screen.queryByRole('button', { name: /video/i })).not.toBeInTheDocument()
 
@@ -300,9 +299,10 @@ describe('Calls page layout', () => {
     expect(within(rows[0]!).getByText('Outgoing')).toBeInTheDocument()
     expect(within(rows[0]!).getByText('Parent One')).toBeInTheDocument()
     expect(within(rows[0]!).getByText('Answered')).toBeInTheDocument()
-    expect(within(rows[0]!).getByText('· 2:05')).toBeInTheDocument()
+    // The length has its own column in the history table.
+    expect(within(rows[0]!).getByText('2m 05s')).toBeInTheDocument()
     // CHATSCHED-013: a call that dropped says so beside its outcome.
-    expect(within(rows[0]!).getByText('· Connection lost')).toBeInTheDocument()
+    expect(within(rows[0]!).getByText('Connection lost')).toBeInTheDocument()
     expect(within(rows[1]!).queryByText(/Connection lost/)).not.toBeInTheDocument()
     // A group call is named after the conversation, not its participants; missed is marked.
     expect(within(rows[1]!).getByText('Group Alpha')).toHaveClass('cp-row__name--missed')
@@ -399,7 +399,8 @@ describe('Member picker', () => {
 
   it('Select a member offers Voice call, Open chat and Schedule call', async () => {
     renderCalls()
-    await userEvent.click(await screen.findByRole('button', { name: 'Select a member' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'More ways to start' }))
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Select a member' }))
     const dialog = screen.getByRole('dialog', { name: 'Select a member' })
     await userEvent.click(await within(dialog).findByRole('button', { name: /Group Alpha/ }))
     const menu = within(screen.getByRole('dialog')).getByRole('menu', { name: 'Group Alpha' })
@@ -473,7 +474,8 @@ describe('New call link', () => {
     const writeText = vi.fn(async () => undefined)
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
     renderCalls()
-    await userEvent.click(await screen.findByRole('button', { name: 'New call link' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'More ways to start' }))
+    await userEvent.click(screen.getByRole('menuitem', { name: 'New call link' }))
     await userEvent.click(await within(screen.getByRole('dialog')).findByRole('button', { name: /Parent One/ }))
 
     const dialog = await screen.findByRole('dialog', { name: 'Call link' })

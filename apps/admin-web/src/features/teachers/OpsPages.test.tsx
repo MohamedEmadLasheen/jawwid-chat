@@ -87,12 +87,19 @@ afterEach(() => {
   tokenStore.clear()
 })
 
+/** A row states one action; the others are behind its "⋯" menu: open it, then choose. */
+async function viaMenu(scope: HTMLElement, name: string) {
+  await userEvent.click(within(scope).getByRole('button', { name: /^More actions/ }))
+  await userEvent.click(await within(scope).findByRole('menuitem', { name }))
+}
+
 describe('Needs action', () => {
   it('shows each queue with its own decisions, and the area tabs', async () => {
     renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/teachers/needs-action' })
     const overdue = await screen.findByRole('region', { name: 'Reports overdue' })
     expect(within(overdue).getByText('Child Alpha')).toBeInTheDocument()
-    expect(within(overdue).getByRole('button', { name: 'Teacher absent' })).toBeInTheDocument()
+    await userEvent.click(within(overdue).getByRole('button', { name: /^More actions/ }))
+    expect(within(overdue).getByRole('menuitem', { name: 'Teacher absent' })).toBeInTheDocument()
     expect(screen.getByRole('region', { name: 'Late apologies' })).toHaveTextContent('hospital')
     expect(screen.getByRole('region', { name: 'Regular-time requests' })).toHaveTextContent('Wednesday 19:00')
     const tabs = screen.getByRole('navigation', { name: 'Teachers' })
@@ -103,7 +110,7 @@ describe('Needs action', () => {
     on('POST', /\/lessons\/l-over\/teacher-no-show$/, () => json(lesson('l-over', { outcome: 'teacher_no_show' }), 201))
     renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/teachers/needs-action' })
     const overdue = await screen.findByRole('region', { name: 'Reports overdue' })
-    await userEvent.click(within(overdue).getByRole('button', { name: 'Teacher absent' }))
+    await viaMenu(overdue, 'Teacher absent')
     const dialog = await screen.findByRole('dialog')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
     expect(within(dialog).getByText('Required')).toBeInTheDocument()
@@ -179,7 +186,7 @@ describe('Schedules', () => {
     expect(within(row).getByText('Monday 17:00 (30 min)')).toBeInTheDocument()
     expect(within(students).queryByText('Child Beta')).not.toBeInTheDocument()
 
-    await userEvent.click(within(row).getByRole('button', { name: 'Change teacher' }))
+    await viaMenu(row, 'Change teacher')
     const dialog = await screen.findByRole('dialog')
     // The current teacher cannot be picked.
     expect(await within(dialog).findByRole('radio', { name: /Teacher One/ })).toBeDisabled()
@@ -200,14 +207,14 @@ describe('Schedules', () => {
     on('POST', /\/learners\/k-1\/suspensions$/, () => json({}, 201))
     renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/teachers/schedules?teacher=t-1' })
     const row = (await screen.findByText('Child Alpha')).closest('tr')!
-    await userEvent.click(within(row).getByRole('button', { name: 'Pause or stop' }))
+    await viaMenu(row, 'Pause or stop')
     let dialog = await screen.findByRole('dialog')
     await userEvent.type(within(dialog).getByLabelText('Returns on'), '2026-11-01')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(sent('POST', /suspensions$/)).toHaveLength(1))
     expect(sent('POST', /suspensions$/)[0]).toEqual({ kind: 'temporary', reason: 'travel', returnOn: '2026-11-01' })
 
-    await userEvent.click(within(row).getByRole('button', { name: 'Pause or stop' }))
+    await viaMenu(row, 'Pause or stop')
     dialog = await screen.findByRole('dialog')
     await chooseOption(userEvent, within(dialog).getByLabelText('Kind'), 'permanent')
     await userEvent.type(within(dialog).getByLabelText('Returns on'), '2026-11-01')
@@ -232,11 +239,13 @@ describe('Students', () => {
     // A calendar day, formatted -- never shifted by the reader's zone.
     expect(within(row).getByText('Nov 1, 2026')).toBeInTheDocument()
     expect(within(row).getByText('Travel')).toBeInTheDocument()
-    expect(within(row).getByText('Kept in Core')).toBeInTheDocument()
+    // Package left is Core's: said once for the list while Core has not published it (round 3).
+    expect(screen.getByText('Kept in Core')).toBeInTheDocument()
     await userEvent.click(within(row).getByRole('button', { name: 'End pause now' }))
     await waitFor(() => expect(fetchMock.mock.calls.some(([u, i]) => /\/suspensions\/s-1\/end$/.test(String(u)) && (i as RequestInit).method === 'POST')).toBe(true))
 
-    await userEvent.click(screen.getByRole('tab', { name: 'Stopped' }))
-    expect(await screen.findByText('Nobody here.')).toBeInTheDocument()
+    // Both switches carry their count (round 3): "Stopped 0".
+    await userEvent.click(screen.getByRole('tab', { name: /^Stopped/ }))
+    expect(await screen.findByText('No student has stopped.')).toBeInTheDocument()
   })
 })

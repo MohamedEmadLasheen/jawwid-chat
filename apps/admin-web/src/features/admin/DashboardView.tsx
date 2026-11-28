@@ -4,7 +4,7 @@ import { adminApi, type AdminConversation, type AdminOverview } from '@/core/api
 import { qk } from '@/core/api/queryKeys'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Avatar } from '@/shared/components/Avatar'
-import { Icon, type IconName } from '@/shared/components/Icon'
+import { Icon } from '@/shared/components/Icon'
 import { PageHeader } from '@/shared/components/PageHeader'
 import { Skeleton } from '@/shared/components/Skeleton'
 import { EmptyState, ErrorState } from '@/shared/components/States'
@@ -25,6 +25,8 @@ import {
 } from './copy'
 import { adminSectionPath, type AdminSection } from './sections'
 import { DashboardSections, useDashboardSections } from '@/features/dashboard/ManagerDashboard'
+import './admin.css'
+import '@/features/teachers/rows.css'
 
 const RECENT = 8
 const STATE_ORDER = ['waiting_on_jawwid', 'waiting_on_customer', 'open', 'resolved'] as const
@@ -64,7 +66,6 @@ export function DashboardView({ section }: { section: AdminSection }) {
         <PageHeader
           eyebrow={eyebrow}
           title={tx(section.label)}
-          subtitle={o?.organization.displayName}
           actions={
             <RefreshAction
               updatedAt={overview.dataUpdatedAt}
@@ -79,7 +80,7 @@ export function DashboardView({ section }: { section: AdminSection }) {
         {/* Figures kept from an earlier read are shown only with this warning,
             never silently as current. */}
         {o && overview.error && (
-          <div className="stale-banner" role="status">
+          <div className="stale-banner adm-stale" role="status">
             <Icon name="alert" size={16} />
             <span>{fill(tx(TEXT.staleData), { time: time(new Date(overview.dataUpdatedAt).toISOString()) })}</span>
             <button type="button" className="btn btn--sm" onClick={refresh}>
@@ -94,15 +95,19 @@ export function DashboardView({ section }: { section: AdminSection }) {
           <ErrorState error={overview.error} onRetry={refresh} />
         ) : (
           <>
-            <Attention o={o} query={conversations} />
-            <Kpis o={o} />
-            <div className="dash-main">
-              <RecentActivity query={conversations} />
-              <div className="dash-side">
+            {/* The board: what waits and what just happened are the work; the academy's totals and
+                breakdowns are context, on the canvas beside it. */}
+            <div className="split split--wide-aside adm-board">
+              <div className="adm-board__main">
+                <Attention o={o} query={conversations} />
+                <RecentActivity query={conversations} />
+              </div>
+              <aside className="adm-board__side">
+                <Kpis o={o} />
                 <StatusBreakdown query={conversations} />
                 <StoriesSummary o={o} />
                 <TeamAccess o={o} />
-              </div>
+              </aside>
             </div>
           </>
         )}
@@ -120,17 +125,9 @@ function DashboardSkeleton() {
   return (
     <div role="status" aria-live="polite">
       <span className="sr-only">{t('common.loading')}</span>
-      <div className="attn attn--loading">
-        <Skeleton width="30%" height={18} />
-        <div className="attn__tiles">
-          <Skeleton height={92} radius={12} />
-          <Skeleton height={92} radius={12} />
-        </div>
-      </div>
-      <div className="kpi-grid">
-        {[0, 1, 2, 3].map((i) => (
-          <Skeleton key={i} height={118} radius={12} />
-        ))}
+      <div className="adm-skeleton">
+        <Skeleton width="18%" height={14} />
+        <Skeleton height={86} radius={6} />
       </div>
     </div>
   )
@@ -156,7 +153,6 @@ function Attention({ o, query }: { o: AdminOverview; query: ConversationsQuery }
   const items = [
     waiting > 0 && {
       key: 'waiting',
-      icon: 'conversations' as IconName,
       text: tx(TEXT.waitingOnUsItem),
       count: waitingLabel,
       meta: oldest ? fill(tx(TEXT.oldestWaiting), { age: relativeTime(oldest, locale) }) : null,
@@ -165,7 +161,6 @@ function Attention({ o, query }: { o: AdminOverview; query: ConversationsQuery }
     },
     drafts > 0 && {
       key: 'drafts',
-      icon: 'stories' as IconName,
       text: tx(TEXT.draftStoriesItem),
       count: number(drafts),
       meta: tx(TEXT.notYetPublished),
@@ -174,50 +169,47 @@ function Attention({ o, query }: { o: AdminOverview; query: ConversationsQuery }
     },
   ].filter((x): x is Exclude<typeof x, false> => Boolean(x))
 
-  const clear = !query.isLoading && !query.error && items.length === 0
-
   return (
-    <section className={clear ? 'attn attn--clear' : 'attn'} aria-labelledby="dash-attention">
-      <div className="attn__head">
-        <span className="attn__icon" aria-hidden="true">
-          <Icon name={clear ? 'check' : 'alert'} size={18} />
-        </span>
-        <h2 className="attn__title" id="dash-attention">
-          {tx(TEXT.needsAttention)}
-        </h2>
-      </div>
+    <section className="sheet adm-attn" aria-labelledby="dash-attention">
+      <header className="sheet__head">
+        <div className="adm-attn__head">
+          <h2 className="sheet__title" id="dash-attention">
+            {tx(TEXT.needsAttention)}
+          </h2>
+          {items.length > 0 && <span className="count">{items.length}</span>}
+        </div>
+      </header>
       {query.isLoading ? (
-        <div className="attn__tiles" aria-hidden="true">
-          <Skeleton height={92} radius={12} />
-          <Skeleton height={92} radius={12} />
+        <div className="sheet__body" aria-hidden="true">
+          <Skeleton height={60} radius={6} />
         </div>
       ) : query.error ? (
         // A failed read is a failure, never "all clear" -- and counts kept from
         // an earlier read are hidden rather than presented as current.
         <ErrorState compact error={query.error} onRetry={() => void query.refetch()} />
       ) : items.length === 0 ? (
-        <p className="attn__clear">{tx(TEXT.nothingNeedsAttention)}</p>
+        <p className="adm-clear">
+          <Icon name="checkCircle" size={18} />
+          {tx(TEXT.nothingNeedsAttention)}
+        </p>
       ) : (
-        <ul className="attn__tiles">
+        <div className="adm-attn__rows">
           {items.map((item) => (
-            <li key={item.key}>
-              <Link to={item.to} className="attn-tile">
-                <span className="attn-tile__icon" aria-hidden="true">
-                  <Icon name={item.icon} size={20} />
+            <Link key={item.key} to={item.to} className="rowx adm-attn__row">
+              <span className="adm-attn__n">{item.count}</span>
+              <span className="rw-who">
+                <span className="rw-who__text">
+                  <span className="rw-name">{item.text}</span>
+                  {item.meta && <span className="rw-sub">{item.meta}</span>}
                 </span>
-                <span className="attn-tile__body">
-                  <span className="attn-tile__count">{item.count}</span>
-                  <span className="attn-tile__label">{item.text}</span>
-                  {item.meta && <span className="attn-tile__meta">{item.meta}</span>}
-                </span>
-                <span className="attn-tile__cta">
-                  {item.cta}
-                  <Icon name="chevronForward" size={16} />
-                </span>
-              </Link>
-            </li>
+              </span>
+              <span className="adm-attn__go">
+                {item.cta}
+                <Icon name="chevronForward" size={14} />
+              </span>
+            </Link>
           ))}
-        </ul>
+        </div>
       )}
     </section>
   )
@@ -229,14 +221,14 @@ function Kpis({ o }: { o: AdminOverview }) {
   const tx = useText()
   const label = useLabel()
   const plural = usePlural()
-  const { number } = useI18n()
+  const { number, locale } = useI18n()
+  const sep = locale === 'ar' ? '، ' : ', '
   const staff = sum(o.staffByRole)
   const direct = o.conversationsByType.direct ?? 0
   const groups = sum(o.conversationsByType) - direct
-  const items: { key: string; icon: IconName; label: string; value: number; sub?: string; to: string }[] = [
+  const items: { key: string; label: string; value: number; sub?: string; to: string }[] = [
     {
       key: 'families',
-      icon: 'home',
       label: tx(TEXT.families),
       value: o.families,
       sub: plural(PLURAL.contacts, o.contacts),
@@ -244,40 +236,38 @@ function Kpis({ o }: { o: AdminOverview }) {
     },
     {
       key: 'conversations',
-      icon: 'conversations',
       label: tx(TEXT.conversations),
       value: sum(o.conversationsByType),
-      sub: `${label(CONVERSATION_TYPE, 'direct')} ${number(direct)} · ${tx(TEXT.groupConversations)} ${number(groups)}`,
+      sub: `${label(CONVERSATION_TYPE, 'direct')} ${number(direct)}${sep}${tx(TEXT.groupConversations)} ${number(groups)}`,
       to: adminSectionPath('conversations'),
     },
-    { key: 'messages', icon: 'messages', label: tx(TEXT.messages), value: o.messages, to: adminSectionPath('conversations') },
+    { key: 'messages', label: tx(TEXT.messages), value: o.messages, to: adminSectionPath('conversations') },
     {
       key: 'people',
-      icon: 'users',
       label: tx(TEXT.people),
       value: staff + o.teachers + o.contacts,
-      sub: `${plural(PLURAL.staff, staff)} · ${plural(PLURAL.teachers, o.teachers)}`,
+      sub: `${plural(PLURAL.staff, staff)}${sep}${plural(PLURAL.teachers, o.teachers)}`,
       to: adminSectionPath('users'),
     },
   ]
   return (
-    <ul className="kpi-grid">
-      {items.map((k) => (
-        <li key={k.key}>
-          <Link to={k.to} className="kpi-card">
-            <span className="kpi-card__top">
-              <span className="kpi-card__icon" aria-hidden="true">
-                <Icon name={k.icon} size={18} />
-              </span>
-              <span className="kpi-card__label">{k.label}</span>
-              <Icon name="chevronForward" size={16} />
-            </span>
-            <span className="kpi-card__value">{number(k.value)}</span>
-            {k.sub && <span className="kpi-card__sub">{k.sub}</span>}
-          </Link>
-        </li>
-      ))}
-    </ul>
+    <section className="aside-group adm-totals" aria-labelledby="dash-totals">
+      {/* The academy's own name heads its numbers (it is not a subtitle under the page title). */}
+      <h2 className="aside-group__title" id="dash-totals">
+        {o.organization.displayName || tx(TEXT.totals)}
+      </h2>
+      <ul className="adm-totals__list">
+        {items.map((k) => (
+          <li key={k.key}>
+            <Link to={k.to} className="adm-total">
+              <span className="adm-total__label">{k.label}</span>
+              <span className="adm-total__n">{number(k.value)}</span>
+              {k.sub && <span className="adm-total__sub">{k.sub}</span>}
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
   )
 }
 
@@ -291,9 +281,9 @@ function RecentActivity({ query }: { query: ConversationsQuery }) {
   const list = (query.data?.conversations ?? []).slice(0, RECENT)
 
   return (
-    <section className="card card--flush dash-card" aria-labelledby="dash-recent">
-      <div className="card__header">
-        <h2 className="card__title" id="dash-recent">
+    <section className="sheet adm-recent" aria-labelledby="dash-recent">
+      <div className="sheet__head">
+        <h2 className="sheet__title" id="dash-recent">
           {tx(TEXT.recentActivity)}
         </h2>
         {list.length > 0 && (
@@ -312,7 +302,7 @@ function RecentActivity({ query }: { query: ConversationsQuery }) {
       ) : query.error ? (
         <ErrorState compact error={query.error} onRetry={() => void query.refetch()} />
       ) : list.length === 0 ? (
-        <EmptyState compact icon="conversations" title={tx(TEXT.noConversations)} />
+        <EmptyState compact title={tx(TEXT.noConversations)} />
       ) : (
         <table className="table dash-table">
           <thead>
@@ -415,8 +405,8 @@ function StatusBreakdown({ query }: { query: ConversationsQuery }) {
     tone: STATE_TONE[s] ?? 'neutral',
   }))
   return (
-    <section className="card dash-card" aria-labelledby="dash-status">
-      <h2 className="card__title card__title--sm" id="dash-status">
+    <section className="aside-group adm-block" aria-labelledby="dash-status">
+      <h2 className="aside-group__title" id="dash-status">
         {tx(TEXT.conversationStatus)}
       </h2>
       {query.isLoading ? (
@@ -448,9 +438,9 @@ function StoriesSummary({ o }: { o: AdminOverview }) {
     tone: STORY_TONE[s] ?? 'neutral',
   }))
   return (
-    <section className="card dash-card" aria-labelledby="dash-stories">
-      <div className="card__header card__header--tight">
-        <h2 className="card__title card__title--sm" id="dash-stories">
+    <section className="aside-group adm-block" aria-labelledby="dash-stories">
+      <div className="adm-block__head">
+        <h2 className="aside-group__title" id="dash-stories">
           {tx(TEXT.storiesByState)}
         </h2>
         <Link to={adminSectionPath('stories')} className="card__link">
@@ -471,8 +461,8 @@ function TeamAccess({ o }: { o: AdminOverview }) {
   const roles = Object.entries(o.staffByRole).sort((a, b) => b[1] - a[1])
   const kinds = Object.entries(o.accounts)
   return (
-    <section className="card dash-card" aria-labelledby="dash-team">
-      <h2 className="card__title card__title--sm" id="dash-team">
+    <section className="aside-group adm-block" aria-labelledby="dash-team">
+      <h2 className="aside-group__title" id="dash-team">
         {tx(TEXT.teamAndAccess)}
       </h2>
       {roles.length === 0 && kinds.length === 0 ? (
@@ -480,11 +470,11 @@ function TeamAccess({ o }: { o: AdminOverview }) {
       ) : (
         <>
           {roles.length > 0 && (
-            <ul className="role-pills" aria-label={tx(TEXT.staffByRole)}>
+            <ul className="adm-roles" aria-label={tx(TEXT.staffByRole)}>
               {roles.map(([role, n]) => (
-                <li className="role-pill" key={role}>
-                  {roleLabel(role) ?? role}
-                  <span className="role-pill__n">{number(n)}</span>
+                <li className="adm-roles__row" key={role}>
+                  <span>{roleLabel(role) ?? role}</span>
+                  <span className="adm-roles__n">{number(n)}</span>
                 </li>
               ))}
             </ul>

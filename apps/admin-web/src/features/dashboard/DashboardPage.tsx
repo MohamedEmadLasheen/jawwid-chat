@@ -29,12 +29,12 @@ function ManagersDashboard() {
   const { t } = useI18n()
   const d = useDashboardSections()
 
+  // No figure strip: the board below is the figures, ranked by need, and its head says how many wait.
   return (
     <div className="page dash">
       <div className="page__inner">
         <PageHeader
           title={t('nav.dashboard')}
-          subtitle={tx(D.subtitle)}
           actions={d.asked > 0 && <RefreshAction updatedAt={d.updatedAt} fetching={d.fetching} onRefresh={d.refetch} />}
         />
         {d.asked === 0 || (d.settled && d.shown.length === 0) ? <EmptyState title={tx(D.noSections)} /> : <DashboardSections shown={d.shown} />}

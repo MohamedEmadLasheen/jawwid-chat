@@ -183,8 +183,10 @@ describe('Admin chat workspace', () => {
     renderChat()
 
     expect(await screen.findByText('Group c1')).toBeInTheDocument()
-    expect(screen.getByText('Second')).toBeInTheDocument()
-    expect(screen.getByLabelText('3 unread')).toBeInTheDocument()
+    // In the list: the unread one is also named in the thread pane, as the conversation to answer first.
+    expect(within(document.getElementById('chat-list')!).getByText('Second')).toBeInTheDocument()
+    // (The same count shows again in the reply queue beside the list.)
+    expect(within(document.getElementById('chat-list')!).getByLabelText('3 unread')).toBeInTheDocument()
 
     await waitFor(() => {
       const subs = fakeSocket.emitted.filter((e) => e.event === 'conversation.subscribe')
@@ -208,11 +210,14 @@ describe('Admin chat workspace', () => {
 
     const chip = await screen.findByRole('button', { name: /Waiting for a reply/ })
     expect(chip).toHaveAttribute('aria-pressed', 'true')
-    expect(await screen.findByText('Parent wrote last')).toBeInTheDocument()
-    expect(screen.getByText('Put away by me')).toBeInTheDocument()
-    expect(screen.queryByText('We answered')).not.toBeInTheDocument()
-    expect(screen.queryByText('Resolved while waiting')).not.toBeInTheDocument()
-    expect(screen.queryByText('Closed conversation')).not.toBeInTheDocument()
+    // In the list: the thread pane also names the conversation to answer first.
+    // The list's Waiting view (the reply queue beside it is a different thing: it goes by what needs a reply).
+    const list = within(document.getElementById('chat-list')!)
+    expect(await list.findByText('Parent wrote last')).toBeInTheDocument()
+    expect(list.getByText('Put away by me')).toBeInTheDocument()
+    expect(list.queryByText('We answered')).not.toBeInTheDocument()
+    expect(list.queryByText('Resolved while waiting')).not.toBeInTheDocument()
+    expect(list.queryByText('Closed conversation')).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: /^All/ }))
     expect(await screen.findByText('We answered')).toBeInTheDocument()
@@ -653,7 +658,8 @@ describe('Chat workspace: message, chat and group actions', () => {
     renderChat('/chat/c1')
     await screen.findByLabelText('Message')
 
-    fireEvent.click(screen.getByRole('button', { name: 'Conversation info' }))
+    // The panel opens from the conversation's name in the header (the header has no row of icon buttons).
+    fireEvent.click(screen.getByRole('button', { name: 'Group info' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Add member' }))
     const dialog = await screen.findByRole('dialog', { name: 'Add member' })
     expect(await within(dialog).findByText('Parent Two')).toBeInTheDocument()
@@ -1028,7 +1034,8 @@ describe('Labels and quick replies (group B, staff only)', () => {
     stubTools({ labels: [{ id: 'lb-1', name: 'VIP', color: '5' }], applied: { c2: ['lb-1'] }, team: [], mine: [] })
     renderChat()
     const second = (await screen.findByText('Second group')).closest('li')!
-    expect(within(second).getByText('VIP')).toBeInTheDocument()
+    // On a row a label is a quiet coloured dot that carries its name.
+    expect(within(second).getByRole('img', { name: 'VIP' })).toBeInTheDocument()
 
     const filter = screen.getByRole('group', { name: 'Filter by label' })
     fireEvent.click(within(filter).getByRole('button', { name: 'VIP' }))
@@ -1092,8 +1099,8 @@ describe('Labels and quick replies (group B, staff only)', () => {
     const calls = stubTools({ labels: [], applied: {}, team: [], mine: [] })
     renderChat('/chat/c1')
     await screen.findByText('body m1')
-    fireEvent.click(screen.getByRole('button', { name: 'Attach' }))
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Quick replies' }))
+    // Quick replies have their own quiet button in the composer.
+    fireEvent.click(screen.getByRole('button', { name: 'Quick replies' }))
     const dialog = await screen.findByRole('dialog', { name: 'Quick replies' })
     fireEvent.click(within(dialog).getByRole('button', { name: /My replies/ }))
     fireEvent.click(within(dialog).getByRole('button', { name: 'Add reply' }))
@@ -1373,7 +1380,9 @@ describe('Search and export (group B)', () => {
     await screen.findByText('the fee is due')
     expect(screen.queryByText('old fee notice')).not.toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Search in chat' }))
+    // Search is in the header's "more" menu.
+    fireEvent.click(screen.getByRole('button', { name: 'Chat options' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Search in chat' }))
     fireEvent.change(screen.getByRole('searchbox', { name: 'Search in chat' }), { target: { value: 'fee' } })
     expect(await screen.findByText('1 of 2')).toBeInTheDocument()
     expect(calls.find((c) => c.path === '/conversations/c1/messages/search')?.query).toEqual({ q: 'fee' })
@@ -1390,7 +1399,8 @@ describe('Search and export (group B)', () => {
     const calls = stubSearch(ADMIN, undefined, true)
     renderChat('/chat/c1')
     await screen.findByText('the fee is due')
-    fireEvent.click(screen.getByRole('button', { name: 'Search in chat' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Chat options' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Search in chat' }))
     fireEvent.change(screen.getByRole('searchbox', { name: 'Search in chat' }), { target: { value: 'fee' } })
     expect(await screen.findByText('1 of 1+')).toBeInTheDocument()
     // More exist on the server, so "older" stays available at the last loaded one.
@@ -1879,7 +1889,7 @@ describe('A card far up the thread (owner report 2026-10-29)', () => {
     )
     renderChat('/chat/c1')
     fireEvent.click(await screen.findByRole('button', { name: 'Show older messages' }))
-    const group = await screen.findByRole('group', { name: '🙏 Child Alpha has an excuse and will not attend the lesson' })
+    const group = await screen.findByRole('group', { name: 'Child Alpha has an excuse and will not attend the lesson' })
     expect(group).not.toHaveTextContent('Make-up lesson')
 
     // The make-up is booked: the server now joins it onto the card, and names the card's seq.

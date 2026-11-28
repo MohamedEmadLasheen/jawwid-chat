@@ -1,4 +1,5 @@
 import { Fragment, useMemo, useState, type ReactNode } from 'react'
+import '@/features/teachers/stack-table.css'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { LOCALE_TAG, useI18n } from '@/core/i18n/I18nProvider'
@@ -48,7 +49,7 @@ export function TeacherScheduleSection({ teacherId, links }: { teacherId: string
   })
 
   return (
-    <section className="card panel tf-section" aria-labelledby="tf-schedule">
+    <section className="tf-section" aria-labelledby="tf-schedule">
       <div className="tf-section__head">
         <h2 id="tf-schedule" className="tf-section__title">{tx(T.schedule)}</h2>
         {links && (
@@ -111,7 +112,7 @@ function LessonTable({ lessons }: { lessons: LessonDto[] }) {
   if (lessons.length === 0) return <p className="tf-muted">{tx(T.noLessons, { n: SCHEDULE_DAYS })}</p>
   return (
     <div className="table-wrap tf-table-wrap">
-      <table className="table">
+      <table className="table stack-table">
         <thead>
           <tr>
             <th scope="col">{tx(T.lessonWhen)}</th>
@@ -127,10 +128,10 @@ function LessonTable({ lessons }: { lessons: LessonDto[] }) {
             return (
               <tr key={l.id}>
                 <td>{dateTime(l.startsAt)}</td>
-                <td dir="auto">{l.learner.name}</td>
-                <td>{tx(T.minutesShort, { m: number(l.durationMinutes) })}</td>
-                <td>{tx(l.kind === 'makeup' ? T.makeup : T.regular)}</td>
-                <td>
+                <td data-label={tx(T.child)}><bdi>{l.learner.name}</bdi></td>
+                <td data-label={tx(T.lessonLength)}>{tx(T.minutesShort, { m: number(l.durationMinutes) })}</td>
+                <td data-label={tx(T.lessonKind)}>{tx(l.kind === 'makeup' ? T.makeup : T.regular)}</td>
+                <td data-label={tx(T.status)}>
                   <Badge tone={phase.tone} dot>{tx(phase.label)}</Badge>
                 </td>
               </tr>
@@ -148,6 +149,8 @@ function LessonTable({ lessons }: { lessons: LessonDto[] }) {
  * as 0%.
  */
 export function MonthlyKpis({ teacherId, month, links }: { teacherId: string; month: string; links?: TeacherWorkLinks }) {
+  // This month's lessons, attendance and reliability are the record's highlights; the card does not say them twice.
+  const glance = month === currentMonth()
   const tx = useCopy()
   const { number, locale } = useI18n()
   const q = useTeacherDetail(teacherId, month)
@@ -162,9 +165,13 @@ export function MonthlyKpis({ teacherId, month, links }: { teacherId: string; mo
       {d && (
         <>
           <dl className="tf-kpis" aria-label={tx(T.kpis)}>
-            <Kpi label={tx(T.kpiHeld)} value={number(d.categories.find((c) => c.key === 'held')?.lessons ?? 0)} hint={hours(d.categories.find((c) => c.key === 'held')?.minutes ?? 0)} />
-            <Kpi label={tx(T.kpiAttendance)} value={percent(d.rates.attendance)} />
-            <Kpi label={tx(T.kpiReliability)} value={percent(d.rates.teacherReliability)} />
+            {!glance && (
+              <>
+                <Kpi label={tx(T.kpiHeld)} value={number(d.categories.find((c) => c.key === 'held')?.lessons ?? 0)} hint={hours(d.categories.find((c) => c.key === 'held')?.minutes ?? 0)} />
+                <Kpi label={tx(T.kpiAttendance)} value={percent(d.rates.attendance)} />
+                <Kpi label={tx(T.kpiReliability)} value={percent(d.rates.teacherReliability)} />
+              </>
+            )}
             <Kpi label={tx(T.kpiReportsOnTime)} value={percent(d.reports.onTimeRate)} hint={`${number(d.reports.onTime)}/${number(d.reports.reports)}`} />
             <Kpi label={tx(T.kpiReplies)} value={percent(d.replies.rate)} hint={tx(T.kpiRepliesHint, { n: number(d.replies.familyMessages) })} />
             <Kpi

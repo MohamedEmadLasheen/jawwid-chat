@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { LESSONS, countLabel } from '@/core/i18n/counts'
+import '@/features/teachers/stack-table.css'
 import { Badge, type Tone } from '@/shared/components/Badge'
+import { RowActions } from '@/shared/components/RowActions'
 import { FilterChips } from '@/shared/components/FilterChips'
 import { PageHeader } from '@/shared/components/PageHeader'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
@@ -67,7 +69,7 @@ export function LeaveRequestsList({ basePath }: { basePath: string }) {
         <EmptyState icon="lock" title={describeError(list.error, locale)} />
       ) : (
         <>
-          <div className="toolbar">
+          <div className="sheet-bar">
             <FilterChips<Filter>
               label={tx(S.leaveTitle)}
               value={filter}
@@ -84,7 +86,7 @@ export function LeaveRequestsList({ basePath }: { basePath: string }) {
               <EmptyState title={tx(S.noLeave)} />
             ) : (
               <div className="table-wrap sv-table-wrap">
-                <table className="table">
+                <table className="table stack-table">
                   <thead>
                     <tr>
                       <th scope="col">{tx(S.teacher)}</th>
@@ -102,11 +104,11 @@ export function LeaveRequestsList({ basePath }: { basePath: string }) {
                       const lessons = r.collidingLessons?.length ?? 0
                       return (
                         <tr key={r.id}>
-                          <td dir="auto">
+                          <td className="sv-nowrap">
                             <TeacherName basePath={basePath} teacher={r.teacher} />
                           </td>
-                          <td>{dates(r)}</td>
-                          <td>
+                          <td className="sv-dates" data-label={tx(S.dates)}>{dates(r)}</td>
+                          <td data-label={tx(S.days)}>
                             <div className="sv-cell-main">
                               <span>{number(r.days)}</span>
                               {/* Absent for Operations: the allowance is the Teachers department's (PD-26 amendment). */}
@@ -116,13 +118,13 @@ export function LeaveRequestsList({ basePath }: { basePath: string }) {
                                 </span>
                               )}
                               {r.state === 'requested' && (r.unpaidDays ?? 0) > 0 && (
-                                <span className="sv-muted" role="note">
-                                  ⚠️ {tx(S.willBeUnpaid, { n: number(r.unpaidDays as number) })}
+                                <span className="sv-warn" role="note">
+                                  {tx(S.willBeUnpaid, { n: number(r.unpaidDays as number) })}
                                 </span>
                               )}
                             </div>
                           </td>
-                          <td>
+                          <td className="stack-wide" data-label={tx(S.reason)}>
                             <div className="sv-cell-main">
                               <span dir="auto">{r.reason}</span>
                               {r.decisionNote && (
@@ -137,29 +139,31 @@ export function LeaveRequestsList({ basePath }: { basePath: string }) {
                               )}
                             </div>
                           </td>
-                          <td>
+                          <td className="stack-wide cell-actions">
                             <div className="sv-actions">
-                              {r.state === 'requested' ? (
-                                <>
-                                  <button type="button" className="btn btn--primary btn--sm" onClick={() => setApproving(r)}>
-                                    {tx(S.approve)}
-                                  </button>
-                                  <button type="button" className="btn btn--ghost btn--sm" onClick={() => setDeclining(r)}>
-                                    {tx(S.decline)}
-                                  </button>
-                                </>
-                              ) : (
-                                <>
-                                  <Badge tone={state.tone} dot>
-                                    {tx(state.label)}
-                                  </Badge>
-                                  {r.state === 'approved' && (
-                                    <button type="button" className="btn btn--ghost btn--sm" onClick={() => setCancelling(r)}>
-                                      {tx(S.cancelLeave)}
-                                    </button>
-                                  )}
-                                </>
+                              {r.state !== 'requested' && (
+                                <Badge tone={state.tone} dot>
+                                  {tx(state.label)}
+                                </Badge>
                               )}
+                              {/* One decision is stated; the other is behind the menu. */}
+                              <RowActions
+                                primary={
+                                  r.state === 'requested' ? (
+                                    <button type="button" className="btn btn--sm" onClick={() => setApproving(r)}>
+                                      {tx(S.approve)}
+                                    </button>
+                                  ) : undefined
+                                }
+                                more={
+                                  r.state === 'requested'
+                                    ? [{ key: 'decline', label: tx(S.decline), icon: 'xCircle', danger: true, onSelect: () => setDeclining(r) }]
+                                    : r.state === 'approved'
+                                      ? [{ key: 'cancel', label: tx(S.cancelLeave), icon: 'calendarX', danger: true, onSelect: () => setCancelling(r) }]
+                                      : []
+                                }
+                                label={tx(S.moreFor, { name: r.teacher.name ?? '' })}
+                              />
                             </div>
                           </td>
                         </tr>

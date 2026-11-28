@@ -60,7 +60,7 @@ export function HistorySection({ kind, file, payroll }: { kind: 'bonus' | 'deduc
 
 function Section({ id, title, hint, action, children }: { id: string; title: string; hint?: string; action?: ReactNode; children: ReactNode }) {
   return (
-    <section className="card panel tf-section" aria-labelledby={id}>
+    <section className="tf-section" aria-labelledby={id}>
       <div className="tf-section__head">
         <h2 id={id} className="tf-section__title">{title}</h2>
         {action && <div className="tf-actions">{action}</div>}
@@ -100,17 +100,17 @@ function Employment({
   const cal = useCalendarDate()
   const terms = finance?.currentTerms ?? null
   const account = finance?.payoutAccount ?? null
-  const missing = <span className="tf-muted">{tx(P.none)}</span>
+  const missing = <span className="tf-muted">{tx({ en: 'Not recorded', ar: 'غير مسجّل' })}</span>
   return (
     <Section
       id="tf-employment"
       title={tx(P.employment)}
       action={
         <>
-          {file.access.canEditPersonal && (
+          {file.access.canEditPersonal && file.teacher.isActive && (
             <button type="button" className="btn btn--sm" onClick={onEdit}>{tx({ en: 'Edit', ar: 'تعديل' })}</button>
           )}
-          {finance && (
+          {finance && file.teacher.isActive && (
             <button type="button" className="btn btn--sm" onClick={() => onOpen({ kind: 'terms' })}>{tx(P.setTerms)}</button>
           )}
         </>
@@ -119,8 +119,6 @@ function Employment({
       <dl className="tf-kv">
         <dt>{tx(P.teachingMarket)}</dt>
         <dd dir="auto">{file.employment?.teachingMarket ?? missing}</dd>
-        <dt>{tx(P.currentStudents)}</dt>
-        <dd>{file.employment?.studentCount ?? file.assignedStudents.length}</dd>
         {finance && (
           <>
             <dt>{tx(P.salaryType)}</dt>
@@ -132,8 +130,8 @@ function Employment({
               {terms ? (
                 <>
                   <bdi>{money(terms.monthlyAmount ?? terms.hourlyRate, terms.currency)}</bdi>
-                  {terms.salaryType === 'hourly' && <span className="tf-muted"> · {tx(P.hourlyMonthly)}</span>}
-                  <span className="tf-byline"> · {tx(P.effectiveFrom, { month: cal.month(terms.effectiveMonth) })}</span>
+                  {terms.salaryType === 'hourly' && <span className="tf-kv__sub">{tx(P.hourlyMonthly)}</span>}
+                  <span className="tf-kv__sub">{tx(P.effectiveFrom, { month: cal.month(terms.effectiveMonth) })}</span>
                 </>
               ) : (
                 missing
@@ -160,7 +158,7 @@ function Employment({
           </>
         )}
       </dl>
-      {finance && !finance.keyConfigured && <div className="banner banner--info" role="status">{tx(P.noKey)}</div>}
+      {finance && !finance.keyConfigured && <p className="tf-note" role="status">{tx(P.noKey)}</p>}
       {finance && <p className="tf-byline">{tx(P.financeOnly)}</p>}
     </Section>
   )
@@ -173,22 +171,26 @@ function Summary({ finance }: { finance: TeacherFinance }) {
   const { number } = useI18n()
   return (
     <Section id="tf-summary" title={tx(P.summary)} hint={tx(P.summaryHint)}>
+      {/* No terms in any month: say so once, instead of a table of dashes. */}
+      {finance.summary.every((m) => m.currency === null) ? (
+        <p className="tf-muted">{tx(P.noTermsYet)}</p>
+      ) : (
       <div className="table-wrap tf-table-wrap">
         <table className="table">
           <thead>
             <tr>
               <th scope="col">{tx(P.month)}</th>
-              <th scope="col">{tx(P.base)}</th>
-              <th scope="col">{tx(P.bonuses)}</th>
-              <th scope="col">{tx(P.deductions)}</th>
-              <th scope="col">{tx(P.net)}</th>
+              <th scope="col" className="num">{tx(P.base)}</th>
+              <th scope="col" className="num">{tx(P.bonuses)}</th>
+              <th scope="col" className="num">{tx(P.deductions)}</th>
+              <th scope="col" className="num">{tx(P.net)}</th>
             </tr>
           </thead>
           <tbody>
             {finance.summary.map((m) => (
               <tr key={m.month}>
                 <th scope="row">{cal.month(m.month)}</th>
-                <td>
+                <td className="num">
                   {money(m.base, m.currency)}
                   {m.salaryType === 'hourly' && (
                     <span className="tf-muted tf-kpi__hint"> {tx(P.paidHours, { h: number(Math.round((m.paidMinutes / 60) * 10) / 10) })}</span>
@@ -197,14 +199,15 @@ function Summary({ finance }: { finance: TeacherFinance }) {
                     <span className="tf-muted tf-kpi__hint"> {tx(P.unpaidLeave, { n: number(m.unpaidLeaveDays as number) })}</span>
                   )}
                 </td>
-                <td>{m.currency ? money(m.bonuses, m.currency) : tx(P.none)}</td>
-                <td>{m.currency ? money(m.deductions, m.currency) : tx(P.none)}</td>
-                <td><strong>{money(m.net, m.currency)}</strong></td>
+                <td className="num">{m.currency ? money(m.bonuses, m.currency) : tx(P.none)}</td>
+                <td className="num">{m.currency ? money(m.deductions, m.currency) : tx(P.none)}</td>
+                <td className="num"><strong>{money(m.net, m.currency)}</strong></td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+      )}
     </Section>
   )
 }
@@ -282,8 +285,8 @@ function History({ kind, file, finance, onOpen }: { kind: 'bonus' | 'deduction';
               {rows.map((r) => (
                 <tr key={r.key}>
                   <td>{r.date}</td>
-                  <td dir="auto">{r.reason}</td>
-                  <td dir="auto">{r.by}</td>
+                  <td><bdi>{r.reason}</bdi></td>
+                  <td><bdi>{r.by}</bdi></td>
                   {finance && (
                     <td>
                       {r.live === null ? (

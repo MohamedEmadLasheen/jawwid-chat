@@ -1,5 +1,6 @@
 import { ApiError } from '@/core/api/errors'
 import type { Pair } from '@/features/organization/copy'
+import type { CountForms } from '@/features/instalments/copy'
 import { PhotoError } from '@/features/profile/photo'
 import type { PaymentMethod, TimelineStatus } from './api'
 import { PhotoUploadError } from './hooks'
@@ -15,14 +16,16 @@ export const P = {
   // The parents list
   parentsTitle: { en: 'Parents', ar: 'أولياء الأمور' },
   parentsSubtitle: {
-    en: 'Contact details, children and payments. Operations and Sales record payments here; teachers never see any of it.',
-    ar: 'بيانات التواصل والأطفال والمدفوعات. يسجّل قسما العمليات والمبيعات المدفوعات هنا، ولا يرى المعلمون شيئًا منها.',
+    en: 'Contacts, children and payments. Teachers never see any of it.',
+    ar: 'بيانات التواصل والأطفال والمدفوعات. لا يرى المعلمون شيئًا منها.',
   },
   search: { en: 'Search a parent or a family', ar: 'ابحث عن ولي أمر أو أسرة' },
   parent: { en: 'Parent', ar: 'ولي الأمر' },
   family: { en: 'Family', ar: 'الأسرة' },
   children: { en: 'Children', ar: 'الأطفال' },
   noParents: { en: 'No parents to show.', ar: 'لا يوجد أولياء أمور لعرضهم.' },
+  noParentsHint: { en: 'The parents of the families you look after appear here.', ar: 'يظهر هنا أولياء أمور الأسر التي تتابعها.' },
+  noParentsFiltered: { en: 'Nothing matches this search and these filters. Clear one to widen the list.', ar: 'لا شيء يطابق البحث والتصفية. أزل أحدهما لتوسيع القائمة.' },
   // PD-44: the subscription filter (a child's PD-30 state)
   subscriptionFilter: { en: 'Subscription', ar: 'الاشتراك' },
   allParents: { en: 'All', ar: 'الكل' },
@@ -59,8 +62,8 @@ export const P = {
   phoneHint: { en: 'With the country code, e.g. +971 50 123 4567.', ar: 'مع رمز الدولة، مثل ‎+971 50 123 4567.' },
   about: { en: 'About this parent', ar: 'نبذة عن ولي الأمر' },
   aboutHint: {
-    en: 'A short internal note for the administration. The parent never sees it, nor do teachers.',
-    ar: 'ملاحظة داخلية قصيرة للإدارة. لا يراها ولي الأمر ولا المعلمون.',
+    en: 'Internal. The parent never sees it, nor do teachers.',
+    ar: 'داخلية. لا يراها ولي الأمر ولا المعلمون.',
   },
   noNote: { en: 'No note yet.', ar: 'لا توجد نبذة بعد.' },
   editNote: { en: 'Edit the note', ar: 'تعديل النبذة' },
@@ -70,11 +73,12 @@ export const P = {
   inactive: { en: 'Inactive', ar: 'غير نشط' },
 
   // Photo
-  photoChoose: { en: 'Upload photo', ar: 'رفع صورة' },
-  photoReplace: { en: 'Change photo', ar: 'تغيير الصورة' },
+  // The same words as a staff member's own photo control.
+  photoChoose: { en: 'Choose a photo', ar: 'اختر صورة' },
+  photoReplace: { en: 'Replace photo', ar: 'استبدال الصورة' },
   photoUse: { en: 'Use this photo', ar: 'استخدام هذه الصورة' },
   photoUploading: { en: 'Uploading…', ar: 'جارٍ الرفع…' },
-  photoRemove: { en: 'Remove', ar: 'إزالة' },
+  photoRemove: { en: 'Remove photo', ar: 'إزالة الصورة' },
   photoPreview: { en: 'New photo preview', ar: 'معاينة الصورة الجديدة' },
   photoHint: { en: 'JPEG, PNG or WebP. It replaces the photo in every chat.', ar: 'JPEG أو PNG أو WebP. تحل محل الصورة في كل المحادثات.' },
   photoSaved: { en: 'Photo saved.', ar: 'تم حفظ الصورة.' },
@@ -83,8 +87,8 @@ export const P = {
   // Payments
   payments: { en: 'Payment information', ar: 'بيانات الدفع' },
   paymentsHint: {
-    en: 'Recorded here in Jawwid Chat by Operations and Sales. The parent sees their own payments in the app; teachers never see any of it.',
-    ar: 'يسجّلها قسما العمليات والمبيعات هنا في جوّد للمحادثات. يرى ولي الأمر مدفوعاته في التطبيق، ولا يرى المعلمون شيئًا منها.',
+    en: 'Recorded by Operations and Sales. The parent sees their own payments; teachers never see any of it.',
+    ar: 'يسجّلها قسما العمليات والمبيعات. يرى ولي الأمر مدفوعاته، ولا يرى المعلمون شيئًا منها.',
   },
   subscription: { en: 'Current subscription', ar: 'الاشتراك الحالي' },
   noPlan: { en: 'No plan recorded', ar: 'لا توجد باقة مسجّلة' },
@@ -95,8 +99,8 @@ export const P = {
   none: { en: 'None', ar: 'بدون' },
   timeline: { en: 'Payment timeline', ar: 'سجل المدفوعات' },
   timelineHint: {
-    en: 'Every instalment in date order. A payment is recorded once; a mistake is voided with a reason, never edited or deleted.',
-    ar: 'كل الأقساط بترتيب التاريخ. تُسجَّل الدفعة مرة واحدة، ويُلغى الخطأ مع ذكر السبب دون تعديل أو حذف.',
+    en: 'A payment is recorded once. A mistake is voided with a reason, never edited or deleted.',
+    ar: 'تُسجَّل الدفعة مرة واحدة. يُلغى الخطأ مع ذكر السبب، دون تعديل أو حذف.',
   },
   noInstalments: { en: 'No instalments yet.', ar: 'لا توجد أقساط بعد.' },
   addInstalments: { en: 'Add instalments', ar: 'إضافة أقساط' },
@@ -104,12 +108,14 @@ export const P = {
   outstanding: { en: 'Outstanding', ar: 'متبقٍ' },
   overdue: { en: 'of which overdue', ar: 'منها متأخر' },
   dueOn: { en: 'Due {date}', ar: 'يستحق {date}' },
-  paidOnBy: { en: 'Paid {date} by {method} · recorded by {name}', ar: 'دُفع {date} عبر {method} · سجّله {name}' },
-  paidOnByStripe: { en: 'Paid {date} by {method} · confirmed by Stripe', ar: 'دُفع {date} عبر {method} · أكّده Stripe' },
+  paidOnBy: { en: 'Paid {date} by {method}, recorded by {name}', ar: 'دُفع في {date}، {method}، وسجّله {name}' },
+  paidOnByStripe: { en: 'Paid {date} by {method}, confirmed by Stripe', ar: 'دُفع في {date}، {method}، وأكّده Stripe' },
   reference: { en: 'Reference', ar: 'المرجع' },
   voidedBy: { en: 'Voided by {name}: {reason}', ar: 'ألغاه {name}: {reason}' },
   forChild: { en: 'For {name}', ar: 'عن {name}' },
   forFamily: { en: 'For the family', ar: 'عن الأسرة' },
+  dueForChild: { en: 'Due {date} for {name}', ar: 'يستحق {date} عن {name}' },
+  dueForFamily: { en: 'Due {date} for the family', ar: 'يستحق {date} عن الأسرة' },
   recordPayment: { en: 'Record payment', ar: 'تسجيل دفعة' },
   void: { en: 'Void', ar: 'إلغاء' },
 
@@ -168,16 +174,113 @@ export const P = {
   schedule: { en: 'Class schedule', ar: 'جدول الحصص' },
   noSchedule: { en: 'No regular lesson times yet', ar: 'لا توجد مواعيد ثابتة للحصص بعد' },
   minutes: { en: '{n} min', ar: '{n} دقيقة' },
-  timezone: { en: 'Times in {zone}', ar: 'المواعيد بتوقيت {zone}' },
   familyLocal: { en: "family's time: {time}", ar: 'بتوقيت الأسرة: {time}' },
   familyLocalEstimate: { en: "family's time ≈ {time} (from location)", ar: 'بتوقيت الأسرة ≈ {time} (حسب الموقع)' },
   notSet: { en: 'Not set', ar: 'غير محدد' },
   parents: { en: 'Parents', ar: 'أولياء الأمور' },
   parentsHint: {
-    en: 'Their Parent Profile opens for the administration that looks after this family.',
-    ar: 'يُفتح ملف ولي الأمر للإدارة المسؤولة عن هذه الأسرة.',
+    en: 'Opens for the administration that looks after this family.',
+    ar: 'يُفتح للإدارة المسؤولة عن هذه الأسرة.',
   },
+
+  // The file's bar: its index and its actions
+  fileIndex: { en: 'Sections', ar: 'الأقسام' },
+  ixChildren: { en: 'Children', ar: 'الأطفال' },
+  ixPackage: { en: 'Package', ar: 'الباقة' },
+  ixInstalments: { en: 'Instalments', ar: 'الأقساط' },
+  ixRequests: { en: 'Requests', ar: 'الطلبات' },
+  ixReceived: { en: 'Received', ar: 'المستلمة' },
+  ixInvoices: { en: 'Invoices', ar: 'الفواتير' },
+  ixReceipts: { en: 'Receipts', ar: 'الإيصالات' },
+  chat: { en: 'Chat', ar: 'محادثة' },
+  call: { en: 'Call', ar: 'اتصال' },
+  overdueShort: { en: 'Overdue', ar: 'متأخر' },
+  photo: { en: 'Photo', ar: 'الصورة' },
+  activity: { en: 'Activity', ar: 'النشاط' },
+  // {lessons} is the counted noun, worded by the subscriptions copy (حصتان، 3 حصص، 24 حصة).
+  lessonsUsed: { en: '{used} of {lessons}', ar: '{used} من {lessons}' },
+  // A subscription with nothing holding it back: the word the Students list uses.
+  subscriptionOpen: { en: 'Active', ar: 'نشط' },
+  lessonsLeft: { en: '{n} left', ar: 'المتبقي {n}' },
+  subscriptionState: { en: 'Subscription', ar: 'الاشتراك' },
+  details: { en: 'Details', ar: 'البيانات' },
+  weekly: { en: 'Weekly times', ar: 'المواعيد الأسبوعية' },
+
+  // The record: a masthead, tabs, and what waits now
+  tabOverview: { en: 'Overview', ar: 'نظرة عامة' },
+  tabMoney: { en: 'Money', ar: 'المدفوعات' },
+  tabHistory: { en: 'History', ar: 'السجل' },
+  tabSchedule: { en: 'Schedule', ar: 'الجدول' },
+  more: { en: 'More actions: {name}', ar: 'إجراءات أخرى: {name}' },
+  openRequests: { en: 'Open requests', ar: 'طلبات مفتوحة' },
+  overdueOf: { en: 'Overdue {amount}', ar: 'متأخر {amount}' },
+  attention: { en: 'Needs attention now', ar: 'يحتاج متابعة الآن' },
+  calmFamily: { en: 'Nothing is waiting on this family.', ar: 'لا شيء ينتظر هذه الأسرة.' },
+  calmStudent: { en: 'Nothing is waiting on this student.', ar: 'لا شيء ينتظر هذا الطالب.' },
+  openRequest: { en: 'Open request', ar: 'طلب مفتوح' },
+  view: { en: 'View', ar: 'عرض' },
+  comingUp: { en: 'Coming up', ar: 'القادم' },
+  allInstalments: { en: 'All instalments', ar: 'كل الأقساط' },
+  openFile: { en: 'Open file', ar: 'فتح الملف' },
+  totals: { en: 'Totals', ar: 'الإجماليات' },
+  nextLesson: { en: 'Next lesson', ar: 'الحصة القادمة' },
+  noTeacherYet: { en: 'No teacher assigned yet', ar: 'لم يُعيَّن معلم بعد' },
+  seeSubscription: { en: 'Open subscription', ar: 'فتح الاشتراك' },
+  seeSchedule: { en: 'Open schedule', ar: 'فتح الجدول' },
+  nextOn: { en: 'Next: {when}', ar: 'القادمة: {when}' },
+  lessonsLeftWord: { en: 'Lessons left', ar: 'الحصص المتبقية' },
+  lessonsUsedWord: { en: 'Lessons used', ar: 'الحصص المستخدمة' },
+  results: { en: 'Results', ar: 'النتائج' },
+
+  // The record's head (V3): one sentence, the highlights, one callout
+  lineFamily: { en: 'Parent in {family}', ar: 'ولي أمر في {family}' },
+  lineFollowedBy: { en: ', followed by {name}', ar: '، ويتابعها {name}' },
+  lineNoSupervisor: { en: ', with no Operations supervisor yet', ar: '، ولا مشرف عمليات لها بعد' },
+  hlNextInstalment: { en: 'Next instalment', ar: 'القسط القادم' },
+  hlNoneScheduled: { en: 'None scheduled', ar: 'لا شيء مجدول' },
+  hlLastContact: { en: 'Last contact', ar: 'آخر تواصل' },
+  hlNoChat: { en: 'No chat yet', ar: 'لا محادثة بعد' },
+  hlSignIn: { en: 'Sign-in', ar: 'تسجيل الدخول' },
+  hlSignedIn: { en: 'E-mail set', ar: 'بريد مسجّل' },
+  hlNoSignIn: { en: 'Not set up', ar: 'لم يُعدّ بعد' },
+  hlNothingDue: { en: 'Nothing due', ar: 'لا شيء مستحق' },
+  calloutLate: { en: '{amount} overdue across {what}.', ar: 'متأخر على الأسرة {amount} في {what}.' },
+  calloutLateOne: { en: '{amount} overdue on one instalment.', ar: 'متأخر على الأسرة {amount} في قسط واحد.' },
+  calloutOldest: { en: 'The oldest, {label}, is {late}.', ar: 'أقدمها {label}، {late}.' },
+  calloutOnly: { en: '{label}, {late}.', ar: '{label}، {late}.' },
+  calloutLocked: { en: 'The subscription is locked: lessons stop until the family pays.', ar: 'الاشتراك مقفل: تتوقف الحصص حتى تسدد الأسرة.' },
+  calloutGrace: { en: 'The subscription is in its grace period.', ar: 'الاشتراك في فترة السماح.' },
+  calloutGraceBody: { en: 'Lessons stop when it ends unless the family pays.', ar: 'تتوقف الحصص عند انتهائها ما لم تسدد الأسرة.' },
+  calloutReceipts: { en: 'A receipt the family uploaded waits to be checked.', ar: 'إيصال رفعته الأسرة ينتظر المراجعة.' },
+  calloutReceiptsMany: { en: '{n} receipts the family uploaded wait to be checked.', ar: '{n} إيصالات رفعتها الأسرة تنتظر المراجعة.' },
+  calloutNoSupervisor: { en: 'No Operations supervisor follows this family yet.', ar: 'لا يتابع هذه الأسرة مشرف عمليات بعد.' },
+  assignSupervisor: { en: 'Assign a supervisor', ar: 'إسناد مشرف' },
+  sendLink: { en: 'Send a payment link', ar: 'إرسال رابط دفع' },
+  requestPayment: { en: 'Request payment', ar: 'طلب دفعة' },
+  inactiveWord: { en: 'Inactive', ar: 'غير نشط' },
+  studentsTitle: { en: 'Students', ar: 'الطلاب' },
+  listCount: { en: '{n} shown', ar: 'المعروض {n}' },
+  noContact: { en: 'No phone, e-mail or country recorded yet.', ar: 'لم يُسجَّل هاتف أو بريد أو دولة بعد.' },
+  lineStudent: { en: 'Student', ar: 'طالب' },
+  lineStudentIn: { en: 'Student in {family}', ar: 'طالب في {family}' },
+  lineTaughtBy: { en: 'taught by {name}', ar: 'ومعلمه {name}' },
+  lineNoTeacher: { en: 'no teacher yet', ar: 'ولا معلم له بعد' },
+  hlNoLesson: { en: 'None booked', ar: 'لا حصة محجوزة' },
+  hlUsed: { en: '{n} used', ar: 'استُخدم {n}' },
+  stCalloutLocked: { en: 'The subscription is locked: no lessons until it is settled.', ar: 'الاشتراك مقفل: لا حصص حتى تتم تسويته.' },
+  stCalloutGrace: { en: 'The subscription is on its grace lessons.', ar: 'الاشتراك في حصص السماح.' },
+  stCalloutWhy: { en: 'Because: {why}.', ar: 'السبب: {why}.' },
 } satisfies Record<string, Pair>
+
+/** Counted nouns, worded the way Arabic counts them (one, two, 3 to 10, 11 and up). */
+export const CHILDREN_COUNT: CountForms = {
+  en: ['{n} child', '{n} children'],
+  ar: ['طفل واحد', 'طفلان', '{n} أطفال', '{n} طفلًا'],
+}
+export const PARENTS_COUNT: CountForms = {
+  en: ['{n} parent', '{n} parents'],
+  ar: ['ولي أمر واحد', 'وليا أمر', '{n} أولياء أمور', '{n} وليّ أمر'],
+}
 
 export const METHOD_LABEL: Record<PaymentMethod, Pair> = {
   invoice: { en: 'Invoice', ar: 'فاتورة' },
@@ -202,6 +305,29 @@ export function planLabel(n: number, locale: 'ar' | 'en'): string {
   if (n === 2) return 'باقة شهرين'
   if (n >= 3 && n <= 10) return `باقة ${n} أشهر`
   return `باقة ${n} شهرًا`
+}
+
+/**
+ * An amount as a ledger shows it: the figure and its currency apart, so the
+ * figure can be set in display numerals and the currency small beside it.
+ */
+export function moneyParts(amountMinor: number, currency: string, locale: 'ar' | 'en'): { amount: string; unit: string } {
+  const tag = locale === 'ar' ? 'ar-EG-u-nu-latn' : 'en-GB'
+  try {
+    const fmt = new Intl.NumberFormat(tag, { style: 'currency', currency })
+    const digits = fmt.resolvedOptions().maximumFractionDigits ?? 2
+    const parts = fmt.formatToParts(amountMinor / 10 ** digits)
+    const unit = parts.find((p) => p.type === 'currency')?.value ?? currency
+    const amount = parts
+      .filter((p) => p.type !== 'currency')
+      .map((p) => p.value)
+      .join('')
+      // What is left around the figure once the currency is lifted out: spaces and direction marks.
+      .replace(/^[\s\u200e\u200f\u061c]+|[\s\u200e\u200f\u061c]+$/g, '')
+    return { amount, unit }
+  } catch {
+    return { amount: (amountMinor / 100).toFixed(2), unit: currency }
+  }
 }
 
 /** The plans the server accepts (chat.family.subscription_plan_months). */

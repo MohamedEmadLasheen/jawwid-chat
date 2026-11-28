@@ -3,6 +3,7 @@ import { useI18n } from '@/core/i18n/I18nProvider'
 import { ACADEMY_ZONE, whenIn, zoneLabel } from '@/core/time/academyTime'
 import { journeyApi, journeyKeys } from './api'
 import { J, excuseCategoryLabel } from './copy'
+import { Icon, type IconName } from '@/shared/components/Icon'
 import './journey.css'
 
 /**
@@ -73,15 +74,26 @@ export function readLessonExcuseCard(cardKind: string, payload: Record<string, u
   }
 }
 
+/** The card's kind, as a line icon beside its title (never a pictograph in the words). */
+const KIND_ICON: Record<string, IconName> = {
+  student_before: 'info',
+  student_after: 'info',
+  teacher: 'info',
+  teacher_absent: 'alert',
+  accepted: 'check',
+  late: 'clock',
+  makeup: 'calendar',
+}
+
 const COPY = {
   title: {
-    student_before: { en: '🙏 {learner} has an excuse and will not attend the lesson', ar: '🙏 لدى {learner} عذر ولن يتمكن من حضور الحصة' },
-    student_after: { en: "🙏 {learner}'s absence from the lesson is excused", ar: '🙏 سُجّل اعتذار {learner} عن الحصة بعد بدايتها' },
-    teacher: { en: "🙏 The teacher cannot teach {learner}'s lesson", ar: '🙏 اعتذر المعلم عن حصة {learner}' },
-    teacher_absent: { en: "⚠️ {learner}'s lesson did not take place: the teacher was absent", ar: '⚠️ لم تُعقد حصة {learner} لغياب المعلم' },
-    accepted: { en: "✅ The apology for {learner}'s lesson was accepted", ar: '✅ قُبل الاعتذار عن حصة {learner}' },
-    late: { en: "🕊️ Late apology for {learner}'s lesson", ar: '🕊️ اعتذار متأخر عن حصة {learner}' },
-    makeup: { en: '📅 A make-up lesson is scheduled for {learner}', ar: '📅 تم تحديد موعد حصة تعويضية لـ {learner}' },
+    student_before: { en: '{learner} has an excuse and will not attend the lesson', ar: 'لدى {learner} عذر ولن يتمكن من حضور الحصة' },
+    student_after: { en: "{learner}'s absence from the lesson is excused", ar: 'سُجّل اعتذار {learner} عن الحصة بعد بدايتها' },
+    teacher: { en: "The teacher cannot teach {learner}'s lesson", ar: 'اعتذر المعلم عن حصة {learner}' },
+    teacher_absent: { en: "{learner}'s lesson did not take place: the teacher was absent", ar: 'لم تُعقد حصة {learner} لغياب المعلم' },
+    accepted: { en: "The apology for {learner}'s lesson was accepted", ar: 'قُبل الاعتذار عن حصة {learner}' },
+    late: { en: "Late apology for {learner}'s lesson", ar: 'اعتذار متأخر عن حصة {learner}' },
+    makeup: { en: 'A make-up lesson is scheduled for {learner}', ar: 'تم تحديد موعد حصة تعويضية لـ {learner}' },
   },
   lesson: { en: 'Lesson', ar: 'الحصة' },
   makeup: { en: 'Make-up lesson', ar: 'الحصة التعويضية' },
@@ -164,7 +176,9 @@ export function LessonExcuseCard({ card }: { card: LessonExcusePayload }) {
       ]
   return (
     <div className="jr-excuse" data-card-kind={isMakeup ? 'lesson_makeup_booked' : 'lesson_excuse'} role="group" aria-label={title}>
-      <strong className="jr-moved__title" dir="auto">{title}</strong>
+      <strong className="jr-moved__title" dir="auto">
+        <Icon name={KIND_ICON[card.kind] ?? 'info'} size={16} /> {title}
+      </strong>
       <dl className="jr-excuse__rows">
         {rows.map(([key, label, value]) => (
           <div key={key} className={`jr-excuse__row jr-excuse__row--${key}`} data-row={key}>

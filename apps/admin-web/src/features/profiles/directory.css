@@ -1,0 +1,113 @@
+/*
+ * A directory: the parents list, the students list.
+ *
+ * One sheet holds the roster. Its bar (the shared .sheet-bar) carries the
+ * search and the filters that narrow it; each row is who the person is with one
+ * supporting line, a few quiet facts, the state that matters as a tag, and one
+ * way in. The whole row opens the record. A roster may be set out in groups
+ * (the students under each teacher), each under its own heading with a count.
+ *
+ *   .dir-sheet / .dir-table   the sheet and its rows
+ *   .dir-who                  the monogram, the name, the line under it
+ *   .dir-group                a group of rows under a heading
+ *   .dir-foot                 the count and the pages, or a note
+ */
+
+.dir-notice { margin-block-end: var(--space-4); }
+.dir-sheet { min-inline-size: 0; }
+.dir-sheet > .state { padding-block: var(--space-7); }
+.dir-sheet .sheet-bar .chip { gap: 6px; }
+.dir-sheet .sheet-bar .chip .icon { flex: none; }
+.dir-pickers { flex-wrap: wrap; }
+.dir-pickers > * { inline-size: 190px; }
+
+.dir-table { inline-size: 100%; border-collapse: collapse; font-size: var(--fs-md); }
+.dir-table th, .dir-table td { padding: 10px var(--space-3); text-align: start; vertical-align: middle; }
+.dir-table :is(th, td):first-child { padding-inline-start: var(--space-4); }
+.dir-table :is(th, td):last-child { padding-inline-end: var(--space-4); }
+.dir-table thead th {
+  padding-block: 8px;
+  border-block-end: 1px solid var(--line-2);
+  /* The type floor is 13px: the English scale's --fs-xs is 12.5. */
+  font-size: max(13px, var(--fs-xs));
+  font-weight: 500;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+.dir-row { cursor: pointer; }
+.dir-row > td { border-block-end: 1px solid var(--line-2); }
+.dir-table > tbody:last-of-type > .dir-row:last-child > td { border-block-end: 0; }
+.dir-row:hover > td { background: var(--surface-hover); }
+.dir-row:has(.dir-name:focus-visible) > td { background: var(--teal-tint); }
+
+.dir-cell-who { inline-size: 60%; }
+/* The students list has three facts beside the name; the name takes less of the width. */
+@media (min-width: 768px) { .dir-table--students .dir-cell-who { inline-size: 40%; } }
+.dir-who { display: flex; align-items: center; gap: 12px; min-inline-size: 0; }
+.dir-who__text { display: grid; gap: 1px; min-inline-size: 0; }
+.dir-name { justify-self: start; font-weight: 600; color: var(--ink); text-decoration: none; overflow-wrap: anywhere; }
+.dir-row:hover .dir-name { color: var(--teal); }
+.dir-name:hover { text-decoration: underline; text-underline-offset: 3px; }
+.dir-sub { display: flex; flex-wrap: wrap; gap: 0 5px; font-size: var(--fs-sm); color: var(--ink-muted); }
+/* The facts under a name read as one phrase: parted by commas, never by dots. */
+.dir-sub > :not(:last-child)::after { content: ','; }
+html[lang='ar'] .dir-sub > :not(:last-child)::after { content: '،'; }
+.dir-cell-quiet { font-size: var(--fs-sm); color: var(--ink-muted); }
+.dir-none { color: var(--ink-muted); }
+.dir-cell-state { white-space: nowrap; }
+.dir-state-quiet { font-size: var(--fs-sm); color: var(--ink-muted); }
+.dir-state__note { display: block; margin-block-start: 2px; font-size: var(--fs-xs); color: var(--ink-muted); }
+.dir-table td.cell-actions { inline-size: 1%; }
+/* The row's one stated action reads in ink like every other row action; it turns teal with its row. */
+.dir-row .row-actions2 > .btn { color: var(--ink); }
+.dir-row:hover .row-actions2 > .btn { border-color: var(--teal); color: var(--teal); }
+
+/* A group of rows: its heading is a band on the canvas colour, with how many it holds. */
+.dir-group__head > th { padding-block: 9px; border-block-end: 1px solid var(--line-2); background: var(--canvas); font-weight: 400; }
+.dir-table > tbody:not(:first-of-type) > .dir-group__head > th { border-block-start: 1px solid var(--line-2); }
+.dir-group__title { display: inline-flex; align-items: center; gap: 8px; font-size: var(--fs-sm); font-weight: 600; color: var(--ink); }
+.dir-group__label { font-weight: 400; color: var(--ink-muted); }
+.dir-group__count { font-weight: 400; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+/* The group nobody holds is said by its heading's word and an amber dot, not by an edge. */
+.dir-group--unplaced .dir-group__title::before { content: ''; inline-size: 8px; block-size: 8px; border-radius: 50%; background: var(--waiting); }
+
+.dir-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-3); margin: 0; padding: 10px var(--space-4); border-block-start: 1px solid var(--line-2); font-size: var(--fs-sm); color: var(--ink-muted); }
+.dir-foot--note { font-size: var(--fs-xs); }
+/* How many the open list holds: said once, quietly, at the end of the sheet's bar. */
+.dir-count { margin-inline-start: auto; font-size: var(--fs-sm); color: var(--ink-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.dir-count strong { font-weight: 600; color: var(--ink); }
+.dir-missing { color: var(--ink-muted); }
+.dir-total { font-variant-numeric: tabular-nums; }
+.dir-pager { display: inline-flex; align-items: center; gap: var(--space-3); font-variant-numeric: tabular-nums; }
+
+/* On a phone a row is a short stack: who and their state on the first line, the quiet
+   facts under the name. The row is the target; nothing scrolls sideways. */
+@media (max-width: 767px) {
+  .dir-sheet .sheet-bar .search { flex: 1 1 100%; max-inline-size: none; }
+  .dir-sheet .sheet-bar .chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; max-inline-size: 100%; }
+  .dir-sheet .sheet-bar .chips::-webkit-scrollbar { display: none; }
+  .dir-sheet .sheet-bar .chip { flex: none; }
+  .dir-sheet .sheet-bar__end { margin-inline-start: 0; }
+  .dir-pickers { inline-size: 100%; }
+  .dir-pickers > * { flex: 1 1 140px; inline-size: auto; }
+
+  .dir-table, .dir-table > tbody { display: block; }
+  .dir-table > thead { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); }
+  .dir-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 2px var(--space-3); min-block-size: 64px; padding: 10px var(--space-4); border-block-end: 1px solid var(--line-2); }
+  .dir-table > tbody:last-of-type > .dir-row:last-child { border-block-end: 0; }
+  .dir-row > td, .dir-table :is(th, td):first-child, .dir-table :is(th, td):last-child { display: block; padding: 0; border: 0; }
+  .dir-row:hover > td { background: none; }
+  .dir-row > .dir-cell-who { grid-column: 1; grid-row: 1; inline-size: auto; }
+  .dir-row > .dir-cell-state { grid-column: 2; grid-row: 1; text-align: end; }
+  .dir-row > .dir-cell-quiet { grid-column: 1 / -1; padding-inline-start: 48px; font-size: var(--fs-xs); }
+  .dir-row > .dir-cell-quiet::before { content: attr(data-label) ': '; }
+  /* A fact with nothing in it is left off a phone's short row. */
+  .dir-table .dir-row > td.dir-cell-quiet--none { display: none; }
+  .dir-table .dir-row > td.cell-actions:last-child { display: none; }
+  .dir-row > .dir-cell-quiet + .dir-cell-quiet { margin-block-start: -1px; }
+  .dir-name { display: inline-flex; align-items: center; min-block-size: 28px; }
+  .dir-group__head { display: block; }
+  .dir-group__head > th, .dir-table .dir-group__head > th:first-child { display: block; padding: 9px var(--space-4); }
+  .dir-foot { flex-direction: column; align-items: stretch; }
+  .dir-pager { justify-content: space-between; }
+}

@@ -285,11 +285,14 @@ export function PermissionPreview({ roles, catalogue }: { roles: AccessRole[]; c
   )
 }
 
-/** A red badge for the risks plan §8 names (personal data, money, family contact); nothing otherwise. */
+/**
+ * A tag for the risks plan §8 names (personal data, money, family contact); nothing otherwise.
+ * A quiet word, not a colour: it asks for care when granting, it is not a state.
+ */
 export function RiskBadge({ risk }: { risk: string }) {
   const tx = useCopy()
   const label = RISK[risk]
-  return label ? <Badge tone="danger">{tx(label)}</Badge> : null
+  return label ? <Badge tone="neutral">{tx(label)}</Badge> : null
 }
 
 /** Keys grouped by page in catalogue order; a key the catalogue does not know is shown by its key. */

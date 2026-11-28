@@ -1,43 +1,234 @@
-/* The chat workspace (features/chat). Built on the portal's conversation
-   styles (.workspace, .conv-row, .bubble*, .thread-head, .dp-*); everything
-   here is prefixed cw- so no other feature's rules can reach it. */
+/*
+ * The conversation workspace (features/chat) and the super admin's read-only
+ * view of it (features/admin/ConversationsView), on the design system
+ * (core/theme/system.css, docs/design/admin-rationale.md).
+ *
+ * Built on the portal's conversation classes (.workspace, .conv-row, .bubble*,
+ * .thread-head, .dp-*), restyled here only under .cw, so no other screen moves.
+ *
+ *  - Three grounds: the list is a white pane, the thread a quiet warm ground,
+ *    the context panel the canvas with white sheets on it.
+ *  - The list is a reply queue. A row is a name (Readex 600), a second line that
+ *    says who said what, and ONE emphasised fact at its end: how long the family
+ *    has waited (grey, amber in the last window, red past it), else the time.
+ *  - People are one neutral tint. What a person wrote is a white bubble with a
+ *    soft border; what Jawwid sent is a deep-teal tint; an internal note is amber
+ *    paper under a lock. A card Jawwid posted is a white sheet whose start edge
+ *    says what it is: teal information, amber "asks someone to act", red a problem.
+ *  - Gold is not used here: it belongs to the sidebar's "here" and to "now".
+ */
 
-.cw-list__actions { margin-inline-start: auto; display: flex; gap: var(--space-1); }
+.cw {
+  --cw-pad: 16px;
+  --cw-row-h: 64px;
+  --cw-out-bg: var(--teal-tint);
+  --cw-out-line: var(--teal-tint-2);
+  --cw-note-line: color-mix(in srgb, var(--waiting) 28%, var(--line));
+}
 
-/* List rows: the row is a button; its options menu sits beside it. */
-.cw-row { position: relative; }
-.cw-row__main { inline-size: 100%; border: 0; background: none; font: inherit; text-align: start; cursor: pointer; padding-inline-end: 44px; }
-.cw-row__main--unread .conv-row__name { font-weight: 700; }
-.cw-row__main--unread .conv-row__time { color: var(--text-link); font-weight: var(--fw-semibold); }
-.cw-row__menu { position: absolute; inset-inline-end: 6px; inset-block-start: 50%; transform: translateY(-50%); opacity: 0; }
-.cw-row:hover .cw-row__menu, .cw-row__menu:focus-within, .cw-row__menu:has([aria-expanded='true']) { opacity: 1; }
-@media (hover: none) { .cw-row__menu { opacity: 1; } }
-.cw-row__mark { display: inline-flex; color: var(--text-subtle); flex: none; }
+/* ======================================================= people: one tint */
+
+/* A monogram is one neutral tint whoever it stands for; the kind glyph and the role word say who. */
+.cw .avatar:not(.avatar--photo):not(.avatar--blank) { background: var(--avatar-bg); color: var(--ink-2); }
+.cw .avatar--blank { background: var(--surface-2); color: var(--ink-muted); box-shadow: inset 0 0 0 1px var(--line); }
+.cw-who .avatar--blank .icon { opacity: 0.9; }
+
+/* The kind of conversation, as a small tab on the monogram's corner. */
+.cw .typed-avatar__glyph {
+  inset-block-end: -5px;
+  inset-inline-end: -6px;
+  inline-size: 21px;
+  block-size: 21px;
+  border-radius: 6px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--ink-muted);
+}
+
+/* =================================================================== layout */
+
+.cw.workspace { --panel-w: 312px; background: var(--chat-bg); }
+.cw .workspace__list { background: var(--surface); border-inline-end: 1px solid var(--line); }
+.cw .workspace__thread { background: var(--chat-bg); container-type: inline-size; container-name: thread; }
+.cw .workspace__list > .banner { padding-inline: var(--cw-pad); }
+
+/* ============================================================== list header */
+
+.cw .workspace__head { gap: 12px; padding: 18px var(--cw-pad) 0; }
+.cw .workspace__title-row { align-items: center; gap: 8px; min-block-size: 40px; }
+.cw .workspace__title { font-family: var(--font-head); font-size: var(--fs-xl); font-weight: 700; line-height: 1.3; }
+.cw .workspace__count { padding: 0; background: none; color: var(--ink-muted); font-size: var(--fs-sm); font-weight: 500; }
+.cw-list__actions, .cw .workspace__refresh { margin-inline-start: auto; align-self: center; }
+.cw-list__actions { display: flex; gap: 2px; }
+.cw-list__actions .btn--ghost, .cw-list__actions .menu__button { color: var(--ink-2); }
+.cw .workspace__head .search .input { min-block-size: 38px; font-size: var(--fs-sm); background-color: var(--surface-2); border-color: transparent; }
+.cw .workspace__head .search .input:hover { border-color: var(--line-strong); }
+.cw .workspace__head .search .input:focus { background-color: var(--surface); border-color: var(--teal); }
+
+/* Views of the list: words with a count, the open one ruled in teal.
+   One line that scrolls sideways; the rule under it runs the pane's width. */
+.cw-filters { display: flex; min-inline-size: 0; margin-inline: calc(-1 * var(--cw-pad)); }
+.cw-filters .seg { flex: 1; min-inline-size: 0; gap: 12px; padding-inline: var(--cw-pad); scroll-padding-inline: 44px; border-block-end-color: var(--line-2); }
+.cw .workspace__head .seg__item { min-block-size: 40px; gap: 6px; padding-inline: 0; }
+.cw-filters .seg__count { margin-inline-start: 0; }
+/* More tabs than the pane is wide: the side that hides more fades out over a
+   tab's width, so a label is never cut off hard. (Masks are physical.) */
+.cw-filters .seg[data-more-end] { mask-image: linear-gradient(to right, #000 calc(100% - 56px), transparent calc(100% - 4px)); }
+.cw-filters .seg[data-more-start] { mask-image: linear-gradient(to left, #000 calc(100% - 56px), transparent calc(100% - 4px)); }
+.cw-filters .seg[data-more-start][data-more-end] { mask-image: linear-gradient(to right, transparent 4px, #000 56px, #000 calc(100% - 56px), transparent calc(100% - 4px)); }
+[dir='rtl'] .cw-filters .seg[data-more-end] { mask-image: linear-gradient(to left, #000 calc(100% - 56px), transparent calc(100% - 4px)); }
+[dir='rtl'] .cw-filters .seg[data-more-start] { mask-image: linear-gradient(to right, #000 calc(100% - 56px), transparent calc(100% - 4px)); }
+[dir='rtl'] .cw-filters .seg[data-more-start][data-more-end] { mask-image: linear-gradient(to right, transparent 4px, #000 56px, #000 calc(100% - 56px), transparent calc(100% - 4px)); }
+
+/* ============================================================ the queue */
+
+.cw .workspace__scroll { padding-block-end: 12px; }
+
+/* A section of the queue: a heading in ink with its count, stuck to the top while its rows pass. */
+.cw .cw-sec__title {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 16px var(--cw-pad) 6px;
+  border: 0;
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--font-head);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  letter-spacing: 0;
+}
+.cw-sec--rest .cw-sec__title { color: var(--ink-2); }
+.cw-sec .count { min-inline-size: 20px; block-size: 20px; }
+.cw-sec .count--quiet { padding-inline: 0; }
+
+/* Rows: 64px, set on the white pane with no rules between them; the open one is lifted. */
+.cw .conv-list { display: grid; gap: 1px; padding-inline: 8px; }
+.cw .conv-row {
+  gap: 12px;
+  min-block-size: var(--cw-row-h);
+  padding: 10px 10px;
+  border: 0;
+  border-radius: 8px;
+  transition: background var(--dur-fast) var(--ease-out);
+}
+.cw .conv-row .avatar { inline-size: 40px; block-size: 40px; border-radius: 10px; font-size: var(--fs-sm); }
+.cw .conv-row__body { gap: 2px; padding: 0; border: 0; }
+.cw .conv-row:hover { background: var(--surface-hover); }
+.cw .conv-row:focus-visible { outline: 2px solid var(--teal); outline-offset: -2px; border-radius: 8px; }
+.cw .conv-row[aria-current='true'] { background: var(--teal-tint); box-shadow: inset 0 0 0 1px var(--teal-tint-2); }
+.cw .conv-row[aria-current='true']::before { content: none; }
+/* A name or a preview may run the other way (a Latin name in the Arabic list).
+   The pane decides where every line starts; the text only its own order: it
+   sits in an isolated box (.cw-line) at the line's start, cut at its own end. */
+.cw .conv-row__name, .cw .conv-row__sub, .cw-hit-row__where { display: flex; align-items: baseline; gap: 4px; overflow: visible; }
+.cw-line { flex: 0 1 auto; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cw-row__who { flex: none; color: var(--ink-2); font-weight: 500; }
+.cw .conv-row__name { font-family: var(--font-head); font-size: var(--fs-md); font-weight: 600; line-height: 1.4; color: var(--ink); }
+.cw .conv-row__time { flex: none; font-size: var(--fs-xs); color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+.cw .conv-row__sub { font-size: var(--fs-sm); line-height: 1.5; color: var(--ink-muted); }
+.cw .conv-row__bottom { gap: 8px; min-block-size: 22px; }
+.cw .conv-row .badge { flex: none; margin-inline-start: 4px; font-size: var(--fs-xs); white-space: nowrap; }
+/* Unread is weight and a teal count: what was said reads in ink. */
+.cw-row__main--unread .conv-row__sub { color: var(--ink-2); }
+.cw-row__main--unread .conv-row__time { color: var(--teal-dark); }
 .cw-unread {
   display: inline-grid;
   place-items: center;
+  flex: none;
   min-inline-size: 20px;
   block-size: 20px;
   padding: 0 6px;
-  border-radius: var(--radius-full);
-  background: var(--accent);
-  color: #fff;
-  font-size: 11px;
-  font-weight: var(--fw-semibold);
+  border-radius: 10px;
+  background: var(--teal-tint-2);
+  color: var(--teal-deep);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  line-height: 1;
   font-variant-numeric: tabular-nums;
-  flex: none;
 }
 
-/* Thread header: the name opens the info panel. */
+/* How long a family has waited: the row's one emphasised fact. Grey while there
+   is time, amber in the last window, red past it. The name never turns red. */
+.cw-row__waited {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.cw-row__waited .icon { color: var(--ink-muted); }
+:is(.cw-row__waited, .cw-queue__waited).cw-wait--soon, :is(.cw-row__waited, .cw-queue__waited).cw-wait--soon .icon { color: var(--waiting); }
+:is(.cw-row__waited, .cw-queue__waited).cw-wait--late, :is(.cw-row__waited, .cw-queue__waited).cw-wait--late .icon { color: var(--urgent); }
+
+/* What this viewer set on the chat: quiet glyphs after the preview. */
+.cw-row__marks { display: inline-flex; align-items: center; gap: 6px; flex: none; color: var(--ink-muted); }
+.cw-row__marks:empty { display: none; }
+.cw-row__mark { display: inline-flex; flex: none; color: var(--ink-muted); }
+.cw-row__mark--mention, .cw-row__mark--cover { color: var(--teal); }
+.cw-row__word { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); }
+.cw-row__label { inline-size: 8px; block-size: 8px; border-radius: 50%; background: var(--cw-tone); }
+
+.cw-row { position: relative; }
+.cw-row__main { inline-size: 100%; border: 0; background: none; font: inherit; text-align: start; cursor: pointer; }
+/* The row's options wait for the pointer or the keyboard, over the row's end. */
+.cw-row__menu { position: absolute; inset-inline-end: 8px; inset-block-start: 50%; transform: translateY(-50%); opacity: 0; }
+.cw-row__menu .menu__button {
+  inline-size: 32px;
+  min-block-size: 32px;
+  block-size: 32px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink-2);
+  box-shadow: var(--shadow-lift);
+}
+.cw-row:hover .cw-row__menu, .cw-row__menu:focus-within, .cw-row__menu:has([aria-expanded='true']) { opacity: 1; }
+@media (hover: none) {
+  .cw-row__menu { opacity: 1; }
+  .cw-row__menu .menu__button { inline-size: 40px; block-size: 40px; border-color: transparent; background: none; box-shadow: none; }
+  .cw-row__main { padding-inline-end: 54px; }
+}
+/* The open row's menu sits above the rows after it. */
+.cw-row:has(.menu__button[aria-expanded='true']) { z-index: 5; }
+
+/* The read-only view's second filter (status) and its sort: one quiet strip under the tabs. */
+.cw .cw-substrip { display: flex; align-items: center; gap: 8px; padding: 8px var(--cw-pad); border-block-end: 1px solid var(--line-2); }
+.cw .cw-substrip .chips { flex: 1; min-inline-size: 0; flex-wrap: nowrap; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+.cw .cw-substrip .chips::-webkit-scrollbar { display: none; }
+.cw .cw-substrip .chip { flex: none; min-block-size: 28px; padding-inline: 9px; white-space: nowrap; }
+.cw .cw-substrip .workspace__controls { flex: none; padding: 0; }
+
+/* ============================================================ thread header */
+
+.cw .thread-head {
+  position: relative;
+  z-index: 2;
+  min-block-size: 68px;
+  gap: 10px;
+  padding-block: 8px;
+  padding-inline: 12px 14px;
+  background: var(--surface);
+  border-block-end: 1px solid var(--line);
+}
+/* The name opens the context panel. */
 .cw-head__who {
   flex: 1;
   min-inline-size: 0;
   display: flex;
   align-items: center;
-  gap: var(--space-3);
-  padding: 4px;
+  gap: 12px;
+  padding: 4px 6px;
   border: 0;
-  border-radius: var(--radius);
+  border-radius: 8px;
   background: none;
   color: inherit;
   font: inherit;
@@ -45,575 +236,942 @@
   cursor: pointer;
 }
 .cw-head__who:hover { background: var(--surface-hover); }
-.cw-head__actions { display: flex; align-items: center; gap: 2px; }
-.cw-older { display: flex; justify-content: center; padding-block-start: var(--space-3); }
+.cw .thread-head > .typed-avatar { margin-inline: 4px 2px; }
+.cw .thread-head .avatar { inline-size: 40px; block-size: 40px; }
+.cw .thread-head__text { gap: 0; }
+.cw .thread-head__name {
+  max-inline-size: 100%;
+  font-family: var(--font-head);
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cw .thread-head__sub { display: flex; align-items: center; gap: 0 4px; font-size: var(--fs-sm); color: var(--ink-muted); }
+.cw .thread-head__sub--typing { color: var(--teal); font-style: normal; }
+/* Online is a ring, never a filled dot: nothing is wrong. */
+.cw .thread-head__sub--online::before {
+  content: '';
+  display: inline-block;
+  flex: none;
+  inline-size: 8px;
+  block-size: 8px;
+  border: 1.5px solid var(--done);
+  border-radius: 50%;
+}
+.cw .thread-head__sub .cw-row__mark { margin-inline-start: 2px; }
+.cw .thread-head__cover { display: block; font-size: var(--fs-xs); color: var(--teal); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cw .thread-head__text .cw-row__labels { margin-block-start: 2px; }
+.cw .thread-head .badge { flex: none; }
+.cw-head__actions { display: flex; align-items: center; gap: 6px; flex: none; }
+.cw .thread-head .btn--icon:not(.btn--primary), .cw .thread-head .menu__button { color: var(--ink-2); }
+.cw .thread-head .btn[aria-pressed='true'], .cw .thread-head .btn[aria-expanded='true'] { background: var(--surface-2); color: var(--ink); }
+/* The family's one urgent fact: late money is a solid tag; money merely due is ink. */
+.cw-head__fact { display: inline-flex; align-items: center; flex: none; padding: 2px; border: 0; border-radius: 8px; background: none; font: inherit; }
+button.cw-head__fact { cursor: pointer; }
+button.cw-head__fact:hover { background: var(--surface-hover); }
+.cw-head__fact .badge { padding: 4px 10px; font-size: var(--fs-sm); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.cw-head__due { padding-inline: 8px; color: var(--ink); font-size: var(--fs-sm); font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* The header's one stated control, outlined: the screen's one filled action is the money sheet's. */
+.cw-head__call { gap: 8px; min-block-size: 40px; padding-inline: 14px; }
+.cw .thread-head .cw-head__call { color: var(--teal-dark); }
+.cw .thread-head .cw-head__call .icon { color: var(--teal); }
+/* A narrow thread keeps the name readable: Call becomes its icon, the fact stays. */
+/* A thread narrower than its header's row: the family's fact takes its own line under the name. */
+@container thread (max-width: 760px) {
+  .cw .thread-head { flex-wrap: wrap; row-gap: 0; }
+  .cw-head__fact { order: 9; flex: 1 1 100%; padding: 0 0 4px; padding-inline-start: 64px; }
+  .cw-head__fact .badge, .cw-head__due { padding-block: 2px; }
+}
+@container thread (max-width: 480px) {
+  .cw-head__call { inline-size: 40px; padding: 0; }
+  .cw-head__call-word { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); }
+}
+@container thread (max-width: 420px) {
+  .cw .thread-head__kind { display: none; }
+}
 
-/* Messages: a hover action button beside each bubble. */
-.cw-msg__line { display: flex; align-items: flex-start; gap: 2px; max-inline-size: 100%; }
+/* Call history (a sheet from the header's menu). */
+.cw-calls__list { list-style: none; margin: 0; padding: 0; }
+.cw-calls__list li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding-block: 10px;
+  border-block-end: 1px solid var(--line-2);
+  font-size: var(--fs-sm);
+}
+.cw-calls__list li:last-child { border-block-end: 0; }
+.cw-calls__list time { flex: none; font-size: var(--fs-xs); color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+.cw-calls__none { margin: 0; font-size: var(--fs-sm); color: var(--ink-muted); }
+
+/* ================================================================== thread */
+
+.cw .athread { max-inline-size: 860px; padding: 12px 28px 24px; gap: 3px; }
+.cw-older { display: flex; justify-content: center; padding-block-start: 14px; }
+.cw .thread-note { color: var(--ink-muted); }
+
+/* A day is a small white label on a soft rule. */
+.cw .athread__day { align-self: stretch; display: flex; align-items: center; gap: 12px; margin-block: 18px 10px; }
+.cw .athread__day::before, .cw .athread__day::after { content: ''; flex: 1; border-block-start: 1px solid var(--line); }
+.cw .athread__day span {
+  padding: 2px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  box-shadow: none;
+  color: var(--ink-2);
+  font-family: var(--font-head);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+}
+/* Where the viewer had read up to: a teal rule with a small "New". */
+.cw .athread__new { align-self: stretch; display: flex; align-items: center; gap: 10px; margin-block: 14px 8px; }
+.cw .athread__new::after { content: ''; flex: 1; border-block-start: 1.5px solid var(--teal); }
+.cw .athread__new span { padding: 1px 8px; border-radius: 6px; background: var(--teal-solid); color: #fff; font-size: 12px; font-weight: 600; }
+
+/* Bubbles. What a family or a teacher wrote: white with a soft border.
+   What Jawwid sent: a deep-teal tint. Radius 12; the corner points at the sender at a run's start. */
+.cw .bubble-row { max-inline-size: min(580px, 78%); }
+.cw .bubble {
+  gap: 3px;
+  min-inline-size: 88px;
+  padding: 8px 12px 6px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: none;
+  color: var(--ink);
+  font-size: var(--fs-md);
+  line-height: 1.65;
+}
+.cw .bubble-row--staff .bubble { background: var(--cw-out-bg); border-color: var(--cw-out-line); }
+.cw .bubble-row--contact.cw-msg--run-start .bubble { border-start-start-radius: 4px; }
+.cw .bubble-row--staff.cw-msg--run-start .bubble { border-start-end-radius: 4px; }
+.cw .bubble-row--contact:not(.cw-msg) .bubble { border-start-start-radius: 4px; }
+.cw .bubble-row--staff:not(.cw-msg) .bubble { border-start-end-radius: 4px; }
+/* An internal note: amber paper under a lock and "Staff only", beside whoever wrote it. */
+.cw .bubble-row--internal { margin-block: 6px; }
+.cw .bubble-row--internal.cw-msg--mine, .cw .bubble-row--internal[data-pending] { align-self: flex-end; align-items: flex-end; }
+.cw .bubble-row--internal.cw-msg--mine .cw-msg__line { flex-direction: row-reverse; }
+.cw .bubble-row--internal .bubble { border: 1px solid var(--cw-note-line); border-radius: 10px; background: var(--waiting-tint); }
+.cw .bubble__flag { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-xs); font-weight: 600; color: var(--waiting); }
+.cw .bubble__flag .icon { color: var(--waiting); }
+.cw .bubble__attachment { border: 1px solid var(--line-2); border-radius: 8px; background: var(--surface-2); color: var(--ink-2); }
+.cw .bubble-row--staff .bubble__attachment { background: var(--surface); }
+.cw .bubble__deleted { color: var(--ink-muted); font-style: normal; }
+/* The time, small and quiet, inside the bubble. */
+.cw .bubble__meta { gap: 6px; font-size: var(--fs-xs); color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+.cw .bubble__meta .badge { font-size: var(--fs-xs); gap: 4px; }
+.cw .bubble-author { margin: 12px 2px 4px; font-size: var(--fs-xs); }
+.cw .bubble-author__name { font-weight: 600; color: var(--ink); }
+
+/* A system line is a line: centred, quiet, no pill. */
+.cw .bubble-row--system { margin-block: 10px; max-inline-size: 86%; }
+.cw .sys-pill {
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 2px 8px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--ink-muted);
+  font-size: var(--fs-xs);
+  text-align: center;
+}
+.cw .sys-pill time { color: var(--ink-muted); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
+
+/* Messages: an options button beside each bubble, waiting for the pointer. */
+.cw-msg__line { display: flex; align-items: flex-start; gap: 4px; max-inline-size: 100%; }
+.cw-msg__line > .bubble { min-inline-size: 0; }
 .bubble-row--staff .cw-msg__line { flex-direction: row-reverse; }
 .bubble-row--internal .cw-msg__line > .bubble { flex: 1; }
-.cw-msg__menu { opacity: 0; transition: opacity var(--dur-fast) var(--ease); }
+.cw-msg__menu { opacity: 0; transition: opacity var(--dur-fast) var(--ease-out); }
+.cw-msg__menu .menu__button { color: var(--ink-muted); }
 .cw-msg:hover .cw-msg__menu, .cw-msg__menu:focus-within, .cw-msg__menu:has([aria-expanded='true']) { opacity: 1; }
 @media (hover: none) { .cw-msg__menu { opacity: 1; } }
 
-/* Who wrote it -- WhatsApp's layout: the picture beside the first bubble of a
-   run, the name in colour at the top inside it. Later bubbles of the run keep
-   the picture's column so they line up under the first. */
+/* Who wrote it: a neutral monogram beside the first bubble of a run and the
+   name in ink inside it, the role a quiet word. Later bubbles keep the column. */
 .cw-msg--with-sender { max-inline-size: min(640px, 86%); }
-.cw-msg__avatar { flex: none; inline-size: 36px; align-self: flex-start; }
-.cw-msg__avatar .avatar { inline-size: 36px; block-size: 36px; font-size: 13px; font-weight: 700; box-shadow: var(--shadow-xs); }
-/* Initials sit in a solid circle of the sender's own name colour (white text
-   is >= 5:1 on every one), so picture and name read as one person. */
-.cw-msg__avatar .avatar:not(.avatar--photo) { background: var(--cw-tone); color: #fff; }
-.cw-tone--1 { --cw-tone: #b4441c; }
-.cw-tone--2 { --cw-tone: #1f6fb2; }
-.cw-tone--3 { --cw-tone: #2a722e; }
-.cw-tone--4 { --cw-tone: #8e3fa6; }
-.cw-tone--5 { --cw-tone: #a8327a; }
-.cw-tone--6 { --cw-tone: #0f766e; }
-.cw-tone--7 { --cw-tone: #8a5a00; }
-.cw-tone--8 { --cw-tone: #4b55c4; }
-.cw-msg__line > .bubble { min-inline-size: 0; }
-.cw-msg--run-start { margin-block-start: var(--space-2); }
-.cw-sender { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; min-inline-size: 0; }
-.cw-sender__name { font-size: var(--fs-md); font-weight: 700; line-height: 1.3; overflow-wrap: anywhere; }
-.cw-sender .kind-chip { font-size: 10px; }
+.cw-msg--run-start { margin-block-start: 10px; }
+.cw-msg__avatar { flex: none; inline-size: 32px; align-self: flex-start; margin-inline-end: 4px; }
+.cw-msg__avatar .avatar { inline-size: 32px; block-size: 32px; border-radius: 9px; font-size: 12px; font-weight: 600; box-shadow: none; }
+.cw-sender { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 8px; min-inline-size: 0; }
+.cw-sender__name { font-size: var(--fs-sm); font-weight: 600; line-height: 1.5; color: var(--ink); overflow-wrap: anywhere; }
+/* The role is a word, not a pill. */
+.cw .kind-chip { padding: 0; border-radius: 0; background: none; color: var(--ink-muted); font-size: var(--fs-xs); font-weight: 400; }
 
-/* A bubble's corner points at its sender only at the start of a run. */
-.bubble-row--contact.cw-msg .bubble { border-start-start-radius: 14px; }
-.bubble-row--contact.cw-msg--run-start .bubble { border-start-start-radius: 4px; }
-.bubble-row--staff.cw-msg .bubble { border-start-end-radius: 14px; }
-.bubble-row--staff.cw-msg--run-start .bubble { border-start-end-radius: 4px; }
-
-/* Eight name colours, each at least 4.5:1 on its bubble in both themes. */
-.cw-sender__name--1 { color: #b4441c; }
-.cw-sender__name--2 { color: #1f6fb2; }
-.cw-sender__name--3 { color: #2a722e; }
-.cw-sender__name--4 { color: #8e3fa6; }
-.cw-sender__name--5 { color: #a8327a; }
-.cw-sender__name--6 { color: #0f766e; }
-.cw-sender__name--7 { color: #8a5a00; }
-.cw-sender__name--8 { color: #4b55c4; }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) .cw-sender__name--1 { color: #f4a27f; }
-  :root:not([data-theme='light']) .cw-sender__name--2 { color: #7cb8f2; }
-  :root:not([data-theme='light']) .cw-sender__name--3 { color: #86d18a; }
-  :root:not([data-theme='light']) .cw-sender__name--4 { color: #d49ae6; }
-  :root:not([data-theme='light']) .cw-sender__name--5 { color: #f08fc7; }
-  :root:not([data-theme='light']) .cw-sender__name--6 { color: #5fd3c6; }
-  :root:not([data-theme='light']) .cw-sender__name--7 { color: #e9bd5c; }
-  :root:not([data-theme='light']) .cw-sender__name--8 { color: #a7aef5; }
+/* A card Jawwid posted (a scheduled call, a moved or excused lesson, an
+   escalated case) is a white sheet with a soft neutral border. What it is is
+   said by its glyph's colour, never a stripe: teal for what is simply so,
+   amber for what asks someone to act, red only for a problem. */
+.cw .bubble-row.cw-msg.cw-msg--card { max-inline-size: min(460px, 88%); margin-block: 8px; }
+/* A notice Jawwid posted about the family (lessons paused, a teacher away) is nobody's message: centred in the thread. */
+.cw .bubble-row.cw-msg.cw-msg--notice { align-self: center; align-items: center; max-inline-size: min(540px, 92%); margin-block: 12px; }
+.cw .bubble-row.cw-msg.cw-msg--card .bubble {
+  min-inline-size: min(300px, 100%);
+  padding: 12px 16px 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
 }
-:root[data-theme='dark'] .cw-sender__name--1 { color: #f4a27f; }
-:root[data-theme='dark'] .cw-sender__name--2 { color: #7cb8f2; }
-:root[data-theme='dark'] .cw-sender__name--3 { color: #86d18a; }
-:root[data-theme='dark'] .cw-sender__name--4 { color: #d49ae6; }
-:root[data-theme='dark'] .cw-sender__name--5 { color: #f08fc7; }
-:root[data-theme='dark'] .cw-sender__name--6 { color: #5fd3c6; }
-:root[data-theme='dark'] .cw-sender__name--7 { color: #e9bd5c; }
-:root[data-theme='dark'] .cw-sender__name--8 { color: #a7aef5; }
+.cw .cw-msg--card .cp-card { min-inline-size: 0; max-inline-size: none; padding: 0; border: 0; border-radius: 0; background: none; }
+.cw .cw-msg--card :is(.cp-card__heading, .jr-moved__title) { font-family: var(--font-head); font-size: var(--fs-md); font-weight: 600; }
+.cw .cw-msg--card .cp-card__glyph { color: var(--teal); }
+.cw .cw-msg--card-act .cp-card__glyph { color: var(--waiting); }
+.cw .cw-msg--card .cp-card__title { font-weight: 600; }
+.cw .cw-msg--card .cp-card__line--sub, .cw .cw-msg--card .cp-card__hint { color: var(--ink-muted); }
+.cw .cw-msg--card .cp-card__actions { margin-block-start: 10px; padding-block-start: 10px; border-block-start: 1px solid var(--line-2); }
+.cw .cw-msg--card .jr-moved__title { border-block-end-color: var(--line-2); }
+.cw .cw-msg--card .jr-now { font-style: normal; }
+/* A card's own button is the card's action, not the screen's: outlined, in teal words. */
+.cw .cw-msg--card .btn--primary:not(:disabled) { background: var(--surface); border-color: var(--line-strong); color: var(--teal-dark); }
+.cw .cw-msg--card .btn--primary:not(:disabled):hover { background: var(--teal-tint); border-color: var(--teal-tint-2); }
+.cw .cw-msg--card .btn--primary .icon { color: var(--teal); }
+/* A button that cannot be pressed yet reads as one: quiet, with words that can still be read. */
+.cw .cw-msg--card .btn:disabled { opacity: 1; background: var(--surface-2); border-color: var(--line); color: var(--ink-muted); }
+.cw .cw-msg--card .case-card { display: block; }
+/* A card drawn from its plain words: a title, then its facts line by line. */
+.cw-card { display: flex; align-items: flex-start; gap: 10px; white-space: normal; }
+.cw-card__glyph { display: inline-flex; flex: none; margin-block-start: 3px; color: var(--teal); }
+.cw-card--act .cw-card__glyph { color: var(--waiting); }
+.cw-card--problem .cw-card__glyph { color: var(--urgent); }
+.cw-card__text { display: grid; gap: 2px; min-inline-size: 0; }
+.cw-card__title { font-family: var(--font-head); font-size: var(--fs-md); font-weight: 600; line-height: 1.5; }
+/* A card that is one sentence has no title: it reads as text. */
+.cw-card__title:only-child { font-family: var(--font); font-weight: 500; line-height: 1.65; }
+.cw-card__line { font-size: var(--fs-sm); color: var(--ink-2); }
+/* A card's words read in their own direction and start on the card's leading side. */
+.cw-card__title, .cw-card__line { text-align: -webkit-match-parent; text-align: match-parent; }
 
 .cw-quote {
   display: grid;
   gap: 1px;
   min-inline-size: 0;
   padding: 6px 10px;
-  border-inline-start: 3px solid var(--accent-line);
-  border-radius: var(--radius-sm);
-  background: var(--surface-sunken);
+  border-inline-start: 2px solid var(--teal);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
   font-size: var(--fs-sm);
 }
-.cw-quote--inline { background: rgba(16, 32, 40, 0.05); }
-.cw-quote__author { font-weight: var(--fw-semibold); color: var(--text-link); }
-.cw-quote__text { color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cw-quote__author { font-weight: 600; color: var(--teal-dark); }
+.cw-quote__text { color: var(--ink-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.cw-media { display: block; max-inline-size: 320px; border-radius: var(--radius); overflow: hidden; }
+.cw-media { display: block; max-inline-size: 320px; border-radius: 8px; overflow: hidden; }
 .cw-media img, video.cw-media { display: block; inline-size: 100%; max-block-size: 320px; object-fit: cover; }
 .cw-audio { max-inline-size: 280px; }
 
-.cw-reactions { display: flex; flex-wrap: wrap; gap: 4px; margin-block-start: -4px; padding-inline: 8px; }
+.cw-reactions { display: flex; flex-wrap: wrap; gap: 4px; margin-block-start: -3px; padding-inline: 8px; }
 .cw-msg--with-sender .cw-reactions { padding-inline-start: 44px; }
 .cw-reaction {
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  padding: 1px 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-full);
+  min-block-size: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
   background: var(--surface);
-  box-shadow: var(--shadow-xs);
   font: inherit;
   font-size: var(--fs-sm);
   cursor: pointer;
 }
-.cw-reaction--mine { border-color: var(--focus); background: var(--accent-soft); }
-.cw-react-row { display: flex; gap: 2px; padding: 2px 2px 6px; margin-block-end: 4px; border-block-end: 1px solid var(--border); }
-.cw-react-row__emoji {
-  inline-size: 34px;
-  block-size: 34px;
+.cw-reaction--mine { border-color: var(--teal-tint-2); background: var(--teal-tint); }
+/* Small marks keep a full-size target around them. */
+.cw-reaction, .cw-label-filter__item, .cw-swatch { position: relative; }
+:is(.cw-reaction, .cw-label-filter__item, .cw-swatch)::after { content: ''; position: absolute; inset: -5px; }
+.cw-react-row { display: flex; gap: 2px; padding: 2px 2px 6px; margin-block-end: 4px; border-block-end: 1px solid var(--line-2); }
+.cw-react-row__emoji { inline-size: 34px; block-size: 34px; border: 0; border-radius: 7px; background: none; font-size: 18px; cursor: pointer; }
+.cw-react-row__emoji:hover, .cw-react-row__emoji:focus-visible, .cw-react-row__emoji[aria-pressed='true'] { background: var(--surface-hover); outline: none; }
+.cw-failed { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-block-start: 4px; font-size: var(--fs-xs); }
+.cw-action-error { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 var(--cw-pad) 8px; border-radius: 8px; }
+
+/* Star, pin, forwarded, edited: quiet marks. */
+.cw-mark { display: inline-flex; color: var(--ink-muted); }
+.cw-forwarded { display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-xs); color: var(--ink-muted); }
+.cw-support { color: var(--teal-dark); font-weight: 500; }
+.cw-edited { font-size: var(--fs-xs); color: var(--ink-muted); }
+.cw-edit-banner .cw-quote__author { display: inline-flex; align-items: center; gap: 4px; }
+
+.cw-pinned {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+  inline-size: 100%;
+  min-block-size: 46px;
+  padding: 6px var(--cw-pad);
   border: 0;
-  border-radius: var(--radius-full);
-  background: none;
-  font-size: 18px;
+  border-block-end: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  text-align: start;
   cursor: pointer;
 }
-.cw-react-row__emoji:hover, .cw-react-row__emoji:focus-visible, .cw-react-row__emoji[aria-pressed='true'] { background: var(--surface-hover); outline: none; }
-.cw-failed { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-block-start: 4px; font-size: var(--fs-xs); }
-.cw-action-error { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); margin: 0 var(--space-4) var(--space-2); }
+.cw-pinned:hover { background: var(--surface-hover); }
+.cw-pinned > .icon { color: var(--ink-muted); flex: none; }
+.cw-pinned__ticks { display: flex; flex-direction: column; gap: 2px; align-self: stretch; padding-block: 4px; }
+.cw-pinned__tick { flex: 1; inline-size: 2px; background: var(--line-strong); }
+.cw-pinned__tick--on { background: var(--teal-solid); }
+.cw-pinned__text { display: grid; min-inline-size: 0; }
+.cw-pinned__label { font-size: var(--fs-xs); font-weight: 600; color: var(--teal-dark); }
+.cw-pinned__body { font-size: var(--fs-sm); color: var(--ink-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cw-msg--flash .bubble { outline: 2px solid var(--teal); outline-offset: 2px; }
 
-/* Composer: Message / Internal note, then one bar -- attach, text, send. */
+.cw-starred { list-style: none; margin: 0; padding: 0; display: grid; max-block-size: 60vh; overflow-y: auto; }
+.cw-starred__item {
+  display: flex; align-items: flex-start; gap: 12px; inline-size: 100%;
+  padding: 10px 6px; border: 0; border-block-end: 1px solid var(--line-2); border-radius: 0;
+  background: none; color: inherit; font: inherit; text-align: start; cursor: pointer;
+}
+.cw-starred__item:hover, .cw-starred__item:focus-visible { background: var(--surface-hover); }
+.cw-starred__item > .icon { color: var(--ink-muted); flex: none; margin-block-start: 3px; }
+.cw-starred__main { flex: 1; min-inline-size: 0; display: grid; gap: 2px; }
+.cw-starred__top { display: flex; align-items: baseline; gap: 8px; min-inline-size: 0; }
+.cw-starred__who { font-weight: 600; font-size: var(--fs-sm); white-space: nowrap; }
+.cw-starred__where { flex: 1; min-inline-size: 0; font-size: var(--fs-xs); color: var(--ink-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cw-starred__time { font-size: var(--fs-xs); color: var(--ink-muted); white-space: nowrap; }
+.cw-starred__body { font-size: var(--fs-sm); color: var(--ink-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Select and forward. */
+.cw-msg--selectable { cursor: pointer; }
+.cw-msg--selectable .cw-msg__line { align-items: center; }
+.cw-msg--selected .bubble { outline: 2px solid var(--teal); outline-offset: 1px; }
+.cw-msg__check { inline-size: 18px; block-size: 18px; flex: none; accent-color: var(--teal); }
+.cw-select-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 0 var(--cw-pad) 14px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.cw-select-bar__count { font-family: var(--font-head); font-size: var(--fs-md); font-weight: 600; }
+.cw-select-bar__actions { margin-inline-start: auto; display: flex; flex-wrap: wrap; gap: 8px; }
+.cw-notice {
+  align-self: center;
+  margin: 0 auto 8px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: var(--ink);
+  color: var(--surface);
+  font-size: var(--fs-sm);
+  box-shadow: var(--shadow-pop);
+}
+.cw-forward { list-style: none; margin: 12px 0 0; padding: 0; max-block-size: 50vh; overflow-y: auto; display: grid; }
+.cw-forward__row { display: flex; align-items: center; gap: 12px; padding: 8px 4px; border-block-end: 1px solid var(--line-2); cursor: pointer; }
+.cw-forward__row:hover { background: var(--surface-hover); }
+.cw-forward__row--on { background: var(--teal-tint); }
+.cw-forward__name { flex: 1; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-sm); font-weight: 600; }
+.cw-forward__kind { font-size: var(--fs-xs); color: var(--ink-muted); white-space: nowrap; }
+
+/* ================================================================ composer */
+
+/* A white sheet docked at the foot of the thread. On its top edge a switch:
+   Message, or Internal note; the note turns the whole sheet amber paper. */
 .cw-composer {
   flex: none;
   display: grid;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-4) var(--space-3);
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+  margin: 0 var(--cw-pad) 14px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
   background: var(--surface);
-  border-block-start: 1px solid var(--border);
+  transition: background var(--dur) var(--ease-out), border-color var(--dur) var(--ease-out);
 }
-.cw-composer__modes { display: flex; gap: 4px; }
+.cw-composer:focus-within { border-color: var(--teal); box-shadow: 0 0 0 3px var(--teal-tint-2); }
+.cw-composer__top { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; padding: 8px 10px 6px; }
+.cw-composer__modes { display: inline-flex; gap: 2px; padding: 3px; border-radius: 9px; background: var(--surface-2); border: 1px solid var(--line-2); }
 .cw-mode {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  min-block-size: 28px;
-  padding: 0 var(--space-3);
-  border: 1px solid transparent;
-  border-radius: var(--radius-full);
+  gap: 6px;
+  min-block-size: 30px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 7px;
   background: none;
-  color: var(--text-muted);
+  color: var(--ink-muted);
   font: inherit;
   font-size: var(--fs-sm);
+  font-weight: 500;
   cursor: pointer;
 }
-.cw-mode[aria-pressed='true'] { background: var(--accent-soft); color: var(--text-link); font-weight: var(--fw-semibold); }
-.cw-mode--internal[aria-pressed='true'] { background: var(--internal-soft); color: var(--internal); }
+.cw-mode:hover { color: var(--ink); }
+.cw-mode[aria-pressed='true'] { background: var(--surface); color: var(--ink); font-weight: 600; box-shadow: var(--shadow-lift); }
+.cw-mode--internal[aria-pressed='true'] { color: var(--waiting); }
+.cw-composer__flag { display: flex; flex-basis: 100%; align-items: center; gap: 6px; margin-inline-start: 2px; color: var(--waiting); font-size: var(--fs-xs); font-weight: 600; }
+.cw-composer--internal { border-color: var(--cw-note-line); background: var(--waiting-tint); }
+.cw-composer--internal:focus-within { border-color: var(--waiting); box-shadow: 0 0 0 3px color-mix(in srgb, var(--waiting) 18%, transparent); }
+.cw-composer--internal .cw-composer__modes { background: color-mix(in srgb, var(--waiting) 10%, var(--waiting-tint)); border-color: var(--cw-note-line); }
 .cw-composer__bar {
   display: flex;
   align-items: flex-end;
-  gap: var(--space-2);
-  padding: 4px;
-  border: 1px solid var(--border-strong);
-  border-radius: 22px;
-  background: var(--surface);
+  gap: 2px;
+  padding: 4px 8px 8px;
+  border: 0;
+  border-radius: 0;
+  background: none;
 }
-.cw-composer__bar:focus-within { border-color: var(--focus); box-shadow: 0 0 0 3px var(--accent-soft); }
-.cw-composer--internal .cw-composer__bar { border-color: var(--internal); border-style: dashed; background: var(--internal-soft); }
-.cw-composer__attach .menu__button { inline-size: 36px; block-size: 36px; border-radius: 50%; }
+.cw-composer__bar:focus-within { outline: none; }
+.cw-composer > :is(.cw-reply-banner, .cw-files, .cw-suggest, .cw-composer__over) { margin: 8px 10px 0; }
+.cw-composer__attach .menu__button, .cw-composer__bar .voice-recorder__mic, .cw-composer__quick {
+  inline-size: 36px;
+  min-block-size: 36px;
+  block-size: 36px;
+  border-color: transparent;
+  border-radius: 8px;
+  background: none;
+  color: var(--ink-2);
+}
+.cw-composer__attach .menu__button:hover, .cw-composer__bar .voice-recorder__mic:hover { background: var(--surface-hover); }
 .cw-composer__attach .menu__popover { inset-block-start: auto; inset-block-end: calc(100% + 6px); }
 .cw-composer__input {
   flex: 1;
   min-inline-size: 0;
   min-block-size: 36px;
   max-block-size: 160px;
-  padding: 8px 4px;
+  padding: 7px 4px;
   border: 0;
   background: transparent;
-  color: var(--text);
+  color: var(--ink);
   font: inherit;
   font-size: var(--fs-md);
-  line-height: 1.4;
+  line-height: 1.5;
   resize: none;
 }
 .cw-composer__input:focus { outline: none; }
+/* The hint stays on one line; what does not fit is cut, never wrapped under the buttons. */
+.cw-composer__input::placeholder { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink-muted); }
+.cw-composer--internal .cw-composer__input::placeholder { color: var(--waiting); opacity: 0.85; }
+/* Attach, quick replies and voice are quiet; Send fills teal once there is something to send. */
 .cw-send {
   display: grid;
   place-items: center;
   flex: none;
-  inline-size: 36px;
+  inline-size: 40px;
   block-size: 36px;
   border: 0;
-  border-radius: 50%;
-  background: var(--accent);
+  border-radius: 8px;
+  background: var(--teal-solid);
   color: #fff;
   cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out);
 }
-.cw-send:hover:not(:disabled) { background: var(--accent-hover); }
-.cw-send:disabled { background: var(--surface-sunken); color: var(--text-subtle); cursor: default; }
-.cw-composer--internal .cw-send:not(:disabled) { background: var(--internal); }
-.cw-reply-banner { display: flex; align-items: center; gap: var(--space-2); }
+.cw-send:hover:not(:disabled) { background: var(--teal-dark); }
+.cw-send:disabled { background: var(--surface-2); color: var(--border-control); cursor: default; }
+.cw-composer--internal .cw-send:disabled { background: color-mix(in srgb, var(--waiting) 10%, transparent); }
+.cw-reply-banner { display: flex; align-items: center; gap: 8px; }
 .cw-reply-banner .cw-quote { flex: 1; }
-.cw-files { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.cw-files { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
 .cw-file {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   max-inline-size: 240px;
-  padding: 2px 2px 2px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-full);
-  background: var(--surface-sunken);
+  padding-inline-start: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
   font-size: var(--fs-sm);
 }
 .cw-file__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cw-composer__count { align-self: center; font-size: var(--fs-sm); color: var(--ink-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cw-composer__count--over { color: var(--urgent); font-weight: 600; }
+.cw-composer__over { margin: 2px 0 0; font-size: var(--fs-sm); color: var(--urgent); }
 
-/* Info panel */
-.cw-info__actions { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
-.cw-switch { display: inline-flex; align-items: center; gap: var(--space-2); min-block-size: 32px; font-size: var(--fs-sm); cursor: pointer; }
-.cw-info__members-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); margin-block-end: var(--space-2); }
-.cw-info__members-head .dp-section__title { margin: 0; }
-.cw-members { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
-.cw-member { display: flex; align-items: center; gap: var(--space-2); min-block-size: 36px; min-inline-size: 0; }
-.cw-member__name { flex: 1; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-sm); }
-
-@media (max-width: 767px) {
-  .cw-composer { padding-inline: var(--space-2); }
-  .cw-media { max-inline-size: 240px; }
-}
-
-/* The open row's menu sits above the rows after it (see menu.css). */
-.cw-row:has(.menu__button[aria-expanded='true']) { z-index: 5; }
-/* Star and pin (group B). */
-.cw-mark { display: inline-flex; color: var(--text-subtle); }
-.cw-mark--star { color: var(--accent-strong); }
-.cw-pinned {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  flex: none;
-  inline-size: 100%;
-  min-block-size: 48px;
-  padding: 6px var(--space-4);
-  border: 0;
-  border-block-end: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text);
-  font: inherit;
-  text-align: start;
-  cursor: pointer;
-}
-.cw-pinned:hover { background: var(--surface-hover); }
-.cw-pinned > .icon { color: var(--text-muted); flex: none; }
-.cw-pinned__ticks { display: flex; flex-direction: column; gap: 2px; align-self: stretch; padding-block: 4px; }
-.cw-pinned__tick { flex: 1; inline-size: 3px; border-radius: var(--radius-full); background: var(--border-strong); }
-.cw-pinned__tick--on { background: var(--accent); }
-.cw-pinned__text { display: grid; min-inline-size: 0; }
-.cw-pinned__label { font-size: var(--fs-xs); font-weight: var(--fw-semibold); color: var(--text-link); }
-.cw-pinned__body { font-size: var(--fs-sm); color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cw-msg--flash .bubble { box-shadow: 0 0 0 3px var(--accent-soft), 0 1px 1px rgba(16, 32, 40, 0.07); transition: box-shadow var(--dur-fast) var(--ease); }
-.cw-starred { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; max-block-size: 60vh; overflow-y: auto; }
-.cw-starred__item {
-  display: flex; align-items: flex-start; gap: var(--space-3); inline-size: 100%;
-  padding: var(--space-2) var(--space-3); border: 0; border-radius: var(--radius-sm);
-  background: none; color: inherit; font: inherit; text-align: start; cursor: pointer;
-}
-.cw-starred__item:hover, .cw-starred__item:focus-visible { background: var(--surface-hover); }
-.cw-starred__item > .icon { color: var(--accent-strong); flex: none; margin-block-start: 2px; }
-.cw-starred__main { flex: 1; min-inline-size: 0; display: grid; gap: 2px; }
-.cw-starred__top { display: flex; align-items: baseline; gap: var(--space-2); min-inline-size: 0; }
-.cw-starred__who { font-weight: var(--fw-semibold); font-size: var(--fs-sm); white-space: nowrap; }
-.cw-starred__where { flex: 1; min-inline-size: 0; font-size: var(--fs-xs); color: var(--text-subtle); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cw-starred__time { font-size: var(--fs-xs); color: var(--text-subtle); white-space: nowrap; }
-.cw-starred__body { font-size: var(--fs-sm); color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-/* Forward and select (group B). */
-.cw-forwarded { display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-xs); font-style: italic; color: var(--text-subtle); }
-.cw-msg--selectable { cursor: pointer; }
-.cw-msg--selectable .cw-msg__line { align-items: center; }
-.cw-msg--selected .bubble { box-shadow: 0 0 0 2px var(--focus); }
-.cw-msg__check { inline-size: 18px; block-size: 18px; flex: none; accent-color: var(--accent); }
-.cw-select-bar {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  flex-wrap: wrap;
-  padding: var(--space-2) var(--space-4) var(--space-3);
-  background: var(--surface);
-  border-block-start: 1px solid var(--border);
-}
-.cw-select-bar__count { font-size: var(--fs-md); }
-.cw-select-bar__actions { margin-inline-start: auto; display: flex; flex-wrap: wrap; gap: var(--space-2); }
-.cw-notice {
-  align-self: center;
-  margin: 0 auto var(--space-2);
-  padding: 6px var(--space-4);
-  border-radius: var(--radius-full);
-  background: var(--text);
-  color: var(--surface);
-  font-size: var(--fs-sm);
-}
-.cw-forward { list-style: none; margin: var(--space-3) 0 0; padding: 0; max-block-size: 50vh; overflow-y: auto; display: grid; gap: 2px; }
-.cw-forward__row { display: flex; align-items: center; gap: var(--space-3); padding: 6px var(--space-2); border-radius: var(--radius-sm); cursor: pointer; }
-.cw-forward__row:hover { background: var(--surface-hover); }
-.cw-forward__row--on { background: var(--accent-soft); }
-.cw-forward__name { flex: 1; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-sm); font-weight: var(--fw-semibold); }
-.cw-forward__kind { font-size: var(--fs-xs); color: var(--text-subtle); white-space: nowrap; }
-
-/* Filters: one aligned line under the search -- All, Unread, Favorites,
-   Groups -- scrolling sideways rather than wrapping onto a ragged second row. */
-.cw-filters { display: flex; align-items: center; gap: var(--space-1); min-inline-size: 0; }
-.cw-filters .chips {
-  flex: 1;
-  min-inline-size: 0;
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  scrollbar-width: none;
-  padding-block: 2px;
-}
-.cw-filters .chips::-webkit-scrollbar { display: none; }
-.cw-filters .chip { flex: none; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
-.cw-filters .chip__count { margin-inline-start: 0; }
-/* A filter row that scrolls fades the side that hides more, like the tab rows. */
-.cw-filters .chips[data-more-end] { mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); }
-.cw-filters .chips[data-more-start] { mask-image: linear-gradient(to left, #000 calc(100% - 32px), transparent); }
-.cw-filters .chips[data-more-start][data-more-end] { mask-image: linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent); }
-[dir='rtl'] .cw-filters .chips[data-more-end] { mask-image: linear-gradient(to left, #000 calc(100% - 32px), transparent); }
-[dir='rtl'] .cw-filters .chips[data-more-start] { mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); }
-
-/* Favorite chats. */
-.cw-row__mark--favorite { color: var(--danger); }
-
-/* Edited messages. */
-.cw-edited { font-size: var(--fs-xs); font-style: italic; color: var(--text-subtle); }
-.cw-edit-banner .cw-quote__author { display: inline-flex; align-items: center; gap: 4px; }
-
-/* Labels (private to each staff member) and quick replies. A label's colour
-   is only the dot and a faint wash; its name stays in the body text colour, so
-   it reads in either theme. */
-.cw-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  max-inline-size: 14ch;
-  padding: 1px 8px;
-  border-radius: var(--radius-full);
-  background: color-mix(in srgb, var(--cw-tone) 12%, transparent);
-  color: var(--text);
-  font-size: var(--fs-xs);
-  font-weight: var(--fw-semibold);
-  line-height: 1.5;
-  white-space: nowrap;
-}
-.cw-label > span:last-child { overflow: hidden; text-overflow: ellipsis; }
-.cw-label__dot { inline-size: 8px; block-size: 8px; border-radius: var(--radius-full); background: var(--cw-tone); flex: none; }
-.cw-row__labels { display: flex; flex-wrap: wrap; gap: 4px; margin-block-start: 4px; }
-.thread-head__text .cw-row__labels { margin-block-start: 2px; }
-
-.cw-label-filter { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; padding-block-start: var(--space-1); }
-.cw-label-filter__item { flex: none; padding: 0; border: 1px solid transparent; border-radius: var(--radius-full); background: none; cursor: pointer; }
-.cw-label-filter__item[aria-pressed='true'] { border-color: var(--cw-tone, var(--focus)); box-shadow: 0 0 0 1px var(--focus); }
-.cw-label-filter__item:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
-
-.cw-labels { list-style: none; margin: var(--space-3) 0 0; padding: 0; display: grid; gap: 2px; }
-.cw-labels__row { display: flex; align-items: center; gap: var(--space-1); padding: 4px var(--space-2); border-radius: var(--radius-sm); }
-.cw-labels__row:hover { background: var(--surface-hover); }
-.cw-labels__check { flex: 1; min-inline-size: 0; display: flex; align-items: center; gap: var(--space-2); cursor: pointer; }
-.cw-labels__check input { accent-color: var(--accent); inline-size: 16px; block-size: 16px; }
-.cw-labels__rename { flex: 1; display: flex; gap: var(--space-2); }
-.cw-labels__rename .input { flex: 1; min-inline-size: 0; }
-.cw-labels__new { margin-block-start: var(--space-4); padding-block-start: var(--space-3); border-block-start: 1px solid var(--border); display: grid; gap: var(--space-2); }
-.cw-labels__new-row { display: flex; gap: var(--space-2); }
-.cw-labels__new-row .input { flex: 1; min-inline-size: 0; }
-.cw-swatches { display: flex; flex-wrap: wrap; gap: var(--space-2); }
-.cw-swatch { inline-size: 24px; block-size: 24px; border-radius: var(--radius-full); border: 2px solid var(--surface); background: var(--cw-tone); box-shadow: 0 0 0 1px var(--border-strong); cursor: pointer; padding: 0; }
-.cw-swatch[aria-checked='true'] { box-shadow: 0 0 0 2px var(--text); }
-.cw-swatch:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-
+/* Quick replies and @ mentions float over the thread. */
 .cw-suggest {
   list-style: none;
-  margin: 0 0 var(--space-2);
+  margin: 0 0 2px;
   padding: 4px;
   max-block-size: 220px;
   overflow-y: auto;
   background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: var(--shadow-pop);
 }
-.cw-suggest__item { display: flex; align-items: baseline; gap: var(--space-2); padding: 6px var(--space-2); border-radius: var(--radius-sm); cursor: pointer; }
-.cw-suggest__item[aria-selected='true'], .cw-suggest__item:hover { background: var(--accent-soft); }
-.cw-suggest__shortcut { font-weight: var(--fw-semibold); font-size: var(--fs-sm); flex: none; }
-.cw-suggest__body { flex: 1; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-sm); color: var(--text-muted); }
-.cw-suggest__scope { flex: none; font-size: var(--fs-xs); color: var(--text-subtle); }
-.cw-suggest__empty { padding: 6px var(--space-2); font-size: var(--fs-sm); color: var(--text-subtle); }
+.cw-suggest__item { display: flex; align-items: baseline; gap: 8px; padding: 7px 8px; border-radius: 7px; cursor: pointer; }
+.cw-suggest__item[aria-selected='true'], .cw-suggest__item:hover { background: var(--teal-tint); }
+.cw-suggest__shortcut { font-weight: 600; font-size: var(--fs-sm); flex: none; }
+.cw-suggest__body { flex: 1; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-sm); color: var(--ink-muted); }
+.cw-suggest__scope { flex: none; font-size: var(--fs-xs); color: var(--ink-muted); }
+.cw-suggest__empty { padding: 6px 8px; font-size: var(--fs-sm); color: var(--ink-muted); }
 
-.cw-quick { list-style: none; margin: var(--space-3) 0 0; padding: 0; max-block-size: 45vh; overflow-y: auto; display: grid; gap: 2px; }
-.cw-quick__row { display: flex; align-items: flex-start; gap: var(--space-2); padding: 6px var(--space-2); border-radius: var(--radius-sm); }
+/* The read-only view has no composer: a docked line says so and points to Chat. */
+.cw .thread-readonly { margin: 0 var(--cw-pad) 14px; padding: 8px 10px 8px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.cw .thread-readonly__bar {
+  justify-content: flex-start;
+  min-block-size: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--ink-2);
+  text-align: start;
+}
+.cw .thread-readonly__bar .icon { color: var(--ink-muted); }
+.cw .thread-readonly__reply { margin-inline-start: auto; }
+
+/* Bars other features put above the composer take the workspace's shape. */
+.cw .workspace__thread > .tj-bar { margin: 0 var(--cw-pad) 8px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.cw .workspace__thread > .sub-lock { margin: 0 var(--cw-pad) 8px; padding: 10px 14px; border-radius: 10px; }
+
+/* ===================================================== nothing selected: the reply queue */
+
+.cw .workspace__thread > .state:not(:has(.spinner)) { padding: clamp(40px, 14vh, 140px) clamp(24px, 6vw, 88px) 20px; }
+.cw .workspace__thread > .state .state__title { font-family: var(--font-head); font-size: var(--fs-xl); font-weight: 700; }
+
+.cw-start {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-block-size: 0;
+  padding: clamp(32px, 9vh, 96px) clamp(20px, 5vw, 64px) 20px;
+  overflow-y: auto;
+}
+.cw-queue { inline-size: 100%; max-inline-size: 760px; margin-inline: auto; }
+.cw-queue__head { margin-block-end: 20px; }
+.cw-queue__title { display: flex; align-items: center; gap: 12px; margin: 0; font-family: var(--font-head); font-size: var(--fs-2xl); font-weight: 700; line-height: 1.3; color: var(--ink); }
+.cw-queue__title .count { min-inline-size: 26px; block-size: 24px; border-radius: 7px; font-size: 13px; }
+.cw-queue__title--calm { font-size: var(--fs-xl); }
+.cw-queue__sub { display: flex; align-items: center; gap: 8px; margin: 6px 0 0; color: var(--ink-muted); font-size: var(--fs-sm); }
+.cw-queue__list { list-style: none; margin: 0; padding: 0; overflow: hidden; }
+.cw-queue__row { display: flex; align-items: center; gap: 14px; min-block-size: 76px; padding: 12px 18px; }
+.cw-queue__row + .cw-queue__row { box-shadow: 0 -1px 0 var(--line-2); }
+.cw-queue__row:hover { background: var(--surface-hover); }
+.cw-queue__row .avatar { inline-size: 44px; block-size: 44px; border-radius: 11px; font-size: 15px; }
+.cw-queue__who { flex: 1; min-inline-size: 0; display: grid; gap: 2px; }
+.cw-queue__name { margin: 0; font-family: var(--font-head); font-size: var(--fs-lg); font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cw-queue__said { display: flex; gap: 4px; min-inline-size: 0; margin: 0; color: var(--ink-muted); font-size: var(--fs-sm); }
+.cw-queue__said > span { flex: none; color: var(--ink-2); font-weight: 500; }
+.cw-queue__waited { display: inline-flex; align-items: center; gap: 5px; flex: none; color: var(--ink-2); font-size: var(--fs-md); font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.cw-queue__waited .icon { color: var(--ink-muted); }
+.cw-queue__row .btn { min-inline-size: 72px; }
+.cw-queue__more { margin: 12px 4px 0; color: var(--ink-muted); font-size: var(--fs-sm); }
+.cw-start__keys {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 22px;
+  inline-size: 100%;
+  max-inline-size: 760px;
+  margin: 20px auto 0;
+  padding-block-start: 0;
+  font-size: var(--fs-xs);
+  color: var(--ink-muted);
+}
+.cw-start__keys > span { display: inline-flex; align-items: center; gap: 5px; }
+@media (hover: none), (max-width: 767px) { .cw-start__keys { display: none; } }
+
+/* =========================================================== context panel */
+
+.cw .workspace__panel { padding: 0 var(--cw-pad) 28px; background: var(--canvas); border-inline-start: 1px solid var(--line); }
+/* The tabs name the panel; its title stays for assistive technology. */
+.cw .workspace__panel-title { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); }
+.cw-info__tabs { position: sticky; inset-block-start: 0; z-index: 2; margin-inline: calc(-1 * var(--cw-pad)); padding-inline: var(--cw-pad); background: var(--canvas); }
+.dialog .cw-info__tabs { background: var(--surface); }
+.cw-info__tabs .seg { gap: 22px; }
+.cw-info__tabs .seg__item { min-block-size: 48px; font-size: var(--fs-md); }
+.cw-info > .dp-section:first-of-type, .cw-info__tabs + .dp-section { border-block-start: 0; }
+
+/* The family: money first, on its own white sheet, with the one solid button. */
+.cw-fam { display: grid; gap: 0; margin-block: 16px 0; }
+.cw-money { padding: 16px 16px 14px; }
+.cw-fam__due { display: grid; gap: 2px; padding: 0 0 14px; }
+.cw-fam__label { font-size: var(--fs-sm); color: var(--ink-muted); }
+.cw-fam__sum { display: grid; gap: 2px; }
+.cw-fam__sum + .cw-fam__sum { margin-block-start: 10px; }
+.cw-fam__figure { display: flex; align-items: baseline; gap: 6px; }
+.cw-fam__figure .numeral { font-family: var(--font-head); font-size: 22px; font-weight: 700; line-height: 1.2; color: var(--ink); }
+.cw-fam__unit { font-size: var(--fs-sm); color: var(--ink-muted); }
+.cw-fam__note { text-wrap: balance; display: flex; align-items: center; flex-wrap: wrap; gap: 0 6px; min-block-size: 1.2em; font-size: var(--fs-sm); color: var(--ink-2); }
+/* The total is not itself late: it stays ink. Red goes only on the line that
+   says how much of it is overdue and since when -- the breached value. */
+.cw-fam__sum--late .cw-fam__note { color: var(--urgent); font-size: var(--fs-md); font-weight: 600; }
+.cw-fam__settled { font-family: var(--font-head); font-size: var(--fs-lg); font-weight: 600; color: var(--ink); }
+.cw-fam__rows { margin: 0; }
+.cw-fam__row {
+  display: grid;
+  grid-template-columns: minmax(5.5rem, 36%) minmax(0, 1fr);
+  gap: 10px;
+  padding-block: 9px;
+  border-block-start: 1px solid var(--line-2);
+}
+.cw-fam__row dt { padding-block-start: 1px; font-size: var(--fs-sm); color: var(--ink-muted); }
+.cw-fam__row dd { display: grid; justify-items: start; gap: 0; min-inline-size: 0; margin: 0; font-size: var(--fs-sm); font-weight: 600; overflow-wrap: anywhere; }
+.cw-fam__money { font-variant-numeric: tabular-nums; }
+.cw-fam__meta, .cw-fam__teacher { font-size: var(--fs-xs); font-weight: 400; color: var(--ink-muted); }
+.cw-money__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding-block-start: 14px; border-block-start: 1px solid var(--line-2); }
+.cw-money__actions .btn--primary { flex: 1 1 100%; margin-block-end: 4px; min-block-size: 42px; }
+.cw-money__actions { justify-content: flex-start; }
+.cw-money__actions .btn--ghost { padding-inline: 8px; color: var(--teal-dark); text-decoration: underline; text-decoration-color: var(--teal-tint-2); text-underline-offset: 4px; }
+.cw-money__actions .btn--ghost:first-of-type { margin-inline-start: -8px; }
+.cw-fam .aside-group { margin-block-start: 24px; }
+.cw-fam .aside-group__title { margin-block-end: 6px; }
+.cw-fam__children { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
+.cw-fam__children li { display: grid; gap: 1px; padding-block: 10px; border-block-start: 1px solid var(--line); }
+.cw-fam__children li:first-child { border-block-start: 0; padding-block-start: 2px; }
+.cw-fam__child { justify-self: start; color: var(--ink); font-size: var(--fs-md); font-weight: 600; text-decoration: none; }
+.cw-fam__child:hover { color: var(--teal-dark); text-decoration: underline; text-underline-offset: 4px; }
+.cw-fam__next { font-size: var(--fs-xs); color: var(--ink-2); }
+.cw-fam__who { display: flex; align-items: center; gap: 12px; padding-block: 2px 10px; }
+.cw-fam__who .avatar { inline-size: 40px; block-size: 40px; font-size: var(--fs-sm); }
+.cw-fam__id { display: grid; justify-items: start; min-inline-size: 0; }
+.cw-fam__name { font-family: var(--font-head); font-size: var(--fs-md); font-weight: 600; line-height: 1.4; color: var(--ink); text-decoration: none; overflow-wrap: anywhere; }
+.cw-fam__name:hover { color: var(--teal-dark); text-decoration: underline; text-underline-offset: 4px; }
+.cw-fam__sub { display: flex; flex-wrap: wrap; gap: 0 10px; font-size: var(--fs-sm); color: var(--ink-muted); }
+.cw-fam__phone-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 0; padding-block: 10px; border-block-start: 1px solid var(--line); font-size: var(--fs-sm); }
+.cw-fam__phone { font-weight: 600; font-variant-numeric: tabular-nums; }
+.cw-fam__file { margin-inline-start: -8px; text-decoration: none; }
+.cw-fam__none { margin: 16px 0; color: var(--ink-muted); font-size: var(--fs-sm); }
+
+/* The conversation's own details: sections under quiet headings, few rules. */
+.cw .dp-hero { gap: 12px; padding-block: 16px 14px; margin-block-end: 0; border-block-start: 0; border-block-end: 1px solid var(--line); }
+.cw .dp-hero .avatar--lg { inline-size: 44px; block-size: 44px; font-family: var(--font-head); font-size: 15px; border-radius: 11px; }
+.cw .dp-hero__text { gap: 4px; justify-items: start; }
+.cw .dp-hero__name { font-family: var(--font-head); font-size: var(--fs-md); font-weight: 600; }
+.cw .dp-section { padding-block: 14px; border-block-start: 1px solid var(--line); }
+.cw .dp-section + .dp-section { margin-block-start: 0; }
+.cw .dp-section__title { margin: 0 0 8px; font-family: var(--font-head); font-size: var(--fs-sm); font-weight: 600; letter-spacing: 0; color: var(--ink-2); }
+.cw .dp-section > p { margin: 0; font-size: var(--fs-sm); font-weight: 500; }
+.cw .dp-list { border: 0; border-radius: 0; overflow: visible; background: none; }
+.cw .dp-list > div { grid-template-columns: minmax(5.5rem, 36%) minmax(0, 1fr); padding: 8px 0; border-block-end: 1px solid var(--line-2); }
+.cw .dp-list > div:last-child { border-block-end: 0; }
+.cw .dp-list dt { font-size: var(--fs-sm); color: var(--ink-muted); }
+.cw .dp-list dd { font-size: var(--fs-sm); font-weight: 600; }
+.cw .dp-list__sub { color: var(--ink-muted); font-weight: 400; }
+.cw .dp-ref { padding: 0; border: 0; border-radius: 0; background: none; }
+.cw .dp-ref code { color: var(--ink-muted); direction: ltr; unicode-bidi: isolate; }
+/* A group's children (features/journey), set as open rows here. */
+.cw .jr-children { gap: 0; }
+.cw .jr-child { padding: 10px 0; border: 0; border-radius: 0; border-block-start: 1px solid var(--line-2); background: none; }
+.cw .jr-children > .jr-child:first-child { border-block-start: 0; padding-block-start: 0; }
+.cw .jr-child__head { flex-wrap: wrap; gap: 0 4px; }
+.cw .jr-child__head strong { flex: 1 1 100%; font-size: var(--fs-sm); }
+.cw .jr-child__head .btn { margin-inline-start: -10px; }
+
+.cw-info__actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.cw-switch { display: inline-flex; align-items: center; gap: 8px; min-block-size: 34px; flex-basis: 100%; font-size: var(--fs-sm); cursor: pointer; }
+.cw-switch input { accent-color: var(--teal); }
+.cw-info__members-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-block-end: 6px; }
+.cw-info__members-head .dp-section__title { margin: 0; }
+.cw-members { list-style: none; margin: 0; padding: 0; display: grid; }
+.cw-member { display: flex; align-items: center; gap: 10px; min-block-size: 42px; min-inline-size: 0; }
+.cw-members > .cw-member + .cw-member { border-block-start: 1px solid var(--line-2); }
+.cw-member__name { flex: 1; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-sm); font-weight: 500; }
+.cw-member__name a { color: var(--ink); text-decoration-color: var(--teal-tint-2); text-underline-offset: 4px; }
+.cw-member--summoned { padding-inline: 10px; border-radius: 8px; background: var(--waiting-tint); }
+.cw-member__note { display: block; font-size: var(--fs-xs); color: var(--waiting); }
+
+/* ============================================= labels, search, mentions */
+
+/* Labels are private to each staff member, who picks their colour: the colour
+   is only the dot; the chip itself is neutral and its name in ink. */
+.cw-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-inline-size: 14ch;
+  padding: 0 7px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  line-height: 1.7;
+  white-space: nowrap;
+}
+.cw-label > span:last-child { overflow: hidden; text-overflow: ellipsis; }
+.cw-label__dot { inline-size: 7px; block-size: 7px; border-radius: 50%; background: var(--cw-tone); flex: none; }
+.cw-tone--1 { --cw-tone: #a4532f; }
+.cw-tone--2 { --cw-tone: #3b6e95; }
+.cw-tone--3 { --cw-tone: #4b7a4f; }
+.cw-tone--4 { --cw-tone: #7a5a8c; }
+.cw-tone--5 { --cw-tone: #9a5476; }
+.cw-tone--6 { --cw-tone: #2f7470; }
+.cw-tone--7 { --cw-tone: #8a6a2a; }
+.cw-tone--8 { --cw-tone: #5a619c; }
+.cw-row__labels { display: flex; flex-wrap: wrap; gap: 4px; margin-block-start: 3px; }
+.cw-label-filter { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; padding-block: 2px 4px; }
+.cw-label-filter__item { flex: none; padding: 0; border: 1px solid transparent; border-radius: 7px; background: none; cursor: pointer; }
+.cw-label-filter__item[aria-pressed='true'] .cw-label { border-color: var(--teal); background: var(--teal-tint); color: var(--ink); }
+.cw-label-filter__item:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.cw-labels { list-style: none; margin: 12px 0 0; padding: 0; display: grid; }
+.cw-labels__row { display: flex; align-items: center; gap: 4px; padding: 4px 2px; border-block-end: 1px solid var(--line-2); }
+.cw-labels__row:hover { background: var(--surface-hover); }
+.cw-labels__check { flex: 1; min-inline-size: 0; display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.cw-labels__check input { accent-color: var(--teal); inline-size: 16px; block-size: 16px; }
+.cw-labels__rename { flex: 1; display: flex; gap: 8px; }
+.cw-labels__rename .input { flex: 1; min-inline-size: 0; }
+.cw-labels__new { margin-block-start: 16px; padding-block-start: 12px; border-block-start: 1px solid var(--line); display: grid; gap: 8px; }
+.cw-labels__new-row { display: flex; gap: 8px; }
+.cw-labels__new-row .input { flex: 1; min-inline-size: 0; }
+.cw-swatches { display: flex; flex-wrap: wrap; gap: 8px; }
+.cw-swatch { inline-size: 24px; block-size: 24px; border-radius: 6px; border: 2px solid var(--surface); background: var(--cw-tone); box-shadow: 0 0 0 1px var(--line-strong); cursor: pointer; padding: 0; }
+.cw-swatch[aria-checked='true'] { box-shadow: 0 0 0 2px var(--ink); }
+.cw-swatch:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+.cw-quick { list-style: none; margin: 12px 0 0; padding: 0; max-block-size: 45vh; overflow-y: auto; display: grid; }
+.cw-quick__row { display: flex; align-items: flex-start; gap: 8px; padding: 8px 2px; border-block-end: 1px solid var(--line-2); }
 .cw-quick__row:hover { background: var(--surface-hover); }
 .cw-quick__text { flex: 1; min-inline-size: 0; display: grid; gap: 2px; }
-.cw-quick__shortcut { font-weight: var(--fw-semibold); font-size: var(--fs-sm); }
-.cw-quick__body { font-size: var(--fs-sm); color: var(--text-muted); white-space: pre-wrap; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.cw-quick__shortcut { font-weight: 600; font-size: var(--fs-sm); }
+.cw-quick__body { font-size: var(--fs-sm); color: var(--ink-muted); white-space: pre-wrap; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .cw-quick__actions { display: flex; align-items: center; gap: 2px; flex: none; }
-.cw-quick__form { margin-block-start: var(--space-3); padding-block-start: var(--space-3); border-block-start: 1px solid var(--border); display: grid; gap: var(--space-2); }
+.cw-quick__form { margin-block-start: 12px; padding-block-start: 12px; border-block-start: 1px solid var(--line); display: grid; gap: 8px; }
 .cw-quick__textarea { resize: vertical; min-block-size: 72px; font: inherit; }
-.cw-quick__form-actions { display: flex; justify-content: flex-end; gap: var(--space-2); }
-.cw-quick__add { margin-block-start: var(--space-3); }
+.cw-quick__form-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.cw-quick__add { margin-block-start: 12px; }
 
-/* Search: a bar under the chat header, matches marked in the text, and a
-   Messages section under the chat list for matches across chats. */
+/* Search: a bar under the header, matches marked in the text, and a Messages
+   section under the list for matches across chats. */
 .cw-search {
   flex: none;
   display: flex;
   align-items: center;
-  gap: var(--space-1);
-  padding: var(--space-2) var(--space-3);
-  border-block-end: 1px solid var(--border);
+  gap: 4px;
+  padding: 8px 12px;
+  border-block-end: 1px solid var(--line);
   background: var(--surface);
-  color: var(--text-muted);
+  color: var(--ink-muted);
 }
 .cw-search__input {
   flex: 1;
   min-inline-size: 0;
-  border: 1px solid var(--border-control, var(--border-strong));
-  border-radius: var(--radius-full);
-  padding: 6px 12px;
+  min-block-size: 36px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  padding: 6px 10px;
   background: var(--surface);
-  color: var(--text);
+  color: var(--ink);
   font: inherit;
   font-size: var(--fs-sm);
 }
 .cw-search__input:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
-.cw-search__status { font-size: var(--fs-xs); color: var(--text-subtle); white-space: nowrap; min-inline-size: 6ch; text-align: center; }
-mark.cw-hit { background: var(--warn-soft); color: inherit; border-radius: 2px; box-shadow: inset 0 -2px 0 var(--warn); }
+.cw-search__status { font-size: var(--fs-xs); color: var(--ink-muted); white-space: nowrap; min-inline-size: 6ch; text-align: center; font-variant-numeric: tabular-nums; }
+mark.cw-hit { background: var(--teal-tint-2); color: inherit; border-radius: 3px; }
 
-.cw-hits { padding: var(--space-2) 0 var(--space-4); border-block-start: 1px solid var(--border); margin-block-start: var(--space-2); }
-.cw-hits__title { margin: 0; padding: var(--space-2) var(--space-4); font-size: var(--fs-xs); font-weight: var(--fw-semibold); color: var(--text-subtle); text-transform: uppercase; letter-spacing: 0.04em; }
-.cw-hits__empty { margin: 0; padding: var(--space-2) var(--space-4); font-size: var(--fs-sm); color: var(--text-subtle); }
-.cw-hits__list { list-style: none; margin: 0; padding: 0; }
-.cw-hit-row { display: flex; align-items: flex-start; gap: var(--space-3); inline-size: 100%; padding: 8px var(--space-4); border: 0; background: none; text-align: start; cursor: pointer; color: inherit; font: inherit; }
+.cw-hits { margin-block-start: 8px; padding: 4px 0 16px; border-block-start: 1px solid var(--line); }
+.cw-hits__title { margin: 0; padding: 12px var(--cw-pad) 4px; font-family: var(--font-head); font-size: var(--fs-sm); font-weight: 600; color: var(--ink); }
+.cw-hits__empty { margin: 0; padding: 6px var(--cw-pad); font-size: var(--fs-sm); color: var(--ink-muted); }
+.cw-hits__list { list-style: none; margin: 0; padding: 0 8px; }
+.cw-hit-row { display: flex; align-items: flex-start; gap: 12px; inline-size: 100%; padding: 10px; border: 0; border-radius: 8px; background: none; text-align: start; cursor: pointer; color: inherit; font: inherit; }
 .cw-hit-row:hover, .cw-hit-row:focus-visible { background: var(--surface-hover); }
-.cw-hit-row__main { flex: 1; min-inline-size: 0; display: grid; gap: 2px; }
-.cw-hit-row__top { display: flex; align-items: baseline; gap: var(--space-2); }
-.cw-hit-row__where { flex: 1; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-sm); font-weight: var(--fw-semibold); }
-.cw-hit-row__time { flex: none; font-size: var(--fs-xs); color: var(--text-subtle); }
-.cw-hit-row__body { font-size: var(--fs-sm); color: var(--text-muted); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
-.cw-hit-row__who { color: var(--text); }
+.cw-hit-row__main { flex: 1; min-inline-size: 0; display: grid; gap: 1px; }
+.cw-hit-row__top { display: flex; align-items: baseline; gap: 8px; min-inline-size: 0; }
+.cw-hit-row__where { flex: 1; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-sm); font-weight: 600; }
+.cw-hit-row__time { flex: none; font-size: var(--fs-xs); color: var(--ink-muted); }
+/* Two lines in the text's own direction, but starting on the pane's side. */
+.cw-hit-row__body { font-size: var(--fs-sm); color: var(--ink-muted); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; text-align: -webkit-match-parent; text-align: match-parent; }
+.cw-hit-row__who { color: var(--ink); }
 
-/* Chat themes: the VIEWER's own background for one chat (owner decisions
-   2026-10-20). Only the background behind the messages changes -- bubbles,
-   day pills and notes keep their own colours -- so every theme reads in light
-   and dark alike. A photo wallpaper is dimmed by --cw-wall-scrim. */
-.thread-body.cw-bg { background: var(--cw-bg, var(--bg)); }
-.cw-bg--lagoon { --cw-bg: linear-gradient(160deg, #e3f1ef, #d3e9e5); }
-.cw-bg--sand { --cw-bg: linear-gradient(160deg, #f5eedf, #ede2cb); }
-.cw-bg--rose { --cw-bg: linear-gradient(160deg, #f8e8ec, #f1d9e0); }
-.cw-bg--sky { --cw-bg: linear-gradient(160deg, #e4eef8, #d6e5f4); }
-.cw-bg--lilac { --cw-bg: linear-gradient(160deg, #eee8f7, #e3daf2); }
-.cw-bg--olive { --cw-bg: linear-gradient(160deg, #ebefdf, #dfe6cc); }
-.cw-bg--slate { --cw-bg: linear-gradient(160deg, #e8ebee, #dadfe4); }
-.cw-bg--dusk { --cw-bg: linear-gradient(160deg, #f6e7dd, #eed7c7); }
+/* @mentions: a name in teal; one that asks this viewer is amber, it asks them to act. */
+.cw-mention { display: inline; padding: 0 3px; border-radius: 4px; background: var(--teal-tint); color: var(--teal-dark); font-weight: 600; unicode-bidi: isolate; }
+.cw-mention--me { background: var(--waiting-tint); color: var(--waiting); }
+.cw-msg--mentions-me .bubble { box-shadow: inset 3px 0 0 var(--waiting); }
+[dir='rtl'] .cw-msg--mentions-me .bubble { box-shadow: inset -3px 0 0 var(--waiting); }
+.cw-mention-banner {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin: 0 var(--cw-pad) 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--cw-note-line);
+  border-radius: 12px;
+  background: var(--waiting-tint);
+  color: var(--ink);
+}
+.cw-mention-banner > .icon, .cw-mention-banner > svg { color: var(--waiting); flex: none; }
+.cw-mention-banner__text { flex: 1; min-inline-size: 12rem; font-size: var(--fs-sm); }
+.cw-mention-banner__time { margin-inline-start: 8px; color: var(--ink-muted); font-size: var(--fs-xs); }
+.cw-mention-banner__hint { display: block; color: var(--ink-muted); font-size: var(--fs-xs); }
+.cw-mention-banner__actions { display: inline-flex; gap: 8px; flex: none; }
+.cw-mention-banner--in { border-color: var(--line); background: var(--surface); }
+
+/* Ticks on the viewer's own messages; read is teal. */
+.cw-ticks { display: inline-flex; align-items: center; margin-inline-start: 2px; color: var(--ink-muted); }
+.cw-ticks--read { color: var(--teal); }
+
+/* Message info. */
+.cw-info-list + .cw-info-list { margin-block-start: 16px; }
+.cw-info-list__people { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.cw-info-list__person { display: flex; align-items: center; gap: 8px; }
+.cw-info-list__name { flex: 1; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cw-info-list__person time { font-size: var(--fs-xs); color: var(--ink-muted); }
+
+/* "Join a group": the groups of the viewer's teachers. */
+.cw-join { list-style: none; margin: 12px 0 0; padding: 0; display: grid; max-block-size: 60vh; overflow-y: auto; }
+.cw-join__row { display: flex; align-items: center; gap: 12px; padding: 10px 2px; border-block-end: 1px solid var(--line-2); }
+.cw-join__row:hover { background: var(--surface-hover); }
+.cw-join__main { flex: 1; min-inline-size: 0; display: grid; gap: 2px; }
+.cw-join__title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cw-join__meta { font-size: var(--fs-sm); color: var(--ink-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ============================================================= chat themes */
+
+/* The VIEWER's own background for one chat. The default is the warm ground; a
+   preset is a flat tint, so bubbles, days and notes read the same on all of
+   them, in light and dark. A photo wallpaper is dimmed by a scrim. */
+.thread-body.cw-bg { background: var(--cw-bg, var(--chat-bg)); }
+.cw-bg--lagoon { --cw-bg: #dcebe8; }
+.cw-bg--sand { --cw-bg: #efe6d0; }
+.cw-bg--rose { --cw-bg: #f3e1e1; }
+.cw-bg--sky { --cw-bg: #dde8f1; }
+.cw-bg--lilac { --cw-bg: #e8e2f0; }
+.cw-bg--olive { --cw-bg: #e4e9d3; }
+.cw-bg--slate { --cw-bg: #e3e6e6; }
+.cw-bg--dusk { --cw-bg: #f0dccb; }
 .thread-body.cw-bg--photo {
-  --cw-wall-scrim: rgb(255 255 255 / 0.55);
+  --cw-wall-scrim: color-mix(in srgb, var(--canvas) 60%, transparent);
   background: linear-gradient(var(--cw-wall-scrim), var(--cw-wall-scrim)), var(--cw-wall) center / cover no-repeat;
 }
+/* Over a photo, lines and labels need their own ground. */
+.cw .cw-bg--photo .athread__day::before, .cw .cw-bg--photo .athread__day::after { border-color: transparent; }
+.cw .cw-bg--photo .athread__day span, .cw .cw-bg--photo .sys-pill { padding: 1px 10px; border-radius: 6px; background: var(--surface); }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) .cw-bg--lagoon { --cw-bg: linear-gradient(160deg, #0f2624, #132e2b); }
-  :root:not([data-theme='light']) .cw-bg--sand { --cw-bg: linear-gradient(160deg, #2a241a, #30291d); }
-  :root:not([data-theme='light']) .cw-bg--rose { --cw-bg: linear-gradient(160deg, #2c1a20, #331f26); }
-  :root:not([data-theme='light']) .cw-bg--sky { --cw-bg: linear-gradient(160deg, #15202c, #192634); }
-  :root:not([data-theme='light']) .cw-bg--lilac { --cw-bg: linear-gradient(160deg, #221c2e, #282135); }
-  :root:not([data-theme='light']) .cw-bg--olive { --cw-bg: linear-gradient(160deg, #1f241a, #252b1f); }
-  :root:not([data-theme='light']) .cw-bg--slate { --cw-bg: linear-gradient(160deg, #1a1d21, #1f2328); }
-  :root:not([data-theme='light']) .cw-bg--dusk { --cw-bg: linear-gradient(160deg, #2b1d16, #33231b); }
+  :root:not([data-theme='light']) .cw-bg--lagoon { --cw-bg: #11292a; }
+  :root:not([data-theme='light']) .cw-bg--sand { --cw-bg: #2a2419; }
+  :root:not([data-theme='light']) .cw-bg--rose { --cw-bg: #2d1c20; }
+  :root:not([data-theme='light']) .cw-bg--sky { --cw-bg: #16222d; }
+  :root:not([data-theme='light']) .cw-bg--lilac { --cw-bg: #241e30; }
+  :root:not([data-theme='light']) .cw-bg--olive { --cw-bg: #20261b; }
+  :root:not([data-theme='light']) .cw-bg--slate { --cw-bg: #1b1f22; }
+  :root:not([data-theme='light']) .cw-bg--dusk { --cw-bg: #2d1f17; }
   :root:not([data-theme='light']) .thread-body.cw-bg--photo { --cw-wall-scrim: rgb(0 0 0 / 0.55); }
+  :root:not([data-theme='light']) .cw .avatar:not(.avatar--photo):not(.avatar--blank) { background: var(--surface-2); }
 }
-/* The same, when Dark is chosen in the app rather than by the system (review fix, PR #72). */
-:root[data-theme='dark'] .cw-bg--lagoon { --cw-bg: linear-gradient(160deg, #0f2624, #132e2b); }
-:root[data-theme='dark'] .cw-bg--sand { --cw-bg: linear-gradient(160deg, #2a241a, #30291d); }
-:root[data-theme='dark'] .cw-bg--rose { --cw-bg: linear-gradient(160deg, #2c1a20, #331f26); }
-:root[data-theme='dark'] .cw-bg--sky { --cw-bg: linear-gradient(160deg, #15202c, #192634); }
-:root[data-theme='dark'] .cw-bg--lilac { --cw-bg: linear-gradient(160deg, #221c2e, #282135); }
-:root[data-theme='dark'] .cw-bg--olive { --cw-bg: linear-gradient(160deg, #1f241a, #252b1f); }
-:root[data-theme='dark'] .cw-bg--slate { --cw-bg: linear-gradient(160deg, #1a1d21, #1f2328); }
-:root[data-theme='dark'] .cw-bg--dusk { --cw-bg: linear-gradient(160deg, #2b1d16, #33231b); }
-:root[data-theme='dark'] .thread-body.cw-bg--photo { --cw-wall-scrim: rgb(0 0 0 / 0.55); }
 
-.cw-themes { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: var(--space-2); margin-block: var(--space-3); }
+/* The same, when Dark is chosen in the app rather than by the system. */
+:root[data-theme='dark'] .cw-bg--lagoon { --cw-bg: #11292a; }
+:root[data-theme='dark'] .cw-bg--sand { --cw-bg: #2a2419; }
+:root[data-theme='dark'] .cw-bg--rose { --cw-bg: #2d1c20; }
+:root[data-theme='dark'] .cw-bg--sky { --cw-bg: #16222d; }
+:root[data-theme='dark'] .cw-bg--lilac { --cw-bg: #241e30; }
+:root[data-theme='dark'] .cw-bg--olive { --cw-bg: #20261b; }
+:root[data-theme='dark'] .cw-bg--slate { --cw-bg: #1b1f22; }
+:root[data-theme='dark'] .cw-bg--dusk { --cw-bg: #2d1f17; }
+:root[data-theme='dark'] .thread-body.cw-bg--photo { --cw-wall-scrim: rgb(0 0 0 / 0.55); }
+:root[data-theme='dark'] .cw .avatar:not(.avatar--photo):not(.avatar--blank) { background: var(--surface-2); }
+
+.cw-themes { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; margin-block: 12px; }
 .cw-theme {
   display: grid;
   gap: 6px;
   padding: 6px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  border-radius: 8px;
   background: var(--surface);
-  color: var(--text);
+  color: var(--ink);
   font: inherit;
   font-size: var(--fs-xs);
   cursor: pointer;
   text-align: center;
 }
-.cw-theme[aria-checked='true'] { border-color: var(--accent); box-shadow: 0 0 0 2px var(--focus); }
+.cw-theme[aria-checked='true'] { border-color: var(--teal); box-shadow: inset 0 0 0 1px var(--teal); }
 .cw-theme:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-.cw-theme__swatch { block-size: 44px; border-radius: var(--radius-sm); background: var(--cw-bg, var(--bg)); border: 1px solid var(--border); }
-.cw-wall { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; margin-block-start: var(--space-3); padding-block-start: var(--space-3); border-block-start: 1px solid var(--border); }
-.cw-wall__preview { inline-size: 96px; block-size: 64px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface-hover) center / cover no-repeat; flex: none; }
-.cw-support { font-style: normal; color: var(--danger); }
+.cw-theme__swatch { block-size: 44px; border-radius: 6px; background: var(--cw-bg, var(--chat-bg)); border: 1px solid var(--line); }
+.cw-wall { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-block-start: 12px; padding-block-start: 12px; border-block-start: 1px solid var(--line); }
+.cw-wall__preview { inline-size: 96px; block-size: 64px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface-hover) center / cover no-repeat; flex: none; }
 
-/* PD-35: "Join a group" -- the groups of the viewer's teachers. */
-.cw-join { list-style: none; margin: var(--space-3) 0 0; padding: 0; display: grid; gap: 2px; max-block-size: 60vh; overflow-y: auto; }
-.cw-join__row {
-  display: flex; align-items: center; gap: var(--space-3);
-  padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm);
+/* ======================================================== the read-only view */
+
+.cw-admin { flex: 1; display: flex; flex-direction: column; min-block-size: 0; min-inline-size: 0; overflow-x: clip; background: var(--canvas); }
+.cw-admin__mast { flex: none; padding: 24px 28px 16px; border-block-end: 1px solid var(--line); }
+.cw-admin .page-header.mast { margin: 0; padding: 0; }
+.cw-admin .figures { margin-block-start: 14px; }
+.cw-admin .figure { flex: 0 1 200px; padding-block: 8px 10px; }
+.cw-admin .figure__n { font-size: var(--fs-2xl); }
+.cw-admin .workspace { border-block-start: 0; }
+/* The list's bar: search and order on one line, the kinds of conversation under them. */
+.cw-admin .workspace__head { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'search sort' 'bar bar'; gap: 10px 8px; padding-block: 14px 0; }
+.cw-admin .workspace__head > .search { grid-area: search; }
+.cw-admin__sort { grid-area: sort; inline-size: 148px; min-inline-size: 0; }
+.cw-admin__sort > * { inline-size: 100%; max-inline-size: 100%; }
+.cw-admin__sort .select { min-block-size: 38px; }
+.cw-admin__bar { grid-area: bar; display: flex; min-inline-size: 0; }
+.cw-admin__bar .cw-filters { flex: 1; }
+.cw--read .conv-row__sub { color: var(--ink-muted); }
+/* Shared-rule gap: app.css draws .badge--outline with a dashed box that system.css does not reset. */
+.cw .badge--outline { border: 0; padding: 0; background: none; }
+
+/* ================================================================== narrow */
+
+/* One pane at a time below 768px; touch targets at 44px; the composer keeps clear of the home indicator. */
+@media (max-width: 767px) {
+  .cw { --cw-pad: 14px; }
+  .cw .workspace__list { border-inline-end: 0; }
+  /* The phone's own bar already names the page: the list keeps its actions, not a second title. */
+  .cw .workspace__title { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); }
+  .cw:not(.cw--read) .workspace__head { grid-template-columns: minmax(0, 1fr) auto; padding-block-start: 12px; }
+  .cw:not(.cw--read) .workspace__head > * { grid-column: 1 / -1; }
+  .cw:not(.cw--read) .workspace__head > .search { grid-column: 1; grid-row: 1; }
+  .cw:not(.cw--read) .workspace__head > .workspace__title-row { grid-column: 2; grid-row: 1; min-block-size: 0; }
+  .cw .conv-list { padding-inline: 6px; }
+  .cw .athread { padding-inline: 12px; }
+  .cw .bubble-row { max-inline-size: 86%; }
+  .cw .bubble-row.cw-msg.cw-msg--card { max-inline-size: 94%; }
+  .cw .thread-head { min-block-size: 60px; padding-inline: 2px 8px; flex-wrap: wrap; row-gap: 0; gap: 6px; }
+  .cw-head__who { flex: 1 1 0; gap: 10px; padding-inline: 2px; }
+  .cw .thread-head .avatar { inline-size: 36px; block-size: 36px; }
+  .cw .thread-head__name { font-size: var(--fs-md); }
+  .cw .thread-head__sub { font-size: var(--fs-xs); }
+  /* A phone's header keeps the name readable: search and the panel are in the options menu. */
+  .cw-head__actions { gap: 4px; }
+  .cw-head__actions > .btn--icon { display: none; }
+  /* The urgent fact takes its own line under the name. */
+  .cw-head__fact { order: 9; flex: 1 1 100%; padding: 0 0 8px; padding-inline-start: 52px; }
+  .cw-head__fact .badge { padding: 3px 8px; font-size: var(--fs-xs); }
+  .cw-head__call { inline-size: 44px; min-block-size: 44px; padding: 0; justify-content: center; }
+  .cw-head__call-word { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); }
+  .cw-media { max-inline-size: 240px; }
+  .cw-composer, .cw-select-bar, .cw .thread-readonly, .cw-mention-banner { margin: 0 8px calc(8px + env(safe-area-inset-bottom)); }
+  .cw-composer__flag { flex-basis: 100%; margin-inline-start: 2px; }
+  .cw .dialog--sheet { inline-size: 100%; padding-block-start: 0; }
+  .cw .dialog--sheet .dialog__header { position: sticky; inset-block-start: 0; z-index: 3; margin-inline: calc(-1 * var(--space-5)); padding: 10px var(--space-5); background: var(--surface); border-block-end: 1px solid var(--line); }
+  .cw-start { padding-inline: 16px; }
+  .cw-queue__row { flex-wrap: wrap; }
+  .cw-admin__mast { padding: 16px 16px 12px; }
+  .cw-admin[data-view='thread'] .cw-admin__mast { display: none; }
+  .cw-admin .page-header__actions .btn { min-block-size: 40px; }
+  .cw-admin .page-header.mast .mast__row { flex-wrap: nowrap; align-items: center; }
+  .cw-admin .page-header__title { font-size: 26px; }
 }
-.cw-join__row:hover { background: var(--surface-hover); }
-.cw-join__main { flex: 1; min-inline-size: 0; display: grid; gap: 2px; }
-.cw-join__title { font-weight: var(--fw-semibold); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cw-join__meta { font-size: var(--fs-sm); color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-/* PD-33: "Amira is covering for Noura until 3 Nov" under a chat's name. */
-.thread-head__cover { font-size: var(--fs-xs); color: var(--text-link); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-/* PD-36 @mentions. Gold is split by job: gold-700 carries text, gold-400 only rules (4.5:1). */
-.cw-mention {
-  display: inline;
-  padding: 0 3px;
-  border-radius: var(--radius-sm);
-  background: var(--accent-soft);
-  color: var(--accent-strong);
-  font-weight: var(--fw-semibold);
-  unicode-bidi: isolate;
+@media (max-width: 767px), (pointer: coarse) {
+  .cw-mode { min-block-size: 40px; }
+  .cw-send, .cw-composer__attach .menu__button, .cw-composer__bar .voice-recorder__mic, .cw-composer__quick { inline-size: 44px; min-block-size: 44px; block-size: 44px; }
+  .cw-send { inline-size: 48px; }
+  .cw-composer__input { min-block-size: 44px; padding-block: 11px; }
+  .cw-money__actions .btn { min-block-size: 44px; }
 }
-.cw-mention--me { background: var(--gold-50); color: var(--gold-700); }
-.cw-msg--mentions-me .bubble { box-shadow: inset 3px 0 0 var(--gold-400), 0 1px 1px rgba(16, 32, 40, 0.07); }
-[dir='rtl'] .cw-msg--mentions-me .bubble { box-shadow: inset -3px 0 0 var(--gold-400), 0 1px 1px rgba(16, 32, 40, 0.07); }
-.cw-row--summoned .cw-row__main { box-shadow: inset 3px 0 0 var(--gold-400); background: var(--gold-50); }
-[dir='rtl'] .cw-row--summoned .cw-row__main { box-shadow: inset -3px 0 0 var(--gold-400); }
-.cw-row__mark--mention { color: var(--gold-700); }
 
-.cw-mention-banner {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  margin: 0 var(--space-3) var(--space-2);
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--gold-400);
-  border-radius: var(--radius);
-  background: var(--gold-50);
-  color: var(--text);
+@media (prefers-reduced-motion: reduce) {
+  .cw .conv-row, .cw-composer, .cw-send, .cw-msg__menu { transition: none; }
 }
-.cw-mention-banner > .icon, .cw-mention-banner > svg { color: var(--gold-700); flex: none; }
-.cw-mention-banner__text { flex: 1; min-inline-size: 12rem; font-size: var(--fs-sm); }
-.cw-mention-banner__time { margin-inline-start: var(--space-2); color: var(--text-subtle); font-size: var(--fs-xs); }
-.cw-mention-banner__hint { display: block; color: var(--text-muted); font-size: var(--fs-xs); }
-.cw-mention-banner__actions { display: inline-flex; gap: var(--space-2); flex: none; }
-.cw-mention-banner--in { border-color: var(--border); background: var(--surface-sunken); }
-
-.cw-member--summoned {
-  padding-inline: var(--space-2);
-  border-radius: var(--radius-sm);
-  background: var(--gold-50);
-  box-shadow: inset 3px 0 0 var(--gold-400);
+/* A narrow reading pane (a small window, the sidebar open): who waits keeps the whole first line;
+   how long and the action move under it. */
+.cw-queue { container: cw-queue / inline-size; }
+@container cw-queue (max-width: 460px) {
+  .cw-queue__row { flex-wrap: wrap; row-gap: 6px; padding-inline: 14px; }
+  .cw-queue__who { flex: 1 1 calc(100% - 60px); }
+  .cw-queue__waited { margin-inline-start: 58px; }
+  .cw-queue__row .btn { margin-inline-start: auto; }
 }
-[dir='rtl'] .cw-member--summoned { box-shadow: inset -3px 0 0 var(--gold-400); }
-.cw-member__note { display: block; font-size: var(--fs-xs); color: var(--gold-700); }
-
-/* PD-37: ticks on the viewer's own messages. Read uses the link colour (an
-   accessible blue-teal in both themes, never the gold that fails contrast). */
-.cw-ticks { display: inline-flex; align-items: center; margin-inline-start: var(--space-1, 4px); color: var(--text-subtle); }
-.cw-ticks--read { color: var(--text-link); }
-
-/* PD-37: "Noura is typing…" in the thread header. */
-.thread-head__sub--typing { color: var(--text-link); font-style: italic; }
-
-/* PD-37: Message info. */
-.cw-info-list + .cw-info-list { margin-block-start: var(--space-4, 16px); }
-.cw-info-list__people { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2, 8px); }
-.cw-info-list__person { display: flex; align-items: center; gap: var(--space-2, 8px); }
-.cw-info-list__name { flex: 1; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cw-info-list__person time { font-size: var(--fs-xs); color: var(--text-subtle); }
-
-/* PARENT-003: the length counter near the limit, and why Send waits past it. */
-.cw-composer__count { align-self: center; font-size: var(--fs-sm); color: var(--text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.cw-composer__count--over { color: var(--danger); font-weight: 600; }
-.cw-composer__over { margin: 4px 0 0; font-size: var(--fs-sm); color: var(--danger); }
+/* The order picker's own input keeps to its slot (on a phone it ran 15px past the screen's edge). */
+.cw-admin__sort :is(input, .select, .ss__input) { box-sizing: border-box; inline-size: 100%; min-inline-size: 0; max-inline-size: 100%; }
+.cw-queue__name { text-align: match-parent; }

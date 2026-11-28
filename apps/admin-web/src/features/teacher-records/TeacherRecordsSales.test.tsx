@@ -209,10 +209,11 @@ describe('PD-52 PR-5: Sales on Grants & testimonials', () => {
     }
     on('GET', /\/teacher-records\/teachers\/t-1\/summary$/, () => json(summary))
     renderWithProviders(<AppRoutes />, { staff: salesStaff, route: '/teacher-grants?teacher=t-1' })
-    const strip = await screen.findByRole('region', { name: 'Teacher One' })
-    expect(within(strip).getByText('1 open complaints')).toBeInTheDocument()
-    expect(within(strip).queryByText(/This month/)).not.toBeInTheDocument()
-    expect(within(strip).queryByText('Available')).not.toBeInTheDocument()
+    // The chosen teacher is named beside the title; the counts are the masthead's figures.
+    await screen.findByRole('group', { name: 'Teacher One' })
+    expect(screen.getByText('Open complaints').closest('.figure')).toHaveTextContent('1')
+    expect(screen.queryByText('Counted this month')).not.toBeInTheDocument()
+    expect(screen.queryByText('Available')).not.toBeInTheDocument()
   })
 
   it('both pages are in Sales\' navigation on the server\'s answer', () => {

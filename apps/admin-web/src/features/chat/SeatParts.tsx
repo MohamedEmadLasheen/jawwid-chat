@@ -84,10 +84,11 @@ export function JoinGroupDialog({ onClose, onJoined }: { onClose: () => void; on
           {rows.map((g) => (
             <li key={g.conversationId} className="cw-join__row">
               <span className="cw-join__main">
-                <span className="cw-join__title" dir="auto">{g.title || g.learners.join('، ')}</span>
+                <span className="cw-join__title" dir="auto">{g.title || g.learners.join(copy.listSeparator)}</span>
                 <span className="cw-join__meta" dir="auto">
-                  {copy.kind[g.type] ?? ''} · {copy.teacherOf(g.teacher.name)}
-                  {g.learners.length > 0 && g.title ? ` · ${g.learners.join(locale === 'ar' ? '، ' : ', ')}` : ''}
+                  {[copy.kind[g.type], copy.teacherOf(g.teacher.name), g.learners.length > 0 && g.title ? g.learners.join(copy.listSeparator) : '']
+                    .filter(Boolean)
+                    .join(copy.listSeparator)}
                 </span>
               </span>
               {g.membership === 'none' ? (

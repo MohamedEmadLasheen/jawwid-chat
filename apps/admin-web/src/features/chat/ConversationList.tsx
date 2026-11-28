@@ -15,8 +15,9 @@ import { Highlighted, SEARCH_ACROSS_MIN, searchable, snippetAround, useDebounced
 import { Avatar } from '@/shared/components/Avatar'
 import { chatCopyFor } from './copy'
 import { LabelChip, LabelsDialog } from './LabelsDialog'
-import { ConversationAvatar, conversationName, isGroup, isMuted, previewText } from './chatView'
+import { ConversationAvatar, conversationName, isGroup, isMuted, previewParts, toneOfKind } from './chatView'
 import { useConversationPreferences } from './useChatActions'
+import { asksViewer, groupQueue, isUnseenSummons, waitTone, waitedFor } from './queue'
 import { TrialBadge, isTrialGroup } from '@/shared/components/TrialBadge'
 
 export type View = 'all' | 'unread' | 'favorites' | 'groups' | 'joined' | 'archived' | 'waiting'
@@ -107,8 +108,16 @@ export function ConversationList({
     : active
   // PD-36: a chat that has asked the viewer in, not yet opened, leads -- above
   // pinned. Then pinned; otherwise the server's order (most recent activity first).
-  const rank = (c: ChatConversation) => (isUnseenSummons(c) ? 2 : c.viewerState?.pinned ? 1 : 0)
-  const rows = [...inView(view)].sort((a, b) => rank(b) - rank(a))
+  // Within "Needs a reply" a family owed an answer comes first (longest wait
+  // first), then a summons -- the same order as the empty pane's queue.
+  const rank = (c: ChatConversation) => (c.needsReply ? 3 : isUnseenSummons(c) ? 2 : c.viewerState?.pinned ? 1 : 0)
+  // A work queue, not a flat inbox: owed an answer (longest wait first), then
+  // unread, then the rest by recency. The tabs filter within this grouping.
+  // A summons asks this viewer to act, so it sits with what is owed an answer.
+  const sections = groupQueue(inView(view), rank, asksViewer)
+  const rows = sections.flatMap((s) => s.rows)
+  // One quiet section alone needs no heading: it is simply the list.
+  const headed = sections.length > 1 || (sections.length === 1 && sections[0]!.key !== 'rest')
 
   const options = [
     { value: 'all' as const, label: copy.filterAll, count: inView('all').length },
@@ -131,7 +140,6 @@ export function ConversationList({
       <div className="workspace__head">
         <div className="workspace__title-row">
           <h1 className="workspace__title">{copy.title}</h1>
-          <span className="workspace__count">{number(active.length)}</span>
           <div className="cw-list__actions">{actions}</div>
         </div>
         <SearchField value={search} onChange={setSearch} label={onOpenMessage ? copy.searchList : copy.search} clearLabel={copy.clearSearch} />
@@ -139,12 +147,12 @@ export function ConversationList({
           className="cw-filters"
           onWheel={(e) => {
             // A mouse wheel moves the one-line filter row sideways.
-            const row = e.currentTarget.querySelector<HTMLElement>('.chips')
+            const row = e.currentTarget.querySelector<HTMLElement>('.seg')
             if (!row || Math.abs(e.deltaY) <= Math.abs(e.deltaX) || row.scrollWidth <= row.clientWidth) return
             row.scrollLeft += getComputedStyle(row).direction === 'rtl' ? -e.deltaY : e.deltaY
           }}
         >
-          <FilterChips options={options} value={view} onChange={setView} label={copy.filterLabel} formatCount={number} />
+          <FilterChips variant="tabs" options={options} value={view} onChange={setView} label={copy.filterLabel} formatCount={number} />
         </div>
         {usedLabels.length > 0 && (
           <div className="cw-label-filter" role="group" aria-label={copy.labelFilter}>
@@ -168,19 +176,31 @@ export function ConversationList({
         ) : rows.length === 0 ? (
           !textSearch && <EmptyState compact icon="search" title={copy.noMatches} />
         ) : (
-          <ul className="conv-list" aria-label={copy.title}>
-            {rows.map((c) => (
-              <ConversationRow
-                key={c.id}
-                c={c}
-                selected={c.id === selectedId}
-                onSelect={() => onSelect(c.id)}
-                selfId={staff?.id}
-                locale={locale}
-                onLabel={() => setLabelling(c.id)}
-              />
-            ))}
-          </ul>
+          sections.map((s) => (
+            <section key={s.key} className={`cw-sec cw-sec--${s.key}`}>
+              {headed && (
+                <h2 className="cw-sec__title">
+                  {copy.section[s.key]}
+                  <span className={s.key === 'needs' ? 'count count--urgent' : s.key === 'unread' ? 'count' : 'count count--quiet'}>
+                    {number(s.rows.length)}
+                  </span>
+                </h2>
+              )}
+              <ul className="conv-list" aria-label={headed ? copy.section[s.key] : copy.title}>
+                {s.rows.map((c) => (
+                  <ConversationRow
+                    key={c.id}
+                    c={c}
+                    selected={c.id === selectedId}
+                    onSelect={() => onSelect(c.id)}
+                    selfId={staff?.id}
+                    locale={locale}
+                    onLabel={() => setLabelling(c.id)}
+                  />
+                ))}
+              </ul>
+            </section>
+          ))
         )}
         {textSearch && (
           <section className="cw-hits" aria-label={copy.searchMessages}>
@@ -198,10 +218,14 @@ export function ConversationList({
                   return (
                     <li key={m.id}>
                       <button type="button" className="cw-hit-row" onClick={() => onOpenMessage?.(conversationId, m.id)}>
-                        <Avatar name={who || where || '?'} seed={m.authorId ?? m.authorKind} size="sm" src={m.authorAvatarUrl} />
+                        <span className={`cw-who cw-who--${toneOfKind(m.authorKind)}`}>
+                          <Avatar name={who || where || '?'} seed={m.authorId ?? m.authorKind} size="sm" src={m.authorAvatarUrl} />
+                        </span>
                         <span className="cw-hit-row__main">
                           <span className="cw-hit-row__top">
-                            <span className="cw-hit-row__where" dir="auto">{where}</span>
+                            <span className="cw-hit-row__where">
+                              <bdi className="cw-line">{where}</bdi>
+                            </span>
                             <time className="cw-hit-row__time" dateTime={m.createdAt}>{listTime(m.createdAt, locale)}</time>
                           </span>
                           <span className="cw-hit-row__body" dir="auto">
@@ -230,11 +254,7 @@ export function ConversationList({
   )
 }
 
-/** PD-36: the viewer was asked into this chat and has not opened it since. */
-export function isUnseenSummons(c: ChatConversation): boolean {
-  const m = c.viewerState?.mention
-  return !!m && m.kind === 'summons' && m.state === 'pending' && !m.seen
-}
+export { isUnseenSummons } from './queue'
 
 function ConversationRow({
   c,
@@ -253,7 +273,7 @@ function ConversationRow({
   onLabel: () => void
 }) {
   const copy = chatCopyFor(locale)
-  const { dateTime } = useI18n()
+  const { dateTime, number } = useI18n()
   const prefs = useConversationPreferences()
   const name = conversationName(c, selfId, copy)
   const unread = c.unreadCount ?? 0
@@ -261,12 +281,15 @@ function ConversationRow({
   const muted = isMuted(c)
   const archived = !!c.viewerState?.archived
   const favorite = !!c.viewerState?.favorite
-  const preview = previewText(c.lastMessage, selfId, copy) || (copy.kind[c.type] ?? c.type)
+  const said = previewParts(c.lastMessage, selfId, copy, isGroup(c) ? c.members : undefined)
+  const preview = said.text || (copy.kind[c.type] ?? c.type)
   const mention = c.viewerState?.mention ?? null
   const summoned = mention?.kind === 'summons' && mention.state === 'pending'
+  const covering = c.cover && c.cover.coverId === selfId ? copy.coveringFor(c.cover.supervisorName) : null
+  const age = c.needsReply ? waitedFor(c.lastActivityAt, locale) : ''
 
   return (
-    <li className={isUnseenSummons(c) ? 'cw-row cw-row--summoned' : 'cw-row'}>
+    <li className="cw-row">
       <button
         type="button"
         className={unread > 0 ? 'conv-row cw-row__main cw-row__main--unread' : 'conv-row cw-row__main'}
@@ -276,59 +299,79 @@ function ConversationRow({
         <ConversationAvatar c={c} name={name} selfId={selfId} />
         <span className="conv-row__body">
           <span className="conv-row__top">
-            <span className="conv-row__name" dir="auto">{name}</span>
+            <span className="conv-row__name">
+              <bdi className="cw-line">{name}</bdi>
+            </span>
             {isTrialGroup(c) && <TrialBadge />}
-            <time className="conv-row__time" dateTime={c.lastActivityAt} title={dateTime(c.lastActivityAt)}>
-              {listTime(c.lastActivityAt, locale)}
-            </time>
+            {/* Owed an answer: how long it has waited is the row's one emphasised fact (grey, then amber, then red). */}
+            {c.needsReply ? (
+              <span
+                className={`cw-row__waited cw-wait--${waitTone(c.lastActivityAt)}`}
+                title={dateTime(c.lastActivityAt)}
+                aria-label={copy.waitedLabel(age)}
+              >
+                <Icon name="hourglass" size={14} />
+                {age}
+              </span>
+            ) : (
+              <time className="conv-row__time" dateTime={c.lastActivityAt} title={dateTime(c.lastActivityAt)}>
+                {listTime(c.lastActivityAt, locale)}
+              </time>
+            )}
           </span>
           <span className="conv-row__bottom">
-            <span className="conv-row__sub" dir="auto">{preview}</span>
-            {c.needsReply && <Badge tone="now">{copy.needsReply}</Badge>}
-            {/* PD-36: asked in and not yet answered; the dot keeps it from being colour-only. */}
-            {summoned && (
-              <Badge tone="gold" dot>
-                {copy.mentionedBadge}
-              </Badge>
-            )}
-            {mention?.kind === 'member' && !mention.seen && (
-              <span className="cw-row__mark cw-row__mark--mention" title={copy.mentionedMark} aria-label={copy.mentionedMark}>
-                <Icon name="at" size={14} />
-              </span>
-            )}
-            {c.cover && c.cover.coverId === selfId && (
-              <span title={copy.coveringFor(c.cover.supervisorName)} aria-label={copy.coveringFor(c.cover.supervisorName)}>
-                <Badge tone="coverage">{copy.covering}</Badge>
-              </span>
-            )}
-            {favorite && (
-              <span className="cw-row__mark cw-row__mark--favorite" title={copy.favoriteMark} aria-label={copy.favoriteMark}>
-                <Icon name="heart" size={14} />
-              </span>
-            )}
-            {muted && (
-              <span className="cw-row__mark" title={copy.mutedMark} aria-label={copy.mutedMark}>
-                <Icon name="bellOff" size={14} />
-              </span>
-            )}
-            {pinned && (
-              <span className="cw-row__mark" title={copy.pinnedMark} aria-label={copy.pinnedMark}>
-                <Icon name="pin" size={14} />
-              </span>
-            )}
-            {unread > 0 && (
-              <span className="cw-unread" aria-label={copy.unread(unread)}>
-                {unread}
-              </span>
+            <span className="conv-row__sub">
+              {/* Why it is here, in words: who said what last. "You" or the writer leads in the pane's direction; what was said follows in its own. */}
+              {said.who && (
+                <span className="cw-row__who">
+                  <bdi>{said.who}</bdi>:
+                </span>
+              )}
+              <bdi className="cw-line">{preview}</bdi>
+            </span>
+            {/* Marks are quiet glyphs: what this viewer set on the chat, never its state. */}
+            <span className="cw-row__marks">
+              {mention?.kind === 'member' && !mention.seen && (
+                <span className="cw-row__mark cw-row__mark--mention" title={copy.mentionedMark} aria-label={copy.mentionedMark}>
+                  <Icon name="at" size={14} />
+                </span>
+              )}
+              {covering && (
+                <span className="cw-row__mark cw-row__mark--cover" title={covering} aria-label={covering}>
+                  <Icon name="swap" size={14} />
+                  <span className="cw-row__word">{copy.covering}</span>
+                </span>
+              )}
+              {(c.labels ?? []).map((l) => (
+                <span key={l.id} className={`cw-row__label cw-tone--${l.color}`} role="img" title={l.name} aria-label={l.name} />
+              ))}
+              {favorite && (
+                <span className="cw-row__mark" title={copy.favoriteMark} aria-label={copy.favoriteMark}>
+                  <Icon name="heart" size={14} />
+                </span>
+              )}
+              {muted && (
+                <span className="cw-row__mark" title={copy.mutedMark} aria-label={copy.mutedMark}>
+                  <Icon name="bellOff" size={14} />
+                </span>
+              )}
+              {pinned && (
+                <span className="cw-row__mark" title={copy.pinnedMark} aria-label={copy.pinnedMark}>
+                  <Icon name="pin" size={14} />
+                </span>
+              )}
+            </span>
+            {/* Asked in (someone wants this viewer to act), else what is unread. */}
+            {summoned ? (
+              <Badge tone="info">{copy.mentionedBadge}</Badge>
+            ) : (
+              unread > 0 && (
+                <span className="cw-unread" aria-label={copy.unread(unread)}>
+                  {number(unread)}
+                </span>
+              )
             )}
           </span>
-          {(c.labels ?? []).length > 0 && (
-            <span className="cw-row__labels" aria-label={copy.labels}>
-              {c.labels!.map((l) => (
-                <LabelChip key={l.id} label={l} />
-              ))}
-            </span>
-          )}
         </span>
       </button>
       <Menu

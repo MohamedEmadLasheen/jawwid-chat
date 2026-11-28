@@ -16,10 +16,11 @@ export const O = {
   // Needs action
   needsTitle: { en: 'Needs action', ar: 'بحاجة إلى إجراء' },
   needsSubtitle: {
-    en: 'What the Teachers department owes a decision on today. Each action is checked by the server and recorded.',
-    ar: 'ما ينتظر قرارًا من قسم المعلمين اليوم. يتحقق الخادم من كل إجراء ويسجّله.',
+    en: 'Waiting on a decision today. Each action is checked and recorded.',
+    ar: 'بانتظار قرار اليوم. يُراجَع كل إجراء ويُسجَّل.',
   },
-  allClear: { en: 'Nothing is waiting. Every lesson is closed and every request answered.', ar: 'لا شيء ينتظر. كل الحصص مغلقة وكل الطلبات مُجاب عنها.' },
+  allClear: { en: 'Nothing is waiting.', ar: 'لا شيء ينتظر.' },
+  allClearHint: { en: 'Every lesson is closed and every request answered.', ar: 'كل الحصص مغلقة وكل الطلبات مُجاب عنها.' },
   overdue: { en: 'Reports overdue', ar: 'تقارير متأخرة' },
   overdueHint: { en: 'Ended more than a day ago with no outcome. Remind the teacher, or record what happened.', ar: 'انتهت منذ أكثر من يوم دون نتيجة. ذكّر المعلم أو سجّل ما حدث.' },
   awaiting: { en: 'Awaiting report', ar: 'بانتظار التقرير' },
@@ -29,6 +30,15 @@ export const O = {
   makeupsHint: { en: 'The teacher did not give these lessons and no make-up was booked within a week.', ar: 'لم يقدّم المعلم هذه الحصص ولم تُحجز حصة تعويضية خلال أسبوع.' },
   requests: { en: 'Regular-time requests', ar: 'طلبات تغيير المواعيد' },
   returning: { en: 'Returning soon', ar: 'يعودون قريبًا' },
+  // Why a row is in the inbox, as a sentence ({teacher}, {when} and {reason} are set in by the page).
+  whyOverdue: { en: 'No report from {teacher} for the lesson of {when}', ar: 'لم يسجّل {teacher} ما حدث في حصة {when}' },
+  whyAwaiting: { en: '{teacher}’s lesson of {when} has ended; the report is not in yet', ar: 'انتهت حصة {teacher} يوم {when} ولم يصل التقرير بعد' },
+  whyRuling: { en: 'The family apologised after the start of the lesson of {when}: “{reason}”', ar: 'اعتذرت الأسرة بعد بدء حصة {when}: «{reason}»' },
+  whyMakeup: { en: '{teacher} did not give the lesson of {when}, and no make-up was booked within a week', ar: 'لم يقدّم {teacher} حصة {when}، ولم تُحجز حصة تعويضية خلال أسبوع' },
+  whyReturning: { en: 'The pause ends on {date}; lessons start again then.', ar: 'ينتهي الإيقاف في {date} وتعود الحصص بعده.' },
+  withTeacher: { en: 'with {teacher}', ar: 'مع {teacher}' },
+  inboxShow: { en: 'Show', ar: 'عرض' },
+  inboxAll: { en: 'All', ar: 'الكل' },
 
   // Columns
   learner: { en: 'Student', ar: 'الطالب' },
@@ -61,11 +71,12 @@ export const O = {
   // Schedules
   schedulesTitle: { en: 'Schedules', ar: 'الجداول' },
   schedulesSubtitle: {
-    en: 'Working hours, days off and regular lesson times. Lessons are created from regular times four weeks ahead.',
-    ar: 'ساعات العمل والإجازات والمواعيد الثابتة. تُنشأ الحصص من المواعيد الثابتة قبل أربعة أسابيع.',
+    en: 'Lessons are created from regular times four weeks ahead.',
+    ar: 'تُنشأ الحصص من المواعيد الثابتة قبل أربعة أسابيع.',
   },
   chooseTeacher: { en: 'Teacher', ar: 'المعلم' },
   pickTeacher: { en: 'Choose a teacher', ar: 'اختر معلمًا' },
+  pickTeacherFirst: { en: 'Their working hours and students appear here.', ar: 'تظهر هنا ساعات عمله وطلابه.' },
   workingHours: { en: 'Working hours', ar: 'ساعات العمل' },
   timezone: { en: 'Time zone', ar: 'المنطقة الزمنية' },
   addWindow: { en: 'Add hours', ar: 'إضافة ساعات' },
@@ -76,6 +87,7 @@ export const O = {
   noDaysOff: { en: 'No days off ahead.', ar: 'لا توجد إجازات قادمة.' },
   students: { en: 'Students', ar: 'الطلاب' },
   noStudents: { en: 'No students with this teacher.', ar: 'لا يوجد طلاب مع هذا المعلم.' },
+  noTimesYet: { en: 'No regular times yet', ar: 'لا مواعيد ثابتة بعد' },
   regularTimes: { en: 'Regular times', ar: 'المواعيد الثابتة' },
   none: { en: 'None', ar: 'لا يوجد' },
   editTimes: { en: 'Edit times', ar: 'تعديل المواعيد' },
@@ -102,8 +114,8 @@ export const O = {
   // Students
   studentsTitle: { en: 'Paused and stopped students', ar: 'الطلاب المتوقفون' },
   studentsSubtitle: {
-    en: 'Paused students come back on their return date by themselves; the family is told two days before. The package is held in Core.',
-    ar: 'يعود الطلاب المتوقفون مؤقتًا في تاريخ عودتهم تلقائيًا، وتُبلّغ الأسرة قبلها بيومين. تُحفظ الباقة في النظام الأساسي.',
+    en: 'A pause ends by itself on its return date; the family is told two days before.',
+    ar: 'ينتهي الإيقاف المؤقت تلقائيًا في تاريخ العودة، وتُبلّغ الأسرة قبله بيومين.',
   },
   pausedList: { en: 'Paused', ar: 'متوقفون مؤقتًا' },
   stoppedList: { en: 'Stopped', ar: 'متوقفون نهائيًا' },
@@ -112,6 +124,18 @@ export const O = {
   package: { en: 'Package left', ar: 'المتبقي من الباقة' },
   packageUnknown: { en: 'Kept in Core', ar: 'في النظام الأساسي' },
   noneList: { en: 'Nobody here.', ar: 'لا أحد هنا.' },
+  nonePaused: { en: 'No student is paused.', ar: 'لا طالب موقوف مؤقتًا.' },
+  nonePausedHint: { en: 'A pause appears here with its return date.', ar: 'يظهر الإيقاف هنا مع تاريخ العودة.' },
+  noneStopped: { en: 'No student has stopped.', ar: 'لا طالب متوقف نهائيًا.' },
+  noneStoppedHint: { en: 'A stop appears here with its reason.', ar: 'يظهر التوقف هنا مع سببه.' },
+  // Round 3: how near a return is, under its date; the family is told two days before.
+  returnsToday: { en: 'Returns today', ar: 'يعود اليوم' },
+  returnsTomorrow: { en: 'Tomorrow', ar: 'غدًا' },
+  returnsTwo: { en: 'In 2 days', ar: 'بعد يومين' },
+  returnsIn: { en: 'In {n} days', ar: 'بعد {n} أيام' },
+  returnsInMany: { en: 'In {n} days', ar: 'بعد {n} يومًا' },
+  noTeacherYet: { en: 'No teacher yet', ar: 'بلا معلم بعد' },
+  endStop: { en: 'End the stop', ar: 'إلغاء التوقف النهائي' },
 
   // PD-31: weekly times
   weeklyTitle: { en: 'Weekly times — {name}', ar: 'المواعيد الأسبوعية — {name}' },
@@ -181,8 +205,8 @@ export const O = {
   free: { en: 'free', ar: 'متاح' },
   notFree: { en: 'no longer free', ar: 'لم يعد متاحًا' },
   noLongerFree: {
-    en: 'No longer free: a requested time was taken after the request was sent. Approving would fail; reject it, or agree other times with the family.',
-    ar: 'لم يعد متاحًا: حُجز أحد المواعيد المطلوبة بعد إرسال الطلب. لا يمكن اعتماده؛ ارفضه أو اتفق على مواعيد أخرى.',
+    en: 'No longer free: a requested time was taken after the request. Reject it, or agree other times with the family.',
+    ar: 'لم يعد متاحًا: حُجز أحد المواعيد بعد الطلب. ارفضه، أو اتفق مع الأسرة على مواعيد أخرى.',
   },
   blocked: { en: 'Weekly lessons not scheduled', ar: 'حصص أسبوعية لم تُجدول' },
   blockedHint: {
@@ -201,6 +225,8 @@ export const O = {
 
   // PD-31: changing the teacher
   changeTeacher: { en: 'Change teacher', ar: 'تغيير المعلم' },
+  assignTeacher: { en: 'Assign teacher', ar: 'تعيين معلم' },
+  setTimes: { en: 'Set times', ar: 'تحديد المواعيد' },
   changeTeacherTitle: { en: 'Change teacher — {name}', ar: 'تغيير المعلم — {name}' },
   changeTeacherHint: {
     en: 'Past lessons and reports stay with the current teacher. Future lessons and weekly times move to the new one, in one step.',
@@ -305,7 +331,10 @@ export function describeOpsError(error: unknown, locale: 'ar' | 'en'): string {
 export function formatDay(day: string, locale: 'ar' | 'en'): string {
   const d = new Date(`${day}T00:00:00Z`)
   if (Number.isNaN(d.getTime())) return day
-  return new Intl.DateTimeFormat(locale === 'ar' ? 'ar-EG-u-nu-latn' : 'en', { dateStyle: 'medium', timeZone: 'UTC' }).format(d)
+  // Arabic month names with Western digits (the rationale's RTL rule): "29 نوفمبر 2026", never "2026/11/29".
+  return locale === 'ar'
+    ? new Intl.DateTimeFormat('ar-EG-u-nu-latn', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }).format(d)
+    : new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeZone: 'UTC' }).format(d)
 }
 
 /** "from → to" in the reading direction: in Arabic the arrow points left, to the new value. */
@@ -318,7 +347,7 @@ export function fill(template: string, params: Record<string, string | number>):
   return template.replace(/\{(\w+)\}/g, (m, k: string) => (k in params ? String(params[k]) : m))
 }
 
-/** A lesson length, "30 min" / "٣٠ دقيقة". */
+/** A lesson length, "30 min" / "30 دقيقة". */
 export function formatMinutes(n: number, locale: 'ar' | 'en'): string {
   return locale === 'ar' ? `${new Intl.NumberFormat('ar-EG-u-nu-latn').format(n)} دقيقة` : `${n} min`
 }

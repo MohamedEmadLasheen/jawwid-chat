@@ -46,8 +46,9 @@ export function ParentFeedbackSection({ basePath, only }: { basePath: string; on
 
   return (
     <>
-      <SectionIntro hint={tx(F.hint)} />
-      <div className="toolbar th-filters">
+      <section className="sheet" aria-label={tx(F.title)}>
+      <SectionIntro title={tx(F.title)} hint={tx(F.hint)} />
+      <div className="sheet-bar th-filters">
         {!only && (
           <FilterChips<CategoryFilter>
             label={tx(F.category)}
@@ -99,7 +100,7 @@ export function ParentFeedbackSection({ basePath, only }: { basePath: string; on
                             {tx(F.take)}
                           </button>
                         )}
-                        <button type="button" className="btn btn--primary btn--sm" onClick={() => setReplying(f)}>
+                        <button type="button" className="btn btn--sm" onClick={() => setReplying(f)}>
                           {f.response ? tx(F.changeReply) : tx(F.reply)}
                         </button>
                       </>
@@ -111,6 +112,7 @@ export function ParentFeedbackSection({ basePath, only }: { basePath: string; on
           )}
         </QueryBoundary>
       )}
+      </section>
       {replying && (
         <ReplyDialog
           feedbackId={replying.id}

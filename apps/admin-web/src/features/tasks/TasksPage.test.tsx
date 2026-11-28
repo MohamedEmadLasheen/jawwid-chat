@@ -118,20 +118,21 @@ describe('the list', () => {
     expect(rows).toHaveLength(2)
     // The system task's title is ours, filled from its source.
     expect(within(rows[0]!).getByRole('button', { name: /Instalment due: family_x, October/ })).toBeInTheDocument()
-    expect(within(rows[0]!).getByTestId('task-level')).toHaveTextContent('High · Overdue')
+    expect(within(rows[0]!).getByTestId('task-level')).toHaveTextContent('High, overdue')
     expect(within(rows[0]!).getByTestId('task-finance')).toHaveTextContent('Finance')
     expect(within(rows[0]!).getByTestId('task-level').querySelector('svg')).toHaveAttribute('aria-hidden', 'true')
     // A person's level needs no reason.
     expect(within(rows[1]!).getByTestId('task-level')).toHaveTextContent(/^Medium$/)
     expect(within(rows[1]!).queryByTestId('task-finance')).toBeNull()
-    expect(within(rows[1]!).getByText('Given by a person')).toBeInTheDocument()
+    // A person's task names who gave it (the response carries the name).
+    expect(within(rows[1]!).getByText('Given by Ops Manager')).toBeInTheDocument()
     expect(sent('GET', /\/me\/tasks/)[0]!.url).toMatch(/state=open/)
   })
 
   it('reads in Arabic', async () => {
     renderWithProviders(<TasksPage />, { staff: supervisor, locale: 'ar' })
     const rows = await screen.findAllByRole('listitem')
-    expect(within(rows[0]!).getByTestId('task-level')).toHaveTextContent('عالية · متأخرة')
+    expect(within(rows[0]!).getByTestId('task-level')).toHaveTextContent('عالية، متأخرة')
     expect(within(rows[0]!).getByTestId('task-finance')).toHaveTextContent('مالية')
     expect(screen.getByRole('tab', { name: 'مهامي' })).toBeInTheDocument()
   })
@@ -188,7 +189,11 @@ describe('a task', () => {
     expect(within(panel).getByRole('button', { name: 'Mark done' })).toBeInTheDocument()
     expect(within(panel).queryByRole('button', { name: 'Remove' })).toBeNull()
     expect(within(panel).queryByRole('button', { name: 'Hand on' })).toBeNull()
-    await userEvent.click(within(panel).getByRole('button', { name: 'Not my responsibility' }))
+    // One stated action; the rest of what the server allows is behind "⋯".
+    await userEvent.click(within(panel).getByRole('button', { name: /^More actions/ }))
+    expect(within(panel).queryByRole('menuitem', { name: 'Remove' })).toBeNull()
+    expect(within(panel).queryByRole('menuitem', { name: 'Hand on' })).toBeNull()
+    await userEvent.click(within(panel).getByRole('menuitem', { name: 'Not my responsibility' }))
     const dialog = await screen.findByRole('dialog')
     await userEvent.type(within(dialog).getByRole('textbox'), 'This is the Sales team\'s')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Send' }))
@@ -215,7 +220,9 @@ describe('a task', () => {
     await chooseOption(userEvent, within(panel).getByRole('combobox', { name: 'Level set by a person' }), 'high')
     await waitFor(() => expect(sent('POST', /priority$/)).toEqual([expect.objectContaining({ body: { priority: 'high' } })]))
 
-    await userEvent.click(within(panel).getByRole('button', { name: 'Remove' }))
+    // Remove is behind "⋯" (Hand on is the stated action for someone who cannot complete it).
+    await userEvent.click(within(panel).getByRole('button', { name: /^More actions/ }))
+    await userEvent.click(within(panel).getByRole('menuitem', { name: 'Remove' }))
     dialog = await screen.findByRole('dialog')
     await userEvent.type(within(dialog).getByRole('textbox'), 'The family withdrew')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Remove' }))
@@ -245,8 +252,8 @@ describe('a task', () => {
     expect(within(panel).queryAllByRole('button').map((b) => b.textContent)).toEqual(['Close'])
     expect(within(panel).queryByRole('textbox')).toBeNull()
     const history = within(panel).getAllByRole('listitem')
-    expect(history[0]).toHaveTextContent('Created · System')
-    expect(history[1]).toHaveTextContent('Level changed — Low → High · Ops Manager')
+    expect(history[0]).toHaveTextContent('Created System,')
+    expect(history[1]).toHaveTextContent('Level changed: Low → High Ops Manager,')
   })
 
   it('returned with instructions, the instructions stand above it', async () => {
@@ -299,7 +306,7 @@ const contrast = (a: string, b: string) => {
 }
 
 describe('the level colours', () => {
-  it('every level is drawn in the app\'s own pair, 4.5:1 light and dark; gold carries text only as gold-700 on gold-50', () => {
+  it('every level is drawn in the app\'s own pair, 4.5:1 light and dark; no level is drawn in gold', () => {
     const tasksCss = readFileSync(join(__dirname, 'tasks.css'), 'utf8')
     const tokens = readFileSync(join(__dirname, '../../core/theme/tokens.css'), 'utf8')
     // The light values are the first :root block; the dark ones the prefers-color-scheme block.
@@ -320,8 +327,29 @@ describe('the level colours', () => {
         expect(ratio, `${what} ${theme}`).toBeGreaterThanOrEqual(4.5)
       }
     }
-    expect(tasksCss).toMatch(/\.task-level--medium \{ color: var\(--gold-700\); background: var\(--gold-50\);/)
+    // Gold means "here and now" only (docs/design/admin-rationale.md): never a level.
+    expect(tasksCss).not.toMatch(/--gold/)
     expect(tasksCss).not.toMatch(/#[0-9a-f]{6}/i)
+  })
+
+  it('on the Tasks page a level is a word on the paper: its colour clears 4.5:1 on the page and on a selected row, light and dark', () => {
+    const paper = readFileSync(join(__dirname, '../../core/theme/system.css'), 'utf8')
+    const light = paper.slice(paper.indexOf(':root {'), paper.indexOf('}', paper.indexOf(':root {')))
+    const darkStart = paper.indexOf(":root:not([data-theme='light']) {")
+    const dark = paper.slice(darkStart, paper.indexOf('}', darkStart))
+    const value = (block: string, name: string): string => {
+      const re = new RegExp(`--${name}:\\s*(#[0-9a-f]{6}|var\\(--([a-z0-9-]+)\\));`, 'i')
+      const m = re.exec(block) ?? re.exec(light)
+      if (!m) throw new Error(`no --${name} in system.css`)
+      return m[2] ? value(block, m[2]) : m[1]!
+    }
+    for (const fg of ['text', 'text-muted', 'text-subtle']) {
+      for (const [theme, block] of [['light', light], ['dark', dark]] as const) {
+        for (const bg of ['paper', 'teal-tint']) {
+          expect(contrast(value(block, fg), value(block, bg)), `--${fg} on --${bg}, ${theme}`).toBeGreaterThanOrEqual(4.5)
+        }
+      }
+    }
   })
 })
 
@@ -351,7 +379,7 @@ describe('switching, links and keys', () => {
   it('"Overdue" is said once: not again beside a level whose reason already says it', async () => {
     renderWithProviders(<TasksPage />, { staff: supervisor })
     const [row] = await screen.findAllByRole('listitem')
-    expect(within(row!).getByTestId('task-level')).toHaveTextContent('High · Overdue')
+    expect(within(row!).getByTestId('task-level')).toHaveTextContent('High, overdue')
     expect(within(row!).queryByTestId('task-overdue')).toBeNull()
   })
 

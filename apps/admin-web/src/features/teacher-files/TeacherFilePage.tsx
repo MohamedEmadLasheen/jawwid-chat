@@ -1,9 +1,13 @@
-import { useCallback, useState, type ReactNode } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useCallback, useRef, useState, type ReactNode } from 'react'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { STEPS, countLabel } from '@/core/i18n/counts'
 import { Badge } from '@/shared/components/Badge'
+import { Icon } from '@/shared/components/Icon'
+import { FilterChips } from '@/shared/components/FilterChips'
+import { Menu, type MenuItem } from '@/shared/components/Menu'
 import { PageHeader } from '@/shared/components/PageHeader'
+import { RecordCallout, RecordHighlights, RecordIdentity, useRecordCallout, type FileTab } from './RecordHead'
 import { QueryBoundary } from '@/shared/components/States'
 import type { Complaint, EntryBrief, TeacherFile, TeacherHistoryEvent } from './api'
 import { HISTORY_ACTION, T, useCopy } from './copy'
@@ -12,109 +16,178 @@ import { Refusal, isTeacherFileRefusal } from './Refusal'
 import { useReissueFirstLogin, useTeacherFile, useTeacherHistory } from './hooks'
 import { FirstLoginCodeDialog, GiveSignInDialog } from './AddTeacherDialog'
 import { AddEntryDialog, EditPersonalDialog, type EntryIntent } from './TeacherFileDialogs'
-import { AwayBadge, ComplaintItem, UpholdDialog } from './Complaint'
+import { ComplaintItem, UpholdDialog } from './Complaint'
 import { SupervisionTimeline } from './SupervisionTimeline'
 import { EvaluationsSection } from './Evaluations'
 import { EmploymentSection, FinancialSummarySection, HistorySection, usePayroll } from './Payroll'
 import { MonthlyKpis, TeacherScheduleSection, currentMonth, teacherAreaLinks, type TeacherWorkLinks } from './TeacherWork'
 import { ShiftSection } from '@/features/schedule/ShiftSection'
 import './teacher-files.css'
+import '@/features/teachers/stack-table.css'
+import { MonthPicker } from '@/features/teachers/MonthPicker'
 import { studentPath } from '@/features/profiles/api'
 import { OpenSupervisionButton, TeacherLeaveSection } from '@/features/supervision/TeacherLeaveSection'
 import { OpenCaseButton } from '@/features/cases/OpenCaseDialog'
 import { OffboardButton, ReactivateButton } from './Offboarding'
 import { DeletionRequestBanner } from './DeletionRequest'
 import { ChangeSignInButton } from './ChangeSignIn'
+import { By } from './Byline'
 import { LessonReports } from './LessonReports'
 
+const FILE_TABS: readonly FileTab[] = ['overview', 'students', 'schedule', 'pay', 'leave', 'evaluations', 'records']
+
 /**
- * PD-10: one teacher's file. Sections in the order the owner listed them;
- * the ones that wait on PD-9 or on Jawwid Core say so instead of showing a
- * plausible zero. Which controls appear comes from the server's `access`.
+ * PD-10: one teacher's file, as a record. The masthead says who this is, what
+ * stands open about them and the one thing to do next; the rest of the file
+ * is behind its tabs (`?tab=`), each a short page, instead of one long scroll.
+ * Which controls appear comes from the server's `access`.
  */
 export function TeacherFilePage({ basePath, eyebrow }: { basePath: string; eyebrow?: string }) {
   const { teacherId = '' } = useParams<{ teacherId: string }>()
   const tx = useCopy()
   const file = useTeacherFile(teacherId)
+  const data = file.data
+
+  if (isTeacherFileRefusal(file.error) || !data) {
+    return (
+      <div className="page">
+        <div className="page__inner">
+          <PageHeader back={{ to: basePath, label: tx(T.back) }} eyebrow={eyebrow} title={tx(T.filesTitle)} />
+          {isTeacherFileRefusal(file.error) ? (
+            <Refusal error={file.error} />
+          ) : (
+            <QueryBoundary isLoading={file.isLoading} error={file.error} onRetry={() => void file.refetch()}>
+              {null}
+            </QueryBoundary>
+          )}
+        </div>
+      </div>
+    )
+  }
+  return <TeacherRecord data={data} basePath={basePath} />
+}
+
+function TeacherRecord({ data, basePath }: { data: TeacherFile; basePath: string }) {
+  const tx = useCopy()
   const [editing, setEditing] = useState(false)
   const [intent, setIntent] = useState<EntryIntent | null>(null)
-  const data = file.data
+  const [params, setParams] = useSearchParams()
+  const asked = params.get('tab') as FileTab | null
+  const tab: FileTab = asked && FILE_TABS.includes(asked) ? asked : 'overview'
+  const setTab = (next: FileTab) => {
+    const p = new URLSearchParams(params)
+    if (next === 'overview') p.delete('tab')
+    else p.set('tab', next)
+    setParams(p, { replace: true })
+  }
+  // The header's quieter actions keep their own dialogs; the "⋯" menu presses them.
+  const proxies = useRef<HTMLDivElement>(null)
+  const press = (act: string) => proxies.current?.querySelector<HTMLButtonElement>(`[data-act="${act}"] > button`)?.click()
   const links = teacherAreaLinks(basePath)
+  const label: Record<FileTab, string> = {
+    overview: tx(T.tabOverview),
+    students: tx(T.tabStudents),
+    schedule: tx(T.schedule),
+    pay: tx(T.tabPay),
+    leave: tx(T.tabLeave),
+    evaluations: tx(T.tabEvaluations),
+    records: tx(T.tabRecords),
+  }
+  const callout = useRecordCallout(data, {
+    setup: () => {
+      setTab('overview')
+      // The checklist is the first sheet of Overview: bring it into view.
+      requestAnimationFrame(() => document.getElementById('tf-setup')?.scrollIntoView?.({ block: 'center', behavior: 'smooth' }))
+    },
+    records: () => setTab('records'),
+  })
+
+  const canWrite = data.access.canWriteSupervision
+  const signIn = data.signIn
+  const more: MenuItem[] = canWrite
+    ? [
+        ...(signIn?.canGive ? [{ key: 'give', label: tx(T.giveSignIn), icon: 'password' as const, onSelect: () => press('give') }] : []),
+        ...(signIn?.canSendCode ? [{ key: 'code', label: tx(T.sendNewCode), icon: 'send' as const, onSelect: () => press('code') }] : []),
+        ...(signIn?.canChange ? [{ key: 'signin', label: tx(T.changeSignIn), icon: 'mail' as const, onSelect: () => press('signin') }] : []),
+        { key: 'case', label: tx(T.escalate), icon: 'alert' as const, onSelect: () => press('case') },
+        ...(data.onboarding?.canReactivate && !data.teacher.isActive ? [{ key: 'reactivate', label: tx(T.reactivate), icon: 'undo' as const, onSelect: () => press('reactivate') }] : []),
+        ...(data.onboarding?.canOffboard && data.teacher.isActive ? [{ key: 'offboard', label: tx(T.offboard), icon: 'userMinus' as const, danger: true, onSelect: () => press('offboard') }] : []),
+      ]
+    : []
+  const openComplaints = data.supervision.complaints.filter((c) => (c.status ?? (c.resolution ? 'resolved' : 'open')) === 'open').length
+  const tabOptions = FILE_TABS.map((t) => ({
+    value: t,
+    label: label[t],
+    count: t === 'students' && data.assignedStudents.length > 0 ? data.assignedStudents.length : t === 'records' && openComplaints > 0 ? openComplaints : undefined,
+  }))
 
   return (
-    <div className="page">
+    <div className="page tf-record">
       <div className="page__inner">
-        <p className="tf-back">
-          <Link to={basePath}>{tx(T.back)}</Link>
-        </p>
-        {isTeacherFileRefusal(file.error) ? (
-          <Refusal error={file.error} />
-        ) : (
-          <QueryBoundary isLoading={file.isLoading} error={file.error} onRetry={() => void file.refetch()}>
-            {data && (
-              <>
-                <PageHeader
-                  eyebrow={eyebrow}
-                  title={data.teacher.name}
-                  status={
-                    <>
-                      <Badge tone={data.teacher.isActive ? 'ok' : 'outline'} dot>
-                        {tx(data.teacher.isActive ? T.active : T.inactive)}
-                      </Badge>
-                      <AwayBadge away={data.teacher.away} />
-                      <SignInBadge status={data.signIn?.status} />
-                    </>
-                  }
-                  actions={
-                    data.access.canWriteSupervision ? (
-                      <>
-                        {/* Mounted whatever the file says: a code shown once must outlive the reload. */}
-                        <GiveSignInButton show={!!data.signIn?.canGive} teacherId={data.teacher.id} basePath={basePath} />
-                        {data.signIn?.canSendCode && <SendCodeButton teacherId={data.teacher.id} />}
-                        <ChangeSignInButton
-                          show={!!data.signIn?.canChange}
-                          teacherId={data.teacher.id}
-                          signedIn={data.signIn?.status === 'active'}
-                        />
-                        {data.teacher.isActive && <OpenSupervisionButton teacherId={data.teacher.id} />}
-                        {/* PD-35 B5: escalate about this teacher (the server checks the scope). */}
-                        <OpenCaseButton subject={{ kind: 'teacher', id: data.teacher.id }} target="teachers" />
-                        {/* PD-43 PR-1b: the server says who may (the routes re-check). */}
-                        <ReactivateButton
-                          show={!!data.onboarding?.canReactivate && !data.teacher.isActive}
-                          teacherId={data.teacher.id}
-                          name={data.teacher.name}
-                        />
-                        <OffboardButton
-                          show={!!data.onboarding?.canOffboard && data.teacher.isActive}
-                          teacherId={data.teacher.id}
-                          name={data.teacher.name}
-                        />
-                      </>
-                    ) : undefined
-                  }
-                />
-                {/* PD-56 O-3: the teacher asked to delete their account (shown only while pending), offboarded or not. */}
-                <DeletionRequestBanner teacherId={data.teacher.id} name={data.teacher.name} />
-                <FileSections file={data} links={links} onEdit={() => setEditing(true)} onAdd={setIntent} />
-                {editing && <EditPersonalDialog file={data} onClose={() => setEditing(false)} />}
-                {intent && <AddEntryDialog teacherId={data.teacher.id} intent={intent} onClose={() => setIntent(null)} />}
-              </>
-            )}
-          </QueryBoundary>
+        <header className="page-header tf-head">
+          <RecordIdentity
+            file={data}
+            back={{ to: basePath, label: tx(T.back) }}
+            actions={
+              canWrite ? (
+                <>
+                  {/* The callout's action is the page's one solid button; otherwise the supervision chat is. */}
+                  {data.teacher.isActive && (
+                    <OpenSupervisionButton teacherId={data.teacher.id} className={callout?.action ? 'btn' : 'btn btn--primary'} />
+                  )}
+                  {more.length > 0 && <Menu label={tx(T.moreFor, { name: data.teacher.name })} items={more} />}
+                </>
+              ) : undefined
+            }
+          />
+          <RecordHighlights file={data} onTab={setTab} />
+          {callout && <RecordCallout callout={callout} />}
+          {/* PD-56 O-3: the teacher asked to delete their account (shown only while pending), offboarded or not. */}
+          <DeletionRequestBanner teacherId={data.teacher.id} name={data.teacher.name} />
+          <div className="mast__tabs">
+            <FilterChips<FileTab> variant="tabs" label={tx(T.fileSections)} value={tab} onChange={setTab} options={tabOptions} />
+          </div>
+        </header>
+        {canWrite && (
+          <div className="tf-proxy" ref={proxies}>
+            {/* Mounted whatever the file says: a code shown once must outlive the reload. */}
+            <span data-act="give">
+              <GiveSignInButton show={!!signIn?.canGive} teacherId={data.teacher.id} basePath={basePath} />
+            </span>
+            <span data-act="code">{signIn?.canSendCode && <SendCodeButton teacherId={data.teacher.id} />}</span>
+            <span data-act="signin">
+              <ChangeSignInButton show={!!signIn?.canChange} teacherId={data.teacher.id} signedIn={signIn?.status === 'active'} />
+            </span>
+            {/* PD-35 B5: escalate about this teacher (the server checks the scope). */}
+            <span data-act="case">
+              <OpenCaseButton subject={{ kind: 'teacher', id: data.teacher.id }} target="teachers" />
+            </span>
+            {/* PD-43 PR-1b: the server says who may (the routes re-check). */}
+            <span data-act="reactivate">
+              <ReactivateButton show={!!data.onboarding?.canReactivate && !data.teacher.isActive} teacherId={data.teacher.id} name={data.teacher.name} />
+            </span>
+            <span data-act="offboard">
+              <OffboardButton show={!!data.onboarding?.canOffboard && data.teacher.isActive} teacherId={data.teacher.id} name={data.teacher.name} />
+            </span>
+          </div>
         )}
+        <FileSections tab={tab} file={data} links={links} onEdit={() => setEditing(true)} onAdd={setIntent} />
+        {editing && <EditPersonalDialog file={data} onClose={() => setEditing(false)} />}
+        {intent && <AddEntryDialog teacherId={data.teacher.id} intent={intent} onClose={() => setIntent(null)} />}
       </div>
     </div>
   )
 }
 
-/** The sections in the order the owner listed them (2026-10-21); the timeline closes the file. */
+/** One tab of the file at a time. The work sits on sheets; who the teacher is sits beside it, on the canvas. */
 function FileSections({
+  tab,
   file,
   links,
   onEdit,
   onAdd,
 }: {
+  tab: FileTab
   file: TeacherFile
   links?: TeacherWorkLinks
   onEdit: () => void
@@ -125,30 +198,56 @@ function FileSections({
   const [month, setMonth] = useState(currentMonth)
   return (
     <>
-      <SetupChecklist file={file} />
-      <Personal file={file} onEdit={onEdit} />
-      <EmploymentSection file={file} payroll={payroll} onEdit={onEdit} />
-      <Students file={file} />
-      {/* PD-38: category and shift, effective-dated. */}
-      <ShiftSection teacherId={file.teacher.id} />
-      <TeacherScheduleSection teacherId={file.teacher.id} links={links} />
-      <Monthly file={file} onAdd={onAdd} links={links} month={month} onMonth={setMonth} />
-      {/* RQA-F1: the reports behind the on-time figure, for the same month. */}
-      <LessonReports teacherId={file.teacher.id} month={month} />
-      <Complaints file={file} onAdd={onAdd} />
+      {tab === 'overview' && (
+        <div className="split split--wide-aside tf-file">
+          <div className="tf-file__main">
+            <SetupChecklist file={file} />
+            <Monthly file={file} onAdd={onAdd} links={links} month={month} onMonth={setMonth} />
+          </div>
+          <aside className="tf-file__side">
+            <Personal file={file} onEdit={onEdit} />
+            <EmploymentSection file={file} payroll={payroll} onEdit={onEdit} />
+          </aside>
+        </div>
+      )}
+      {tab === 'students' && <Students file={file} />}
+      {tab === 'schedule' && (
+        <>
+          <TeacherScheduleSection teacherId={file.teacher.id} links={links} />
+          {/* PD-38: category and shift, effective-dated. */}
+          <ShiftSection teacherId={file.teacher.id} />
+        </>
+      )}
+      {tab === 'pay' && (
+        <>
+          {/* PD-18: the super admin and the Teachers manager (PD-43); the server re-checks every route. */}
+          <FinancialSummarySection payroll={payroll} />
+          <HistorySection kind="bonus" file={file} payroll={payroll} />
+          <HistorySection kind="deduction" file={file} payroll={payroll} />
+        </>
+      )}
+      {tab === 'leave' && (
+        <>
+          {/* PD-12: the manager (and super admin) edit the record; the same two set the allowance. */}
+          <TeacherLeaveSection teacherId={file.teacher.id} canSetAllowance={file.access.canEditPersonal} />
+          <DaysOff file={file} onAdd={onAdd} />
+        </>
+      )}
       {/* PD-35: evaluations and improvement plans; the teacher sees them once shared. */}
-      <EvaluationsSection teacherId={file.teacher.id} canWrite={file.access.canWriteSupervision} canEditCriteria={file.access.canEditPersonal} />
-      {/* PD-18: the super admin and the Teachers manager (PD-43); the server re-checks every route. */}
-      <FinancialSummarySection payroll={payroll} />
-      <HistorySection kind="bonus" file={file} payroll={payroll} />
-      <HistorySection kind="deduction" file={file} payroll={payroll} />
-      <DaysOff file={file} onAdd={onAdd} />
-      {/* PD-12: the manager (and super admin) edit the record; the same two set the allowance. */}
-      <TeacherLeaveSection teacherId={file.teacher.id} canSetAllowance={file.access.canEditPersonal} />
-      {/* PD-43: the teacher's and their login's lifecycle. */}
-      <LifecycleHistory teacherId={file.teacher.id} />
-      {/* PD-11's timeline: every record about the teacher in one line, plus notes and the bonus ticket. */}
-      <SupervisionTimeline teacherId={file.teacher.id} canWrite={file.access.canWriteSupervision} />
+      {tab === 'evaluations' && (
+        <EvaluationsSection teacherId={file.teacher.id} canWrite={file.access.canWriteSupervision} canEditCriteria={file.access.canEditPersonal} />
+      )}
+      {tab === 'records' && (
+        <>
+          <Complaints file={file} onAdd={onAdd} />
+          {/* PD-11's timeline: every record about the teacher in one line, plus notes and the bonus ticket. */}
+          <SupervisionTimeline teacherId={file.teacher.id} canWrite={file.access.canWriteSupervision} />
+          {/* RQA-F1: the reports behind the on-time figure, for the month chosen on Overview. */}
+          <LessonReports teacherId={file.teacher.id} month={month} />
+          {/* PD-43: the teacher's and their login's lifecycle. */}
+          <LifecycleHistory teacherId={file.teacher.id} />
+        </>
+      )}
       {payroll.dialogs}
     </>
   )
@@ -168,7 +267,7 @@ function Section({
   children: ReactNode
 }) {
   return (
-    <section className="card panel tf-section" aria-labelledby={id}>
+    <section className="tf-section" aria-labelledby={id}>
       <div className="tf-section__head">
         <h2 id={id} className="tf-section__title">
           {title}
@@ -204,21 +303,21 @@ function SetupChecklist({ file }: { file: TeacherFile }) {
       id="tf-setup"
       title={tx(T.setupTitle)}
       action={
-        <Badge tone="warn">{setup.missing === 1 ? tx(T.oneStepLeft) : tx(T.stepsLeft, { steps: countLabel(setup.missing, number(setup.missing), STEPS, locale) })}</Badge>
+        <span className="sr-only">{setup.missing === 1 ? tx(T.oneStepLeft) : tx(T.stepsLeft, { steps: countLabel(setup.missing, number(setup.missing), STEPS, locale) })}</span>
       }
     >
       <ul className="tf-setup">
-        {SETUP_STEPS.map(([key, label]) => (
-          <li key={key}>
-            <span>{tx(label)}</span>
-            <Badge tone={setup[key] ? 'ok' : 'outline'} dot>
-              {tx(setup[key] ? T.done : T.stepNotDone)}
-            </Badge>
+        {/* What is left first; what is done after it, quieter. */}
+        {[...SETUP_STEPS].sort((a, b) => Number(setup[a[0]]) - Number(setup[b[0]])).map(([key, label]) => (
+          <li key={key} className={setup[key] ? 'is-done' : undefined}>
+            <Icon name={setup[key] ? 'checkCircle' : 'circle'} size={18} />
+            <span className="tf-setup__label">{tx(label)}</span>
+            <span className="sr-only">{tx(setup[key] ? T.done : T.stepNotDone)}</span>
           </li>
         ))}
       </ul>
       {!setup.payMatchesShift && (
-        <p className="banner banner--warn" role="note">
+        <p className="tf-note tf-note--waiting" role="note">
           {tx(T.payMismatch)}
         </p>
       )}
@@ -251,14 +350,10 @@ function LifecycleHistory({ teacherId }: { teacherId: string }) {
             {events.map((e, i) => (
               <li key={`${e.at}-${i}`}>
                 <strong dir="auto">{what(e)}</strong>
-                <span className="tf-byline">
-                  {' '}
-                  · <bdi>{who(e)}</bdi> · {dateTime(e.at)}
-                </span>
+                <By name={who(e)} when={dateTime(e.at)} />
                 {e.reason && (
-                  <span className="tf-muted" dir="auto">
-                    {' '}
-                    · {e.reason}
+                  <span className="tf-history__reason" dir="auto">
+                    {e.reason}
                   </span>
                 )}
               </li>
@@ -271,9 +366,8 @@ function LifecycleHistory({ teacherId }: { teacherId: string }) {
 }
 
 function Byline({ entry }: { entry: EntryBrief }) {
-  const tx = useCopy()
   const { dateTime } = useI18n()
-  return <span className="tf-byline">{tx(T.by, { name: entry.author.name, date: dateTime(entry.createdAt) })}</span>
+  return <By name={entry.author.name} when={dateTime(entry.createdAt)} />
 }
 
 function Personal({ file, onEdit }: { file: TeacherFile; onEdit: () => void }) {
@@ -287,7 +381,7 @@ function Personal({ file, onEdit }: { file: TeacherFile; onEdit: () => void }) {
       id="tf-personal"
       title={tx(T.personal)}
       action={
-        file.access.canEditPersonal && (
+        file.access.canEditPersonal && file.teacher.isActive && (
           <button type="button" className="btn btn--sm" onClick={onEdit} aria-label={tx(T.editPersonal)}>
             {tx(T.edit)}
           </button>
@@ -306,11 +400,8 @@ function Personal({ file, onEdit }: { file: TeacherFile; onEdit: () => void }) {
         <dd>{p.joinedOn ? cal.day(p.joinedOn) : missing}</dd>
       </dl>
       {p.updatedBy && p.updatedAt && (
-        <p className="tf-byline">
-          {tx(T.lastEdit, {
-            name: p.updatedBy.name,
-            date: dateTime(p.updatedAt),
-          })}
+        <p className="tf-kv__foot">
+          <By prefix={tx(T.lastEditBy)} name={p.updatedBy.name} when={dateTime(p.updatedAt)} />
         </p>
       )}
     </Section>
@@ -326,7 +417,7 @@ function Students({ file }: { file: TeacherFile }) {
         <p className="tf-muted">{tx(T.noStudents)}</p>
       ) : (
         <div className="table-wrap tf-table-wrap">
-          <table className="table">
+          <table className="table stack-table">
             <thead>
               <tr>
                 <th scope="col">{tx(T.child)}</th>
@@ -338,13 +429,13 @@ function Students({ file }: { file: TeacherFile }) {
             <tbody>
               {rows.map((s) => (
                 <tr key={s.learnerId}>
-                  <td dir="auto">
+                  <td>
                     {/* PD-17: the child's Student Profile. */}
                     <Link to={studentPath(s.learnerId)}>{s.name}</Link>
                   </td>
-                  <td dir="auto">{s.level ?? tx(T.none)}</td>
-                  <td dir="auto">{s.family.displayName}</td>
-                  <td dir="auto">{s.supervisor?.name ?? tx(T.none)}</td>
+                  <td data-label={tx(T.level)}><bdi>{s.level ?? tx(T.none)}</bdi></td>
+                  <td data-label={tx(T.family)}><bdi>{s.family.displayName}</bdi></td>
+                  <td data-label={tx(T.supervisor)}><bdi>{s.supervisor?.name ?? tx(T.none)}</bdi></td>
                 </tr>
               ))}
             </tbody>
@@ -415,23 +506,13 @@ function Monthly({
       id="tf-monthly"
       title={tx(T.monthly)}
       action={
-        <label className="tf-month">
-          <span className="field__label">{tx(T.month)}</span>
-          <input
-            className="input"
-            type="month"
-            value={month}
-            max={currentMonth()}
-            onChange={(e) => e.target.value && setMonth(e.target.value)}
-            aria-label={tx(T.month)}
-          />
-        </label>
+        <MonthPicker value={month} onChange={(next) => next <= currentMonth() && setMonth(next)} label={tx(T.month)} showLabel={false} />
       }
     >
       <MonthlyKpis teacherId={file.teacher.id} month={month} links={links} />
       <div className="tf-section__head">
         <h3 className="tf-subtitle">{tx(T.comments)}</h3>
-        {file.access.canWriteSupervision && (
+        {file.access.canWriteSupervision && file.teacher.isActive && (
           <button type="button" className="btn btn--sm" onClick={() => onAdd({ kind: 'monthly_comment' })}>
             {tx(T.addMonthly)}
           </button>
@@ -524,15 +605,6 @@ function DaysOff({ file, onAdd }: { file: TeacherFile; onAdd: (i: EntryIntent) =
       )}
     </Section>
   )
-}
-
-/** PD-43: a login that waits for its first sign-in, or is suspended. Nothing for an active login. */
-function SignInBadge({ status }: { status?: string }) {
-  const tx = useCopy()
-  if (status === 'provisioned') return <Badge tone="warn">{tx(T.notSignedInYet)}</Badge>
-  if (status === 'suspended') return <Badge tone="outline">{tx(T.signInSuspended)}</Badge>
-  if (status === 'none') return <Badge tone="outline">{tx(T.noSignIn)}</Badge>
-  return null
 }
 
 /** PD-43: a new first sign-in code; the server decides who may and who sees it. */

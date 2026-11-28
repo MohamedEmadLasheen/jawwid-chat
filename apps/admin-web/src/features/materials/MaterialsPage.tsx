@@ -1,3 +1,7 @@
+import type { IconName } from '@/shared/components/Icon'
+import type { MenuItem } from '@/shared/components/Menu'
+import { RowActions } from '@/shared/components/RowActions'
+import '@/features/teachers/rows.css'
 import { useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
@@ -49,7 +53,7 @@ import './materials.css'
 
 type Tab = 'library' | 'import' | 'recitations'
 const TABS: readonly Tab[] = ['library', 'import', 'recitations']
-const STATUS_TONE: Record<ItemStatus, Tone> = { draft: 'outline', in_review: 'info', published: 'ok', retired: 'warn' }
+const STATUS_TONE: Record<ItemStatus, Tone> = { draft: 'outline', in_review: 'info', published: 'ok', retired: 'neutral' }
 
 /**
  * PD-29: the Materials page -- the super admin's and the Teachers manager's.
@@ -72,26 +76,30 @@ export function MaterialsPage({ eyebrow }: { eyebrow?: string }) {
   return (
     <div className="page">
       <div className="page__inner">
-        <PageHeader eyebrow={eyebrow} title={tx(M.title)} subtitle={tx(M.subtitle)} />
+        <PageHeader
+          eyebrow={eyebrow}
+          title={tx(M.title)}
+          subtitle={tx(M.subtitle)}
+          tabs={
+            access.data && tabs.length > 1 ? (
+              <FilterChips<Tab>
+                variant="tabs"
+                label={tx(M.tabs)}
+                value={tab}
+                onChange={(next) => setParams(next === 'library' ? {} : { tab: next }, { replace: true })}
+                options={tabs.map((t) => ({ value: t, label: label[t] }))}
+              />
+            ) : undefined
+          }
+        />
         {access.error ? (
-          <EmptyState icon="alert" title={describeError(access.error, locale)} />
+          <EmptyState title={describeError(access.error, locale)} />
         ) : !access.data ? (
           <QueryBoundary isLoading error={null} onRetry={() => void access.refetch()}>
             <></>
           </QueryBoundary>
         ) : (
           <>
-            {tabs.length > 1 && (
-              <div className="mt-tabs">
-                <FilterChips<Tab>
-                  variant="tabs"
-                  label={tx(M.tabs)}
-                  value={tab}
-                  onChange={(next) => setParams(next === 'library' ? {} : { tab: next }, { replace: true })}
-                  options={tabs.map((t) => ({ value: t, label: label[t] }))}
-                />
-              </div>
-            )}
             {tab === 'library' && <LibraryTab access={access.data} />}
             {tab === 'import' && <ImportTab />}
             {tab === 'recitations' && <RecitationsTab />}
@@ -167,20 +175,28 @@ function LibraryTab({ access }: { access: MaterialsAccess }) {
 
   return (
     <>
-      <div className="mt-toolbar">
+      <div className="mt-lib">
+      <nav className="mt-outline" aria-label={tx(M.subject)}>
         <FilterChips<Subject>
           label={tx(M.subject)}
           value={subject}
           onChange={setSubject}
           options={SUBJECTS.map((s) => ({ value: s, label: tx(SUBJECT_LABEL[s]) }))}
         />
-        {(access.canManage || access.canAuthor) && (
-          <button type="button" className="btn btn--primary" onClick={() => setEditing('new')}>
-            {tx(M.add)}
-          </button>
-        )}
-      </div>
-      <div className="mt-filters">
+      </nav>
+      <section className="sheet mt-shelf" aria-label={tx(SUBJECT_LABEL[subject])}>
+        <header className="sheet__head">
+          <h2 className="sheet__title">
+            {tx(SUBJECT_LABEL[subject])}
+            {items.data && <span className="sheet__count">{items.data.items.length}</span>}
+          </h2>
+          {(access.canManage || access.canAuthor) && (
+            <button type="button" className="btn btn--primary btn--sm" onClick={() => setEditing('new')}>
+              {tx(M.add)}
+            </button>
+          )}
+        </header>
+      <div className="sheet-bar mt-filters">
         <input className="input" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={tx(M.search)} aria-label={tx(M.search)} />
         <SearchableSelect className="select" value={status} onValueChange={(v) => setStatus(v as ItemStatus | '')} aria-label={tx(M.status)}>
           <option value="">{tx(M.status)}: {tx(M.all)}</option>
@@ -201,11 +217,11 @@ function LibraryTab({ access }: { access: MaterialsAccess }) {
       </div>
       {save.error ? <ServerError error={save.error} /> : null}
       {items.error ? (
-        <EmptyState icon="alert" title={describeError(items.error, locale)} />
+        <EmptyState title={describeError(items.error, locale)} />
       ) : (
         <QueryBoundary isLoading={items.isLoading} error={null} onRetry={() => void items.refetch()}>
           {!items.data || items.data.items.length === 0 ? (
-            <EmptyState title={tx(filtered ? M.empty : M.emptyLibrary)} />
+            <EmptyState title={tx(filtered ? M.empty : M.emptyLibrary)} hint={tx(filtered ? M.emptyHint : M.emptyLibraryHint)} />
           ) : (
             <ul className="mt-items" aria-label={tx(M.tabLibrary)}>
               {items.data.items.map((item) => (
@@ -222,11 +238,16 @@ function LibraryTab({ access }: { access: MaterialsAccess }) {
           )}
         </QueryBoundary>
       )}
+      </section>
+      </div>
       {editing && <ItemDialog item={editing === 'new' ? null : editing} onClose={() => setEditing(null)} />}
       {previewing && <PreviewDialog item={previewing} onClose={() => setPreviewing(null)} />}
     </>
   )
 }
+
+/** What an item is, at a glance. */
+const KIND_ICON: Record<string, IconName> = { audio: 'speaker', video: 'video', image: 'imageSquare', pdf: 'file', link: 'link', lesson: 'bookBookmark', site: 'bookBookmark' }
 
 function ItemRow({ item, busy, onEdit, onPreview, onStatus }: {
   item: MaterialItem
@@ -240,60 +261,55 @@ function ItemRow({ item, busy, onEdit, onPreview, onStatus }: {
   const surahs = useSurahs()
   const surah = item.surah ? surahs.data?.surahs.find((s) => s.number === item.surah) : undefined
   const title = itemTitle(item, locale)
+  // What moves the item on is stated (by what the reader may do); the rest is behind the menu.
+  const step = item.can?.submit
+    ? { label: tx(M.submitForReview), to: 'in_review' as ItemStatus }
+    : item.can?.approve
+      ? { label: tx(M.approve), to: 'published' as ItemStatus }
+      : item.can?.publish
+        ? { label: tx(M.publish), to: 'published' as ItemStatus }
+        : null
+  const primary = step ? (
+    <button type="button" className="btn btn--sm" disabled={busy} onClick={() => onStatus(step.to)}>
+      {step.label}
+    </button>
+  ) : (
+    <button type="button" className="btn btn--sm" onClick={onPreview}>
+      {tx(M.preview)}
+    </button>
+  )
+  const more: MenuItem[] = [
+    ...(step ? [{ key: 'preview', label: tx(M.preview), icon: 'eye' as const, onSelect: onPreview }] : []),
+    ...(item.can?.edit ? [{ key: 'edit', label: tx(M.edit), icon: 'pencil' as const, onSelect: onEdit }] : []),
+    ...(item.can?.return && !busy ? [{ key: 'return', label: tx(M.returnToDraft), icon: 'undo' as const, onSelect: () => onStatus('draft') }] : []),
+    ...(item.can?.retire && !busy ? [{ key: 'retire', label: tx(M.retire), icon: 'archive' as const, danger: true, onSelect: () => onStatus('retired') }] : []),
+  ]
   return (
-    <li className="card panel mt-item" aria-label={title}>
-      <div className="mt-item__body">
-        <div className="mt-item__head">
-          <Badge tone={STATUS_TONE[item.status]} dot>
-            {tx(STATUS_LABEL[item.status])}
-          </Badge>
-          <strong dir="auto">{title}</strong>
-        </div>
-        <div className="mt-item__meta">
-          <span>{tx(SUBJECT_LABEL[item.subject])}</span>
+    <li className="rowx mt-item" aria-label={title}>
+      <div className="rw-who mt-item__body">
+        <span className="mt-item__icon" aria-hidden="true">
+          <Icon name={KIND_ICON[item.kind] ?? 'file'} size={18} />
+        </span>
+        <span className="rw-who__text">
+          <strong className="rw-name" dir="auto">{title}</strong>
+        <span className="mt-item__meta">
           {item.strand && <span>{tx(STRAND_LABEL[item.strand])}</span>}
           <span>{tx(KIND_LABEL[item.kind])}</span>
           {surah && <span>{tx(M.surah)}: {locale === 'ar' ? surah.nameAr : surah.nameEn}</span>}
           <span>{item.ageGroups.length ? item.ageGroups.map((a) => tx(AGE_LABEL[a])).join('، ') : tx(M.allAges)}</span>
-          {item.sitePath && item.sitePath !== item.externalRef && <span className="mt-ref" dir="ltr">{item.sitePath}</span>}
+          {/* The lesson path stays in the item's form; the row keeps the reference (round 3). */}
           {item.externalRef && <span className="mt-ref" dir="ltr">{item.externalRef}</span>}
           {item.sortOrder !== null && <span>{tx(M.sortOrderShort, { n: String(item.sortOrder) })}</span>}
-        </div>
+        </span>
+        </span>
       </div>
-      <div className="mt-item__actions">
-        <button type="button" className="btn btn--sm btn--ghost" onClick={onPreview}>
-          {tx(M.preview)}
-        </button>
-        {item.can?.edit && (
-          <button type="button" className="btn btn--sm" onClick={onEdit}>
-            {tx(M.edit)}
-          </button>
-        )}
-        {item.can?.submit && (
-          <button type="button" className="btn btn--sm btn--primary" disabled={busy} onClick={() => onStatus('in_review')}>
-            {tx(M.submitForReview)}
-          </button>
-        )}
-        {item.can?.approve && (
-          <button type="button" className="btn btn--sm btn--primary" disabled={busy} onClick={() => onStatus('published')}>
-            {tx(M.approve)}
-          </button>
-        )}
-        {item.can?.return && (
-          <button type="button" className="btn btn--sm" disabled={busy} onClick={() => onStatus('draft')}>
-            {tx(M.returnToDraft)}
-          </button>
-        )}
-        {item.can?.publish && !item.can.approve && (
-          <button type="button" className="btn btn--sm btn--primary" disabled={busy} onClick={() => onStatus('published')}>
-            {tx(M.publish)}
-          </button>
-        )}
-        {item.can?.retire && (
-          <button type="button" className="btn btn--sm" disabled={busy} onClick={() => onStatus('retired')}>
-            {tx(M.retire)}
-          </button>
-        )}
+      <div className="rw-tags">
+        <Badge tone={STATUS_TONE[item.status]} dot>
+          {tx(STATUS_LABEL[item.status])}
+        </Badge>
+      </div>
+      <div className="cell-actions">
+        <RowActions primary={primary} more={more} label={tx(M.moreFor, { name: title })} />
       </div>
     </li>
   )
@@ -748,11 +764,11 @@ function ImportReportView({ report }: { report: ImportReport }) {
   const actionLabel = { create: tx(M.actionCreate), update: tx(M.actionUpdate), error: tx(M.actionError) }
   const actionTone: Record<'create' | 'update' | 'error', Tone> = { create: 'info', update: 'outline', error: 'danger' }
   return (
-    <section className="card panel mt-report" aria-label={tx(M.details)}>
+    <section className="mt-report" aria-label={tx(M.details)}>
       <p>{tx(M.summary, { create: report.summary.create, update: report.summary.update, errors: report.summary.errors })}</p>
       {report.summary.errors > 0 && <p className="field__error">{tx(M.fixFirst)}</p>}
       {report.unmatchedFiles.length > 0 && <p className="field__hint">{tx(M.unmatched, { files: report.unmatchedFiles.join(', ') })}</p>}
-      <table className="mt-table">
+      <table className="table mt-table">
         <thead>
           <tr>
             <th scope="col">{tx(M.row)}</th>
@@ -767,7 +783,7 @@ function ImportReportView({ report }: { report: ImportReport }) {
             <tr key={r.row} className={r.action === 'error' ? 'mt-table__error' : undefined}>
               <td>{r.row}</td>
               <td dir="ltr">{r.ref ?? '—'}</td>
-              <td dir="auto">{r.title ?? '—'}</td>
+              <td><bdi>{r.title ?? '—'}</bdi></td>
               <td>
                 <Badge tone={actionTone[r.action]}>{actionLabel[r.action]}</Badge>
               </td>
@@ -812,7 +828,8 @@ function RecitationsTab() {
           {list.data?.sources.map((s) => <SourceCard key={s.id} source={s} />)}
         </ul>
       </QueryBoundary>
-      <section className="card panel mt-add-source" aria-label={tx(M.addSource)}>
+      <section className="mt-add-source" aria-label={tx(M.addSource)}>
+        <h2 className="section-label mt-add-source__label">{tx(M.addSource)}</h2>
         <Field label={tx(M.sourceName)}>{(id) => <input id={id} className="input" dir="auto" value={name} onChange={(e) => setName(e.target.value)} />}</Field>
         <Field label={tx(M.urlTemplate)}>
           {(id) => <input id={id} className="input" dir="ltr" placeholder="https://…/{surah3}.mp3" value={template} onChange={(e) => setTemplate(e.target.value)} />}
@@ -850,7 +867,7 @@ function SourceCard({ source }: { source: RecitationSource }) {
     }
   }
   return (
-    <li className="card panel mt-source" aria-label={source.name}>
+    <li className="mt-source" aria-label={source.name}>
       <div className="mt-item__head">
         {source.isDefault && <Badge tone="ok" dot>{tx(M.isDefault)}</Badge>}
         {!source.isActive && <Badge tone="outline">{tx(M.inactive)}</Badge>}

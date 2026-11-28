@@ -109,7 +109,7 @@ export function EvaluationsSection({ teacherId, canWrite, canEditCriteria }: { t
   const data = records.data
 
   return (
-    <section className="card panel tf-section" aria-labelledby={id}>
+    <section className="tf-section" aria-labelledby={id}>
       <div className="tf-section__head">
         <h2 id={id} className="tf-section__title">{tx(E.title)}</h2>
         {canWrite && (
@@ -141,7 +141,7 @@ export function EvaluationsSection({ teacherId, canWrite, canEditCriteria }: { t
                 {e.superseded && <Badge tone="neutral">{tx(E.superseded)}</Badge>}
                 {e.sharedAt ? <Badge tone="ok" dot>{tx(E.shared)}</Badge> : <Badge tone="outline">{tx(E.notShared)}</Badge>}
                 {canWrite && !e.sharedAt && !e.superseded && (
-                  <button type="button" className="btn btn--sm btn--primary" disabled={act.isPending} onClick={() => act.mutate(() => evaluationsApi.shareEvaluation(e.id))}>
+                  <button type="button" className="btn btn--sm" disabled={act.isPending} onClick={() => act.mutate(() => evaluationsApi.shareEvaluation(e.id))}>
                     {tx(E.share)}
                   </button>
                 )}
@@ -158,10 +158,10 @@ export function EvaluationsSection({ teacherId, canWrite, canEditCriteria }: { t
           {data?.plans.map((p) => (
             <li key={p.id} className="tf-eval__item">
               <div className="tf-eval__head">
-                <strong dir="auto">🎯 {p.title}</strong>
+                <strong dir="auto">{p.title}</strong>
                 {p.sharedAt ? <Badge tone="ok" dot>{tx(E.shared)}</Badge> : <Badge tone="outline">{tx(E.notShared)}</Badge>}
                 {canWrite && !p.sharedAt && (
-                  <button type="button" className="btn btn--sm btn--primary" disabled={act.isPending} onClick={() => act.mutate(() => evaluationsApi.sharePlan(p.id))}>
+                  <button type="button" className="btn btn--sm" disabled={act.isPending} onClick={() => act.mutate(() => evaluationsApi.sharePlan(p.id))}>
                     {tx(E.share)}
                   </button>
                 )}

@@ -6,16 +6,26 @@ export { useCopy, type Pair } from '@/features/organization/copy'
 /** PD-34 copy, Arabic and English side by side. */
 export const N = {
   title: { en: 'Notifications', ar: 'الإشعارات' },
-  subtitle: {
-    en: 'What needs your attention, newest first. Times are in your own time zone.',
-    ar: 'ما يحتاج إلى انتباهك، الأحدث أولًا. الأوقات بحسب توقيتك.',
-  },
+  asks: { en: 'Requires action', ar: 'تتطلب إجراءً' },
+  saving: { en: 'Saving…', ar: 'جارٍ الحفظ…' },
+  dueBy: { en: 'Due {when}', ar: 'موعده {when}' },
+  wasDue: { en: 'Was due {when}', ar: 'تجاوز موعده {when}' },
   bell: { en: 'Notifications, {n} unread', ar: 'الإشعارات، {n} غير مقروءة' },
-  empty: { en: 'You are all caught up', ar: 'لا جديد لديك' },
+  empty: { en: 'No notifications yet', ar: 'لا إشعارات بعد' },
+  emptyHint: {
+    en: 'Messages, missed calls, tasks and payments that need you are listed here as they arrive, each with the way to its page.',
+    ar: 'تظهر هنا الرسائل والمكالمات الفائتة والمهام والمدفوعات التي تحتاج إليك فور وصولها، ومع كلٍّ منها طريقه إلى صفحته.',
+  },
+  emptyTab: { en: 'No notifications of this kind', ar: 'لا إشعارات من هذا النوع' },
+  emptyTabHint: { en: 'They are listed here as they arrive. The other tabs may hold more.', ar: 'تظهر هنا فور وصولها. قد تجد المزيد في التبويبات الأخرى.' },
+  showAll: { en: 'Show all', ar: 'عرض الكل' },
   markAllRead: { en: 'Mark all as read', ar: 'تحديد الكل كمقروء' },
   loadOlder: { en: 'Show older', ar: 'عرض الأقدم' },
   open: { en: 'Open', ar: 'فتح' },
   settings: { en: 'Notification settings', ar: 'إعدادات الإشعارات' },
+  settingsTab: { en: 'Settings', ar: 'الإعدادات' },
+  today: { en: 'Today', ar: 'اليوم' },
+  yesterday: { en: 'Yesterday', ar: 'أمس' },
   quietHours: { en: 'Quiet hours', ar: 'ساعات الهدوء' },
   quietHint: {
     en: 'Pushes to your phone wait until quiet hours end. Calls always come through.',

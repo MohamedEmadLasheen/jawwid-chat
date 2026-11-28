@@ -11,10 +11,13 @@ import { FilterChips } from '@/shared/components/FilterChips'
 import { PageHeader } from '@/shared/components/PageHeader'
 import { SearchField } from '@/shared/components/SearchField'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
-import { RefreshAction, matches, useEyebrow, useRoleLabel } from './common'
-import { ACCOUNT_STATUS, PLURAL, PRINCIPAL_KIND, PRINCIPAL_KIND_PLURAL, TEXT, listTime, useLabel, usePlural, useText } from './copy'
+import { RefreshAction, matches, useRoleLabel } from './common'
+import { ACCOUNT_STATUS, PRINCIPAL_KIND, PRINCIPAL_KIND_PLURAL, TEXT, listTime, useLabel, useText } from './copy'
 import type { AdminSection } from './sections'
 import { SearchableSelect } from '@/shared/components/SearchableSelect'
+import './admin.css'
+import '@/features/teachers/rows.css'
+import { RowActions } from '@/shared/components/RowActions'
 
 type KindFilter = 'all' | AdminUser['principalKind']
 type StatusFilter = 'all' | 'active' | 'inactive'
@@ -31,10 +34,8 @@ const userKey = (u: AdminUser) => `${u.principalKind}:${u.id}`
  */
 export function UsersView({ section }: { section: AdminSection }) {
   const tx = useText()
-  const eyebrow = useEyebrow(section)
   const label = useLabel()
   const roleLabel = useRoleLabel()
-  const plural = usePlural()
   const { number, locale } = useI18n()
   const [search, setSearch] = useState('')
   // The kind filter is in the URL, so the dashboard can link to "family contacts".
@@ -94,12 +95,25 @@ export function UsersView({ section }: { section: AdminSection }) {
   }
 
   return (
-    <div className="page">
+    <div className="page adm-users">
       <div className="page__inner">
+        {/* The directory's counts are the masthead's figures, whatever the filters; a zero is quiet,
+            and the inactive count, when there is one, is also the way to list them. */}
         <PageHeader
-          eyebrow={eyebrow}
           title={tx(section.label)}
-          subtitle={query.data ? plural(PLURAL.people, users.length) : undefined}
+          figures={
+            query.data && users.length > 0
+              ? summary.map((m) => ({
+                  key: m.key,
+                  label: m.label,
+                  value: number(m.value),
+                  tone: m.value === 0 ? ('quiet' as const) : undefined,
+                  ...(m.key === 'inactive' && m.value > 0
+                    ? { onClick: () => setStatus(status === 'inactive' ? 'all' : 'inactive'), pressed: status === 'inactive' }
+                    : {}),
+                }))
+              : undefined
+          }
           actions={
             <RefreshAction
               updatedAt={query.dataUpdatedAt}
@@ -114,59 +128,48 @@ export function UsersView({ section }: { section: AdminSection }) {
           onRetry={() => void query.refetch()}
           isEmpty={users.length === 0}
           emptyTitle={tx(TEXT.noUsers)}
-          emptyIcon="users"
         >
-          {/* Real counts, not filters: the filters are below. */}
-          <dl className="summary-strip">
-            {summary.map((m) => (
-              <div className={`summary-strip__item summary-strip__item--${m.key}`} key={m.key}>
-                <dt>{m.label}</dt>
-                <dd>{number(m.value)}</dd>
+          <section className="sheet" aria-label={tx(section.label)}>
+            <div className="sheet-bar">
+              <SearchField value={search} onChange={setSearch} label={tx(TEXT.searchByName)} clearLabel={tx(TEXT.clearSearch)} />
+              <FilterChips
+                label={tx(TEXT.type)}
+                value={kind}
+                onChange={setKind}
+                formatCount={number}
+                options={[
+                  { value: 'all', label: tx(TEXT.all) },
+                  ...kinds.map((k) => ({ value: k, label: label(PRINCIPAL_KIND_PLURAL, k), count: kindCount(k) })),
+                ]}
+              />
+              <div className="sheet-bar__end">
+                <SearchableSelect
+                  className="select select--inline"
+                  value={status}
+                  onValueChange={(v) => setStatus(v as StatusFilter)}
+                  aria-label={tx(TEXT.filterByAccountStatus)}
+                >
+                  <option value="all">{tx(TEXT.allStatuses)}</option>
+                  <option value="active">{tx(TEXT.active)}</option>
+                  <option value="inactive">{tx(TEXT.inactive)}</option>
+                </SearchableSelect>
+                <SearchableSelect
+                  className="select select--inline"
+                  value={sort}
+                  onValueChange={(v) => setSort(v as SortKey)}
+                  aria-label={tx(TEXT.sortBy)}
+                >
+                  {/* The chosen order reads as an order, not as a filter: "Sort: Name". */}
+                  <option value="name">{tx(TEXT.sortBy)}: {tx(TEXT.sortName)}</option>
+                  <option value="signin">{tx(TEXT.sortBy)}: {tx(TEXT.sortSignIn)}</option>
+                  <option value="newest">{tx(TEXT.sortBy)}: {tx(TEXT.sortNewestAdded)}</option>
+                </SearchableSelect>
               </div>
-            ))}
-          </dl>
-
-          <div className="toolbar">
-            <SearchField value={search} onChange={setSearch} label={tx(TEXT.searchByName)} clearLabel={tx(TEXT.clearSearch)} />
-            <FilterChips
-              label={tx(TEXT.type)}
-              value={kind}
-              onChange={setKind}
-              formatCount={number}
-              options={[
-                { value: 'all', label: tx(TEXT.all), count: searched.length },
-                ...kinds.map((k) => ({ value: k, label: label(PRINCIPAL_KIND_PLURAL, k), count: kindCount(k) })),
-              ]}
-            />
-            <div className="toolbar__end">
-              <SearchableSelect
-                className="select select--inline"
-                value={status}
-                onValueChange={(v) => setStatus(v as StatusFilter)}
-                aria-label={tx(TEXT.filterByAccountStatus)}
-              >
-                <option value="all">{tx(TEXT.allStatuses)}</option>
-                <option value="active">{tx(TEXT.active)}</option>
-                <option value="inactive">{tx(TEXT.inactive)}</option>
-              </SearchableSelect>
-              <SearchableSelect
-                className="select select--inline"
-                value={sort}
-                onValueChange={(v) => setSort(v as SortKey)}
-                aria-label={tx(TEXT.sortBy)}
-              >
-                <option value="name">{tx(TEXT.sortName)}</option>
-                <option value="signin">{tx(TEXT.sortSignIn)}</option>
-                <option value="newest">{tx(TEXT.sortNewestAdded)}</option>
-              </SearchableSelect>
             </div>
-          </div>
 
-          {visible.length === 0 ? (
-            <div className="table-wrap">
+            {visible.length === 0 ? (
               <EmptyState
                 compact
-                icon="search"
                 title={tx(TEXT.noMatches)}
                 action={
                   filtered && (
@@ -176,35 +179,30 @@ export function UsersView({ section }: { section: AdminSection }) {
                   )
                 }
               />
-            </div>
-          ) : (
-            <div className="table-wrap">
-              <table className="table table--interactive">
+            ) : (
+              <table className="rowlist">
+                {/* The columns' names, shown once over the rows on a wide screen. */}
                 <thead>
                   <tr>
-                    <th>{tx(TEXT.name)}</th>
-                    <th className="col-optional">{tx(TEXT.role)}</th>
-                    <th>{tx(TEXT.status)}</th>
-                    <th className="col-optional">{tx(TEXT.signIn)}</th>
-                    <th className="col-optional">{tx(TEXT.lastSignIn)}</th>
+                    <th scope="col" className="rw-who">{tx(TEXT.name)}</th>
+                    <th scope="col" className="rw-meta">{tx(TEXT.lastSignIn)}</th>
+                    <th scope="col" className="cell-actions">
+                      <span className="sr-only">{tx(TEXT.details)}</span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {visible.map((u) => (
-                    <tr
-                      key={userKey(u)}
-                      onClick={() => setOpenKey(userKey(u))}
-                      aria-selected={openKey === userKey(u)}
-                    >
-                      <td>
-                        <div className="entity">
-                          <Avatar name={u.displayName} seed={u.id} size="sm" />
-                          <span className="entity__text">
-                            {/* The keyboard path to the row's details. */}
+                    <tr key={userKey(u)} onClick={() => setOpenKey(userKey(u))} aria-selected={openKey === userKey(u)}>
+                      <td className="rw-who">
+                        <Avatar name={u.displayName} seed={u.id} />
+                        <span className="rw-who__text">
+                          {/* The keyboard path to the row's details. */}
+                          <span className="adm-user__name">
                             <button
                               type="button"
-                              className="row-button entity__name"
-                            title={u.displayName}
+                              className="rw-name"
+                              title={u.displayName}
                               onClick={(e) => {
                                 e.stopPropagation()
                                 setOpenKey(userKey(u))
@@ -212,26 +210,36 @@ export function UsersView({ section }: { section: AdminSection }) {
                             >
                               {u.displayName}
                             </button>
-                            <span className="entity__sub">{label(PRINCIPAL_KIND, u.principalKind)}</span>
+                            {/* Active with a working login is the usual case and is left unsaid; the rest is tagged beside the name. */}
+                            {!u.isActive && <ActiveBadge active={false} />}
+                            {!u.hasLogin ? <Badge tone="outline">{tx(TEXT.noLogin)}</Badge> : u.accountStatus !== 'active' ? <Badge tone="warn">{label(ACCOUNT_STATUS, u.accountStatus)}</Badge> : null}
                           </span>
-                        </div>
+                          <span className="rw-sub">
+                            {label(PRINCIPAL_KIND, u.principalKind)}
+                            {roleLabel(u.staffRole) ? `${locale === 'ar' ? '، ' : ', '}${roleLabel(u.staffRole)}` : ''}
+                          </span>
+                        </span>
                       </td>
-                      <td className="col-optional cell-muted">{roleLabel(u.staffRole) ?? tx(TEXT.dash)}</td>
-                      <td>
-                        <ActiveBadge active={u.isActive} />
+                      <td className="rw-meta">
+                        <span className="rw-fact__label">{tx(TEXT.lastSignIn)}</span>
+                        <div>{u.lastLoginAt ? <strong>{listTime(u.lastLoginAt, locale)}</strong> : u.hasLogin ? tx(TEXT.never) : tx(TEXT.dash)}</div>
                       </td>
-                      <td className="col-optional cell-muted">
-                        {u.hasLogin ? label(ACCOUNT_STATUS, u.accountStatus) : tx(TEXT.noLogin)}
-                      </td>
-                      <td className="col-optional cell-muted cell-nowrap">
-                        {u.lastLoginAt ? listTime(u.lastLoginAt, locale) : u.hasLogin ? tx(TEXT.never) : tx(TEXT.dash)}
+                      <td className="cell-actions">
+                        <RowActions
+                          primary={
+                            <button type="button" className="btn btn--sm" aria-label={`${tx(TEXT.details)}: ${u.displayName}`} onClick={() => setOpenKey(userKey(u))}>
+                              {tx(TEXT.details)}
+                            </button>
+                          }
+                          label={u.displayName}
+                        />
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </div>
-          )}
+            )}
+          </section>
           {query.data?.truncated && <p className="list-footnote">{tx(TEXT.truncated)}</p>}
         </QueryBoundary>
       </div>

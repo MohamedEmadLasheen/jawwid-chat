@@ -1,20 +1,27 @@
-/* PD-41: the Certificates page. Layout only; colours come from the theme tokens. */
-.cert-toolbar { display: flex; flex-wrap: wrap; gap: var(--space-3, 12px); align-items: center; justify-content: space-between; }
-.cert-more { margin-block: var(--space-3, 12px); }
-.cert-drawer { display: grid; gap: var(--space-4, 16px); }
-.cert-drawer__status { display: flex; gap: var(--space-2, 8px); flex-wrap: wrap; }
-.cert-facts { display: grid; grid-template-columns: max-content 1fr; gap: var(--space-1, 4px) var(--space-3, 12px); margin: 0; }
-.cert-facts dt { color: var(--text-muted, inherit); }
-.cert-facts dd { margin: 0; overflow-wrap: anywhere; }
-.cert-callout { padding: var(--space-3, 12px); border-radius: var(--radius-2, 8px); background: var(--surface-warn, var(--surface-2)); }
-.cert-h { font-size: 1rem; margin: 0 0 var(--space-2, 8px); }
-.cert-files { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2, 8px); }
-.cert-files li { display: flex; gap: var(--space-2, 8px); align-items: center; justify-content: space-between; }
-.cert-actions { display: flex; flex-wrap: wrap; gap: var(--space-2, 8px); }
-.cert-history { margin: 0; padding-inline-start: var(--space-4, 16px); display: grid; gap: var(--space-2, 8px); }
-.cert-history__when, .cert-muted { color: var(--text-muted, inherit); font-size: 0.875em; }
-.cert-history__note { margin-top: 2px; }
-.cert-recipients { display: flex; flex-wrap: wrap; gap: var(--space-2, 8px); max-height: 10rem; overflow-y: auto; }
-.cert-row { display: flex; flex-wrap: wrap; gap: var(--space-2, 8px); align-items: flex-end; }
-.cert-consent { margin: 0; }
-@media (max-width: 640px) { .cert-facts { grid-template-columns: 1fr; } }
+/* PD-41: the Certificates page. The board and the inspector come from the
+   shared request queue; this file holds only what a certificate adds. */
+
+/* Above the board: the search every column answers, and the way to the closed ones. */
+.cert-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
+.cert-bar .search { flex: 1 1 14rem; max-inline-size: 360px; }
+.cert-bar__closed { margin-inline-start: auto; }
+.rq-page .cert-types { flex: 1; min-block-size: 0; overflow-y: auto; padding-block: var(--space-4) var(--space-6); }
+
+
+
+.cert-files { list-style: none; margin: 0; padding: 0; }
+.cert-files li { display: flex; gap: var(--space-2); align-items: center; justify-content: space-between; padding-block: 6px; border-block-end: 1px solid var(--line-2); font-size: var(--fs-sm); }
+.cert-files li:last-child { border-block-end: 0; }
+.cert-files__name { min-inline-size: 0; overflow-wrap: anywhere; }
+.cert-files__current { margin-inline-start: var(--space-2); font-size: var(--fs-xs); font-weight: 600; color: var(--teal-dark); }
+
+.cert-history { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); font-size: var(--fs-sm); }
+.cert-history strong { font-weight: 600; }
+.cert-history__when { display: block; font-size: var(--fs-xs); color: var(--ink-muted); }
+.cert-muted { color: var(--ink-muted); font-size: var(--fs-xs); }
+.cert-history__note { margin-block-start: 2px; }
+.cert-consent { margin: 0 0 var(--space-3); padding-block-start: var(--space-3); border-block-start: 1px solid var(--line); font-size: var(--fs-sm); }
+
+/* The request form. */
+.cert-recipients { display: flex; flex-wrap: wrap; gap: var(--space-2); max-block-size: 10rem; overflow-y: auto; }
+.cert-row { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: flex-end; }

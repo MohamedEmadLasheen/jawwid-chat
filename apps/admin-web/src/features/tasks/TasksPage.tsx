@@ -8,8 +8,12 @@ import { academyWallClockToIso, ACADEMY_ZONE, clock12In, dayMonthIn, isoToAcadem
 import { Badge } from '@/shared/components/Badge'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
 import { PageHeader } from '@/shared/components/PageHeader'
+import { RowActions } from '@/shared/components/RowActions'
+import type { MenuItem } from '@/shared/components/Menu'
+import { relativeTime } from '@/features/admin/copy'
+import { academyToday, addDays } from '@/features/schedule/viewState'
 import { ReasonDialog } from '@/shared/components/ReasonDialog'
-import { QueryBoundary } from '@/shared/components/States'
+import { EmptyState, QueryBoundary } from '@/shared/components/States'
 import { ApiError } from '@/core/api/errors'
 import { Icon } from '@/shared/components/Icon'
 import { describeError } from '@/features/teacher-files/copy'
@@ -24,15 +28,17 @@ import {
   type TaskSummary,
   type TaskView,
 } from './api'
-import { C, DEPARTMENT_LABEL, EVENT_LABEL, LEVEL_LABEL, SOURCE_LABEL, STATE_LABEL, TAB_LABEL, useCopy } from './copy'
-import { sourceLink, stateOf, STATE_TONE, titleOf } from './format'
+import { C, DEPARTMENT_LABEL, EVENT_LABEL, GROUP_LABEL, LEVEL_LABEL, SOURCE_LABEL, STATE_LABEL, TAB_LABEL, useCopy } from './copy'
+import { reasonOf, sourceLink, stateOf, STATE_TONE, titleOf } from './format'
 import { FinanceTag, PriorityChip } from './PriorityChip'
 import { SearchableSelect } from '@/shared/components/SearchableSelect'
-import { TasksAreaTabs } from './TasksAreaTabs'
+import { CASES_ACCESS_KEYS, TasksAreaTabs } from './TasksAreaTabs'
 import './tasks.css'
 
 type Tab = TaskView | 'closed'
 const LEVELS: Level[] = ['high', 'medium', 'low']
+/** The window before a task is due in which its time turns amber. */
+const SOON_MS = 24 * 60 * 60 * 1000
 
 const keys = {
   all: ['tasks'] as const,
@@ -44,7 +50,7 @@ const keys = {
 /** "3 Nov, 6:00 PM": an instant on the academy's clock, 12-hour (PD-22, owner 2026-10-28). */
 function useWhen() {
   const { locale } = useI18n()
-  return (iso: string) => `${dayMonthIn(iso, ACADEMY_ZONE, locale)}, ${clock12In(iso, ACADEMY_ZONE, locale)}`
+  return (iso: string) => `${dayMonthIn(iso, ACADEMY_ZONE, locale)}${locale === 'ar' ? '، ' : ', '}${clock12In(iso, ACADEMY_ZONE, locale)}`
 }
 
 function useTitle() {
@@ -64,17 +70,35 @@ function useTabs(): { tabs: Tab[]; closedViews: TaskView[] } {
   return { tabs: [...views, 'closed'], closedViews: views.filter((v) => v !== 'decisions') }
 }
 
+/** When a task is due, as the list groups it. Overdue is the server's own flag, never recomputed. */
+type Group = 'overdue' | 'today' | 'tomorrow' | 'week' | 'later' | 'none'
+const GROUPS: Group[] = ['overdue', 'today', 'tomorrow', 'week', 'later', 'none']
+function groupOf(t: Pick<TaskSummary, 'overdue' | 'dueAt'>, today: string): Group {
+  if (t.overdue) return 'overdue'
+  if (!t.dueAt) return 'none'
+  const day = isoToAcademyWallClock(t.dueAt).date
+  if (day <= today) return 'today'
+  if (day === addDays(today, 1)) return 'tomorrow'
+  return day <= addDays(today, 7) ? 'week' : 'later'
+}
+
 /**
  * PD-47: one Tasks page for every staff member. Mine, the team's (read-only
  * for a teacher's supervisor), the decisions waiting on the viewer, everything
- * (the super admin), and the closed ones with their history. Most urgent first,
- * in the server's order; nothing here decides who sees or may do what.
+ * (the super admin), and the closed ones with their history. Nothing here
+ * decides who sees or may do what.
+ *
+ * The page is a queue and an inspector: the masthead says how much of the
+ * viewer's own work is late or due today; the list is grouped by when a task
+ * is due (overdue first, in the server's order inside each group); the open
+ * task stays on screen beside it.
  *
  * Deep links: ?tab=, ?task=<id>, ?overdue=true, ?level=, ?category=.
  */
 export function TasksPage({ eyebrow }: { eyebrow?: string }) {
   const tx = useCopy()
   const { staff } = useSession()
+  const { number } = useI18n()
   const [params, setParams] = useSearchParams()
   const { tabs, closedViews } = useTabs()
   const asked = params.get('tab') as Tab | null
@@ -90,6 +114,8 @@ export function TasksPage({ eyebrow }: { eyebrow?: string }) {
   const [unmanaged, setUnmanaged] = useState(params.get('unmanaged') === 'true')
   const [openId, setOpenId] = useState<string | null>(params.get('task'))
   const [creating, setCreating] = useState(false)
+  // The filters fold behind one button; a view that arrives filtered shows them.
+  const [filtersOpen, setFiltersOpen] = useState(() => !!(params.get('level') || params.get('category') || params.get('overdue')))
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([])
   const { dir } = useI18n()
 
@@ -143,97 +169,154 @@ export function TasksPage({ eyebrow }: { eyebrow?: string }) {
   })
   const items = list.data?.pages.flatMap((p) => p.items) ?? []
   const canCreate = holdsAny(staff, ['tasks.create'])
+  const hasCases = holdsAny(staff, CASES_ACCESS_KEYS)
+  const today = academyToday()
+
+  // No figure strip: the overdue group below carries its count, and the Escalations
+  // page has none either, so the two pages of this place keep one layout.
+  const filterCount = (level ? 1 : 0) + (category ? 1 : 0) + (overdue && tab !== 'closed' ? 1 : 0) + (tab === 'closed' && closedView !== 'mine' ? 1 : 0)
+  const grouped = GROUPS.map((g) => ({ group: g, rows: items.filter((t) => groupOf(t, today) === g) })).filter((g) => g.rows.length > 0)
+  const row = (t: TaskSummary) => (
+    <TaskRow key={t.id} task={t} showAssignee={query.view !== 'mine'} selected={t.id === openId} onOpen={() => setOpenId(t.id)} />
+  )
 
   return (
     <div className="page tasks">
-      <TasksAreaTabs />
-      <PageHeader
-        eyebrow={eyebrow}
-        title={tx(C.title)}
-        subtitle={tx(C.subtitle)}
-        actions={
-          canCreate ? (
-            <button type="button" className="btn btn--primary" onClick={() => setCreating(true)}>
-              {tx(C.newTask)}
-            </button>
-          ) : undefined
-        }
-      />
-      <div className="tasks__bar">
-        <div role="tablist" className="tasks__tabs" aria-label={tx(C.title)}>
-          {tabs.map((t, i) => (
-            <button
-              key={t}
-              ref={(el) => {
-                tabRefs.current[i] = el
-              }}
-              id={`tasks-tab-${t}`}
-              type="button"
-              role="tab"
-              aria-selected={tab === t}
-              aria-controls="tasks-tabpanel"
-              tabIndex={tab === t ? 0 : -1}
-              className="tasks__tab"
-              onClick={() => pick(t)}
-              onKeyDown={(e) => onTabKey(e, i)}
-            >
-              {tx(TAB_LABEL[t])}
-            </button>
-          ))}
-        </div>
-        <div className="tasks__filters">
-          {tab === 'closed' && closedViews.length > 1 && (
-            <SearchableSelect className="select" aria-label={tx(C.whose)} value={closedView} onValueChange={(v) => setClosedView(v as TaskView)}>
-              {closedViews.map((v) => (
-                <option key={v} value={v}>{tx(TAB_LABEL[v])}</option>
-              ))}
-            </SearchableSelect>
-          )}
-          <SearchableSelect className="select" aria-label={tx(C.level)} value={level} onValueChange={(v) => setLevel(v as Level | '')}>
-            <option value="">{tx(C.anyLevel)}</option>
-            {LEVELS.map((l) => (
-              <option key={l} value={l}>{tx(LEVEL_LABEL[l])}</option>
-            ))}
-          </SearchableSelect>
-          <SearchableSelect className="select" aria-label={tx(C.kind)} value={category} onValueChange={(v) => setCategory(v as Category | '')}>
-            <option value="">{tx(C.anyKind)}</option>
-            <option value="financial">{tx({ en: 'Finance', ar: 'مالية' })}</option>
-            <option value="operational">{tx(C.operational)}</option>
-          </SearchableSelect>
-          {tab !== 'closed' && (
-            <label className="tasks__check">
-              <input type="checkbox" checked={overdue} onChange={(e) => setOverdue(e.target.checked)} /> {tx(C.overdueOnly)}
-            </label>
-          )}
-          {gone && (
-            <button type="button" className="btn btn--ghost" onClick={() => setGone(false)}>
-              {tx(C.clearFilter, { filter: tx(C.goneOnly) })}
-            </button>
-          )}
-          {unmanaged && (
-            <button type="button" className="btn btn--ghost" onClick={() => setUnmanaged(false)}>
-              {tx(C.clearFilter, { filter: tx(C.unmanagedOnly) })}
-            </button>
-          )}
-        </div>
-      </div>
-      <div className="tasks__body">
-        <div id="tasks-tabpanel" role="tabpanel" aria-labelledby={`tasks-tab-${tab}`}>
-          <QueryBoundary isLoading={list.isLoading} error={list.error} isEmpty={items.length === 0} emptyTitle={tx(C.empty)} onRetry={() => list.refetch()}>
-            <ul className="tasks__list">
-              {items.map((t) => (
-                <TaskRow key={t.id} task={t} showAssignee={query.view !== 'mine'} selected={t.id === openId} onOpen={() => setOpenId(t.id)} />
-              ))}
-            </ul>
-            {list.hasNextPage && (
-              <button type="button" className="btn tasks__more" disabled={list.isFetchingNextPage} onClick={() => void list.fetchNextPage()}>
-                {tx(C.loadMore)}
+      <div className="page__inner">
+        <PageHeader
+          eyebrow={eyebrow}
+          title={tx(C.title)}
+          actions={
+            canCreate ? (
+              // Not the page's primary: the next thing to do is in the queue (and, with a task open, its own action).
+              <button type="button" className="btn" onClick={() => setCreating(true)}>
+                <Icon name="plus" size={16} />
+                {tx(C.newTask)}
               </button>
+            ) : undefined
+          }
+          tabs={hasCases ? <TasksAreaTabs /> : undefined}
+        />
+        <div className={openId ? 'tq tq--open' : 'tq'}>
+          <div className="sheet tq__sheet">
+            <div className="sheet-bar">
+              <div role="tablist" className="tasks__tabs" aria-label={tx(C.title)}>
+                {tabs.map((t, i) => (
+                  <button
+                    key={t}
+                    ref={(el) => {
+                      tabRefs.current[i] = el
+                    }}
+                    id={`tasks-tab-${t}`}
+                    type="button"
+                    role="tab"
+                    aria-selected={tab === t}
+                    aria-controls="tasks-tabpanel"
+                    tabIndex={tab === t ? 0 : -1}
+                    className="tasks__tab"
+                    onClick={() => pick(t)}
+                    onKeyDown={(e) => onTabKey(e, i)}
+                  >
+                    {tx(TAB_LABEL[t])}
+                  </button>
+                ))}
+              </div>
+              <div className="sheet-bar__end">
+                <span className="tq__sort">
+                  {tx(tab === 'closed' ? C.sortClosed : C.sortDue)}
+                </span>
+                {gone && (
+                  <button type="button" className="chip tq__clear" aria-label={tx(C.clearFilter, { filter: tx(C.goneOnly) })} onClick={() => setGone(false)}>
+                    {tx(C.goneOnly)}
+                    <Icon name="close" size={14} />
+                  </button>
+                )}
+                {unmanaged && (
+                  <button type="button" className="chip tq__clear" aria-label={tx(C.clearFilter, { filter: tx(C.unmanagedOnly) })} onClick={() => setUnmanaged(false)}>
+                    {tx(C.unmanagedOnly)}
+                    <Icon name="close" size={14} />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="btn btn--sm tq__filter-toggle"
+                  aria-expanded={filtersOpen}
+                  aria-controls="tasks-filters"
+                  onClick={() => setFiltersOpen((v) => !v)}
+                >
+                  <Icon name="filter" size={16} />
+                  {tx(C.filters)}
+                  {filterCount > 0 && <span className="count">{number(filterCount)}</span>}
+                </button>
+              </div>
+            </div>
+            {filtersOpen && (
+              <div className="sheet-bar tasks__filters" id="tasks-filters">
+                {tab === 'closed' && closedViews.length > 1 && (
+                  <SearchableSelect className="select" aria-label={tx(C.whose)} value={closedView} onValueChange={(v) => setClosedView(v as TaskView)}>
+                    {closedViews.map((v) => (
+                      <option key={v} value={v}>{tx(TAB_LABEL[v])}</option>
+                    ))}
+                  </SearchableSelect>
+                )}
+                <SearchableSelect className="select" aria-label={tx(C.level)} value={level} onValueChange={(v) => setLevel(v as Level | '')}>
+                  <option value="">{tx(C.anyLevel)}</option>
+                  {LEVELS.map((l) => (
+                    <option key={l} value={l}>{tx(LEVEL_LABEL[l])}</option>
+                  ))}
+                </SearchableSelect>
+                <SearchableSelect className="select" aria-label={tx(C.kind)} value={category} onValueChange={(v) => setCategory(v as Category | '')}>
+                  <option value="">{tx(C.anyKind)}</option>
+                  <option value="financial">{tx({ en: 'Finance', ar: 'مالية' })}</option>
+                  <option value="operational">{tx(C.operational)}</option>
+                </SearchableSelect>
+                {tab !== 'closed' && (
+                  <label className="tasks__check">
+                    <input type="checkbox" checked={overdue} onChange={(e) => setOverdue(e.target.checked)} /> {tx(C.overdueOnly)}
+                  </label>
+                )}
+              </div>
             )}
-          </QueryBoundary>
+            <div id="tasks-tabpanel" role="tabpanel" aria-labelledby={`tasks-tab-${tab}`}>
+              <QueryBoundary isLoading={list.isLoading} error={list.error} onRetry={() => list.refetch()}>
+                {items.length === 0 ? (
+                  <EmptyState
+                    title={tx(tab === 'closed' ? C.emptyClosed : C.empty)}
+                    hint={tx(tab === 'closed' ? C.emptyClosedHint : C.emptyHint)}
+                    action={
+                      canCreate && tab !== 'closed' ? (
+                        <button type="button" className="btn btn--sm" onClick={() => setCreating(true)}>
+                          {tx(C.emptyAction)}
+                        </button>
+                      ) : undefined
+                    }
+                  />
+                ) : tab === 'closed' ? (
+                  <ul className="tq-rows">{items.map(row)}</ul>
+                ) : (
+                  grouped.map(({ group, rows }) => (
+                    <section key={group} className={`tq-group tq-group--${group}`} aria-labelledby={`tasks-group-${group}`}>
+                      <h2 className="tq-group__head" id={`tasks-group-${group}`}>
+                        <span>{tx(GROUP_LABEL[group])}</span>
+                        <span className={group === 'overdue' ? 'count count--urgent' : 'count count--quiet'}>{number(rows.length)}</span>
+                      </h2>
+                      <ul className="tq-rows">{rows.map(row)}</ul>
+                    </section>
+                  ))
+                )}
+                {list.hasNextPage && (
+                  <div className="tq__more">
+                    <button type="button" className="btn btn--sm tasks__more" disabled={list.isFetchingNextPage} onClick={() => void list.fetchNextPage()}>
+                      {tx(C.loadMore)}
+                    </button>
+                  </div>
+                )}
+              </QueryBoundary>
+            </div>
+          </div>
+          {/* Keyed by the task: a draft, a dialog or a date typed for one task never carries to the next. */}
+          {openId && <TaskPanel key={openId} id={openId} onClose={() => setOpenId(null)} />}
         </div>
-        {/* Keyed by the task: a draft, a dialog or a date typed for one task never carries to the next. */}
-        {openId && <TaskPanel key={openId} id={openId} onClose={() => setOpenId(null)} />}
       </div>
       {creating && <NewTaskDialog onClose={() => setCreating(false)} />}
     </div>
@@ -253,33 +336,69 @@ function OverdueMark() {
 
 function TaskRow({ task, showAssignee, selected, onOpen }: { task: TaskSummary; showAssignee: boolean; selected: boolean; onOpen: () => void }) {
   const tx = useCopy()
-  const { duration } = useI18n()
+  const { duration, locale } = useI18n()
   const when = useWhen()
   const title = useTitle()
   const state = stateOf(task)
   const closed = task.state === 'completed' || task.state === 'removed'
+  const link = sourceLink(task)
+  const late = !closed && task.overdue
+  // The last day before it is due is the window: amber, as red is for overdue.
+  const soon = !closed && !late && !!task.dueAt && Date.parse(task.dueAt) - Date.now() < SOON_MS
+  const name = title(task)
+  const sep = locale === 'ar' ? '، ' : ', '
   return (
-    <li className={`tasks__row${selected ? ' tasks__row--selected' : ''}`}>
-      <button type="button" className="tasks__title" dir="auto" aria-current={selected ? 'true' : undefined} onClick={onOpen}>
-        {title(task)}
-      </button>
-      <div className="tasks__chips">
-        {!closed && <PriorityChip task={task} />}
-        {task.category === 'financial' && <FinanceTag />}
-        <Badge tone={STATE_TONE[state]}>{tx(STATE_LABEL[state])}</Badge>
-        <Badge tone="outline">{tx(SOURCE_LABEL[task.source?.type ?? 'manual'])}</Badge>
-        {task.needsReassignment && !closed && <Badge tone="danger">{tx(C.assigneeLeft)}</Badge>}
+    <li className={`tq-row${selected ? ' tq-row--selected' : ''}${closed ? ' tq-row--closed' : ''}${late ? ' tq-row--late' : ''}${soon ? ' tq-row--soon' : ''}`}>
+      <div className="tq-row__main">
+        <button type="button" className="tasks__title" dir="auto" aria-current={selected ? 'true' : undefined} onClick={onOpen}>
+          {name}
+        </button>
+        <div className="tq-row__sub">
+          {/* Why it is here, in words: the kind of work for a system task, the person for one somebody gave, and whose it is. */}
+          <span className="tq-row__why">
+            {task.source ? (
+              <span className="tasks__source">{tx(SOURCE_LABEL[task.source.type])}</span>
+            ) : (
+              task.createdBy && <span className="tasks__source" dir="auto">{tx(C.createdBy, { name: task.createdBy.name })}</span>
+            )}
+            {showAssignee && (
+              <>
+                {(task.source || task.createdBy) && sep}
+                <span dir="auto">{tx(C.assignedTo, { name: task.assigneeName })}</span>
+              </>
+            )}
+          </span>
+          {!closed && <PriorityChip task={task} />}
+          {task.category === 'financial' && <FinanceTag />}
+          {!closed && state !== 'open' && <Badge tone={STATE_TONE[state]}>{tx(STATE_LABEL[state])}</Badge>}
+          {task.needsReassignment && !closed && <Badge tone="neutral">{tx(C.goneOnly)}</Badge>}
+        </div>
       </div>
-      <div className="tasks__meta">
-        {showAssignee && <span dir="auto">{tx(C.assignedTo, { name: task.assigneeName })}</span>}
+      {/* The one fact a queue is read for: how long until it is due, or how long since. */}
+      <div className="tq-row__when">
         {closed ? (
-          task.closedAt && <span>{tx(C.closedOn, { when: when(task.closedAt) })}</span>
-        ) : (
           <>
-            <span>{task.dueAt ? tx(C.due, { when: when(task.dueAt) }) : tx(C.noDue)}</span>
-            {task.overdue && task.priorityReason !== 'overdue' && <OverdueMark />}
-            <span>· {tx(C.age, { ago: duration(task.createdAt) })}</span>
+            <Badge tone={STATE_TONE[state]}>{tx(STATE_LABEL[state])}</Badge>
+            {task.closedAt && <span className="tq-row__date">{tx(C.closedOn, { when: when(task.closedAt) })}</span>}
           </>
+        ) : task.dueAt ? (
+          <>
+            <span className="tq-row__age">
+              {late && task.priorityReason !== 'overdue' && <OverdueMark />}
+              {late ? tx(C.dueAgo, { ago: duration(task.dueAt) }) : relativeTime(task.dueAt, locale)}
+            </span>
+            <span className="tq-row__date">{tx(C.due, { when: when(task.dueAt) })}</span>
+          </>
+        ) : (
+          <span className="tq-row__date">{tx(C.noDue)}</span>
+        )}
+      </div>
+      {/* One stated action, in a slot of its own width so the column stays straight; the open task's is in its inspector. */}
+      <div className="tq-row__act">
+        {link && !closed && !selected && (
+          <Link className="btn btn--sm" to={link} aria-label={`${tx(C.goPage)}: ${name}`}>
+            {tx(C.goPage)}
+          </Link>
         )}
       </div>
     </li>
@@ -288,7 +407,7 @@ function TaskRow({ task, showAssignee, selected, onOpen }: { task: TaskSummary; 
 
 function TaskPanel({ id, onClose }: { id: string; onClose: () => void }) {
   const tx = useCopy()
-  const { locale } = useI18n()
+  const { locale, duration } = useI18n()
   const qc = useQueryClient()
   const when = useWhen()
   const title = useTitle()
@@ -312,131 +431,196 @@ function TaskPanel({ id, onClose }: { id: string; onClose: () => void }) {
   // is not a failure to retry.
   if (one.error instanceof ApiError && (/TASK_NOT_FOUND$/.test(one.error.code) || one.error.status === 404)) {
     return (
-      <section className="tasks__panel card" aria-label={tx(C.title)}>
-        <div className="tasks__panel-head">
+      <section className="tasks__panel sheet insp" aria-label={tx(C.title)}>
+        <div className="insp__head">
+          <div className="insp__top">
+            <span />
+            <CloseButton onClose={onClose} />
+          </div>
           <p className="tasks__text" role="status">{tx(C.notFound)}</p>
-          <button type="button" className="btn btn--ghost" onClick={onClose}>{tx(C.close)}</button>
         </div>
       </section>
     )
   }
 
+  const live = !!t && t.state !== 'completed' && t.state !== 'removed'
+  // One thing to do, stated; everything else the server allows is behind "⋯".
+  const secondary: Array<{ key: 'out_of_scope' | 'return' | 'reassign' | 'remove'; label: string; icon: MenuItem['icon']; danger?: boolean }> = [
+    ...(can.has('reassign') ? [{ key: 'reassign' as const, label: tx(C.reassign), icon: 'swap' as const }] : []),
+    ...(can.has('return') ? [{ key: 'return' as const, label: tx(C.returnTask), icon: 'undo' as const }] : []),
+    ...(can.has('out_of_scope') ? [{ key: 'out_of_scope' as const, label: tx(C.outOfScope), icon: 'prohibit' as const }] : []),
+    ...(can.has('remove') ? [{ key: 'remove' as const, label: tx(C.remove), icon: 'trash' as const, danger: true }] : []),
+  ]
+  const completes = can.has('complete') || can.has('acknowledge')
+  // With nothing to complete, the first of the rest is the stated action.
+  const lead = completes ? null : (secondary[0] ?? null)
+  const rest = lead ? secondary.slice(1) : secondary
+
   return (
-    <section className="tasks__panel card" aria-label={t ? title(t) : tx(C.title)}>
+    <section className="tasks__panel sheet insp" aria-label={t ? title(t) : tx(C.title)}>
       <QueryBoundary isLoading={one.isLoading} error={one.error} onRetry={() => one.refetch()}>
         {t && (
           <>
-            <div className="tasks__panel-head">
-              <h2 className="tasks__panel-title" dir="auto">{title(t)}</h2>
-              <button type="button" className="btn btn--ghost" onClick={onClose}>{tx(C.close)}</button>
-            </div>
-            <div className="tasks__chips">
-              {t.state !== 'completed' && t.state !== 'removed' && <PriorityChip task={t} />}
-              {t.category === 'financial' && <FinanceTag />}
-              <Badge tone={STATE_TONE[state]}>{tx(STATE_LABEL[state])}</Badge>
-              <Badge tone="outline">{tx(SOURCE_LABEL[t.source?.type ?? 'manual'])}</Badge>
-            </div>
-            <p className="tasks__meta">
-              <span dir="auto">{tx(C.assignedTo, { name: t.assigneeName })}</span>
-              {t.createdBy && <span dir="auto">· {tx(C.createdBy, { name: t.createdBy.name })}</span>}
-              <span>· {t.dueAt ? tx(C.due, { when: when(t.dueAt) }) : tx(C.noDue)}</span>
-              {t.overdue && t.priorityReason !== 'overdue' && t.state !== 'completed' && t.state !== 'removed' && <OverdueMark />}
-            </p>
-            {link && (
-              <p>
-                <Link className="btn" to={link}>{tx(C.openSource)}</Link>
-              </p>
-            )}
-            {t.instructions && t.state === 'open' && (
-              <div className="tasks__banner" role="note">
-                <p className="tasks__banner-title">{tx(C.instructions)}</p>
-                <p className="tasks__text" dir="auto">{t.instructions}</p>
+            <header className="insp__head">
+              <div className="insp__top">
+                <h2 className="tasks__panel-title" dir="auto">{title(t)}</h2>
+                <CloseButton onClose={onClose} />
               </div>
-            )}
-            {t.sourceState === 'withdrawn' && t.state !== 'completed' && t.state !== 'removed' && (
-              <div className="tasks__banner" role="note">{tx(C.withdrawn)}</div>
-            )}
-            {t.needsReassignment && <div className="tasks__banner" role="note">{tx(C.assigneeLeft)}</div>}
-            {t.unmanaged && <div className="tasks__banner" role="note">{tx(C.unmanaged)}</div>}
-            {t.body && <p className="tasks__text" dir="auto">{t.body}</p>}
-            {t.closeReason && (
-              <p className="tasks__text" dir="auto">
-                <strong>{tx(C.closeReason)}:</strong> {t.closeReason}
-              </p>
-            )}
-            {op.error && <p className="field__error" role="alert">{describeError(op.error, locale)}</p>}
-
-            <div className="tasks__actions">
-              {can.has('complete') && (
-                <button type="button" className="btn btn--primary" disabled={op.isPending} onClick={() => op.mutate(() => tasksApi.complete(id))}>
-                  {tx(C.complete)}
-                </button>
-              )}
-              {can.has('acknowledge') && (
-                <button type="button" className="btn btn--primary" disabled={op.isPending} onClick={() => op.mutate(() => tasksApi.acknowledge(id))}>
-                  {tx(C.acknowledge)}
-                </button>
-              )}
-              {can.has('out_of_scope') && <button type="button" className="btn" onClick={() => setDialog('out_of_scope')}>{tx(C.outOfScope)}</button>}
-              {can.has('return') && <button type="button" className="btn" onClick={() => setDialog('return')}>{tx(C.returnTask)}</button>}
-              {can.has('reassign') && <button type="button" className="btn" onClick={() => setDialog('reassign')}>{tx(C.reassign)}</button>}
-              {can.has('remove') && <button type="button" className="btn" onClick={() => setDialog('remove')}>{tx(C.remove)}</button>}
-            </div>
-
-            {(can.has('due') || can.has('priority')) && (
-              <div className="tasks__controls">
-                {can.has('priority') && (
-                  <label className="field">
-                    <span className="field__label">{tx(C.manualLevel)}</span>
-                    <SearchableSelect
-                      clearable={false}
-                      className="select"
-                      value={t.manualPriority}
-                      disabled={op.isPending}
-                      onValueChange={(v) => {
-                        const next = v as Level
-                        op.mutate(() => tasksApi.setPriority(id, next))
-                      }}
-                    >
-                      {LEVELS.map((l) => (
-                        <option key={l} value={l}>{tx(LEVEL_LABEL[l])}</option>
-                      ))}
-                    </SearchableSelect>
-                  </label>
-                )}
-                {can.has('due') && (
-                  <DueControl
-                    key={t.dueAt ?? 'none'}
-                    date={due?.date ?? ''}
-                    time={due?.time ?? ''}
-                    disabled={op.isPending}
-                    onSave={(iso) => op.mutate(() => tasksApi.setDue(id, iso))}
-                  />
-                )}
+              <div className="tasks__chips">
+                <span className="insp__kind">
+                  {t.source || !t.createdBy ? tx(SOURCE_LABEL[t.source?.type ?? 'manual']) : tx(C.createdBy, { name: t.createdBy.name })}
+                </span>
+                {live && <PriorityChip task={t} />}
+                {t.category === 'financial' && <FinanceTag />}
+                {state !== 'open' && <Badge tone={STATE_TONE[state]}>{tx(STATE_LABEL[state])}</Badge>}
               </div>
-            )}
+              {/* When it is due, in words and coloured as on the row: the one fact the queue is read for. */}
+              {live && t.dueAt && (
+                <p className={`insp__due insp__due--${t.overdue ? 'late' : Date.parse(t.dueAt) - Date.now() < SOON_MS ? 'soon' : 'later'}`}>
+                  {t.overdue ? tx(C.dueAgo, { ago: duration(t.dueAt) }) : relativeTime(t.dueAt, locale)}
+                  {locale === 'ar' ? '، ' : ', '}
+                  {when(t.dueAt)}
+                </p>
+              )}
+            </header>
 
-            {can.has('comment') && (
-              <div className="tasks__comment">
-                <label className="field">
-                  <span className="field__label">{tx(C.comment)}</span>
-                  <textarea className="textarea" rows={2} maxLength={2000} value={comment} onChange={(e) => setComment(e.target.value)} />
-                </label>
+            <div className="insp__body">
+              <dl className="insp__facts">
                 <div>
-                  <button
-                    type="button"
-                    className="btn"
-                    disabled={!comment.trim() || op.isPending}
-                    onClick={() => op.mutate(() => tasksApi.comment(id, comment.trim()), { onSuccess: () => setComment('') })}
-                  >
-                    {tx(C.send)}
-                  </button>
+                  <dt>{tx(C.factAssignee)}</dt>
+                  <dd dir="auto">{t.assigneeName}</dd>
                 </div>
-              </div>
-            )}
+                {t.createdBy && (
+                  <div>
+                    <dt>{tx(C.factFrom)}</dt>
+                    <dd dir="auto">{t.createdBy.name}</dd>
+                  </div>
+                )}
+                {/* Shown as a fact only where it cannot be edited below (the line under the title says it in words). */}
+                {!can.has('due') && (
+                <div>
+                    <dt>{tx(C.dueAt)}</dt>
+                    <dd className={t.overdue && live ? 'insp__late' : undefined}>
+                      <span className="insp__when">{t.dueAt ? when(t.dueAt) : tx(C.noDue)}</span>
+                      {t.overdue && t.priorityReason !== 'overdue' && live && <OverdueMark />}
+                    </dd>
+                  </div>
+                )}
+                {link && (
+                  <div>
+                    <dt>{tx(C.factWhere)}</dt>
+                    <dd>
+                      <Link className="insp__link" to={link}>
+                        {tx(C.openSource)}
+                        <Icon name="chevronForward" size={14} />
+                      </Link>
+                    </dd>
+                  </div>
+                )}
+              </dl>
 
-            <h3 className="tasks__history-title">{tx(C.history)}</h3>
-            <History task={t} />
+              {t.instructions && t.state === 'open' && (
+                <div className="tasks__banner tasks__banner--waiting" role="note">
+                  <p className="tasks__banner-title">{tx(C.instructions)}</p>
+                  <p className="tasks__text" dir="auto">{t.instructions}</p>
+                </div>
+              )}
+              {t.sourceState === 'withdrawn' && live && <div className="tasks__banner" role="note">{tx(C.withdrawn)}</div>}
+              {t.needsReassignment && <div className="tasks__banner" role="note">{tx(C.assigneeLeft)}</div>}
+              {t.unmanaged && <div className="tasks__banner" role="note">{tx(C.unmanaged)}</div>}
+              {t.body && <p className="tasks__text" dir="auto">{t.body}</p>}
+              {t.closeReason && (
+                <p className="tasks__text" dir="auto">
+                  <strong>{tx(C.closeReason)}:</strong> {t.closeReason}
+                </p>
+              )}
+              {op.error && <p className="field__error" role="alert">{describeError(op.error, locale)}</p>}
+
+              {(can.has('due') || can.has('priority')) && (
+                <div className="tasks__controls">
+                  {can.has('priority') && (
+                    <label className="field">
+                      <span className="field__label">{tx(C.manualLevel)}</span>
+                      <SearchableSelect
+                        clearable={false}
+                        className="select"
+                        value={t.manualPriority}
+                        disabled={op.isPending}
+                        onValueChange={(v) => {
+                          const next = v as Level
+                          op.mutate(() => tasksApi.setPriority(id, next))
+                        }}
+                      >
+                        {LEVELS.map((l) => (
+                          <option key={l} value={l}>{tx(LEVEL_LABEL[l])}</option>
+                        ))}
+                      </SearchableSelect>
+                      {/* When something raised the level above the one a person set, say so: one level, explained. */}
+                      {t.effectivePriority !== t.manualPriority && reasonOf(t, tx) && (
+                        <span className="field__hint">{tx(C.levelNow, { level: tx(LEVEL_LABEL[t.effectivePriority]), reason: reasonOf(t, tx)! })}</span>
+                      )}
+                    </label>
+                  )}
+                  {can.has('due') && (
+                    <DueControl
+                      key={t.dueAt ?? 'none'}
+                      date={due?.date ?? ''}
+                      time={due?.time ?? ''}
+                      disabled={op.isPending}
+                      onSave={(iso) => op.mutate(() => tasksApi.setDue(id, iso))}
+                    />
+                  )}
+                </div>
+              )}
+
+              {can.has('comment') && (
+                <div className="tasks__comment">
+                  <label className="field">
+                    <span className="field__label">{tx(C.comment)}</span>
+                    <textarea className="textarea" rows={2} maxLength={2000} value={comment} onChange={(e) => setComment(e.target.value)} />
+                  </label>
+                  <div>
+                    <button
+                      type="button"
+                      className="btn btn--sm"
+                      disabled={!comment.trim() || op.isPending}
+                      onClick={() => op.mutate(() => tasksApi.comment(id, comment.trim()), { onSuccess: () => setComment('') })}
+                    >
+                      {tx(C.send)}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <h3 className="tasks__history-title">{tx(C.history)}</h3>
+              <History task={t} />
+            </div>
+
+            {(completes || secondary.length > 0) && (
+              <footer className="insp__foot">
+                <RowActions
+                  label={tx(C.moreActions, { name: title(t) })}
+                  primary={
+                    can.has('complete') ? (
+                      <button type="button" className="btn btn--primary" disabled={op.isPending} onClick={() => op.mutate(() => tasksApi.complete(id))}>
+                        <Icon name="check" size={16} />
+                        {tx(C.complete)}
+                      </button>
+                    ) : can.has('acknowledge') ? (
+                      <button type="button" className="btn btn--primary" disabled={op.isPending} onClick={() => op.mutate(() => tasksApi.acknowledge(id))}>
+                        <Icon name="check" size={16} />
+                        {tx(C.acknowledge)}
+                      </button>
+                    ) : lead ? (
+                      <button type="button" className={lead.danger ? 'btn btn--danger' : 'btn'} onClick={() => setDialog(lead.key)}>
+                        {lead.label}
+                      </button>
+                    ) : undefined
+                  }
+                  more={rest.map((a) => ({ key: a.key, label: a.label, icon: a.icon, danger: a.danger, onSelect: () => setDialog(a.key) }))}
+                />
+              </footer>
+            )}
           </>
         )}
       </QueryBoundary>
@@ -488,6 +672,17 @@ function TaskPanel({ id, onClose }: { id: string; onClose: () => void }) {
   )
 }
 
+/** Closes the inspector: a cross, with its name for whoever reads the text. */
+function CloseButton({ onClose }: { onClose: () => void }) {
+  const tx = useCopy()
+  return (
+    <button type="button" className="btn btn--ghost btn--icon btn--sm insp__close" title={tx(C.close)} onClick={onClose}>
+      <Icon name="close" size={16} />
+      <span className="sr-only">{tx(C.close)}</span>
+    </button>
+  )
+}
+
 function DueControl({ date, time, disabled, onSave }: { date: string; time: string; disabled: boolean; onSave: (iso: string | null) => void }) {
   const tx = useCopy()
   const [d, setD] = useState(date)
@@ -515,8 +710,9 @@ function DueControl({ date, time, disabled, onSave }: { date: string; time: stri
 function History({ task }: { task: TaskDetail }) {
   const tx = useCopy()
   const when = useWhen()
+  const { dir, locale } = useI18n()
   // "before → after" reads in the page's direction.
-  const arrow = useI18n().dir === 'rtl' ? '←' : '→'
+  const arrow = dir === 'rtl' ? '←' : '→'
   return (
     <ol className="tasks__history">
       {task.history.map((e) => {
@@ -524,15 +720,20 @@ function History({ task }: { task: TaskDetail }) {
         const after = e.after as Record<string, string | null> | null
         return (
           <li key={e.id}>
-            <strong>{tx(EVENT_LABEL[e.kind])}</strong>
-            {e.kind === 'priority_changed' && before?.priority && after?.priority && (
-              <> — {tx(LEVEL_LABEL[before.priority as Level])} {arrow} {tx(LEVEL_LABEL[after.priority as Level])}</>
-            )}
-            {e.kind === 'due_changed' && (
-              <> — {before?.dueAt ? when(before.dueAt) : tx(C.noDue)} {arrow} {after?.dueAt ? when(after.dueAt) : tx(C.noDue)}</>
-            )}
-            {' · '}
-            <span dir="auto">{e.actor ? e.actor.name : tx(C.system)}</span> · <time dateTime={e.at}>{when(e.at)}</time>
+            <span>
+              <strong>{tx(EVENT_LABEL[e.kind])}</strong>
+              {e.kind === 'priority_changed' && before?.priority && after?.priority && (
+                <>: {tx(LEVEL_LABEL[before.priority as Level])} {arrow} {tx(LEVEL_LABEL[after.priority as Level])}</>
+              )}
+              {e.kind === 'due_changed' && (
+                <>: {before?.dueAt ? when(before.dueAt) : tx(C.noDue)} {arrow} {after?.dueAt ? when(after.dueAt) : tx(C.noDue)}</>
+              )}
+            </span>{' '}
+            <span className="tasks__history-by">
+              <span dir="auto">{e.actor ? e.actor.name : tx(C.system)}</span>
+              {locale === 'ar' ? '، ' : ', '}
+              <time dateTime={e.at}>{when(e.at)}</time>
+            </span>
             {e.body && <p className="tasks__text" dir="auto">{e.body}</p>}
           </li>
         )
@@ -666,6 +867,10 @@ function NewTaskDialog({ onClose }: { onClose: () => void }) {
     >
       <QueryBoundary isLoading={options.isLoading} error={options.error} onRetry={() => options.refetch()}>
         <label className="field">
+          <span className="field__label">{tx(C.taskTitle)}</span>
+          <input className="input" maxLength={200} value={title} onChange={(e) => setTitle(e.target.value)} />
+        </label>
+        <label className="field">
           <span className="field__label">{tx(C.assignee)}</span>
           <SearchableSelect className="select" value={assignee} onValueChange={(v) => setAssignee(v)}>
             <option value="">{tx(C.choose)}</option>
@@ -673,10 +878,6 @@ function NewTaskDialog({ onClose }: { onClose: () => void }) {
               <option key={`${p.kind}:${p.id}`} value={`${p.kind}:${p.id}`}>{p.name}</option>
             ))}
           </SearchableSelect>
-        </label>
-        <label className="field">
-          <span className="field__label">{tx(C.taskTitle)}</span>
-          <input className="input" maxLength={200} value={title} onChange={(e) => setTitle(e.target.value)} />
         </label>
         <label className="field">
           <span className="field__label">{tx(C.details)}</span>

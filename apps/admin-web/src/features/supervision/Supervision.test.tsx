@@ -177,7 +177,9 @@ describe('leave requests', () => {
     await screen.findByText('No leave requests here.')
     await userEvent.click(screen.getByRole('button', { name: 'Approved' }))
     const row = (await screen.findByText('Family wedding')).closest('tr')!
-    await userEvent.click(within(row).getByRole('button', { name: 'Cancel leave' }))
+    // Cancelling is behind the row's menu.
+    await userEvent.click(within(row).getByRole('button', { name: /^More actions/ }))
+    await userEvent.click(await within(row).findByRole('menuitem', { name: 'Cancel leave' }))
     const dialog = await screen.findByRole('dialog')
     await userEvent.type(within(dialog).getByLabelText('Reason (the teacher sees it)'), 'Plans changed')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel leave' }))
@@ -206,7 +208,7 @@ describe('the Teacher File leave section', () => {
   it('shows the computed balance; only the manager may set the allowance', async () => {
     on('GET', /\/teacher-files\/t-1$/, () => json(fileOf(false)))
     on('GET', /\/teacher-files\/t-1\/leave$/, () => json(leaveOf))
-    renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/files/t-1' })
+    renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/files/t-1?tab=leave' })
     const section = await screen.findByRole('region', { name: 'Leave' })
     expect(within(section).getByText('21')).toBeInTheDocument()
     expect(within(section).getByText('17')).toBeInTheDocument()
@@ -217,7 +219,7 @@ describe('the Teacher File leave section', () => {
     on('GET', /\/teacher-files\/t-1$/, () => json(fileOf(true)))
     on('GET', /\/teacher-files\/t-1\/leave$/, () => json(leaveOf))
     on('POST', /\/teacher-files\/t-1\/leave-allowance$/, () => json({ ...leaveOf, allowance: 25, balance: 21 }))
-    renderWithProviders(<AppRoutes />, { staff: makeStaff({ id: 'm-1', role: 'manager' }), route: '/teachers/files/t-1' })
+    renderWithProviders(<AppRoutes />, { staff: makeStaff({ id: 'm-1', role: 'manager' }), route: '/teachers/files/t-1?tab=leave' })
     const section = await screen.findByRole('region', { name: 'Leave' })
     await userEvent.click(within(section).getByRole('button', { name: 'Set allowance' }))
     const dialog = await screen.findByRole('dialog')
@@ -237,7 +239,7 @@ describe('the Teacher File leave section', () => {
     on('GET', /\/teacher-files\/t-1$/, () => json(fileOf(false)))
     on('POST', /\/teachers\/t-1\/supervision-conversation$/, () => json({ conversationId: 'conv-9' }))
     on('GET', /\/conversations/, () => json([]))
-    renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/files/t-1' })
+    renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/files/t-1?tab=leave' })
     await userEvent.click(await screen.findByRole('button', { name: 'Supervision chat' }))
     await waitFor(() => expect(calls('POST', /\/supervision-conversation$/)).toHaveLength(1))
   })

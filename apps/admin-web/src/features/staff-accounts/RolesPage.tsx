@@ -1,17 +1,25 @@
 import { useCallback, useId, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { useSession } from '@/core/auth/SessionProvider'
 import { holdsAny } from '@/core/permissions/capabilities'
+import { Avatar } from '@/shared/components/Avatar'
 import { Badge } from '@/shared/components/Badge'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
+import { Icon } from '@/shared/components/Icon'
 import { PageHeader } from '@/shared/components/PageHeader'
-import { LoadingState, QueryBoundary } from '@/shared/components/States'
+import { RowActions } from '@/shared/components/RowActions'
+import { EmptyState, LoadingState, QueryBoundary } from '@/shared/components/States'
 import { ReasonDialog } from '@/shared/components/ReasonDialog'
 import { Field } from '@/shared/components/Field'
+import { PLURAL, usePlural } from '@/features/admin/copy'
+import { A } from '@/features/accounts/copy'
+import { Fact } from '@/features/profiles/RecordParts'
 import type { AccessRole, PermissionEntry, RoleMaxTier, StaffAccount } from './api'
 import { SA, TIER, blockingGrants, describeError, localized, pageLabel, useCopy } from './copy'
 import { useAccessRoles, useArchiveRole, useDefineRole, usePermissionCatalogue, useStaffAccounts, useUpdateRole } from './hooks'
-import { AccountsTabs, STAFF_ACCOUNT_KEYS } from './AccountsTabs'
+import { STAFF_ACCOUNT_KEYS, useAccountsTabs } from './AccountsTabs'
+import { ListDetail, Part, rowOpens, useOpenItem, useShown } from './ListDetail'
 import { RiskBadge, groupByPage } from './NewStaffAccountDialog'
 import { SearchableSelect } from '@/shared/components/SearchableSelect'
 import '@/features/accounts/accounts.css'
@@ -28,14 +36,22 @@ type Pending = { act: 'new' } | { act: 'edit'; role: AccessRole } | { act: 'arch
  * edits and archives them. "Template" is the server's flag, shown only while
  * it says so.
  *
+ * A list and the open role's sheet on one screen: the roles as compact rows
+ * (name, key, what kind it is, how many hold it), and beside them the open
+ * role -- what it is, the highest tier that may hold it, what it opens page by
+ * page, and who holds it. The open role is kept in the URL (`?role=`). The
+ * editor and the archive reason stay dialogs, opened from the sheet.
+ *
  * Not here, and why: a role's department (the API defines org-wide roles
  * only), and per-tier disabling in the checklist (the catalogue does not say
  * which tier may hold a key; the server refuses it on save).
  */
 export function RolesPage() {
   const tx = useCopy()
-  const { locale } = useI18n()
+  const { locale, number } = useI18n()
+  const plural = usePlural()
   const { staff } = useSession()
+  const tabs = useAccountsTabs()
   const roles = useAccessRoles()
   const catalogue = usePermissionCatalogue()
   const canDefine = holdsAny(staff, ['access_roles.manage'])
@@ -45,95 +61,102 @@ export function RolesPage() {
   // Stable: the Dialog re-focuses whenever onClose changes.
   const closeAll = useCallback(() => setPending(null), [])
   const list = roles.data?.roles ?? []
+  // "Template" tells roles apart only where some are not: when every role is one, it is not said on each.
+  const allTemplates = list.length > 0 && list.every((r) => r.template)
   const members = useMemo(() => countMembers(staffList.data?.accounts), [staffList.data])
-  const label = useMemo(() => new Map((catalogue.data?.permissions ?? []).map((p) => [p.key, p.label])), [catalogue.data])
+  const [openId, open] = useOpenItem('role')
+  const shown = useShown(list, (r) => r.id, openId)
+  const roleName = (r: AccessRole) => (locale === 'ar' ? r.nameAr : r.nameEn)
 
   return (
-    <div className="page">
+    <div className="page dir sa-page">
       <div className="page__inner">
-        <AccountsTabs />
         <PageHeader
           title={tx(SA.rolesTitle)}
-          subtitle={tx(SA.rolesSubtitle)}
+          tabs={tabs ?? undefined}
           actions={
             canDefine && (
               <button type="button" className="btn btn--primary" onClick={() => setPending({ act: 'new' })}>
+                <Icon name="plus" size={16} />
                 {tx(SA.newRole)}
               </button>
             )
           }
         />
-        <QueryBoundary
-          isLoading={roles.isLoading}
-          error={roles.error}
-          isEmpty={list.length === 0}
-          emptyTitle={tx(SA.noRolesYet)}
-          onRetry={() => void roles.refetch()}
-        >
-          <div className="table-wrap">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th scope="col">{tx(SA.role)}</th>
-                  <th scope="col">{tx(SA.maxTier)}</th>
-                  <th scope="col">{tx(SA.permissions)}</th>
-                  {members && <th scope="col">{tx(SA.members)}</th>}
-                  {canDefine && <th scope="col">{tx(SA.actions)}</th>}
-                </tr>
-              </thead>
-              <tbody>
-                {list.map((r) => (
-                  <tr key={r.id}>
-                    <td>
-                      <div dir="auto">
-                        <strong>{locale === 'ar' ? r.nameAr : r.nameEn}</strong>{' '}
-                        {r.template && <Badge tone="info">{tx(SA.template)}</Badge>}{' '}
-                        {r.archived && <Badge tone="neutral">{tx(SA.archived)}</Badge>}{' '}
-                        {!canDefine && r.grantable && <Badge tone="ok">{tx(SA.youCanGrant)}</Badge>}
-                      </div>
-                      <div className="field__hint" dir="ltr">
-                        {r.key}
-                      </div>
-                      {r.template && <div className="field__hint">{tx(SA.templateHint)}</div>}
-                      {r.description && (
-                        <div className="field__hint" dir="auto">
-                          {r.description}
-                        </div>
-                      )}
-                    </td>
-                    <td>{tx(TIER[r.maxTier] ?? { ar: r.maxTier, en: r.maxTier })}</td>
-                    <td>
-                      <span className="sa-chips">
-                        {r.permissions.map((k) => {
-                          const l = label.get(k)
-                          return (
-                            <Badge key={k} tone="outline">
-                              {l ? (locale === 'ar' ? l.ar : l.en) : k}
-                            </Badge>
-                          )
-                        })}
-                      </span>
-                    </td>
-                    {members && <td>{members.get(r.id) ?? 0}</td>}
-                    {canDefine && (
-                      <td>
-                        {!r.archived && (
-                          <div className="acct-actions">
-                            <button type="button" className="btn btn--sm" onClick={() => setPending({ act: 'edit', role: r })}>
-                              {tx(SA.edit)}
-                            </button>
-                            <button type="button" className="btn btn--sm btn--danger" onClick={() => setPending({ act: 'archive', role: r })}>
-                              {tx(SA.archive)}
-                            </button>
-                          </div>
-                        )}
-                      </td>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+        <QueryBoundary isLoading={roles.isLoading} error={roles.error} onRetry={() => void roles.refetch()}>
+          <ListDetail
+            openId={openId}
+            backLabel={tx(SA.backToRoles)}
+            onBack={() => open(null)}
+            missing={tx(SA.roleNotInList)}
+            list={
+              <section className="sheet dir-sheet md-sheet" aria-label={tx(SA.rolesTitle)}>
+                {list.length === 0 ? (
+                  <EmptyState title={tx(SA.noRolesYet)} compact />
+                ) : (
+                  <table className="dir-table md-table">
+                    <thead>
+                      <tr>
+                        <th scope="col">{tx(SA.role)}</th>
+                        {members && <th scope="col">{tx(SA.members)}</th>}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {list.map((r) => {
+                        const current = shown?.id === r.id
+                        const n = members?.get(r.id) ?? 0
+                        return (
+                          <tr
+                            key={r.id}
+                            className={['dir-row', 'md-row', current ? 'md-row--current' : '', r.archived ? 'md-row--past' : ''].filter(Boolean).join(' ')}
+                            onClick={rowOpens(() => open(r.id))}
+                          >
+                            <td className="dir-cell-who">
+                              <span className="dir-who__text">
+                                <span className="sa-role">
+                                  <button type="button" className="sa-name md__open" aria-current={current ? 'true' : undefined} onClick={() => open(r.id)}>
+                                    <strong>{roleName(r)}</strong>
+                                  </button>
+                                  {r.template && !allTemplates && <Badge tone="neutral">{tx(SA.template)}</Badge>}
+                                  {r.archived && <Badge tone="neutral">{tx(SA.archived)}</Badge>}
+                                  {!canDefine && r.grantable && <Badge tone="ok" dot>{tx(SA.youCanGrant)}</Badge>}
+                                </span>
+                                {/* The role's key is said on its own sheet, not down the list. */}
+                              </span>
+                            </td>
+                            {members && (
+                              <td className="dir-cell-state">
+                                <span className={n > 0 ? 'sa-members' : 'sa-members sa-members--none'}>
+                                  <Icon name="teams" size={15} />
+                                  <span>{number(n)}</span>
+                                  <span className="sr-only">{tx(SA.members)}</span>
+                                </span>
+                              </td>
+                            )}
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </section>
+            }
+            detail={
+              shown && (
+                <RolePane
+                  key={shown.id}
+                  role={shown}
+                  name={roleName(shown)}
+                  catalogue={catalogue.data?.permissions ?? []}
+                  holders={members ? (staffList.data?.accounts ?? []).filter((a) => a.roles.some((r) => r.id === shown.id)) : null}
+                  holdersLabel={members ? ((members.get(shown.id) ?? 0) > 0 ? plural(PLURAL.members, members.get(shown.id) ?? 0) : tx(SA.noHolders)) : null}
+                  canDefine={canDefine}
+                  onEdit={() => setPending({ act: 'edit', role: shown })}
+                  onArchive={() => setPending({ act: 'archive', role: shown })}
+                />
+              )
+            }
+          />
         </QueryBoundary>
       </div>
 
@@ -146,6 +169,142 @@ export function RolesPage() {
       )}
       {pending?.act === 'archive' && <ArchiveRoleDialog role={pending.role} onClose={() => setPending(null)} />}
     </div>
+  )
+}
+
+/**
+ * One role, beside the list: what it is, the highest tier that may hold it,
+ * what it opens (the catalogue's labels, page by page, a risk tagged), and
+ * who holds it where the viewer sees the staff list. Editing is the stated
+ * action; archiving waits behind "more".
+ */
+function RolePane({
+  role: r,
+  name,
+  catalogue,
+  holders,
+  holdersLabel,
+  canDefine,
+  onEdit,
+  onArchive,
+}: {
+  role: AccessRole
+  name: string
+  catalogue: readonly PermissionEntry[]
+  /** Who holds the role; null when this viewer does not see the whole staff list. */
+  holders: StaffAccount[] | null
+  holdersLabel: string | null
+  canDefine: boolean
+  onEdit: () => void
+  onArchive: () => void
+}) {
+  const tx = useCopy()
+  const { locale, number } = useI18n()
+  const id = useId()
+  const pages = groupByPage(r.permissions, catalogue)
+  return (
+    <section className="sheet md-pane" aria-labelledby={`${id}-name`}>
+      <header className="md-pane__head">
+        <div className="md-pane__who">
+          <h2 id={`${id}-name`} className="md-pane__title">
+            {name}
+          </h2>
+          <span className="acct-state">
+            {/* The role's key is for whoever defines roles; a manager who grants them reads its name. */}
+            {canDefine && (
+              <code className="sa-key" dir="ltr">
+                {r.key}
+              </code>
+            )}
+            {r.template && <Badge tone="neutral">{tx(SA.template)}</Badge>}
+            {r.archived && <Badge tone="neutral">{tx(SA.archived)}</Badge>}
+            {!canDefine && r.grantable && <Badge tone="ok" dot>{tx(SA.youCanGrant)}</Badge>}
+          </span>
+        </div>
+        {canDefine && !r.archived && (
+          <div className="md-pane__actions">
+            <RowActions
+              label={tx(A.more, { name })}
+              primary={
+                <button type="button" className="btn btn--sm" onClick={onEdit}>
+                  <Icon name="pencil" size={15} />
+                  {tx(SA.edit)}
+                </button>
+              }
+              // Archiving is housekeeping, not a problem: a plain line in the menu, not a red one.
+              more={[{ key: 'archive', label: tx(SA.archive), icon: 'archive', onSelect: onArchive }]}
+            />
+          </div>
+        )}
+      </header>
+      {(r.description || r.template) && (
+        <div className="md-pane__note">
+          {r.description && (
+            <p>
+              <bdi>{r.description}</bdi>
+            </p>
+          )}
+          {r.template && <p>{tx(SA.templateHint)}</p>}
+        </div>
+      )}
+
+      <dl className="rec-facts md-pane__facts">
+        <Fact icon="staff" label={tx(SA.maxTier)}>
+          {tx(TIER[r.maxTier] ?? { ar: r.maxTier, en: r.maxTier })}
+        </Fact>
+        {holdersLabel && (
+          <Fact icon="teams" label={tx(SA.members)}>
+            {holdersLabel}
+          </Fact>
+        )}
+      </dl>
+
+      <Part id={`${id}-perms`} title={tx(SA.checklist)} count={number(r.permissions.length)}>
+        <ul className="md-groups">
+          {pages.map(({ page, entries }) => (
+            <li key={page} className="md-group">
+              <span className="md-group__title">{tx(pageLabel(page))}</span>
+              <ul className="md-checks">
+                {entries.map((p) => (
+                  <li key={p.key} className="md-check">
+                    <Icon name="check" size={16} />
+                    <span className="md-check__text">
+                      <span className="md-check__label">
+                        <span>{locale === 'ar' ? p.label.ar : p.label.en}</span>
+                        <RiskBadge risk={p.risk} />
+                      </span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </li>
+          ))}
+        </ul>
+      </Part>
+
+      {holders && holders.length === 0 && (
+        <Part id={`${id}-holders`} title={tx(SA.members)}>
+          <p className="md-part__none">{tx(SA.noHoldersYet)}</p>
+        </Part>
+      )}
+      {holders && holders.length > 0 && (
+        <Part id={`${id}-holders`} title={tx(SA.members)} count={number(holders.length)}>
+          <ul className="md-checks md-people">
+            {holders.map((a) => (
+              <li key={a.staffId} className="md-check">
+                <Avatar name={a.name} seed={a.staffId} size="sm" />
+                <span className="md-check__text">
+                  <Link to={`/accounts/staff?account=${encodeURIComponent(a.staffId)}`} className="md-person">
+                    <bdi>{a.name}</bdi>
+                  </Link>
+                  <span className="md-check__src">{tx(TIER[a.tier] ?? { ar: a.tier, en: a.tier })}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Part>
+      )}
+    </section>
   )
 }
 

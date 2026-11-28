@@ -1,0 +1,258 @@
+/*
+ * Teacher statistics: the ranked list, its side sheet and the full-page record.
+ * Composes system.css; red only on a value past its threshold.
+ */
+
+/* ------------------------------------------------------------- header */
+.tsx-page .page-header__actions { gap: 8px; }
+.tsx-page .page-header__actions .btn--sm { min-block-size: 38px; }
+.tsx-export .icon { color: var(--ink-muted); }
+/* The figures filter the list below them. Context under a red count stays neutral: only the count asks. */
+.tsx-figures .figures { margin-block: 0 var(--space-5); }
+.tsx-page .figure--urgent .figure__note, .tsx-full .figure--urgent .figure__note { color: var(--ink-muted); }
+.tsx-figures .figure--link { transition: background var(--dur-fast) var(--ease); }
+.tsx-figures .figure--link:hover .figure__label { color: var(--ink); text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 3px; }
+.tsx-page .mast__tabs { margin-block-start: var(--space-3); }
+.tsx-denied.state--forbidden { margin: var(--space-5) 0 0; text-align: start; justify-content: flex-start; }
+
+/* ------------------------------------------------------------- the list */
+.tsx-list { overflow: clip; }
+.tsx-filtered { gap: 4px; font-size: var(--fs-sm); color: var(--ink-2); }
+.tsx-filtered > span { font-weight: 600; }
+
+.tsx-table { inline-size: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+.tsx-table thead th {
+  padding: 10px var(--space-4);
+  border-block-end: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink-muted);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  text-align: start;
+  white-space: nowrap;
+}
+.tsx-table th.num, .tsx-table td.num { text-align: end; }
+.tsx-table { table-layout: fixed; }
+.tsx-table thead th.num { inline-size: 128px; }
+.tsx-table thead th.num:nth-child(3) { inline-size: 156px; }
+.tsx-table thead th.tsx-act { inline-size: 194px; }
+@media (max-width: 1279px) { .tsx-table thead th.num { inline-size: 120px; } .tsx-table thead th.tsx-act { inline-size: 190px; } }
+
+/* A group's heading: a word in ink, a small dot, a plain count. */
+.tsx-ghead th {
+  padding: var(--space-4) var(--space-4) 8px;
+  border-block-end: 1px solid var(--line-2);
+  background: var(--surface);
+  text-align: start;
+}
+.tsx-group:first-of-type .tsx-ghead th { padding-block-start: var(--space-4); }
+.tsx-ghead__in { display: flex; align-items: center; gap: 8px; min-block-size: 24px; }
+.tsx-ghead__label { font-family: var(--font-head); font-size: var(--fs-md); font-weight: 600; color: var(--ink); }
+.tsx-group--ok .tsx-ghead__label { color: var(--done); }
+.tsx-ghead__link { margin-inline-start: auto; font-family: var(--font); font-weight: 500; }
+.tsx-dot { flex: none; inline-size: 8px; block-size: 8px; border-radius: 50%; }
+.tsx-dot--urgent { background: var(--urgent-solid); }
+.tsx-dot--watch { background: var(--waiting); }
+.tsx-dot--ok { background: var(--done); }
+
+/* A row: who and why, three figures, one action on hover. */
+.tsx-row { cursor: pointer; transition: background var(--dur-fast) var(--ease); }
+.tsx-row:hover { background: var(--surface-hover); }
+.tsx-row > th, .tsx-row > td { padding: 6px var(--space-4); border-block-end: 1px solid var(--line-2); vertical-align: middle; font-weight: 400; }
+.tsx-row > th { text-align: start; }
+.tsx-group:last-of-type .tsx-row:last-child > * { border-block-end: 0; }
+.tsx-who { display: flex; align-items: center; gap: 12px; min-inline-size: 0; min-block-size: 40px; }
+.tsx-who__text { display: grid; gap: 1px; min-inline-size: 0; }
+.tsx-who__line { display: flex; align-items: center; gap: 8px; min-inline-size: 0; }
+.tsx-name {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font-family: var(--font-head);
+  font-size: var(--fs-md);
+  font-weight: 600;
+  line-height: 1.3;
+  text-align: start;
+  cursor: pointer;
+}
+.tsx-name:hover { text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 4px; }
+.tsx-reason { text-wrap: pretty; font-size: var(--fs-sm); line-height: 1.35; color: var(--ink-muted); }
+
+.tsx-n { display: block; font-family: var(--font-head); font-size: var(--fs-lg); font-weight: 600; line-height: 1.2; color: var(--ink); font-variant-numeric: tabular-nums lining-nums; }
+.tsx-n--lead { font-size: var(--fs-xl); font-weight: 700; }
+.tsx-n.is-zero, .tsx-ratio.is-zero { color: var(--ink-muted); font-weight: 400; }
+.tsx-sub { display: block; margin-block-start: 1px; font-size: var(--fs-xs); line-height: 1.35; color: var(--ink-muted); white-space: nowrap; }
+/* Red: the count that made the row urgent. Amber: a trend past its watch threshold. */
+.tsx-n.is-breach, .tsx-sub.is-breach { color: var(--urgent); }
+.tsx-n.is-watch, .tsx-sub.is-watch { color: var(--waiting); }
+.tsx-sub.is-breach, .tsx-sub.is-watch { font-weight: 500; }
+.tsx-ratio { font-size: var(--fs-md); color: var(--ink); font-variant-numeric: tabular-nums lining-nums; white-space: nowrap; }
+
+.tsx-act { white-space: nowrap; text-align: end; }
+.tsx-act .row-actions2 { display: flex; justify-content: flex-end; }
+/* The stated action shows on hover and focus (always on touch); "more" is always there. */
+.tsx-row .row-actions2 > :not(.menu) { opacity: 0; transition: opacity var(--dur-fast) var(--ease); }
+.tsx-row:hover .row-actions2 > :not(.menu), .tsx-row:focus-within .row-actions2 > :not(.menu), .tsx-row .row-actions2 > :has(.tsx-message__error) { opacity: 1; }
+@media (hover: none) { .tsx-row .row-actions2 > :not(.menu) { opacity: 1; } }
+.tsx-message { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.tsx-message__error { max-inline-size: 22ch; white-space: normal; text-align: end; font-size: var(--fs-xs); }
+@media screen { .tsx-row[hidden] { display: none !important; } }
+
+.tsx-morerow td { padding: 6px var(--space-4) 10px; border-block-end: 0; }
+.tsx-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-block-size: 34px;
+  padding: 0 8px;
+  margin-inline-start: -8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--teal);
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+.tsx-more:hover { background: var(--teal-tint); }
+
+.tsx-thresholds { margin: 0; padding: 12px var(--space-4) 14px; border-block-start: 1px solid var(--line-2); background: var(--surface); font-size: var(--fs-xs); line-height: 1.6; color: var(--ink-muted); }
+
+/* Phone: each row stacks (who and why, then the three figures on one line). */
+@media (max-width: 767px) {
+  .tsx-table, .tsx-table tbody, .tsx-ghead, .tsx-ghead th, .tsx-morerow, .tsx-morerow td { display: block; }
+  .tsx-table thead { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .tsx-ghead th { padding-inline: var(--space-4); }
+  .tsx-row {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+    align-items: start;
+    gap: 10px 12px;
+    padding: 12px var(--space-4);
+    border-block-end: 1px solid var(--line-2);
+  }
+  .tsx-row > th, .tsx-row > td { padding: 0; border: 0; }
+  .tsx-row > th { grid-column: 1 / -1; grid-row: 1; }
+  /* The actions join the row's grid: "more" at the top end, the one action under the figures. */
+  .tsx-row > .tsx-act, .tsx-row .row-actions2 { display: contents; }
+  .tsx-row .row-actions2 > .menu { grid-column: 4; grid-row: 2; align-self: center; }
+  .tsx-row:has(.tsx-message) .row-actions2 > .menu { grid-row: 3; }
+  .tsx-row .row-actions2 > :not(.menu) { grid-column: 1 / 4; grid-row: 3; justify-self: start; }
+  .tsx-row .tsx-open { display: none; }
+  .tsx-row > td.tsx-cell { grid-row: 2; text-align: start; }
+  .tsx-row { grid-template-columns: repeat(3, minmax(0, 1fr)) 34px; }
+  .tsx-row > td.tsx-cell::before { content: attr(data-label); display: block; margin-block-end: 2px; font-size: var(--fs-xs); line-height: 1.35; color: var(--ink-muted); }
+  .tsx-row > td.tsx-cell:nth-of-type(1) { grid-column: 1; }
+  .tsx-row > td.tsx-cell:nth-of-type(2) { grid-column: 2; }
+  .tsx-row > td.tsx-cell:nth-of-type(3) { grid-column: 3; }
+  .tsx-row .row-actions2 > :not(.menu) { opacity: 1; }
+  /* The figures become one row of compact filters, so the first teacher shows without scrolling. */
+  .tsx-figures .figures { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-block-end: var(--space-4); padding: 4px; }
+  .tsx-figures .figure { min-inline-size: 0; padding: 8px 8px 10px; align-content: space-between; }
+  .tsx-figures .figure__label { font-size: var(--fs-xs); line-height: 1.35; }
+  .tsx-figures .figure__n { font-size: 22px; }
+  .tsx-figures .figure__note { display: none; }
+  .tsx-page .mast__tabs { margin-inline: -16px; padding-inline: 16px; mask-image: linear-gradient(to left, transparent 0, #000 24px, #000 calc(100% - 24px), transparent 100%); }
+  .tsx-row .tsx-act .btn { min-block-size: 40px; }
+  .tsx-who { align-items: flex-start; }
+  .tsx-n--lead { font-size: var(--fs-lg); }
+  .tsx-ghead__in { flex-wrap: wrap; }
+  .tsx-ghead__link { margin-inline-start: 0; flex-basis: 100%; }
+  .sheet-bar .tsx-filtered { margin-inline-start: 0; }
+}
+
+/* Phone, English: a label may take two lines; reserve them so the values share a line. */
+@media (max-width: 767px) {
+  html[lang='en'] .tsx-row > td.tsx-cell::before { min-block-size: 2.7em; }
+}
+
+/* --------------------------------------------------------- the side sheet */
+.dialog--sheet:has(.tsx-sheet) { display: flex; flex-direction: column; overflow: hidden; padding: 0; }
+.dialog--sheet:has(.tsx-sheet) .dialog__header { margin: 0; padding: 18px var(--space-5) 14px; }
+.dialog--sheet:has(.tsx-sheet) .dialog__actions { flex-wrap: wrap; justify-content: flex-start; margin: 0; padding: 14px var(--space-5); border-block-start: 1px solid var(--line-2); background: var(--surface); }
+.tsx-sheet { flex: 1; min-block-size: 0; overflow-y: auto; padding: 14px var(--space-5) var(--space-5); }
+.tsx-sheet__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 0; font-size: var(--fs-sm); color: var(--ink-muted); }
+.tsx-sheet__reason { margin: 8px 0 0; font-size: var(--fs-md); line-height: 1.5; color: var(--ink-2); }
+
+/* Labels may wrap; the rows are shared (subgrid) so the three values stay on one line. */
+.tsx-figs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: auto auto auto auto; margin: var(--space-4) 0 0; border: 1px solid var(--line); border-radius: var(--radius-lg); }
+.tsx-fig { display: grid; grid-row: span 4; grid-template-rows: subgrid; align-content: start; row-gap: 2px; min-inline-size: 0; padding: 12px 14px; }
+.tsx-fig dt { align-self: end; }
+.tsx-fig + .tsx-fig { border-inline-start: 1px solid var(--line-2); }
+.tsx-fig dt { font-size: var(--fs-xs); font-weight: 500; line-height: 1.35; color: var(--ink-muted); }
+.tsx-fig dd { margin: 0; }
+.tsx-fig__n { font-family: var(--font-head); font-size: 26px; font-weight: 700; line-height: 1.2; color: var(--ink); font-variant-numeric: tabular-nums lining-nums; }
+.tsx-fig__n--ratio { font-size: var(--fs-xl); line-height: 1.4; }
+.tsx-fig__n.is-breach, .tsx-fig__sub.is-breach { color: var(--urgent); }
+.tsx-fig__n.is-watch, .tsx-fig__sub.is-watch { color: var(--waiting); }
+.tsx-fig__n.is-zero { color: var(--ink-muted); font-weight: 400; }
+.tsx-fact dd .tsx-quiet { font-weight: 400; }
+.tsx-fig__sub { font-size: var(--fs-xs); color: var(--ink-muted); }
+.tsx-fig__sub.is-breach { font-weight: 600; }
+
+.tsx-sheet__part { margin-block-start: var(--space-5); }
+.tsx-sheet__title { margin: 0 0 8px; font-family: var(--font-head); font-size: var(--fs-md); font-weight: 600; color: var(--ink); }
+.tsx-sheet__loading { display: grid; gap: 14px; margin-block-start: var(--space-5); }
+.tsx-sheet__full { margin-block-start: var(--space-5); }
+.tsx-sheet .ts-denied { margin-block-start: var(--space-4); }
+
+.tsx-facts { margin: 0; }
+.tsx-fact { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-4); padding-block: 9px; border-block-end: 1px solid var(--line-2); font-size: var(--fs-sm); }
+.tsx-fact:last-child { border-block-end: 0; }
+.tsx-fact dt { display: grid; gap: 1px; color: var(--ink-2); }
+.tsx-fact__hint { font-size: var(--fs-xs); color: var(--ink-muted); }
+.tsx-fact dd { margin: 0; font-weight: 600; color: var(--ink); white-space: nowrap; font-variant-numeric: tabular-nums lining-nums; }
+
+/* Lessons by outcome: short neutral bars, red only for a teacher no-show and an unreported lesson. */
+.tsx-bars { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
+.tsx-bar { display: grid; grid-template-columns: minmax(7.5rem, 10rem) minmax(0, 1fr) 2.75rem; align-items: center; gap: 12px; font-size: var(--fs-sm); }
+.tsx-bar__label { color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tsx-bar__track { display: block; block-size: 8px; border-radius: 4px; background: var(--line-2); overflow: hidden; }
+.tsx-bar__fill { display: block; min-inline-size: 8px; block-size: 100%; border-radius: 4px; background: var(--ink-muted); }
+.tsx-bar--alarm .tsx-bar__fill { background: var(--urgent-solid); }
+.tsx-bar__n { text-align: end; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums lining-nums; }
+.tsx-bar--alarm .tsx-bar__n { color: var(--urgent); }
+.tsx-quiet { margin: 0; font-size: var(--fs-sm); color: var(--ink-muted); }
+
+/* ---------------------------------------------- one teacher, at page width */
+.tsx-full__outcomes { padding: var(--space-4) var(--space-5) 18px; margin-block-end: var(--space-6); }
+.tsx-full__outcomes .tsx-bar { grid-template-columns: minmax(8rem, 12rem) minmax(0, 1fr) 3rem; }
+.tsx-full__why { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: calc(-1 * var(--space-3)) 0 0; font-size: var(--fs-md); color: var(--ink-2); }
+.tsx-full .figures { margin-block-end: var(--space-5); }
+.tsx-full__facts { padding: var(--space-4) var(--space-5); }
+.tsx-full__head { margin: 0 0 var(--space-3); font-family: var(--font-head); font-size: var(--fs-lg); font-weight: 600; }
+.tsx-full .ts-cat { --tick: var(--ink-muted); }
+.tsx-full .ts-cat--danger { --tick: var(--urgent); }
+.tsx-full .ts-cat--danger .ts-cat__count { color: var(--urgent); }
+.tsx-full .ts-cat__count { font-family: var(--font-head); font-weight: 700; }
+.tsx-full .ts-previous { margin-block-start: var(--space-4); font-size: var(--fs-sm); }
+.tsx-full .page-header__actions .btn--sm { min-block-size: 38px; }
+@media (max-width: 1023px) { .tsx-full .split { grid-template-columns: minmax(0, 1fr); } .tsx-full .split > aside { position: static; } }
+
+/* ----------------------------------------------------------------- print */
+@media print {
+  body:has(.tsx-page) .sidebar,
+  .tsx-page .page-header__actions,
+  .tsx-page .mast__tabs,
+  .tsx-page .sheet-bar,
+  .tsx-page .tsx-act,
+  .tsx-page .tsx-morerow,
+  .tsx-page .tsx-ghead__link { display: none !important; }
+  body:has(.tsx-page) .shell { display: block; }
+  body:has(.tsx-page) .page { overflow: visible; padding: 0; }
+  .tsx-page .tsx-row[hidden] { display: table-row !important; }
+  .tsx-page .tsx-list, .tsx-page .figures { border-color: #ccc; }
+  .tsx-page .figure--link[aria-pressed='true'] { background: none; }
+  .tsx-page .tsx-row { break-inside: avoid; }
+}
+
+/* The list sized by its own room (the sidebar may be open beside a 1024px window): the
+   figures and the action narrow first, so a teacher's name and reason keep a readable line. */
+.tsx-list { container: tsx-list / inline-size; }
+@container tsx-list (max-width: 880px) and (min-width: 600px) {
+  .tsx-table thead th.num, .tsx-table thead th.num:nth-child(3) { inline-size: 92px; }
+  .tsx-table thead th.tsx-act { inline-size: 128px; }
+  .tsx-table thead th { white-space: normal; line-height: 1.3; }
+}

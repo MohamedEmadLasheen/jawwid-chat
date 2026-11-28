@@ -1,10 +1,15 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { QueryBoundary } from '@/shared/components/States'
 import { Badge } from '@/shared/components/Badge'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
 import type { CertificateReviewItem, ReviewCertificate } from '@/core/api/endpoints'
 import { openCertificate, useDecideCertificate, usePendingReviews } from './hooks'
+import './teacher-profiles.css'
+import '@/features/teachers/rows.css'
+import { Icon } from '@/shared/components/Icon'
+import { PageHeader } from '@/shared/components/PageHeader'
+import { RowActions } from '@/shared/components/RowActions'
 
 /**
  * Teacher CREDENTIAL review.
@@ -33,55 +38,66 @@ export function TeacherProfilesPage() {
 
   return (
     <div className="page">
-      <h1 className="page__title">{t('nav.teacher-profiles')}</h1>
+      <div className="page__inner">
+        {/* No figure: the list below is the count (round 3). */}
+        <PageHeader title={t('nav.teacher-profiles')} />
 
-      <QueryBoundary
-        isLoading={query.isLoading}
-        error={query.error}
-        isEmpty={query.profiles.length === 0}
-        emptyTitle={t('tprofile.empty')}
-        onRetry={() => void query.refetch()}
-      >
-        <ul className="card" aria-label={t('tprofile.pending.title')}>
-          {query.profiles.map((profile) => (
-            <TeacherRow key={profile.profileId} profile={profile} />
-          ))}
-        </ul>
-      </QueryBoundary>
+        {/* With nothing to review, the page still stands on a sheet. */}
+        <div className={query.profiles.length === 0 ? 'sheet' : undefined}>
+        <QueryBoundary
+          isLoading={query.isLoading}
+          error={query.error}
+          isEmpty={query.profiles.length === 0}
+          emptyTitle={t('tprofile.empty')}
+          onRetry={() => void query.refetch()}
+        >
+          <ul className="tp-list" aria-label={t('tprofile.pending.title')}>
+            {query.profiles.map((profile) => (
+              <TeacherRow key={profile.profileId} profile={profile} />
+            ))}
+          </ul>
+        </QueryBoundary>
+        </div>
+      </div>
     </div>
   )
 }
 
+/** One teacher's certificates: a sheet headed by the teacher, each certificate a row decided in place. */
 function TeacherRow({ profile }: { profile: CertificateReviewItem }) {
   const { t } = useI18n()
 
   return (
-    <li className="row">
-      <div>
+    <li className="sheet tp-teacher">
+      <div className="sheet__head">
         {/* The teacher's name as the SERVER resolved it, from chat.teacher.
             The console stores no identity of its own. */}
-        <strong>{profile.teacherName}</strong>
+        <strong className="sheet__title" dir="auto">
+          {profile.teacherName}
+        </strong>
         {profile.pendingCertificates > 0 ? (
-          <Badge tone="now">
-            {profile.pendingCertificates} · {t('tprofile.cert.state.pending')}
-          </Badge>
+          // Said once per teacher, not on every row: everything here waits by definition.
+          <span className="tp-waiting">
+            {t('tprofile.cert.state.pending')}
+            <span className="count">{profile.pendingCertificates}</span>
+          </span>
         ) : (
-          <Badge tone="ok">{t('tprofile.ready')}</Badge>
+          <Badge tone="ok" dot>
+            {t('tprofile.ready')}
+          </Badge>
         )}
-
-        <h4>{t('tprofile.certificates')}</h4>
-        <ul aria-label={t('tprofile.certificates')}>
-          {profile.certificates.map((certificate) => (
-            <CertificateRow key={certificate.id} certificate={certificate} />
-          ))}
-        </ul>
       </div>
+      <ul className="tp-certs" aria-label={t('tprofile.certificates')}>
+        {profile.certificates.map((certificate) => (
+          <CertificateRow key={certificate.id} certificate={certificate} />
+        ))}
+      </ul>
     </li>
   )
 }
 
 function CertificateRow({ certificate }: { certificate: ReviewCertificate }) {
-  const { t, date } = useI18n()
+  const { t, date, locale } = useI18n()
   const decide = useDecideCertificate()
   const [rejecting, setRejecting] = useState(false)
 
@@ -90,47 +106,48 @@ function CertificateRow({ certificate }: { certificate: ReviewCertificate }) {
       ? 'ok'
       : certificate.state === 'rejected'
         ? 'danger'
-        : 'now'
+        : 'warn'
 
   return (
-    <li>
-      <strong>{certificate.title}</strong>
-      <Badge tone={tone}>{t(`tprofile.cert.state.${certificate.state}` as const)}</Badge>
-
-      <p>
-        {certificate.issuingOrganization}
-        {certificate.issuedOn && <> · {date(certificate.issuedOn)}</>}
-      </p>
-      {certificate.reviewNote && <p>{certificate.reviewNote}</p>}
-
-      {decide.error != null && <p role="alert">{(decide.error as Error).message}</p>}
-
-      <div style={{ display: 'flex', gap: 8 }}>
-        <button
-          type="button"
-          // A fresh signed URL per click. Nothing about where the file lives is
-          // held here between clicks, and no URL is constructed.
-          onClick={() => void openCertificate(certificate.id)}
-        >
-          {t('tprofile.cert.open')}
-        </button>
-        <button
-          type="button"
-          onClick={() =>
-            decide.mutate({ certificateId: certificate.id, approved: true })
-          }
-          disabled={decide.isPending}
-        >
-          {t('tprofile.cert.approve')}
-        </button>
-        <button
-          type="button"
-          onClick={() => setRejecting(true)}
-          disabled={decide.isPending}
-        >
-          {t('tprofile.cert.reject')}
-        </button>
+    <li className="rowx tp-cert">
+      <div className="rw-who">
+        <span className="rw-who__text">
+          {/* The title opens the document: a credential is read before it is decided. */}
+          <button type="button" className="tp-cert__title" onClick={() => void openCertificate(certificate.id)}>
+            <Icon name="file" size={18} />
+            <strong className="rw-name" dir="auto">{certificate.title}</strong>
+          </button>
+          <span className="rw-sub">
+            {certificate.issuingOrganization && <bdi dir="auto">{certificate.issuingOrganization}</bdi>}
+            {certificate.issuingOrganization && certificate.issuedOn && (locale === 'ar' ? '، ' : ', ')}
+            {certificate.issuedOn && <bdi>{date(certificate.issuedOn)}</bdi>}
+          </span>
+        </span>
       </div>
+      <div className="rw-meta">{certificate.reviewNote && <span dir="auto">{certificate.reviewNote}</span>}</div>
+      <div className="rw-tags">
+        {certificate.state !== 'pending' && <Badge tone={tone} dot>{t(`tprofile.cert.state.${certificate.state}` as const)}</Badge>}
+      </div>
+
+      <div className="cell-actions">
+        {/* The decision this page exists for is stated; the file and the refusal are behind the menu. */}
+        <RowActions
+          primary={
+            <button type="button" className="btn btn--sm" onClick={() => decide.mutate({ certificateId: certificate.id, approved: true })} disabled={decide.isPending}>
+              {t('tprofile.cert.approve')}
+            </button>
+          }
+          more={[
+            // A fresh signed URL per click. Nothing about where the file lives is
+            // held here between clicks, and no URL is constructed.
+            { key: 'open', label: t('tprofile.cert.open'), icon: 'file', onSelect: () => void openCertificate(certificate.id) },
+            ...(decide.isPending ? [] : [{ key: 'reject', label: t('tprofile.cert.reject'), icon: 'xCircle' as const, danger: true, onSelect: () => setRejecting(true) }]),
+          ]}
+          label={`${t('tprofile.certificates')}: ${certificate.title}`}
+        />
+      </div>
+
+      {decide.error != null && <p className="tp-cert__error" role="alert">{(decide.error as Error).message}</p>}
 
       {rejecting && (
         <NoteDialog
@@ -176,6 +193,7 @@ function NoteDialog({
   const { t } = useI18n()
   const [note, setNote] = useState('')
   const [touched, setTouched] = useState(false)
+  const noteId = useId()
   const invalid = note.trim().length === 0
 
   return (
@@ -187,6 +205,7 @@ function NoteDialog({
           <DialogCancelButton onClick={onCancel} />
           <button
             type="button"
+            className="btn btn--primary"
             disabled={pending}
             onClick={() => {
               setTouched(true)
@@ -199,15 +218,25 @@ function NoteDialog({
         </>
       }
     >
-      <label>
-        {label}
+      <div className="field">
+        <label className="field__label" htmlFor={noteId}>
+          {label}
+        </label>
         <textarea
+          id={noteId}
+          className="input"
+          rows={3}
+          dir="auto"
           value={note}
           onChange={(event) => setNote(event.target.value)}
-          aria-label={label}
+          aria-invalid={touched && invalid}
         />
-      </label>
-      {touched && invalid && <p role="alert">{requiredMessage}</p>}
+        {touched && invalid && (
+          <p className="field__error" role="alert">
+            {requiredMessage}
+          </p>
+        )}
+      </div>
     </Dialog>
   )
 }

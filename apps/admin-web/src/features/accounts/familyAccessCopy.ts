@@ -1,4 +1,5 @@
 import { ApiError } from '@/core/api/errors'
+import type { CountForms } from '@/features/instalments/copy'
 import type { Pair } from './copy'
 import { describeError } from './copy'
 import type { FamilyAccessStatus, GRANT_HOURS } from './familyAccessApi'
@@ -52,6 +53,9 @@ export const F = {
     ar: 'ينتهي الوصول الآن. وتنتهي أي جلسة دعم فُتحت به عند طلبها التالي.',
   },
 }
+
+/** How many grants are open now, beside the record's heading. */
+export const ACTIVE_COUNT: CountForms = { en: ['{n} active', '{n} active'], ar: ['واحد ساري', 'اثنان ساريان', '{n} سارية', '{n} ساريًا'] }
 
 const BY_CODE: Record<string, Pair> = {
   'COMM.ACCOUNT_ADMIN_DENIED': {

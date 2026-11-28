@@ -99,7 +99,7 @@ describe('Dashboard', () => {
     vi.stubGlobal('fetch', routeFetch({ '/admin/overview': OVERVIEW, '/admin/conversations': CONVERSATIONS }))
     renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/admin/dashboard' })
 
-    const attention = await screen.findByRole('region', { name: 'Needs attention' })
+    const attention = await screen.findByRole('region', { name: 'Conversations and stories' })
     const waiting = await within(attention).findByRole('link', { name: /waiting on a reply from us/ })
     // The least recent of the two waiting conversations is 40 days old.
     expect(waiting).toHaveTextContent('Oldest activity 40 days ago')
@@ -140,13 +140,16 @@ describe('Conversations', () => {
     vi.stubGlobal('fetch', routeFetch({ '/admin/conversations': CONVERSATIONS }))
     renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/admin/conversations' })
     await screen.findByText('Alpha')
+    // A work queue: what waits on us leads under its own heading, the longest wait first; the rest follows by day.
+    expect(screen.getByRole('heading', { level: 2, name: /^Waiting on us\s*2$/ })).toBeInTheDocument()
     expect(screen.getByRole('heading', { level: 2, name: 'Today' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { level: 2, name: 'Older' })).toBeInTheDocument()
 
     const names = () => [...document.querySelectorAll('.conv-row__name')].map((n) => n.textContent)
-    expect(names()).toEqual(['Alpha', 'Charlie', 'Bravo'])
+    expect(names()).toEqual(['Bravo', 'Charlie', 'Alpha'])
     await chooseOption(userEvent, screen.getByRole('combobox', { name: 'Sort' }), 'oldest')
     expect(names()).toEqual(['Bravo', 'Charlie', 'Alpha'])
+    // A chosen order is by day only: the older days are headed again.
+    expect(screen.getByRole('heading', { level: 2, name: 'Older' })).toBeInTheDocument()
     await chooseOption(userEvent, screen.getByRole('combobox', { name: 'Sort' }), 'name')
     expect(names()).toEqual(['Alpha', 'Bravo', 'Charlie'])
     // Name order has no day sections.
@@ -196,8 +199,8 @@ describe('Stories', () => {
     await screen.findByRole('link', { name: 'Story one' })
 
     const tiles = screen.getByRole('navigation', { name: 'Status' })
-    // Every state is shown, with its real count, including zero.
-    expect(within(tiles).getByRole('link', { name: /Deleted\s*0/ })).toBeInTheDocument()
+    // Every state is offered; a zero count is not printed beside it.
+    expect(within(tiles).getByRole('link', { name: /^Deleted$/ })).toBeInTheDocument()
     await userEvent.click(within(tiles).getByRole('link', { name: /Draft\s*1/ }))
     expect(screen.getByRole('link', { name: 'Story three' })).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Story one' })).not.toBeInTheDocument()
@@ -211,7 +214,8 @@ describe('Stories', () => {
     renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/admin/stories' })
     await screen.findByRole('link', { name: 'Story one' })
     expect(screen.getByText('18 of 20 viewed')).toBeInTheDocument()
-    expect(screen.getByText('Not published')).toBeInTheDocument()
+    // A draft has no reach yet: its reach cell stays empty rather than repeating its state.
+    expect(screen.queryByText('Not published')).not.toBeInTheDocument()
 
     await chooseOption(userEvent, screen.getByRole('combobox', { name: 'Sort' }), 'views')
     const titles = [...document.querySelectorAll('.story-row__name')].map((n) => n.textContent)
@@ -253,14 +257,14 @@ describe('Users summary and sort', () => {
       user('b', 'Bob', { principalKind: 'contact', staffRole: null, familyId: 'f', hasLogin: false, accountStatus: null, createdAt: ago(HOUR) }),
     ],
   }
-  const names = () => [...document.querySelectorAll('.table .entity__name')].map((n) => n.textContent)
+  const names = () => [...document.querySelectorAll('.rowlist .rw-name')].map((n) => n.textContent)
 
   it('counts the whole directory, whatever the filters, and deep-links the sort order', async () => {
     vi.stubGlobal('fetch', routeFetch({ '/admin/users': USERS }))
     renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/admin/users?sort=newest&kind=staff' })
     await screen.findByRole('button', { name: 'Zed' })
 
-    const strip = document.querySelector('.summary-strip') as HTMLElement
+    const strip = document.querySelector('.figures') as HTMLElement
     const figure = (label: string) => within(strip).getByText(label).nextElementSibling?.textContent
     expect([figure('People'), figure('Active'), figure('Inactive'), figure('No login')]).toEqual(['3', '2', '1', '1'])
 

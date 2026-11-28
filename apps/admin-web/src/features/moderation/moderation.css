@@ -1,4 +1,40 @@
-/* WP-1C (PD-57): the moderation queue. Reuses the design system's table, badges and fields. */
+/* WP-1C (PD-57): the moderation queue. A hairline table, its filters on one line, the report in a sheet. */
+.mod-note { margin: 0 0 var(--space-4); padding-inline-start: var(--space-3); border-inline-start: 2px solid var(--line-strong); color: var(--ink-muted); font-size: var(--fs-sm); max-inline-size: 90ch; }
+.mod-filters { align-items: flex-end; gap: var(--space-3) var(--space-4); }
+.mod-draft { max-inline-size: 22rem; color: var(--ink-muted); font-size: var(--fs-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mod-error { margin: 0; padding: 8px var(--space-4); }
+.sheet > .mod-note { margin: 0; padding: 8px var(--space-4); border-inline-start: 0; border-block-end: 1px solid var(--hairline-soft); }
+.mod-filters .field { margin: 0; inline-size: min(100%, 15rem); }
+.mod-check { display: inline-flex; align-items: center; gap: 8px; min-block-size: var(--control-h); font-size: var(--fs-sm); cursor: pointer; }
+.mod-check input { inline-size: 16px; block-size: 16px; accent-color: var(--teal); flex: none; }
+.mod-status { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 2px var(--space-3); }
+.mod-answered { color: var(--ink-muted); font-size: var(--fs-xs); font-weight: 400; }
+.mod-left { color: var(--ink-muted); font-size: var(--fs-sm); font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* On a phone the filters take two short lines, not a screen: the pickers side by side, the draft note left to the desktop. */
+@media (max-width: 767px) {
+  .mod-filters { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2) var(--space-3); }
+  .mod-filters .field { inline-size: auto; min-inline-size: 0; }
+  .mod-filters .field__label { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .mod-check { min-block-size: 44px; }
+  .mod-draft { display: none; }
+}
+.mod-when { color: var(--ink-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .mod-actions { display: flex; flex-wrap: wrap; gap: var(--space-1); }
-.mod-attachments { list-style: none; padding: 0; margin: 0; display: grid; gap: var(--space-1); }
-.mod-warn { border: 1px solid var(--danger, currentColor); border-radius: var(--radius-md, 8px); padding: var(--space-2); margin-block: var(--space-2); }
+.mod-attachments { list-style: none; padding: 0; margin: 0; }
+.mod-attachments li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px var(--space-2); padding-block: 6px; border-block-end: 1px solid var(--hairline-soft); font-size: var(--fs-sm); }
+.mod-attachments .btn { margin-inline-start: auto; }
+/* Opening a child-safety attachment asks first: a terracotta edge, words that say why. */
+.mod-warn { margin-block: var(--space-3); padding: var(--space-2) 0; padding-inline-start: var(--space-3); border: 0; border-inline-start: 2px solid var(--line-strong); border-radius: 0; font-size: var(--fs-sm); }
+.mod-warn strong { color: var(--urgent); }
+.mod-warn p { margin: 4px 0 var(--space-2); }
+
+/* The report: facts as a ruled list, each part under a quiet label. */
+.mod-detail { display: grid; gap: var(--space-4); font-size: var(--fs-sm); }
+.mod-detail .mod-note { margin: 0; }
+.mod-facts { grid-template-columns: minmax(6rem, max-content) 1fr; gap: 0 var(--space-4); margin: 0; }
+.mod-facts dt, .mod-facts dd { padding-block: 7px; border-block-end: 1px solid var(--hairline-soft); }
+.mod-facts dd { font-weight: 500; }
+.mod-detail h3 { margin: 0 0 6px; padding-block-end: 6px; border-block-end: 1px solid var(--hairline); font-size: var(--fs-xs); font-weight: 500; color: var(--ink-muted); }
+.mod-detail section p { margin: 0 0 4px; }
+.mod-detail form { display: grid; gap: var(--space-3); padding-block-start: var(--space-3); border-block-start: 1px solid var(--hairline); }
+.mod-detail form .field { margin: 0; }

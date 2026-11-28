@@ -149,6 +149,10 @@ describe('the requester', () => {
     const drawer = await openRow()
     // Nothing is offered that the server did not offer: no send before approval.
     expect(within(drawer).queryByRole('button', { name: 'Send to group' })).not.toBeInTheDocument()
+    // Nor behind the "⋯", which holds only the server's other actions.
+    await userEvent.click(within(drawer).getByRole('button', { name: /More actions/ }))
+    expect(screen.queryByRole('menuitem', { name: 'Send to group' })).not.toBeInTheDocument()
+    await userEvent.keyboard('{Escape}')
     await userEvent.click(within(drawer).getByRole('button', { name: 'Approve this design' }))
     await waitFor(() => expect(calls('POST', /\/approve$/)).toHaveLength(1))
     expect(bodyOf(calls('POST', /\/approve$/)[0])).toEqual({ fileId: 'f-2' })

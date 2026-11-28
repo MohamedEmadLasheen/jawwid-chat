@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   certificateKeys,
   certificatesApi,
@@ -7,6 +7,7 @@ import {
   type ConsentBody,
   type ListQuery,
   type RequestBody,
+  type StateGroup,
 } from './api'
 
 /** What the caller may do on the page (nav, form, tabs). The server's answer, nothing inferred. */
@@ -16,6 +17,26 @@ export function useCertificateAccess(enabled = true) {
 
 export function useCertificates(q: ListQuery, enabled = true) {
   return useQuery({ queryKey: certificateKeys.list(q), queryFn: () => certificatesApi.list(q), enabled, staleTime: 15_000 })
+}
+
+/**
+ * The board's columns: the existing list read, once per state on the board (its
+ * first page, or the page a column's "Show more" moved it to). A column's count
+ * is its list's length, with "+" when the server says there is more. A state
+ * that is not on the board (Closed, until it is asked for) is not read.
+ */
+export function useCertificateBoard(
+  category: CertificateCategory | undefined,
+  groups: readonly StateGroup[],
+  q: string | undefined,
+  cursors: Partial<Record<StateGroup, string>>,
+) {
+  return useQueries({
+    queries: groups.map((status) => {
+      const query: ListQuery = { category, status, q, cursor: cursors[status] }
+      return { queryKey: certificateKeys.list(query), queryFn: () => certificatesApi.list(query), enabled: !!category, staleTime: 15_000 }
+    }),
+  })
 }
 
 export function useCertificate(certificateId: string | null) {

@@ -1,0 +1,24 @@
+/*
+ * A table on a phone. Under 768px a row stops being a line of columns: its
+ * first cell is the row's heading and every other cell is a labelled fact
+ * under it (`data-label` carries the column's name), two to a line. Nothing is
+ * cut and nothing scrolls sideways. A cell marked `stack-wide` takes the whole
+ * line (a sentence, a status list, the row's actions).
+ */
+@media (max-width: 767px) {
+  .table.stack-table { display: block; inline-size: 100%; min-inline-size: 0; }
+  .table.stack-table thead { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .table.stack-table tbody { display: block; }
+  .table.stack-table tbody tr { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px var(--space-4); padding: 12px 2px 13px; border-block-end: 1px solid var(--hairline-soft); }
+  .table.stack-table tbody tr > * { display: block; position: static; min-inline-size: 0; padding: 0; border: 0; background: none; white-space: normal; text-align: start; overflow-wrap: anywhere; }
+  .table.stack-table tbody tr:hover > * { background: none; }
+  /* The row's heading: the name, at body size. */
+  .table.stack-table tbody tr > :first-child { grid-column: 1 / -1; font-size: var(--fs-md); font-weight: 600; color: var(--ink); }
+  .table.stack-table tbody tr > [data-label]::before { content: attr(data-label); display: block; margin-block-end: 1px; font-size: var(--fs-xs); font-weight: 400; color: var(--ink-muted); }
+  .table.stack-table tbody tr > .stack-wide { grid-column: 1 / -1; }
+  .table.stack-table tbody tr > :empty { display: none; }
+  /* Actions are always in reach on a phone, on their own line. */
+  .table.stack-table tbody tr > .stack-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: var(--space-2); opacity: 1; white-space: normal; }
+  .table.stack-table tbody tr > .stack-actions .btn + .btn { margin-inline-start: 0; }
+  .table-wrap:has(> .stack-table) { overflow-x: visible; }
+}

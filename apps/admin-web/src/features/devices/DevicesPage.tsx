@@ -1,27 +1,49 @@
-import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useId, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { useSession } from '@/core/auth/SessionProvider'
 import { ApiError } from '@/core/api/errors'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
+import { Icon } from '@/shared/components/Icon'
 import { PageHeader } from '@/shared/components/PageHeader'
 import { QueryBoundary } from '@/shared/components/States'
 import { mySessionsApi, sessionKeys, type SessionDto } from './api'
-import { D, isSessionGone, sessionError, useCopy } from './copy'
-import { SessionList, useDeviceName } from './SessionList'
+import { D, DEVICES, isSessionGone, sessionError, useCopy } from './copy'
+import { countWords } from '@/features/instalments/copy'
+import { T as PROFILE } from '@/features/profile/copy'
+import { SessionList, isUnrecognised, useDeviceName } from './SessionList'
 import './devices.css'
 
 type Pending = { act: 'one'; session: SessionDto } | { act: 'others' }
 
 /**
  * PD-23 `/profile/devices`: where the signed-in staff member's account is
- * signed in, with "Sign out" per device and "Sign out all other devices".
- * Signing out THIS browser ends the session here too -- locally, without
- * another request, because the server has already ended it.
+ * signed in. The page is its masthead and one sheet; the same sheet is the
+ * "Devices & sessions" tab of My profile, so the two read as one thing.
  */
 export function DevicesPage() {
   const tx = useCopy()
+  return (
+    <div className="page dev-page">
+      <div className="page__inner">
+        <PageHeader back={{ to: '/profile', label: tx(PROFILE.myProfile) }} title={tx(D.title)} />
+        <MyDevices />
+      </div>
+    </div>
+  )
+}
+
+/**
+ * The sheet of one's own signed-in devices: this browser first and tagged,
+ * "Sign out" on each row, and "Sign out all other devices" as the sheet's one
+ * action. Signing out THIS browser ends the session here too -- locally,
+ * without another request, because the server has already ended it.
+ */
+export function MyDevices() {
+  const tx = useCopy()
+  const { locale } = useI18n()
+  const deviceName = useDeviceName()
+  const titleId = useId()
   const list = useQuery({ queryKey: sessionKeys.mine, queryFn: mySessionsApi.list })
   const sessions = list.data ?? []
   const others = sessions.filter((s) => !s.current).length
@@ -29,39 +51,45 @@ export function DevicesPage() {
   const [notice, setNotice] = useState<string | null>(null)
 
   return (
-    <div className="page">
-      <div className="page__inner dev-page">
-        <PageHeader
-          title={tx(D.title)}
-          subtitle={tx(D.subtitle)}
-          actions={
-            <Link to="/profile" className="btn btn--sm">
-              {tx(D.back)}
-            </Link>
-          }
-        />
-        {others > 0 && (
-          <div className="dev-toolbar">
-            <button type="button" className="btn btn--sm btn--danger" onClick={() => setPending({ act: 'others' })}>
+    <div className="dev-mine">
+      {notice && (
+        <p className="notice notice--info dev-notice" role="status">
+          {notice}
+        </p>
+      )}
+      <section className="sheet dev-sheet" aria-labelledby={titleId}>
+        <div className="sheet__head">
+          <div className="dev-sheet__title">
+            <h2 id={titleId} className="sheet__title">
+              {tx(D.signedInDevices)}
+            </h2>
+            {sessions.length > 0 && (
+              <span className="sheet__count">
+                {/* The answer: on how many devices, and whether one of them cannot be recognised. */}
+                {tx(sessions.some(isUnrecognised) ? D.summaryUnknown : D.summary, {
+                  devices: countWords(new Set(sessions.map(deviceName)).size, DEVICES, locale),
+                })}
+              </span>
+            )}
+          </div>
+          {others > 0 && (
+            <button type="button" className="btn btn--sm dev-signout-others" onClick={() => setPending({ act: 'others' })}>
+              <Icon name="signOut" size={16} />
               {tx(D.signOutOthers)}
             </button>
-          </div>
-        )}
-        {notice && (
-          <p className="field__hint" role="status">
-            {notice}
-          </p>
-        )}
+          )}
+        </div>
         <QueryBoundary
           isLoading={list.isLoading}
           error={list.error}
           isEmpty={sessions.length === 0}
           emptyTitle={tx(D.empty)}
           onRetry={() => void list.refetch()}
+          compact
         >
           <SessionList sessions={sessions} onSignOut={(session) => setPending({ act: 'one', session })} />
         </QueryBoundary>
-      </div>
+      </section>
 
       {pending?.act === 'one' && <RevokeOneDialog session={pending.session} onClose={() => setPending(null)} />}
       {pending?.act === 'others' && (

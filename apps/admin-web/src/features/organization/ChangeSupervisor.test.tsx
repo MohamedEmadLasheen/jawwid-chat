@@ -97,7 +97,7 @@ describe('changing a group\'s supervisor (PD-24)', () => {
     await userEvent.type(within(dialog).getByLabelText('Reason (required)'), 'supervisor on leave')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Change supervisor' }))
     await waitFor(() => expect(sent('POST', /\/org\/conversations\/c-1\/supervisor$/)).toEqual([{ supervisorId: 'sup-2', reason: 'supervisor on leave' }]))
-    expect(await screen.findByText('Child Alpha · Child Beta moved to Supervisor Two. The chat history is unchanged.')).toBeInTheDocument()
+    expect(await screen.findByText('Child Alpha, Child Beta moved to Supervisor Two. The chat history is unchanged.')).toBeInTheDocument()
   })
 
   it('is not offered to a supervisor, nor to a manager of another department', async () => {

@@ -149,6 +149,9 @@ function student(over: Partial<StudentProfile> = {}): StudentProfile {
 const supervisor = makeStaff({ id: 's-1', name: 'Supervisor One', role: 'admin' })
 const superAdmin = makeStaff({ id: 'sa-1', name: 'Owner', role: 'super_admin' })
 
+/** One of the masthead's key numbers, by its label. */
+const figure = (label: string) => screen.getByText(label, { selector: '.figure__label' }).closest('.figure') as HTMLElement
+
 beforeEach(() => {
   routes = []
   fetchMock = vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
@@ -176,27 +179,37 @@ describe('the Parent Profile', () => {
 
     expect(await screen.findByRole('heading', { level: 1, name: /^Parent Alpha/ })).toBeInTheDocument()
     expect(screen.getByText('Administration only')).toBeInTheDocument()
+    // The file opens on Overview: who the family is, beside what waits.
+    expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true')
     const contact = screen.getByRole('region', { name: 'Contact information' })
     expect(within(contact).getByText('+971 50 123 4567')).toHaveAttribute('dir', 'ltr')
     expect(within(contact).getByText('alpha@example.test')).toHaveAttribute('dir', 'ltr')
     expect(within(contact).getByText('United Arab Emirates')).toBeInTheDocument()
     expect(within(contact).getByText('Dubai')).toBeInTheDocument()
-    expect(within(contact).getByText('2')).toBeInTheDocument()
+    // The number of children is one of the masthead's figures.
+    expect(within(figure('Children')).getByText('2')).toBeInTheDocument()
     expect(screen.getByText('Prefers calls after 6 pm.')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Children' }))
+    expect(screen.getByRole('tab', { name: 'Children' })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByRole('link', { name: 'View profile: Child One' })).toHaveAttribute('href', '/students/k-1')
 
+    await userEvent.click(screen.getByRole('tab', { name: 'Money' }))
     const payments = await screen.findByRole('region', { name: 'Payment information' })
     expect(within(payments).getByText('3-month plan')).toBeInTheDocument()
     expect(within(payments).getByText('Bank transfer')).toBeInTheDocument()
     const timeline = screen.getByRole('region', { name: 'Payment timeline' })
     const entries = within(timeline).getAllByRole('listitem')
     expect(entries.map((e) => within(e).getByText(/term|twice/).textContent)).toEqual(['Autumn term', 'Summer term', 'Entered twice'])
-    expect(within(entries[1]!).getByText(/Paid .* by Invoice · recorded by Supervisor One/)).toBeInTheDocument()
+    expect(within(entries[1]!).getByText(/Paid .* by Invoice, recorded by Supervisor One/)).toBeInTheDocument()
     expect(within(entries[2]!).getByText('Voided by Supervisor One: duplicate')).toBeInTheDocument()
     // A paid or voided instalment cannot be paid again; a voided one cannot be voided again.
     expect(within(entries[0]!).getByRole('button', { name: 'Record payment' })).toBeInTheDocument()
     expect(within(entries[1]!).queryByRole('button', { name: 'Record payment' })).not.toBeInTheDocument()
-    expect(within(entries[2]!).queryByRole('button', { name: 'Void' })).not.toBeInTheDocument()
+    // Void is in each row's menu now; a voided instalment has no menu, and nothing else to press.
+    await userEvent.click(within(entries[1]!).getByRole('button', { name: /More actions/ }))
+    expect(within(entries[1]!).getByRole('menuitem', { name: 'Void' })).toBeInTheDocument()
+    expect(within(entries[2]!).queryByRole('button')).not.toBeInTheDocument()
   })
 
   it('reads the same in Arabic, right to left', async () => {
@@ -233,7 +246,7 @@ describe('the Parent Profile', () => {
     on('GET', /\/families\/f-1\/billing$/, () => json(billing()))
     on('POST', /\/families\/f-1\/billing$/, () =>
       json({ error: { code: 'COMM.BILLING_STATE', message: 'these billing settings were changed since you opened them', detail: { current: { planMonths: 12 } } } }, 409))
-    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1' })
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1#money' })
     await userEvent.click(await screen.findByRole('button', { name: 'Edit subscription and payment method' }))
     const dialog = screen.getByRole('dialog', { name: 'Edit subscription and payment method' })
     await chooseOption(userEvent, within(dialog).getByLabelText('Plan'), '6')
@@ -252,7 +265,7 @@ describe('the Parent Profile', () => {
     on('POST', /\/families\/f-1\/instalments$/, () => json(billing()))
     on('POST', /\/instalments\/i-1\/payment$/, () => json(billing()))
     on('POST', /\/instalments\/i-1\/void$/, () => json(billing()))
-    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1' })
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1#money' })
 
     await userEvent.click(await screen.findByRole('button', { name: 'Add instalments' }))
     let dialog = screen.getByRole('dialog', { name: 'Add instalments' })
@@ -287,7 +300,9 @@ describe('the Parent Profile', () => {
       paymentId: expect.stringMatching(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/),
     })
 
-    await userEvent.click(within(first).getByRole('button', { name: 'Void' }))
+    // Void is behind the row's menu.
+    await userEvent.click(within(first).getByRole('button', { name: /More actions/ }))
+    await userEvent.click(within(first).getByRole('menuitem', { name: 'Void' }))
     dialog = screen.getByRole('dialog', { name: 'Void: Autumn term' })
     await userEvent.click(within(dialog).getByRole('button', { name: 'Void' }))
     expect(within(dialog).getByText('Say why.')).toBeInTheDocument()
@@ -305,7 +320,10 @@ describe('the Parent Profile', () => {
     expect(await screen.findByRole('heading', { level: 1, name: /^Parent Alpha/ })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Edit contact information' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Edit the note' })).not.toBeInTheDocument()
-    expect(screen.queryByText('Upload photo')).not.toBeInTheDocument()
+    expect(screen.queryByText('Choose a photo')).not.toBeInTheDocument()
+    // The photo and the edits also live in the file's menu: with none of them offered, there is no menu.
+    expect(screen.queryByRole('button', { name: 'More actions: Parent Alpha' })).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('tab', { name: 'Money' }))
     expect(await screen.findByRole('button', { name: 'Add instalments' })).toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: 'Record payment' }).length).toBeGreaterThan(0)
   })
@@ -313,10 +331,13 @@ describe('the Parent Profile', () => {
   it('a viewer the server does not let record sees the money, and no recording controls', async () => {
     on('GET', /\/parent-profiles\/p-1$/, () => json(parent()))
     on('GET', /\/families\/f-1\/billing$/, () => json(billing({ canRecord: false })))
-    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1' })
-    expect(await screen.findByRole('region', { name: 'Payment timeline' })).toBeInTheDocument()
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1#money' })
+    const timeline = await screen.findByRole('region', { name: 'Payment timeline' })
     expect(screen.queryByRole('button', { name: 'Add instalments' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Record payment' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Record a payment' })).not.toBeInTheDocument()
+    // No row has a menu either: the instalments are read, not acted on.
+    expect(within(timeline).queryByRole('button')).not.toBeInTheDocument()
   })
 
   it('a refusal is said plainly, and nothing of the family\'s money is asked for', async () => {
@@ -335,6 +356,97 @@ describe('the Parent Profile', () => {
   })
 })
 
+describe('the Parent Profile is a record: a masthead and tabs', () => {
+  const panel = (key: string) => document.getElementById(`pf-panel-${key}`) as HTMLElement
+  const serve = (b: FamilyBilling = billing(), p: ParentProfile = parent()) => {
+    on('GET', /\/parent-profiles\/p-1$/, () => json(p))
+    on('GET', /\/families\/f-1\/billing$/, () => json(b))
+  }
+
+  it('the masthead says where the money stands; the overdue part of Outstanding is flagged while anything is overdue', async () => {
+    serve()
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1' })
+    const outstanding = await waitFor(() => figure('Outstanding'))
+    // The balance itself is not the breach: the overdue line under it carries the urgent colour.
+    expect(within(outstanding).getByText(/^Overdue /)).toHaveClass('rec-hl__late')
+    expect(within(outstanding).getByText('1,250.50')).toHaveAttribute('dir', 'ltr')
+    expect(within(outstanding).getByText(/^Overdue .*1,250\.50/)).toBeInTheDocument()
+    // What was paid is set out with the family's money, on the Money tab.
+    expect(within(screen.getByRole('table', { name: 'Totals' })).getByRole('row', { name: /^Paid/ })).toHaveTextContent('1,250.50')
+    expect(within(figure('Open requests')).getByText('0')).toBeInTheDocument()
+    // Overview: the late instalment with how late it is, and what to do about it.
+    const waiting = within(screen.getByRole('region', { name: 'Needs attention now' })).getAllByRole('listitem')
+    expect(waiting).toHaveLength(1)
+    expect(within(waiting[0]!).getByText('Autumn term')).toBeInTheDocument()
+    expect(within(waiting[0]!).getByText('20 days late')).toBeInTheDocument()
+    await userEvent.click(within(waiting[0]!).getByRole('button', { name: 'Record payment' }))
+    expect(screen.getByRole('dialog', { name: 'Record a payment: Autumn term' })).toBeInTheDocument()
+  })
+
+  it('nothing late and nothing waiting: Outstanding is plain, and Overview says so in one line', async () => {
+    serve(
+      billing({
+        instalments: [instalment({ id: 'i-9', label: 'Winter term', status: 'upcoming', days: 40, dueDate: '2026-11-30' })],
+        totals: [{ currency: 'AED', paidMinor: 0, outstandingMinor: 125050, overdueMinor: 0 }],
+      }),
+    )
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1' })
+    const outstanding = await waitFor(() => figure('Outstanding'))
+    expect(outstanding.querySelector('.rec-hl__late')).toBeNull()
+    expect(within(outstanding).queryByText(/Overdue/)).not.toBeInTheDocument()
+    expect(within(screen.getByRole('region', { name: 'Needs attention now' })).getByText('Nothing is waiting on this family.')).toBeInTheDocument()
+    // What falls due next is said under it.
+    expect(within(screen.getByRole('region', { name: 'Coming up' })).getByText('Winter term')).toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: 'Money' })).toHaveAttribute('aria-selected', 'false')
+  })
+
+  it('the open tab is in the URL: a link to a section opens its tab, and choosing a tab shows its page alone', async () => {
+    serve()
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1#instalments' })
+    expect(await screen.findByRole('heading', { level: 1, name: /^Parent Alpha/ })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Money' })).toHaveAttribute('aria-selected', 'true')
+    expect(panel('money')).toHaveAttribute('data-active', 'true')
+    expect(panel('overview')).toHaveAttribute('data-active', 'false')
+    expect(panel('money')).toHaveAttribute('aria-labelledby', screen.getByRole('tab', { name: 'Money' }).id)
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Children' }))
+    expect(screen.getByRole('tab', { name: 'Children' })).toHaveAttribute('aria-selected', 'true')
+    expect(panel('children')).toHaveAttribute('data-active', 'true')
+    expect(panel('money')).toHaveAttribute('data-active', 'false')
+
+    // The arrow keys move along the tabs.
+    await userEvent.keyboard('{ArrowLeft}')
+    expect(screen.getByRole('tab', { name: 'Money' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tab', { name: 'Money' })).toHaveFocus()
+
+    // A masthead figure is a way in: Children opens the Children tab.
+    await userEvent.click(figure('Children'))
+    expect(screen.getByRole('tab', { name: 'Children' })).toHaveAttribute('aria-selected', 'true')
+  })
+
+  it('History is a tab only when the server answers it for this viewer', async () => {
+    serve()
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1#history' })
+    expect(await screen.findByRole('heading', { level: 1, name: /^Parent Alpha/ })).toBeInTheDocument()
+    await waitFor(() => expect(calls('GET', /parent-feedback$/).length).toBeGreaterThan(0))
+    await waitFor(() => expect(screen.queryByRole('tab', { name: 'History' })).not.toBeInTheDocument())
+    // The link named a tab this viewer does not have: the file opens on Overview.
+    expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true')
+  })
+
+  it('the file menu holds the rest: the contact edit, the note, the photo', async () => {
+    serve(billing(), parent({ avatarUrl: 'https://media.example.test/p-1.jpg' }))
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1#money' })
+    await userEvent.click(await screen.findByRole('button', { name: 'More actions: Parent Alpha' }))
+    const menu = screen.getByRole('menu', { name: 'More actions: Parent Alpha' })
+    expect(within(menu).getAllByRole('menuitem').map((i) => i.textContent)).toEqual(['Edit contact information', 'Edit the note', 'Replace photo', 'Remove photo'])
+    await userEvent.click(within(menu).getByRole('menuitem', { name: 'Edit the note' }))
+    const dialog = screen.getByRole('dialog', { name: 'Edit the note' })
+    // The rule stays with the note wherever it is edited.
+    expect(within(dialog).getByText('Internal. The parent never sees it, nor do teachers.')).toBeInTheDocument()
+  })
+})
+
 // ADMIN-009 (QA AR-PAR-05): a Sales member was offered "Add child" on a family they did not
 // enter; the server refused it (404). The button now follows the family's own answer.
 describe('Add child on the Parent Profile', () => {
@@ -350,19 +462,26 @@ describe('Add child on the Parent Profile', () => {
     on('GET', /\/parent-profiles\/p-1$/, () => json(parent()))
     on('GET', /\/family-intake\/options$/, () => json(options))
     on('GET', /\/family-intake\/families\/f-1$/, () => json(ownership(true)))
-    renderWithProviders(<AppRoutes />, { staff: salesMember, route: '/parents/p-1' })
+    renderWithProviders(<AppRoutes />, { staff: salesMember, route: '/parents/p-1#children' })
     const children = await screen.findByRole('region', { name: /Children/ })
+    expect(screen.getByRole('tab', { name: 'Children' })).toHaveAttribute('aria-selected', 'true')
     expect(await within(children).findByRole('button', { name: 'Add child' })).toBeInTheDocument()
+    // ... and from the file's menu, whichever tab is open.
+    await userEvent.click(screen.getByRole('button', { name: 'More actions: Parent Alpha' }))
+    expect(screen.getByRole('menuitem', { name: 'Add child' })).toBeInTheDocument()
   })
 
   it('is NOT offered on a family the viewer did not enter (the server refuses that family)', async () => {
     on('GET', /\/parent-profiles\/p-1$/, () => json(parent()))
     on('GET', /\/family-intake\/options$/, () => json(options))
     on('GET', /\/family-intake\/families\/f-1$/, () => json({ error: { code: 'COMM.INTAKE_NOT_FOUND', message: 'not found' } }, 404))
-    renderWithProviders(<AppRoutes />, { staff: salesMember, route: '/parents/p-1' })
+    renderWithProviders(<AppRoutes />, { staff: salesMember, route: '/parents/p-1#children' })
     const children = await screen.findByRole('region', { name: /Children/ })
     await waitFor(() => expect(calls('GET', /\/family-intake\/families\/f-1$/).length).toBeGreaterThan(0))
     expect(within(children).queryByRole('button', { name: 'Add child' })).toBeNull()
+    // Nor from the file's menu.
+    await userEvent.click(screen.getByRole('button', { name: 'More actions: Parent Alpha' }))
+    expect(screen.queryByRole('menuitem', { name: 'Add child' })).toBeNull()
   })
 })
 
@@ -371,13 +490,63 @@ describe('the Student Profile', () => {
     on('GET', /\/learners\/k-1\/profile$/, () => json(student()))
     renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/students/k-1' })
     expect(await screen.findByRole('heading', { level: 1, name: 'Child One' })).toBeInTheDocument()
-    const info = screen.getByRole('region', { name: 'Student' })
+    // Age, course and teacher are the head's highlights.
+    const info = screen.getByLabelText('At a glance')
     expect(within(info).getByText('9 years')).toBeInTheDocument()
     expect(within(info).getByText('Tajweed')).toBeInTheDocument()
-    expect(within(info).getByText('Teacher Omega')).toBeInTheDocument()
-    expect(within(info).getByText(/Monday/)).toHaveTextContent('Monday · 16:30 · 30 min')
-    expect(within(info).getByText(/Thursday/)).toHaveTextContent('Thursday · 17:00 · 45 min')
-    expect(screen.getByRole('link', { name: 'Parent Alpha' })).toHaveAttribute('href', '/parents/p-1')
+    // The teacher is named in the head's sentence.
+    expect(screen.getByText('Teacher Omega')).toBeInTheDocument()
+    // The weekly times are the Schedule tab: one row each, the day, the hour, the length.
+    await userEvent.click(screen.getByRole('tab', { name: 'Schedule' }))
+    expect(screen.getByRole('tab', { name: 'Schedule' })).toHaveAttribute('aria-selected', 'true')
+    const [monday, thursday] = within(screen.getByRole('region', { name: 'Class schedule' })).getAllByRole('listitem')
+    expect(monday).toHaveTextContent(/^Monday\s*16:30\s*30 min$/)
+    expect(thursday).toHaveTextContent(/^Thursday\s*17:00\s*45 min$/)
+    // The parents are the Family tab (and named on Overview, each a way into their file).
+    await userEvent.click(screen.getByRole('tab', { name: 'Family' }))
+    expect(within(screen.getByRole('region', { name: 'Parents' })).getByRole('link', { name: 'Parent Alpha' })).toHaveAttribute('href', '/parents/p-1')
+  })
+
+  it('the masthead carries the lessons and the next lesson only when the server sends them; the tabs follow', async () => {
+    on('GET', /\/learners\/k-1\/profile$/, () =>
+      json(student({ schedule: [{ weekday: 1, start: '16:30', durationMinutes: 30, timezone: 'Africa/Cairo', nextStartsAt: '2027-01-18T14:30:00.000Z' }] })),
+    )
+    on('GET', /\/learners\/k-1\/subscription$/, () =>
+      json({
+        enforced: true, canRecord: false, canAddSubscription: false, canGrantException: false,
+        standing: {
+          child: { id: 'k-1', name: 'Child One' }, current: null, lessonsIncluded: 24, lessonsUsed: 24, lessonsLeft: 0, graceLeft: null,
+          state: 'locked', lockReasons: ['balance'], overdue: null, balance: 0, excepted: [], held: false,
+        },
+        subscriptions: [], exceptions: [], renewalRequests: [],
+      }),
+    )
+    renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/students/k-1' })
+    expect(await screen.findByRole('heading', { level: 1, name: 'Child One' })).toBeInTheDocument()
+    const left = await waitFor(() => figure('Lessons left'))
+    expect(within(left).getByText('0')).toBeInTheDocument()
+    expect(left).toHaveClass('figure--urgent')
+    expect(within(figure('Lessons bought')).getByText('24')).toBeInTheDocument()
+    expect(within(figure('Next lesson')).getByText('16:30')).toHaveAttribute('dir', 'ltr')
+    // The one thing waiting is the head's callout: the lock, why, and the way to it.
+    expect(screen.queryByRole('region', { name: 'Needs attention now' })).not.toBeInTheDocument()
+    const callout = document.querySelector('.rec-callout') as HTMLElement
+    expect(within(callout).getByText(/locked/)).toBeInTheDocument()
+    expect(within(callout).getByText(/lessons used up/)).toBeInTheDocument()
+    await userEvent.click(within(callout).getByRole('link', { name: 'Open subscription' }))
+    expect(screen.getByRole('tab', { name: 'Subscription' })).toHaveAttribute('aria-selected', 'true')
+  })
+
+  it('with no subscription answered, there are no lesson figures and no Subscription tab', async () => {
+    on('GET', /\/learners\/k-1\/profile$/, () => json(student()))
+    renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/students/k-1#subscription' })
+    expect(await screen.findByRole('heading', { level: 1, name: 'Child One' })).toBeInTheDocument()
+    await waitFor(() => expect(calls('GET', /\/learners\/k-1\/subscription$/).length).toBeGreaterThan(0))
+    expect(screen.queryByRole('tab', { name: 'Subscription' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Lessons left')).not.toBeInTheDocument()
+    expect(screen.queryByText('Next lesson')).not.toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByText('Nothing is waiting on this student.')).toBeInTheDocument()
   })
 
   it('says "Not set" rather than blank, and no parents section when the server sends none', async () => {
@@ -385,10 +554,14 @@ describe('the Student Profile', () => {
       json(student({ age: null, course: null, teacher: null, schedule: [], family: undefined, birthDate: undefined, viewer: 'teacher' })),
     )
     renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/students/k-1' })
-    const info = await screen.findByRole('region', { name: 'Student' })
-    expect(within(info).getAllByText('Not set')).toHaveLength(3)
-    expect(within(info).getByText('No regular lesson times yet')).toBeInTheDocument()
+    const info = await screen.findByLabelText('At a glance')
+    expect(within(info).getAllByText('Not set')).toHaveLength(2)
+    expect(screen.getByText(/no teacher yet/)).toBeInTheDocument()
+    // The empty schedule is said on the Schedule tab (and Overview lists it as something that waits).
+    expect(within(screen.getByRole('region', { name: 'Class schedule' })).getByText('No regular lesson times yet')).toBeInTheDocument()
+    expect(within(screen.getByRole('region', { name: 'Needs attention now' })).getByText('No teacher assigned yet')).toBeInTheDocument()
     expect(screen.queryByRole('region', { name: 'Parents' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: 'Family' })).not.toBeInTheDocument()
   })
 
   it('a student this viewer may not open is said plainly', async () => {
@@ -421,8 +594,9 @@ describe('PD-32: feedback about teachers on the Parent Profile', () => {
     on('GET', /\/parent-profiles\/p-1$/, () => json(parent()))
     on('GET', /\/families\/f-1\/billing$/, () => json(billing()))
     on('GET', /\/families\/f-1\/parent-feedback$/, () => json({ feedback: [row] }))
-    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1' })
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1#history' })
     const section = await screen.findByRole('region', { name: 'Feedback about teachers' })
+    expect(screen.getByRole('tab', { name: 'History' })).toHaveAttribute('aria-selected', 'true')
     expect(await within(section).findByText('Lessons start late.')).toBeInTheDocument()
     expect(within(section).getByText('We are looking into it.')).toBeInTheDocument()
     // Taking and replying belong to the Supervision page.

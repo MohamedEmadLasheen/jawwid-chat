@@ -1,17 +1,23 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useI18n } from '@/core/i18n/I18nProvider'
+import { Avatar } from '@/shared/components/Avatar'
 import { Badge, type Tone } from '@/shared/components/Badge'
+import { useWhen } from '@/features/devices/when'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
 import { FilterChips } from '@/shared/components/FilterChips'
 import { ReasonDialog } from '@/shared/components/ReasonDialog'
+import { RowActions } from '@/shared/components/RowActions'
 import { SearchableSelect } from '@/shared/components/SearchableSelect'
+import { countWords } from '@/features/instalments/copy'
+import { Sheet } from '@/features/profiles/RecordParts'
 import { accountKeys, type AccountSummary } from './api'
 import { A, useCopy } from './copy'
-import { F, describeAccessError } from './familyAccessCopy'
+import { ACTIVE_COUNT, F, describeAccessError } from './familyAccessCopy'
 import { GRANT_HOURS, familyAccessApi, familyAccessKeys, type FamilyAccessGrant, type FamilyAccessStatus } from './familyAccessApi'
 
-const STATUS_TONE: Record<FamilyAccessStatus, Tone> = { active: 'ok', ended: 'neutral', revoked: 'warn' }
+/** A live grant is where things stand (a teal tag); one that is over is a quiet word. */
+const STATUS_TONE: Record<FamilyAccessStatus, Tone> = { active: 'info', ended: 'neutral', revoked: 'neutral' }
 
 export function useFamilyAccess() {
   return useQuery({ queryKey: familyAccessKeys.list(), queryFn: () => familyAccessApi.list() })
@@ -107,72 +113,100 @@ export function GrantFamilyAccessDialog({
 }
 
 /**
- * The record of exceptional access. A grantor sees the organization's grants
- * (live, and ended in the last 30 days) and may revoke a live one; a grantee
- * sees "Your temporary access" -- what is open to them, and until when.
+ * The record of exceptional access, on a sheet of its own. A grantor sees the
+ * organization's grants (live, and ended in the last 30 days) and may revoke a
+ * live one; a grantee sees "Your temporary access" -- what is open to them,
+ * and until when. A row is the family and what the access is for, who holds
+ * it and who gave it, the day it ends, and where it stands.
  */
 export function FamilyAccessRecord() {
   const tx = useCopy()
-  const { dateTime } = useI18n()
+  const { dateTime, locale } = useI18n()
+  const when = useWhen()
   const list = useFamilyAccess()
   const [revoking, setRevoking] = useState<FamilyAccessGrant | null>(null)
   const grants = list.data?.grants ?? []
   const canGrant = list.data?.canGrant === true
   // A grantee with nothing open sees nothing: the section is the exception, not a feature to advertise.
   if (!list.data || (!canGrant && grants.length === 0)) return null
+  const live = grants.filter((g) => g.status === 'active').length
 
   return (
-    <section className="acct-record" aria-labelledby="acct-access-title">
-      <h2 id="acct-access-title" className="acct-record__title">
-        {tx(canGrant ? F.recordTitle : F.mineTitle)}
-      </h2>
-      {canGrant && <p className="field__hint">{tx(F.recordHint)}</p>}
+    <Sheet
+      id="acct-access-title"
+      title={tx(canGrant ? F.recordTitle : F.mineTitle)}
+      count={live > 0 ? countWords(live, ACTIVE_COUNT, locale) : undefined}
+      rule={canGrant ? tx(F.recordHint) : undefined}
+    >
       {grants.length === 0 ? (
-        <p className="field__hint">{tx(F.noRecord)}</p>
+        <p className="rec-empty">{tx(F.noRecord)}</p>
       ) : (
-        <div className="table-wrap">
-          <table className="table">
-            <thead>
-              <tr>
-                <th scope="col">{tx(F.family)}</th>
-                {canGrant && <th scope="col">{tx(F.grantee)}</th>}
-                <th scope="col">{tx(F.grantedBy)}</th>
-                <th scope="col">{tx(F.purpose)}</th>
-                <th scope="col">{tx(F.until)}</th>
-                <th scope="col">{tx(A.status)}</th>
-                {canGrant && <th scope="col">{tx(A.actions)}</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {grants.map((g) => (
-                <tr key={g.id}>
-                  <td dir="auto">{g.family.name}</td>
-                  {canGrant && <td dir="auto">{g.grantee.name}</td>}
-                  <td dir="auto">{g.grantedBy.name}</td>
-                  <td dir="auto">{g.purpose}</td>
-                  <td>{dateTime(g.revokedAt ?? g.endsAt)}</td>
-                  <td>
-                    <Badge tone={STATUS_TONE[g.status]} dot>
-                      {tx(F.status[g.status])}
-                    </Badge>
+        <table className="dir-table acct-table acct-grants">
+          <thead>
+            <tr>
+              <th scope="col">{tx(F.family)}</th>
+              {canGrant && <th scope="col">{tx(F.grantee)}</th>}
+              <th scope="col">{tx(F.grantedBy)}</th>
+              <th scope="col">{tx(F.until)}</th>
+              <th scope="col">{tx(A.status)}</th>
+              {canGrant && (
+                <th scope="col" className="cell-actions">
+                  <span className="sr-only">{tx(A.actions)}</span>
+                </th>
+              )}
+            </tr>
+          </thead>
+          <tbody>
+            {grants.map((g) => (
+              <tr key={g.id} className={g.status === 'active' ? 'dir-row' : 'dir-row acct-grant--over'}>
+                <td className="dir-cell-who">
+                  <span className="dir-who">
+                    <Avatar name={g.family.name} seed={g.family.id} />
+                    <span className="dir-who__text">
+                      <strong className="dir-name">
+                        <bdi>{g.family.name}</bdi>
+                      </strong>
+                      <span className="acct-sub">
+                        <bdi>{g.purpose}</bdi>
+                      </span>
+                    </span>
+                  </span>
+                </td>
+                {canGrant && (
+                  <td className="dir-cell-quiet acct-cell-person" data-label={tx(F.grantee)}>
+                    <bdi>{g.grantee.name}</bdi>
                   </td>
-                  {canGrant && (
-                    <td>
-                      {g.status === 'active' && (
-                        <button type="button" className="btn btn--sm btn--danger" onClick={() => setRevoking(g)}>
-                          {tx(F.revoke)}
-                        </button>
-                      )}
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                )}
+                <td className="dir-cell-quiet" data-label={tx(F.grantedBy)}>
+                  <bdi>{g.grantedBy.name}</bdi>
+                </td>
+                <td className="dir-cell-quiet" data-label={tx(F.until)}>
+                  <time dateTime={g.revokedAt ?? g.endsAt} title={dateTime(g.revokedAt ?? g.endsAt)}>{when(g.revokedAt ?? g.endsAt, { start: true })}</time>
+                </td>
+                <td className="dir-cell-state">
+                  <Badge tone={STATUS_TONE[g.status]}>{tx(F.status[g.status])}</Badge>
+                </td>
+                {canGrant && (
+                  <td className="cell-actions">
+                    {g.status === 'active' && (
+                      <RowActions
+                        label={tx(A.more, { name: g.family.name })}
+                        primary={
+                          <button type="button" className="btn btn--sm acct-revoke" onClick={() => setRevoking(g)}>
+                            {tx(F.revoke)}
+                          </button>
+                        }
+                      />
+                    )}
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
       )}
       {revoking && <RevokeDialog grant={revoking} onClose={() => setRevoking(null)} />}
-    </section>
+    </Sheet>
   )
 }
 

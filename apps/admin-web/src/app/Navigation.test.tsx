@@ -76,7 +76,7 @@ describe('The navigation registry', () => {
   it('gives each of the twenty-one sections exactly one destination, in the nine sections of the rail', () => {
     const destinations = destinationsFor('super_admin')
     expect(destinations.map((d) => d.key)).toEqual([
-      'conversations', 'dashboard', 'people', 'sales', 'scheduling', 'operations', 'certificates', 'materials', 'finance', 'communication', 'admin',
+      'conversations', 'dashboard', 'people', 'sales', 'scheduling', 'certificates', 'finance', 'communication', 'admin',
     ])
     const keys = destinations.flatMap((d) => entriesOf(d).map((e) => e.key))
     // The twenty-one sections, plus Chat (PD-8: where the super admin replies),
@@ -85,10 +85,11 @@ describe('The navigation registry', () => {
     // (PD-38: the academy's calendar), Trials and New students (PD-11 T4,
     // PD-16, now Sales), the Teachers' and Student schedules (Scheduling), Teacher credentials review, Escalations (PD-35 B5) and
     // Certificates (PD-41) and Lesson audio (PD-48, under More), and
-    // the two teacher-records pages (PD-52, their own group under People).
-    expect(keys).toHaveLength(38)
+    // the two teacher-records pages (PD-52, their own group under People), and
+    // Team (the staff directory, beside Accounts and Users).
+    expect(keys).toHaveLength(39)
     expect([...keys].sort()).toEqual(
-      [...ADMIN_SECTIONS.map((s) => s.key), 'needs-action', 'chat', 'accounts', 'materials', 'schedule', 'teacher-schedules', 'student-schedules', 'students', 'sales-pipeline', 'trials', 'new-students', 'teacher-profiles', 'certificates', 'lesson-audio', 'moderation', 'teacher-attendance', 'teacher-grants'].sort(),
+      [...ADMIN_SECTIONS.map((s) => s.key), 'needs-action', 'chat', 'accounts', 'materials', 'schedule', 'teacher-schedules', 'student-schedules', 'students', 'sales-pipeline', 'trials', 'new-students', 'teacher-profiles', 'certificates', 'lesson-audio', 'moderation', 'teacher-attendance', 'teacher-grants', 'team'].sort(),
     )
     const conversations = destinations.find((d) => d.key === 'conversations')!
     expect(entriesOf(conversations).map((e) => e.path)).toEqual(['/chat', '/admin/conversations', '/moderation'])
@@ -112,6 +113,8 @@ describe('The navigation registry', () => {
         const allowed = navAreas(role, { lessonManager, billingReader })
           .filter((a): a is Exclude<NavArea, 'settings' | 'cases'> => a !== 'settings' && a !== 'cases')
           .map((a) => AREA_PATH[a])
+        // Team is not an area: a manager lists their own team (GET /staff-profiles/team decides who).
+        if (role === 'manager') allowed.push('/team')
         expect([...listed].sort(), role).toEqual([...allowed].sort())
         expect(listed, role).not.toContain('/inbox')
         const withheld = [
@@ -155,9 +158,10 @@ describe('The navigation registry', () => {
     // which it shares with Sales and Operations (PD-11 T4, PD-16), Teacher
     // credentials review (the queue it reviews with operators), Escalations
     // (PD-35 B5) and Materials, the library it manages with the Teachers
-    // manager (PD-29), and Lesson audio, whose keys it holds (PD-48).
+    // manager (PD-29), and Lesson audio, whose keys it holds (PD-48); and Team,
+    // the staff directory every manager has for their own people.
     const listed = destinationsFor('super_admin').flatMap((d) => entriesOf(d).map((e) => e.path))
-    expect(listed.filter((p) => !p.startsWith('/admin/'))).toEqual(['/chat', '/moderation', '/accounts', '/teacher-profiles', '/students', '/sales/pipeline', '/trials', '/trials/new-students', '/schedule', '/teachers/schedules', '/schedule/students', '/teachers/needs-action', '/lesson-audio', '/certificates', '/materials'])
+    expect(listed.filter((p) => !p.startsWith('/admin/'))).toEqual(['/chat', '/moderation', '/accounts', '/team', '/teacher-profiles', '/students', '/sales/pipeline', '/trials', '/trials/new-students', '/schedule', '/teachers/schedules', '/schedule/students', '/teachers/needs-action', '/lesson-audio', '/certificates', '/materials'])
     // PD-38: an operator is offered the Schedule on the server's word only
     // (the department roles -- finance, technical, academic -- never are).
     for (const role of ['manager', 'admin', 'coverage'] as const) {
@@ -178,7 +182,7 @@ describe('People & Organization', () => {
   it('groups the super admin\'s pages by subject and holds nothing that is not about people', () => {
     const people = destinationsFor('super_admin').find((d) => d.key === 'people')!
     expect(people.groups.map((g) => [g.label?.en, g.entries.map((e) => e.key)])).toEqual([
-      ['Staff & accounts', ['accounts', 'users']],
+      ['Staff & accounts', ['accounts', 'users', 'team']],
       ['Teachers', ['teachers', 'teacher-profiles', 'teacher-attendance', 'teacher-grants']],
       ['Families', ['parents', 'students']],
       ['Organization', ['teams']],
@@ -210,15 +214,15 @@ describe('The nine sections', () => {
     expect(pathsIn('people', 'admin', { billingReader: true })).toContain('/parents')
   })
 
-  it('Operations holds the supervisors\' queue, escalations and lesson audio; Certificates and Educational materials have destinations of their own', () => {
+  it('Schedule & lessons holds the lesson follow-up (once Operations); Certificates & materials holds both (once two icons)', () => {
     const access = { lessonManager: true, certificates: true, lessonAudio: true, materialsWorkspace: true }
-    expect(pathsIn('operations', 'manager', access)).toEqual([
+    const lessons = destinationsFor('manager', access).find((d) => d.key === 'scheduling')!.groups.find((g) => g.key === 'lessons')!
+    expect(lessons.entries.map((e) => e.path)).toEqual([
       // The Teachers department's Trial lessons page is listed here, not under Sales (PD-59 owner decision).
-      '/teachers/needs-action', '/trials', '/lesson-audio',
+      '/teachers/needs-action', '/lesson-audio', '/trials',
     ])
-    expect(pathsIn('certificates', 'manager', access)).toEqual(['/certificates'])
-    expect(pathsIn('materials', 'manager', access)).toEqual(['/materials'])
-    expect(pathsIn('operations', 'admin', {})).toEqual([])
+    expect(pathsIn('certificates', 'manager', access)).toEqual(['/certificates', '/materials'])
+    expect(pathsIn('scheduling', 'admin', {})).not.toContain('/teachers/needs-action')
     // Escalations is a tab of Tasks: reached from there, never listed in the rail.
     for (const role of ['admin', 'manager', 'super_admin'] as const) expect(destinationsFor(role, access).flatMap((d) => entriesOf(d).map((e) => e.key)), role).not.toContain('cases')
     // The Marketing designer's whole workspace is one rail item, and nothing else is listed for them but their tasks.
@@ -228,7 +232,7 @@ describe('The nine sections', () => {
     // Nobody is offered either page without the server's word.
     for (const role of ['manager', 'admin', 'coverage', 'specialist'] as const) {
       expect(destinationsFor(role, {}).map((d) => d.key), role).not.toContain('certificates')
-      expect(destinationsFor(role, {}).map((d) => d.key), role).not.toContain('materials')
+      expect(destinationsFor(role, {}).flatMap((d) => entriesOf(d).map((e) => e.path)), role).not.toContain('/materials')
     }
   })
 
@@ -444,7 +448,7 @@ describe('The desktop rail', () => {
     const nav = await screen.findByRole('navigation', { name: 'Admin Portal' })
     const items = [...nav.querySelectorAll('[data-destination]')]
     expect(items.map((el) => el.getAttribute('data-destination'))).toEqual([
-      'conversations', 'dashboard', 'people', 'sales', 'scheduling', 'operations', 'certificates', 'materials', 'finance', 'communication', 'admin',
+      'conversations', 'dashboard', 'people', 'sales', 'scheduling', 'certificates', 'finance', 'communication', 'admin',
     ])
     // Conversations is a menu now -- Chat and All conversations -- and it is
     // where the super admin lands.
@@ -489,6 +493,7 @@ describe('The desktop rail', () => {
     await waitFor(() => expect(document.activeElement).toHaveAccessibleName('Accounts'))
     for (const name of [
       'Users', // the read-only directory beside the account actions,
+      'Team', // and the staff profiles,
       'Teachers', // PD-10, then the teachers' pages: files,
       'Teacher credentials review',
       'Attendance & complaints', // PD-52
@@ -535,9 +540,63 @@ describe('The desktop rail', () => {
       const nav = await screen.findByRole('navigation', { name: 'Jawwid Operations' })
       expect([...nav.querySelectorAll('[data-destination]')].map((el) => el.getAttribute('data-destination')), role).toEqual(keys)
       expect(within(nav).getAllByRole('link').map((l) => l.textContent), role).toEqual(links)
-      expect(within(nav).queryAllByRole('button').map((b) => b.textContent), role).toEqual(menus)
+      // By accessible name: a long place name may be shortened on screen (People & Organization reads "People").
+      expect(within(nav).queryAllByRole('button').map((b) => b.getAttribute('aria-label') ?? b.textContent), role).toEqual(menus)
       unmount()
     }
+  })
+
+  it('is folded to its icons by default; the toggle opens it and the choice is remembered', async () => {
+    vi.stubGlobal('fetch', routeFetch({}))
+    const { unmount } = renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/admin/stories' })
+    const sidebar = await waitFor(() => document.getElementById('app-sidebar')!)
+    expect(sidebar).toHaveAttribute('data-rail', 'collapsed')
+    // Folded, every place keeps its name for assistive technology.
+    const nav = within(sidebar).getByRole('navigation', { name: 'Admin Portal' })
+    expect(within(nav).getByRole('button', { name: 'Finance' })).toBeInTheDocument()
+
+    // Folded, the head shows the mark (the book); opened, the full wordmark.
+    expect(sidebar.querySelector('.side__brand .brand-mark')).not.toBeNull()
+    expect(sidebar.querySelector('.side__brand .brand-logo')).toBeNull()
+
+    await userEvent.click(within(sidebar).getByRole('button', { name: 'Expand sidebar' }))
+    expect(sidebar).toHaveAttribute('data-rail', 'expanded')
+    expect(sidebar.querySelector('.side__brand .brand-mark')).toBeNull()
+    expect(sidebar.querySelector('.side__brand .brand-logo')).not.toBeNull()
+    expect(sidebar.closest('.shell')).toHaveClass('shell--rail-open')
+    expect(localStorage.getItem('jawwid.sidebar.expanded')).toBe('1')
+    unmount()
+
+    // A new visit opens as it was left, and folding again is remembered too.
+    renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/admin/stories' })
+    const again = await waitFor(() => document.getElementById('app-sidebar')!)
+    expect(again).toHaveAttribute('data-rail', 'expanded')
+    await userEvent.click(within(again).getByRole('button', { name: 'Collapse sidebar' }))
+    expect(again).toHaveAttribute('data-rail', 'collapsed')
+    expect(localStorage.getItem('jawwid.sidebar.expanded')).toBe('0')
+  })
+
+  it('marks the page\'s own entry on a teachers page the super admin reaches under its operator name', async () => {
+    localStorage.setItem('jawwid.sidebar.expanded', '1')
+    vi.stubGlobal('fetch', routeFetch({}))
+    renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/teachers/files' })
+    const nav = await screen.findByRole('navigation', { name: 'Admin Portal' })
+    // People is the place; under it, Teachers (which links to /admin/teachers) is the page.
+    await waitFor(() => expect(within(nav).getByRole('button', { name: 'People & Organization' })).toHaveAttribute('aria-current', 'true'))
+    const sub = within(nav).getByRole('list', { name: 'People & Organization' })
+    expect(within(sub).getByRole('link', { name: 'Teachers' })).toHaveAttribute('aria-current', 'page')
+    expect(within(sub).getAllByRole('link').filter((l) => l.getAttribute('aria-current'))).toHaveLength(1)
+  })
+
+  it('names a folded icon in a tooltip on hover', async () => {
+    vi.stubGlobal('fetch', routeFetch({}))
+    renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/admin/stories' })
+    const nav = await screen.findByRole('navigation', { name: 'Admin Portal' })
+    await userEvent.hover(within(nav).getByRole('button', { name: 'Finance' }))
+    expect(document.querySelector('.side__tip')).toHaveTextContent('Finance')
+    await userEvent.unhover(within(nav).getByRole('button', { name: 'Finance' }))
+    await userEvent.hover(document.querySelector('.shell__content')!)
+    expect(document.querySelector('.side__tip')).toBeNull()
   })
 })
 
@@ -615,7 +674,7 @@ describe('The drawer, below desktop width', () => {
     expect(within(nav).getByRole('group', { name: 'الأشخاص والهيكل التنظيمي' })).toBeInTheDocument()
     const dashboard = within(nav).getByRole('group', { name: 'لوحة المتابعة' })
     expect(within(dashboard).getByRole('link', { name: 'لوحة المتابعة' })).toBeInTheDocument()
-    // A destination with one page is that page: a direct link, not a menu.
+    // Certificates and Educational materials share one place now; each page is still one tap away.
     expect(within(nav).getByRole('link', { name: 'المواد التعليمية' })).toHaveAttribute('href', '/materials')
     expect(within(nav).getByRole('link', { name: 'الشهادات' })).toHaveAttribute('href', '/certificates')
     expect(within(nav).queryByRole('link', { name: 'التصعيدات' })).not.toBeInTheDocument()
@@ -627,7 +686,7 @@ describe('The drawer, below desktop width', () => {
     // PD-52: its own heading under People.
     expect(within(people).getByRole('link', { name: 'الحضور والتأخير والأعذار والشكاوى' })).toHaveAttribute('href', '/admin/teacher-attendance')
     expect(within(people).getByRole('link', { name: 'المنح والشهادات الطيبة' })).toHaveAttribute('href', '/admin/teacher-grants')
-    expect(within(nav).getAllByRole('link')).toHaveLength(38)
+    expect(within(nav).getAllByRole('link')).toHaveLength(39)
   })
 
   it('opens from the menu button and closes with Escape, giving focus back', async () => {

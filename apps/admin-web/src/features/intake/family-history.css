@@ -1,0 +1,5 @@
+/* The family history on the Parent file: what holds a line together. The list
+   itself is drawn by the profile's own sheet. */
+
+/* A name or a figure moves to the next line whole, never half of it; one longer than the line still wraps. */
+.fh-run { display: inline-block; max-inline-size: 100%; }

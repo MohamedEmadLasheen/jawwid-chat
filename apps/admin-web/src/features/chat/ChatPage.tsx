@@ -8,7 +8,7 @@ import { isManager, isOperator, isSuperAdmin } from '@/core/permissions/capabili
 import { Dialog } from '@/shared/components/Dialog'
 import { Menu, type MenuItem } from '@/shared/components/Menu'
 import { Splitter, useResizableWidth } from '@/shared/components/Splitter'
-import { EmptyState, ErrorState, LoadingState } from '@/shared/components/States'
+import { ErrorState, LoadingState } from '@/shared/components/States'
 import { useMediaQuery } from '@/shared/hooks/useMediaQuery'
 import { chatApi, chatKeys } from './chatApi'
 import { chatCopyFor } from './copy'
@@ -16,13 +16,18 @@ import { useChatRealtime } from './useChatRealtime'
 import { ConversationList } from './ConversationList'
 import { ChatThread } from './ChatThread'
 import { ConversationInfo } from './ConversationInfo'
+import { ThreadStart } from './ThreadStart'
+import { useWorkspaceKeys } from './useWorkspaceKeys'
 import { NewFamilyGroupDialog } from './NewFamilyGroupDialog'
 import { NewDirectChatDialog } from './NewDirectChatDialog'
 import { StarredDialog } from './StarredDialog'
 import { JoinGroupDialog } from './SeatParts'
 import { Icon } from '@/shared/components/Icon'
 import { isGroup } from './chatView'
-import { MyCoverBanner } from '@/features/organization/CoverBanner'
+import { CoverActions } from '@/features/organization/CoverBanner'
+import { HandOverDialog } from '@/features/organization/HandOverDialog'
+import { T as OrgT, useCopy as useOrgCopy } from '@/features/organization/copy'
+import { useMyCover } from '@/features/organization/hooks'
 import './chat.css'
 
 export { conversationName } from './chatView'
@@ -30,11 +35,12 @@ export { conversationName } from './chatView'
 const LIST_WIDTH_KEY = 'jawwid.chat.listWidth'
 const INFO_KEY = 'jawwid.chat.infoPanel'
 
+/** The context panel is open until someone closes it; the choice is remembered. */
 function readInfoPref(): boolean {
   try {
-    return localStorage.getItem(INFO_KEY) === '1'
+    return localStorage.getItem(INFO_KEY) !== '0'
   } catch {
-    return false
+    return true
   }
 }
 
@@ -42,11 +48,12 @@ function readInfoPref(): boolean {
  * The admin's chat workspace: the same conversations, through the same API, as
  * the parent and teacher apps. What appears in the list is exactly what the
  * server will let this admin open (staff scope); nothing here filters or widens
- * it. Laid out like the Admin Portal's conversation view -- list, thread, and
- * an info panel (a sheet below wide screens).
+ * it. Three panes -- list, thread, and the context panel (the family, then the
+ * conversation's own details), which is a drawer below 1360px; below 768px one
+ * pane shows at a time. J / K / Enter / Escape work the list from the keyboard.
  */
 export function ChatPage() {
-  const { locale } = useI18n()
+  const { locale, date } = useI18n()
   const copy = chatCopyFor(locale)
   const navigate = useNavigate()
   const { conversationId } = useParams<{ conversationId: string }>()
@@ -61,7 +68,19 @@ export function ChatPage() {
   const [creatingDirect, setCreatingDirect] = useState(false)
   const [showingStarred, setShowingStarred] = useState(false)
   const [joiningGroup, setJoiningGroup] = useState(false)
-  const wide = useMediaQuery('(min-width: 1280px)')
+  // PD-33, as MyCoverBanner (features/organization) has it: who covers and until
+  // when stay banners over the list; "I'm away" itself is a quiet action in the
+  // list's header rather than a bar of its own. Supervisors and backups only;
+  // the server says who may hand over.
+  const otx = useOrgCopy()
+  const mayCover = !!staff && (staff.role === 'admin' || staff.role === 'coverage')
+  const myCover = useMyCover(mayCover)
+  const cover = mayCover ? myCover.data : undefined
+  const canGoAway = !!cover && !cover.away && cover.canHandOver
+  const [handingOver, setHandingOver] = useState(false)
+  // The panel sits beside the thread only where the thread keeps a readable
+  // width (sidebar, list and panel take ~920px); below that it is a drawer.
+  const wide = useMediaQuery('(min-width: 1360px)')
   const resizable = useMediaQuery('(min-width: 1024px)')
   const listWidth = useResizableWidth(LIST_WIDTH_KEY, 360, 280, 520)
   const [infoPref, setInfoPref] = useState(readInfoPref)
@@ -118,6 +137,7 @@ export function ChatPage() {
   ]
 
   const style = resizable ? ({ '--list-w': `${listWidth.width}px` } as CSSProperties) : undefined
+  useWorkspaceKeys({ listId: 'chat-list', onBack: conversationId ? () => navigate('/chat') : null })
 
   return (
     <div className="workspace cw" data-view={conversationId ? 'thread' : 'list'} style={style}>
@@ -127,8 +147,25 @@ export function ChatPage() {
             {copy.offline}
           </div>
         )}
-        {/* PD-33: "I'm away", or who covers until when. */}
-        <MyCoverBanner />
+        {/* PD-33: who covers until when ("I'm away" is in the list's header). */}
+        {cover?.away && (
+          <div className="banner banner--info cover-banner" role="status">
+            <span dir="auto">
+              {cover.away.status === 'scheduled'
+                ? otx(OrgT.scheduled, { backup: cover.away.backup.name, date: date(cover.away.startsAt) })
+                : otx(OrgT.awayBanner, { backup: cover.away.backup.name, date: date(cover.away.endsAt) })}
+            </span>
+            <CoverActions cover={cover.away} />
+          </div>
+        )}
+        {(cover?.covering ?? [])
+          .filter((x) => x.status === 'active')
+          .map((x) => (
+            <div key={x.id} className="banner banner--info cover-banner" role="status">
+              <span dir="auto">{otx(OrgT.coveringBanner, { name: x.supervisor.name, date: date(x.endsAt) })}</span>
+              <CoverActions cover={x} />
+            </div>
+          ))}
         {list.isLoading ? (
           <LoadingState />
         ) : list.error ? (
@@ -143,6 +180,17 @@ export function ChatPage() {
             initialView={params.get('view') === 'waiting' ? 'waiting' : undefined}
             actions={
               <>
+                {canGoAway && (
+                  <button
+                    type="button"
+                    className="btn btn--ghost btn--icon btn--sm"
+                    onClick={() => setHandingOver(true)}
+                    aria-label={otx(OrgT.imAway)}
+                    title={otx(OrgT.imAway)}
+                  >
+                    <Icon name="calendarPlus" size={18} />
+                  </button>
+                )}
                 <button
                   type="button"
                   className="btn btn--ghost btn--icon btn--sm"
@@ -172,8 +220,8 @@ export function ChatPage() {
             focusMessageId={focusMessageId}
             onFocused={() => setParams({}, { replace: true })}
           />
-        ) : (
-          <EmptyState icon="conversations" title={copy.pick} />
+        ) : list.data === undefined ? null : (
+          <ThreadStart conversations={conversations} onOpen={(id) => navigate(`/chat/${encodeURIComponent(id)}`)} />
         )}
       </section>
 
@@ -191,6 +239,7 @@ export function ChatPage() {
         </Dialog>
       )}
 
+      {handingOver && staff && <HandOverDialog supervisor={{ id: staff.id, name: staff.name }} onClose={() => setHandingOver(false)} />}
       {showingStarred && (
         <StarredDialog
           onClose={() => setShowingStarred(false)}

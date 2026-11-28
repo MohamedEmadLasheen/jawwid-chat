@@ -75,7 +75,8 @@ const DETAIL: LeadDetail = {
   manualStage: true,
   lastContactedAt: '2026-11-18T10:00:00Z',
   nextFollowUpOn: '2026-11-20',
-  followUpDue: true,
+  // A lead ready to hand over, with no follow-up overdue: its stated act is Convert.
+  followUpDue: false,
   followUpNote: null,
   createdAt: '2026-11-10T09:00:00Z',
   convertedAt: null,
@@ -132,13 +133,14 @@ describe('the Sales pipeline in the navigation', () => {
 describe('the Sales pipeline page', () => {
   it('lists leads with their stage, shows that a channel is on file and never a contact value', async () => {
     renderWithProviders(<AppRoutes />, { staff: sales, route: '/sales/pipeline' })
-    const alpha = (await screen.findByText('Lead Alpha')).closest('tr')!
-    expect(within(alpha).getByText('Contacted')).toBeInTheDocument()
+    // The board: a lead is a card, and its stage is the column it stands in.
+    const alpha = (await screen.findByText('Lead Alpha')).closest('article')!
+    expect(within(alpha.closest('section')!).getByRole('heading', { name: 'Contacted' })).toBeInTheDocument()
     expect(within(alpha).getByText('Follow-up due')).toBeInTheDocument()
-    expect(within(alpha).getByText('Phone · E-mail')).toBeInTheDocument()
-    const beta = screen.getByText('Lead Beta').closest('tr')!
-    expect(within(beta).getByText('Trial booked')).toBeInTheDocument()
-    expect(within(beta).getByText('None')).toBeInTheDocument()
+    expect(within(alpha).getByText('Phone, E-mail')).toBeInTheDocument()
+    const beta = screen.getByText('Lead Beta').closest('article')!
+    expect(within(beta.closest('section')!).getByRole('heading', { name: 'Trial booked' })).toBeInTheDocument()
+    expect(within(beta).getByText('No way to reach them on file')).toBeInTheDocument()
     expect(document.body.textContent).not.toContain(SECRET_PHONE)
     expect(document.body.textContent).not.toContain(SECRET_EMAIL)
     // The list's own request never asked for a contact; the detail has not been read.
@@ -173,7 +175,8 @@ describe('the Sales pipeline page', () => {
     renderWithProviders(<AppRoutes />, { staff: sales, route: '/sales/pipeline', locale: 'ar' })
     expect(await screen.findByRole('heading', { name: 'مسار المبيعات' })).toBeInTheDocument()
     expect(document.documentElement.dir).toBe('rtl')
-    expect(await screen.findByText('تم التواصل')).toBeInTheDocument()
+    // The stage names its column and its switch.
+    expect((await screen.findAllByText('تم التواصل')).length).toBeGreaterThan(0)
   })
 })
 
@@ -236,7 +239,9 @@ describe('a lead\'s panel', () => {
     const { user, dialog } = await open()
     await user.clear(within(dialog).getByLabelText('Follow up on'))
     await user.type(within(dialog).getByLabelText('Follow up on'), '2026-11-25')
-    await user.click(within(dialog).getByRole('button', { name: 'Mark contacted' }))
+    // Convert is this lead's stated action; the contact just made is behind "⋯".
+    await user.click(within(dialog).getByRole('button', { name: /More actions/ }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Mark contacted' }))
     await waitFor(() => expect(calls('POST', /\/contacted$/)).toHaveLength(1))
     expect(bodyOf(calls('POST', /\/contacted$/)[0])).toEqual({ nextFollowUpOn: '2026-11-25', followUpNote: null })
     expect(await within(dialog).findByText('Contact recorded.')).toBeInTheDocument()
@@ -277,7 +282,8 @@ describe('a lead\'s panel', () => {
   it('marks a lead lost only with a reason', async () => {
     on('POST', /\/sales-pipeline\/leads\/lead-1$/, () => json({ ...DETAIL, stage: 'lost', lostReason: 'price' }))
     const { user, dialog } = await open()
-    await user.click(within(dialog).getByRole('button', { name: 'Mark lost' }))
+    await user.click(within(dialog).getByRole('button', { name: /More actions/ }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Mark lost' }))
     const confirm = within(dialog).getAllByRole('button', { name: 'Mark lost' }).at(-1)!
     expect(confirm).toBeDisabled()
     await chooseOption(user, within(dialog).getByRole('combobox', { name: 'Why was the lead lost?' }), 'price')
@@ -291,6 +297,8 @@ describe('a lead\'s panel', () => {
     const { dialog } = await open()
     expect(within(dialog).queryByRole('button', { name: 'Mark contacted' })).not.toBeInTheDocument()
     expect(within(dialog).queryByRole('button', { name: 'Mark lost' })).not.toBeInTheDocument()
+    // Nor behind a "⋯": there is none.
+    expect(within(dialog).queryByRole('button', { name: /More actions/ })).not.toBeInTheDocument()
     expect(within(dialog).getByText('A trial decides this stage.')).toBeInTheDocument()
   })
 
@@ -329,8 +337,9 @@ describe('a lead\'s panel', () => {
 describe('who gets the Sales icon, per the server\'s answers (PD-59 owner decision)', () => {
   const salesPaths = (role: Parameters<typeof destinationsFor>[0], access: Parameters<typeof destinationsFor>[1]) =>
     destinationsFor(role, access).find((d) => d.key === 'sales')?.groups.flatMap((g) => g.entries.map((e) => e.path)) ?? null
+  // The follow-up of lessons (once the Operations icon) is now the "lessons" group of Schedule & lessons.
   const opsPaths = (role: Parameters<typeof destinationsFor>[0], access: Parameters<typeof destinationsFor>[1]) =>
-    destinationsFor(role, access).find((d) => d.key === 'operations')?.groups.flatMap((g) => g.entries.map((e) => e.path)) ?? []
+    destinationsFor(role, access).find((d) => d.key === 'scheduling')?.groups.filter((g) => g.key === 'lessons' || g.label === null).flatMap((g) => g.entries.map((e) => e.path)).filter((p) => !['/schedule', '/teachers/schedules', '/schedule/students'].includes(p)) ?? []
 
   it('the super admin: the whole Sales workspace', () => {
     expect(salesPaths('super_admin', {})).toEqual(['/sales/pipeline', '/trials', '/trials/new-students'])
@@ -346,7 +355,7 @@ describe('who gets the Sales icon, per the server\'s answers (PD-59 owner decisi
     expect(salesPaths('admin', { operations: true })).toEqual(['/trials', '/trials/new-students'])
   })
 
-  it('the Teachers department (lessonManager only): NO Sales icon; Trial lessons stays reachable, listed under Operations', () => {
+  it('the Teachers department (lessonManager only): NO Sales icon; Trial lessons stays reachable, listed with the lessons', () => {
     for (const role of ['admin', 'manager'] as const) {
       expect(salesPaths(role, { lessonManager: true }), role).toBeNull()
       expect(opsPaths(role, { lessonManager: true }), role).toContain('/trials')
@@ -392,7 +401,7 @@ describe('ownership in the page', () => {
 
   it('shows each lead\'s owner in the list', async () => {
     renderWithProviders(<AppRoutes />, { staff: sales, route: '/sales/pipeline' })
-    const alpha = (await screen.findByText('Lead Alpha')).closest('tr')!
+    const alpha = (await screen.findByText('Lead Alpha')).closest('article')!
     expect(within(alpha).getByText('Rep One')).toBeInTheDocument()
   })
 
@@ -416,6 +425,10 @@ describe('ownership in the page', () => {
     await user.click(await screen.findByRole('button', { name: 'Open Lead Alpha' }))
     const dialog = await screen.findByRole('dialog')
     await within(dialog).findByText('Parent One')
+    // Reassigning adjusts the lead; it waits behind "⋯" until it is asked for.
+    expect(within(dialog).queryByRole('combobox', { name: 'Reassign to' })).not.toBeInTheDocument()
+    await user.click(within(dialog).getByRole('button', { name: 'More actions: Lead Alpha' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Reassign to' }))
     const picker = await within(dialog).findByRole('combobox', { name: 'Reassign to' })
     await chooseOption(user, picker, 'Rep Two')
     await user.click(within(dialog).getByRole('button', { name: 'Reassign to' }))

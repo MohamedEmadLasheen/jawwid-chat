@@ -1,13 +1,13 @@
 import { useSearchParams } from 'react-router-dom'
 import { FilterChips } from '@/shared/components/FilterChips'
 import { PageHeader } from '@/shared/components/PageHeader'
-import { EmptyState, LoadingState } from '@/shared/components/States'
+import { LoadingState } from '@/shared/components/States'
 import { ExcusesSection, LatenessSection, LeaveSection } from '@/features/teacher-supervision/AttendanceSections'
 import { ParentFeedbackSection } from '@/features/teacher-supervision/ParentFeedback'
 import { ComplaintsSection } from '@/features/teacher-supervision/RewardsAndComplaints'
 import { R, useCopy } from './copy'
 import { useTeacherRecordsAccess } from './hooks'
-import { TeacherPicker, TeacherStrip } from './TeacherStrip'
+import { Denied, TeacherPicker, useTeacherFacts } from './TeacherStrip'
 import './teacher-records.css'
 
 export type AttendanceSection = 'leave' | 'lateness' | 'excuses' | 'complaints'
@@ -53,6 +53,7 @@ export function TeacherAttendancePage({ basePath, eyebrow }: { basePath: string;
     complaints: tx(R.complaints),
   }
 
+  const facts = useTeacherFacts(teacher || null, basePath)
   const a = access.data
   if (access.isLoading) return <LoadingState />
   if (!a || !a.attendance.view) {
@@ -60,7 +61,7 @@ export function TeacherAttendancePage({ basePath, eyebrow }: { basePath: string;
       <div className="page">
         <div className="page__inner">
           <PageHeader eyebrow={eyebrow} title={tx(R.attendanceTitle)} />
-          <EmptyState icon="lock" title={tx(R.denied)} />
+          <Denied text={tx(R.denied)} />
         </div>
       </div>
     )
@@ -70,7 +71,18 @@ export function TeacherAttendancePage({ basePath, eyebrow }: { basePath: string;
   return (
     <div className="page">
       <div className="page__inner">
-        <PageHeader eyebrow={eyebrow ?? tx(R.group)} title={tx(R.attendanceTitle)} subtitle={tx(R.attendanceSubtitle)} />
+        <PageHeader
+          title={tx(R.attendanceTitle)}
+          status={facts.status}
+          figures={facts.figures}
+          actions={
+            <>
+              {/* Whose records these are: the control every sheet below answers to. */}
+              <TeacherPicker value={teacher} onChange={setTeacher} />
+              {facts.action}
+            </>
+          }
+          tabs={
         <FilterChips<AttendanceSection>
           variant="tabs"
           label={tx(R.sections)}
@@ -78,28 +90,28 @@ export function TeacherAttendancePage({ basePath, eyebrow }: { basePath: string;
           onChange={(next) => set({ section: next })}
           options={sections.map((s) => ({ value: s, label: label[s] }))}
         />
+          }
+        />
+        {/* The parents' suggestions are answered by those who decide; not Sales'. */}
+        {section === 'complaints' && !sales && (
         <div className="tr-toolbar">
-          <TeacherPicker value={teacher} onChange={setTeacher} />
+            <FilterChips<ComplaintsView>
+              label={tx(R.showing)}
+              value={view}
+              onChange={(next) => set(next === 'complaints' ? { section } : { section, view: next })}
+              options={[
+                { value: 'complaints', label: tx(R.complaintsList) },
+                { value: 'suggestions', label: tx(R.suggestions) },
+              ]}
+            />
         </div>
-        <TeacherStrip teacherId={teacher || null} basePath={basePath} />
+        )}
         <div className="th-body">
-          {section === 'leave' && <LeaveSection basePath={basePath} />}
+          {section === 'leave' && <LeaveSection basePath={basePath} teacherId={teacher || undefined} />}
           {section === 'lateness' && <LatenessSection {...rights} trialsOnly={sales} />}
           {section === 'excuses' && <ExcusesSection {...rights} />}
           {section === 'complaints' && (
             <>
-              {/* The parents' suggestions are answered by those who decide; not Sales'. */}
-              {!sales && (
-                <FilterChips<ComplaintsView>
-                  label={tx(R.showing)}
-                  value={view}
-                  onChange={(next) => set(next === 'complaints' ? { section } : { section, view: next })}
-                  options={[
-                    { value: 'complaints', label: tx(R.complaintsList) },
-                    { value: 'suggestions', label: tx(R.suggestions) },
-                  ]}
-                />
-              )}
               {view === 'complaints' || sales ? (
                 <ComplaintsSection canDecide={a.attendance.decide} requireAbout={sales} />
               ) : (

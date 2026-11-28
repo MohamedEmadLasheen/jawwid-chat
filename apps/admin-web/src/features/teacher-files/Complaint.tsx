@@ -1,3 +1,5 @@
+import type { MenuItem } from '@/shared/components/Menu'
+import { RowActions } from '@/shared/components/RowActions'
 import { useId, useState } from 'react'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Badge, type Tone } from '@/shared/components/Badge'
@@ -10,6 +12,7 @@ import { FeedbackStatusBadge, ReplyDialog } from '@/features/teacher-supervision
 import { useTakeFeedback } from '@/features/teacher-supervision/hooks'
 import type { Away, Complaint, ComplaintStatus, EntryBrief } from './api'
 import { T, describeError, useCopy } from './copy'
+import { By } from './Byline'
 import { useCalendarDate } from './calendar'
 
 const STATUS: Record<ComplaintStatus, { label: keyof typeof T; tone: Tone }> = {
@@ -34,11 +37,10 @@ export function AwayBadge({ away }: { away: Away | null | undefined }) {
 }
 
 function Byline({ entry }: { entry: Omit<EntryBrief, 'author'> & { author: EntryBrief['author'] | null } }) {
-  const tx = useCopy()
   const { dateTime } = useI18n()
   // A PD-32 app complaint has no staff author: the parent filed it (named in its head).
-  if (!entry.author) return <span className="tf-byline">{dateTime(entry.createdAt)}</span>
-  return <span className="tf-byline">{tx(T.by, { name: entry.author.name, date: dateTime(entry.createdAt) })}</span>
+  if (!entry.author) return <By when={dateTime(entry.createdAt)} />
+  return <By name={entry.author.name} when={dateTime(entry.createdAt)} />
 }
 
 /** Where a complaint came from. An app complaint names the parent and the child (PD-32). */
@@ -91,6 +93,23 @@ export function ComplaintItem({
   const decision = c.action?.decision as Decision | null | undefined
   // PD-32: an app complaint is also the parent's feedback, with its own status and the one reply they read.
   const feedback = c.from === 'parent_app' ? (c.parentFeedback ?? null) : null
+  // What is done next with a complaint, by where it stands: that one is stated, the rest are behind "⋯".
+  const acts: Array<{ key: string; label: string; icon: MenuItem['icon']; strong?: boolean; run: () => void; busy?: boolean }> = []
+  if (canDecide && feedback && !c.handledBy) acts.push({ key: 'take', label: tx(F.take), icon: 'userCheck', strong: true, run: () => take.mutate(feedback.id), busy: take.isPending })
+  if (canDecide && status === 'upheld' && onDecide) acts.push({ key: 'decide', label: tx(T.decideAction), icon: 'scales', strong: true, run: onDecide })
+  if (canDecide && feedback) acts.push({ key: 'reply', label: feedback.response ? tx(F.changeReply) : tx(F.reply), icon: 'reply', run: () => setReplying(true) })
+  if (canDecide && status === 'open') acts.push({ key: 'uphold', label: tx(T.uphold), icon: 'scales', run: onUphold })
+  if (status !== 'resolved') {
+    acts.push({ key: 'follow', label: tx(T.followUp), icon: 'note', run: onFollowUp })
+    if (canDecide) acts.push({ key: 'resolve', label: tx(T.resolve), icon: 'checkCircle', run: onResolve })
+  }
+  const first = acts[0]
+  const primary = first ? (
+    <button type="button" className="btn btn--sm" disabled={first.busy} onClick={first.run}>
+      {first.label}
+    </button>
+  ) : undefined
+  const more: MenuItem[] = acts.slice(1).map((x) => ({ key: x.key, label: x.label, icon: x.icon, onSelect: x.run }))
   return (
     <li className="tf-entry">
       <div className="tf-entry__head">
@@ -143,38 +162,7 @@ export function ComplaintItem({
       )}
       {canWrite && (
         <div className="tf-entry__actions">
-          {canDecide && feedback && !c.handledBy && (
-            <button type="button" className="btn btn--primary btn--sm" disabled={take.isPending} onClick={() => take.mutate(feedback.id)}>
-              {tx(F.take)}
-            </button>
-          )}
-          {canDecide && feedback && (
-            <button type="button" className="btn btn--sm" onClick={() => setReplying(true)}>
-              {feedback.response ? tx(F.changeReply) : tx(F.reply)}
-            </button>
-          )}
-          {canDecide && status === 'open' && (
-            <button type="button" className="btn btn--sm" onClick={onUphold}>
-              {tx(T.uphold)}
-            </button>
-          )}
-          {canDecide && status === 'upheld' && onDecide && (
-            <button type="button" className="btn btn--primary btn--sm" onClick={onDecide}>
-              {tx(T.decideAction)}
-            </button>
-          )}
-          {status !== 'resolved' && (
-            <>
-              <button type="button" className="btn btn--ghost btn--sm" onClick={onFollowUp}>
-                {tx(T.followUp)}
-              </button>
-              {canDecide && (
-                <button type="button" className="btn btn--ghost btn--sm" onClick={onResolve}>
-                  {tx(T.resolve)}
-                </button>
-              )}
-            </>
-          )}
+          <RowActions primary={primary} more={more} label={tx(T.moreFor, { name: teacherName ?? tx(T.complaints) })} />
         </div>
       )}
       {take.error ? (

@@ -26,6 +26,18 @@ export const H = {
   teacher: { en: 'Teacher', ar: 'المعلم' },
   month: { en: 'Month', ar: 'الشهر' },
   empty: { en: 'Nothing here.', ar: 'لا شيء هنا.' },
+  emptyLeave: { en: 'No teachers to show.', ar: 'لا معلمين للعرض.' },
+  emptyLeaveHint: { en: 'Each teacher appears here with their leave balance.', ar: 'يظهر كل معلم هنا مع رصيد إجازاته.' },
+  emptyOpen: { en: 'Nothing is waiting for a decision.', ar: 'لا شيء بانتظار قرار.' },
+  emptyOpenHint: { en: 'A new record appears here by itself.', ar: 'يظهر كل سجل جديد هنا تلقائيًا.' },
+  emptyMonth: { en: 'Nothing was recorded in this month.', ar: 'لم يُسجَّل شيء في هذا الشهر.' },
+  emptyMonthHint: { en: 'Choose another month, or go back to what needs a decision.', ar: 'اختر شهرًا آخر، أو عد إلى ما يحتاج قرارًا.' },
+  emptyRewards: { en: 'No rewards yet.', ar: 'لا مكافآت بعد.' },
+  emptyRewardsHint: { en: 'Record one and the teacher is told in the supervision chat.', ar: 'سجّل واحدة فيُبلَّغ المعلم في محادثة الإشراف.' },
+  emptyComplaints: { en: 'No complaints.', ar: 'لا شكاوى.' },
+  emptyComplaintsHint: { en: 'A parent’s complaint from the app appears here by itself.', ar: 'تظهر شكوى ولي الأمر من التطبيق هنا تلقائيًا.' },
+  addCurrencyAction: { en: 'Add', ar: 'إضافة' },
+  addCurrencyHint: { en: 'A three-letter code. Its row is added to the list above.', ar: 'رمز من ثلاثة أحرف. يُضاف صفّه إلى القائمة أعلاه.' },
   needsDecision: { en: 'Needs decision', ar: 'بحاجة إلى قرار' },
   thisMonth: { en: 'Month', ar: 'الشهر' },
   what: { en: 'What happened', ar: 'ما حدث' },
@@ -39,22 +51,25 @@ export const H = {
 
   // Leave
   balance: { en: 'Leave balance', ar: 'رصيد الإجازات' },
-  balanceOf: { en: '{left} of {allowance} days left', ar: 'متبقٍ {left} من {allowance} يومًا' },
-  notTracked: { en: 'Not tracked ({used} days taken)', ar: 'غير محدد ({used} يومًا مأخوذة)' },
+  // {days} is a counted noun (core/i18n/counts): "21 days", "5 أيام", "21 يومًا".
+  balanceOf: { en: '{left} of {days} left', ar: 'متبقٍ {left} من {days}' },
+  notTracked: { en: 'Not tracked ({days} taken)', ar: 'غير محدد (المأخوذ: {days})' },
+  notTrackedNone: { en: 'Not tracked (0 days taken)', ar: 'غير محدد (لم تُؤخذ إجازة)' },
   status: { en: 'Status', ar: 'الحالة' },
   available: { en: 'Available', ar: 'متاح' },
-  pending: { en: '{n} waiting', ar: '{n} بانتظار القرار' },
+  pending: { en: 'Requests waiting: {n}', ar: 'طلبات بانتظار القرار: {n}' },
+  leaveOverview: { en: 'Who is away, and leave balances', ar: 'من في إجازة، وأرصدة الإجازات' },
   requests: { en: 'Requests', ar: 'الطلبات' },
   leaveHint: {
-    en: 'A teacher on leave is shown as such to families in their chat, and is not given new students, transfers or trials until they are back. Messages still reach them.',
-    ar: 'يظهر المعلم في إجازة لأولياء الأمور في المحادثة، ولا يُسند إليه طلاب جدد أو نقل أو حصص تجريبية حتى يعود. وتظل الرسائل تصله.',
+    en: 'On leave: families see it in chat, and no new students, transfers or trials are given; messages still arrive.',
+    ar: 'في الإجازة: يراها أولياء الأمور في المحادثة، ولا يُسند طلاب جدد أو نقل أو تجريبية، وتظل الرسائل تصل.',
   },
   leaveRequests: { en: 'Leave requests', ar: 'طلبات الإجازة' },
 
   // Absences
   absencesHint: {
-    en: 'An apology the teacher sends in the chat, or a lesson closed as their absence, is recorded here by itself. Record an absence yourself only when there is no lesson to close.',
-    ar: 'اعتذار المعلم في المحادثة، أو حصة أُغلقت كغياب له، يُسجَّل هنا تلقائيًا. سجّل الغياب بنفسك فقط عندما لا توجد حصة لإغلاقها.',
+    en: 'An apology in chat or a lesson closed as absent is recorded by itself; record one only when there is no lesson to close.',
+    ar: 'اعتذار المعلم في المحادثة أو حصة أُغلقت كغياب يُسجَّل تلقائيًا؛ سجّل الغياب بنفسك فقط إن لم توجد حصة لإغلاقها.',
   },
   recordAbsence: { en: 'Record an absence', ar: 'تسجيل غياب' },
   // PD-52: PD-50's reason, staff only.
@@ -62,8 +77,8 @@ export const H = {
 
   // Lateness
   latenessHint: {
-    en: 'How late the teacher was, and the action taken. Each one takes its step on the teacher’s monthly ladder.',
-    ar: 'مقدار تأخر المعلم والإجراء المتخذ. كل حالة تأخذ خطوتها في سُلّم المعلم الشهري.',
+    en: 'Each lateness takes its step on the teacher’s monthly ladder.',
+    ar: 'كل تأخير يأخذ خطوته في سُلّم المعلم الشهري.',
   },
   recordLateness: { en: 'Record lateness', ar: 'تسجيل تأخير' },
   delay: { en: 'Delay', ar: 'مدة التأخير' },
@@ -71,8 +86,8 @@ export const H = {
 
   // Rewards
   rewardsHint: {
-    en: 'Each reward is told to the teacher in their supervision chat and appears on their file. Its amount is added to that month’s pay.',
-    ar: 'تُبلَّغ كل مكافأة للمعلم في محادثة الإشراف وتظهر في ملفه. ويُضاف مبلغها إلى راتب ذلك الشهر.',
+    en: 'Told to the teacher in the supervision chat, shown on their file, and added to that month’s pay.',
+    ar: 'تُبلَّغ للمعلم في محادثة الإشراف، وتظهر في ملفه، ويُضاف مبلغها إلى راتب ذلك الشهر.',
   },
   recordReward: { en: 'Record a reward', ar: 'تسجيل مكافأة' },
   reason: { en: 'Reason', ar: 'السبب' },
@@ -94,8 +109,8 @@ export const H = {
   // Deduction defaults
   defaultsTitle: { en: 'Default deduction amounts', ar: 'مبالغ الخصم الافتراضية' },
   defaultsHint: {
-    en: 'Deciding a first or second deduction deducts this amount from that month’s pay at once, in the teacher’s pay currency. Change one case from the teacher’s Payroll. 0 stops it.',
-    ar: 'عند تقرير الخصم الأول أو الثاني يُخصم هذا المبلغ من راتب ذلك الشهر فورًا، بعملة راتب المعلم. عدّل حالة واحدة من قسم الرواتب في ملف المعلم. القيمة 0 توقفه.',
+    en: 'Taken from that month’s pay as soon as a first or second deduction is decided. 0 stops it; one case is changed from the teacher’s Payroll.',
+    ar: 'يُخصم من راتب الشهر فور تقرير الخصم الأول أو الثاني. القيمة 0 توقفه، وتُعدَّل حالة واحدة من الرواتب في ملف المعلم.',
   },
   currency: { en: 'Currency', ar: 'العملة' },
   first: { en: 'First deduction', ar: 'الخصم الأول' },
@@ -110,8 +125,8 @@ export const H = {
 
   // Complaints
   complaintsHint: {
-    en: 'Complaints from management and from parents. Uphold one to put it on the teacher’s monthly ladder and decide the action; follow-ups and the resolution stay with it.',
-    ar: 'شكاوى الإدارة وأولياء الأمور. أثبت الشكوى لتُضاف إلى سُلّم المعلم الشهري ويُتخذ الإجراء؛ وتبقى المتابعات والمعالجة معها.',
+    en: 'Uphold a complaint to put it on the teacher’s monthly ladder and decide the action; follow-ups stay with it.',
+    ar: 'أثبت الشكوى لتُضاف إلى سُلّم المعلم الشهري ويُتخذ الإجراء؛ وتبقى المتابعات معها.'
   },
   fromManagement: { en: 'From management', ar: 'من الإدارة' },
   fromParents: { en: 'From parents', ar: 'من أولياء الأمور' },
@@ -126,9 +141,10 @@ export const H = {
  * sees says so, and a complaint is never "resolved" from here.
  */
 export const F = {
+  title: { en: 'From parents', ar: 'من أولياء الأمور' },
   hint: {
-    en: 'What parents send from the app about their child’s teacher: praise, suggestions and complaints. Take one so the parent sees it is in review, then reply. A complaint is also listed under Complaints, and is resolved there.',
-    ar: 'ما يرسله أولياء الأمور من التطبيق عن معلم طفلهم: شكر وثناء واقتراحات وشكاوى. تولَّ المتابعة ليرى ولي الأمر أنها قيد المراجعة، ثم اكتب الرد. وتظهر الشكوى أيضًا في قسم الشكاوى، وتُعالَج من هناك.',
+    en: 'Take one so the parent sees it is in review, then reply. A complaint is resolved under Complaints.',
+    ar: 'تولَّ المتابعة ليرى ولي الأمر أنها قيد المراجعة، ثم اكتب الرد. والشكوى تُعالَج من قسم الشكاوى.',
   },
   category: { en: 'Type', ar: 'النوع' },
   allCategories: { en: 'All types', ar: 'كل الأنواع' },

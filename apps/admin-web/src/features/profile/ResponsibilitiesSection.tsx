@@ -5,20 +5,24 @@ import { NOTE_MAX, RESPONSIBILITY_CATEGORIES, type StaffProfile } from './api'
 import { CATEGORY_LABEL, T, labelFor, useCopy } from './copy'
 import { describeError } from './errors'
 import { useAssignResponsibility, useEndResponsibility } from './hooks'
+import { Icon } from '@/shared/components/Icon'
+import { RowActions } from '@/shared/components/RowActions'
 import { SearchableSelect } from '@/shared/components/SearchableSelect'
+import { AttentionRow, Sheet } from '@/features/profiles/RecordParts'
 
 /**
- * Section 3: what this person supervises.
+ * What this person supervises: a sheet of the Overview.
  *
  * Two lists, kept visibly apart:
+ *   - ASSIGNED RESPONSIBILITIES: official labels a manager or the super admin
+ *     assigned, a row each, with "End" as the row's one action. Descriptive
+ *     only -- a label grants no access to any module.
  *   - FROM SYSTEM RECORDS: facts the database already holds (families owned,
  *     direct reports, the coverage role). Nobody types these.
- *   - ASSIGNED RESPONSIBILITIES: official labels a manager or the super admin
- *     assigned. Descriptive only -- a label grants no access to any module.
  */
 export function ResponsibilitiesSection({ profile, refKey }: { profile: StaffProfile; refKey: string }) {
   const tx = useCopy()
-  const { date } = useI18n()
+  const { date, number } = useI18n()
   const [assigning, setAssigning] = useState(false)
   const [ending, setEnding] = useState<string | null>(null)
   const active = profile.responsibilities.filter((r) => !r.endedAt)
@@ -26,63 +30,86 @@ export function ResponsibilitiesSection({ profile, refKey }: { profile: StaffPro
   const canManage = profile.access.canManageResponsibilities
 
   return (
-    <section className="card sp-card" aria-labelledby="sp-resp">
-      <div className="sp-card__head">
-        <h2 id="sp-resp" className="sp-card__title">{tx(T.responsibilities)}</h2>
-        {canManage && (
+    <Sheet
+      id="sp-resp"
+      section="responsibilities"
+      title={tx(T.responsibilities)}
+      count={active.length > 0 ? number(active.length) : undefined}
+      rule={tx(T.responsibilitiesHint)}
+      action={
+        canManage && (
           <button type="button" className="btn btn--sm" onClick={() => setAssigning(true)}>
+            <Icon name="plus" size={15} />
             {tx(T.assign)}
           </button>
-        )}
-      </div>
-      <p className="sp-footnote">{tx(T.responsibilitiesHint)}</p>
+        )
+      }
+    >
+      {/* Assigned by a manager: what it is, its scope and who gave it, and one way to end it. */}
+      <h3 className="sr-only">{tx(T.officialLabels)}</h3>
+      {active.length === 0 ? (
+        <p className="rec-empty">{tx(T.noResponsibilities)}</p>
+      ) : (
+        <ul className="rec-list">
+          {active.map((r) => {
+            const label = tx(CATEGORY_LABEL[r.category] ?? { en: r.category, ar: r.category })
+            return (
+              <AttentionRow
+                key={r.id}
+                tone="plain"
+                title={label}
+                sub={
+                  <>
+                    {r.scopeNote && <span dir="auto">{r.scopeNote}</span>}
+                    <span>{tx(T.assignedOn, { when: date(r.assignedAt) })}</span>
+                    {r.assignedBy && <span>{tx(T.assignedBy, { who: r.assignedBy.displayName })}</span>}
+                  </>
+                }
+                action={
+                  canManage && (
+                    <RowActions
+                      label={tx(T.more, { name: label })}
+                      primary={
+                        <button type="button" className="btn btn--sm" onClick={() => setEnding(r.id)}>
+                          {tx(T.end)}
+                        </button>
+                      }
+                    />
+                  )
+                }
+              />
+            )
+          })}
+        </ul>
+      )}
 
+      {/* What the database already holds: nobody types these. */}
       {profile.derivedResponsibilities.length > 0 && (
         <>
-          <h3 className="sp-subtitle">{tx(T.fromRecords)}</h3>
-          <ul className="sp-list">
+          <h3 className="tf-subtitle">{tx(T.fromRecords)}</h3>
+          <ul className="sp-derived">
             {profile.derivedResponsibilities.map((d) => (
-              <li key={d.kind} className="sp-list__item">
-                {tx(T[`derived_${d.kind}`], { n: d.count ?? 0 })}
+              <li key={d.kind}>
+                <Icon name="check" size={15} />
+                <span>{tx(T[`derived_${d.kind}`], { n: d.count ?? 0 })}</span>
               </li>
             ))}
           </ul>
         </>
       )}
 
-      <h3 className="sp-subtitle">{tx(T.officialLabels)}</h3>
-      {active.length === 0 ? (
-        <p className="sp-muted">{tx(T.noResponsibilities)}</p>
-      ) : (
-        <ul className="sp-list">
-          {active.map((r) => (
-            <li key={r.id} className="sp-list__item sp-resp">
-              <div className="sp-resp__body">
-                <strong>{tx(CATEGORY_LABEL[r.category] ?? { en: r.category, ar: r.category })}</strong>
-                {r.scopeNote && <div dir="auto">{r.scopeNote}</div>}
-                <div className="sp-muted sp-small">
-                  {tx(T.assignedOn, { when: date(r.assignedAt) })}
-                  {r.assignedBy && <> · {tx(T.assignedBy, { who: r.assignedBy.displayName })}</>}
-                </div>
-              </div>
-              {canManage && (
-                <button type="button" className="btn btn--sm btn--ghost" onClick={() => setEnding(r.id)}>
-                  {tx(T.end)}
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-
       {ended.length > 0 && (
         <details className="sp-details">
-          <summary>{tx(T.history)} ({ended.length})</summary>
-          <ul className="sp-list">
+          <summary>
+            {tx(T.history)} <span className="ltr">({number(ended.length)})</span>
+          </summary>
+          <ul className="sp-derived sp-derived--ended">
             {ended.map((r) => (
-              <li key={r.id} className="sp-list__item sp-muted">
-                {tx(CATEGORY_LABEL[r.category] ?? { en: r.category, ar: r.category })} · {tx(T.ended, { when: date(r.endedAt!) })}
-                {r.endReason && <> — <span dir="auto">{r.endReason}</span></>}
+              <li key={r.id}>
+                <span>
+                  {tx(CATEGORY_LABEL[r.category] ?? { en: r.category, ar: r.category })} · {tx(T.ended, { when: date(r.endedAt!) })}
+                  {r.endReason && <> — <span dir="auto">{r.endReason}</span></>}
+                </span>
               </li>
             ))}
           </ul>
@@ -97,7 +124,7 @@ export function ResponsibilitiesSection({ profile, refKey }: { profile: StaffPro
         />
       )}
       {ending && <EndDialog refKey={refKey} responsibilityId={ending} onClose={() => setEnding(null)} />}
-    </section>
+    </Sheet>
   )
 }
 

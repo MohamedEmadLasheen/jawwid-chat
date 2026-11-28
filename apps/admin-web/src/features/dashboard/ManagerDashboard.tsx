@@ -4,7 +4,7 @@ import { ApiError } from '@/core/api/errors'
 import { useSession } from '@/core/auth/SessionProvider'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { TEXT, fill, relativeTime, useText } from '@/features/admin/copy'
-import { Icon } from '@/shared/components/Icon'
+import { Icon, type IconName } from '@/shared/components/Icon'
 import { Skeleton } from '@/shared/components/Skeleton'
 import { dashboardApi, dashboardKeys, type DashboardSection, type DashboardTile } from './api'
 import { D } from './copy'
@@ -58,44 +58,113 @@ export function useDashboardSections() {
   }
 }
 
-/** The sections `useDashboardSections` decided to show, in the registry's order. */
-export function DashboardSections({ shown }: { shown: ReturnType<typeof useDashboardSections>['shown'] }) {
+type Shown = ReturnType<typeof useDashboardSections>['shown']
+
+/** A backlog above zero wants doing; one whose key ends in "overdue" is late as well. */
+const isWaiting = (tile: DashboardTile) => TILES[tile.key]!.backlog && tile.count > 0
+const isLate = (tile: DashboardTile) => tile.count > 0 && /overdue$/.test(tile.key)
+
+/** The oldest item behind a section's waiting figures, as a time (Infinity when none says). */
+const oldest = (tiles: DashboardTile[]) => Math.min(Infinity, ...tiles.filter((t) => t.oldestAt).map((t) => Date.parse(t.oldestAt!)))
+/** What needs a manager first: anything late, then what has waited longest, then the largest. */
+const byNeed = (x: DashboardTile, y: DashboardTile) =>
+  Number(isLate(y)) - Number(isLate(x)) ||
+  (x.oldestAt ? Date.parse(x.oldestAt) : Infinity) - (y.oldestAt ? Date.parse(y.oldestAt) : Infinity) ||
+  y.count - x.count
+
+/**
+ * The board. At the start, on one sheet: "Needs you now", the sections with
+ * something waiting (or that failed to load), ranked by need: a section with
+ * something late first, then the one whose work has waited longest, then the
+ * largest; inside each, its waiting figures in the same order, each a row to
+ * open that says how long the oldest has waited. At the end, on the canvas:
+ * the sections with nothing waiting, as compact groups. Every figure is one
+ * link inside its own section.
+ *
+ * All the sections are siblings in one list, the waiting ones first, and the
+ * stylesheet sets them in two columns: a section that goes from loading to
+ * waiting is moved, never rebuilt, so nothing the reader holds is lost.
+ */
+export function DashboardSections({ shown }: { shown: Shown }) {
+  const tx = useText()
+  const { number } = useI18n()
+  const ranked = shown.map(({ spec, query }) => {
+    const waiting = tilesOf(query.data).filter(isWaiting)
+    const failed = !query.isLoading && !query.data
+    return { spec, query, waiting, failed, late: waiting.some(isLate), since: oldest(waiting), most: Math.max(0, ...waiting.map((t) => t.count)) }
+  })
+  const needs = ranked
+    .filter((r) => r.waiting.length > 0 || r.failed)
+    .sort((x, y) => Number(y.late) - Number(x.late) || x.since - y.since || y.most - x.most)
+  const calm = ranked.filter((r) => r.waiting.length === 0 && !r.failed)
+  // The late items themselves, not the rows. Overdue tasks are counted as mine and as my team's,
+  // which can overlap, so a section's overdue task figures count once, at the larger of them.
+  const lateItems = needs.reduce((n, r) => {
+    const late = r.waiting.filter(isLate)
+    const tasks = late.filter((t) => t.key.startsWith('tasks.'))
+    const rest = late.filter((t) => !t.key.startsWith('tasks.'))
+    return n + rest.reduce((m, t) => m + t.count, 0) + Math.max(0, ...tasks.map((t) => t.count))
+  }, 0)
+  const settled = shown.every(({ query }) => !query.isLoading)
+
   return (
-    <>
-      {shown.map(({ spec, query }) => (
-        <Section key={spec.key} spec={spec} query={query} />
+    <div className={calm.length > 0 ? 'dash-board' : 'dash-board dash-board--one'}>
+      <h2 className="dash-needs__head" id="dash-needs-title">
+        <span className="dash-needs__title">{tx(D.needs)}</span>
+        {lateItems > 0 && <span className="count count--urgent dash-needs__count">{fill(tx(D.lateCount), { n: number(lateItems) })}</span>}
+      </h2>
+      {needs.length === 0 && <p className="dash-needs__clear">{tx(settled ? D.needsClear : D.needsLoading)}</p>}
+      {calm.length > 0 && <h2 className="dash-calm__head">{tx(D.calm)}</h2>}
+      {/* One keyed list: a section that changes column is moved in place, not rebuilt. */}
+      {[...needs, ...calm].map(({ spec, query }, i) => (
+        <Section key={spec.key} spec={spec} query={query} variant={i < needs.length ? 'needs' : 'calm'} />
       ))}
-    </>
+    </div>
   )
 }
 
-function Section({ spec, query }: { spec: SectionSpec; query: SectionQuery }) {
+/** Each section's mark: the icon its page has in the navigation. */
+const SECTION_ICON: Record<SectionSpec['key'], IconName> = {
+  chats: 'conversations',
+  cases: 'needsAction',
+  lessons: 'calendar',
+  enrolment: 'trials',
+  billing: 'finance',
+  teachers: 'teachers',
+  structure: 'organization',
+  tasks: 'tasks',
+}
+
+function Section({ spec, query, variant }: { spec: SectionSpec; query: SectionQuery; variant: 'needs' | 'calm' }) {
   const tx = useText()
-  const { t, time } = useI18n()
+  const { t, time, number } = useI18n()
   const titleId = `dash-section-${spec.key}`
   const tiles = tilesOf(query.data)
+  const present = new Set(tiles.map((x) => x.key))
+  // What wants doing is a row to open, ranked by need; the section's other figures are plain lines.
+  const waiting = tiles.filter(isWaiting).sort(byNeed)
+  // The other figures above zero are lines; the zeros fold into one quiet line a reader may open.
+  const others = tiles.filter((tile) => !isWaiting(tile))
+  const rest = others.filter((tile) => tile.count > 0)
+  const zeros = others.filter((tile) => tile.count === 0)
 
   return (
-    <section className="dash-section" aria-labelledby={titleId}>
-      <h2 id={titleId} className="dash-section__title">
+    <section className={variant === 'needs' ? 'dash-group dash-group--needs' : 'dash-group dash-group--calm'} aria-labelledby={titleId}>
+      <h3 id={titleId} className="dash-group__title">
+        <Icon name={SECTION_ICON[spec.key]} size={16} />
         {tx(spec.title)}
-      </h2>
+      </h3>
       {query.isLoading ? (
-        <div role="status" aria-live="polite">
+        <div role="status" aria-live="polite" className="dash-loading">
           <span className="sr-only">{t('common.loading')}</span>
-          <div className="kpi-grid">
-            {[0, 1, 2].map((i) => (
-              <Skeleton key={i} height={118} radius={12} />
-            ))}
-          </div>
+          {[0, 1].map((i) => (
+            <Skeleton key={i} height={34} radius={6} />
+          ))}
         </div>
       ) : !query.data ? (
         // A figure that failed is never shown as zero.
-        <div className="state state--compact" role="alert">
-          <span className="state__icon" aria-hidden="true">
-            <Icon name="alert" size={22} />
-          </span>
-          <div className="state__title">{tx(D.failed)}</div>
+        <div className="dash-failed" role="alert">
+          <span className="dash-failed__text">{tx(D.failed)}</span>
           <button type="button" className="btn btn--sm" onClick={() => void query.refetch()}>
             <Icon name="refresh" size={16} />
             {t('common.retry')}
@@ -105,8 +174,7 @@ function Section({ spec, query }: { spec: SectionSpec; query: SectionQuery }) {
         <>
           {/* Figures kept from an earlier read are shown only with this warning. */}
           {query.error && (
-            <div className="stale-banner" role="status">
-              <Icon name="alert" size={16} />
+            <div className="dash-stale" role="status">
               <span>{fill(tx(TEXT.staleData), { time: time(new Date(query.dataUpdatedAt).toISOString()) })}</span>
               <button type="button" className="btn btn--sm" onClick={() => void query.refetch()}>
                 {t('common.retry')}
@@ -114,16 +182,34 @@ function Section({ spec, query }: { spec: SectionSpec; query: SectionQuery }) {
             </div>
           )}
           {tiles.every((tile) => tile.count === 0) ? (
-            <p className="dash-section__clear">
-              <Icon name="check" size={16} />
-              {tx(D.allClear)}
-            </p>
+            <p className="dash-section__clear">{tx(D.allClear)}</p>
           ) : (
-            <ul className="kpi-grid">
-              {tiles.map((tile) => (
-                <Tile key={tile.key} tile={tile} present={new Set(tiles.map((x) => x.key))} />
-              ))}
-            </ul>
+            <>
+              {waiting.length > 0 && (
+                <ul className="dash-rows">
+                  {waiting.map((tile) => (
+                    <Figure key={tile.key} tile={tile} present={present} large />
+                  ))}
+                </ul>
+              )}
+              {rest.length > 0 && (
+                <ul className="dash-lines">
+                  {rest.map((tile) => (
+                    <Figure key={tile.key} tile={tile} present={present} />
+                  ))}
+                </ul>
+              )}
+              {zeros.length > 0 && (
+                <details className="dash-zeros">
+                  <summary className="dash-zeros__head">{fill(tx(D.zeros), { n: number(zeros.length) })}</summary>
+                  <ul className="dash-lines dash-lines--zeros">
+                    {zeros.map((tile) => (
+                      <Figure key={tile.key} tile={tile} present={present} />
+                    ))}
+                  </ul>
+                </details>
+              )}
+            </>
           )}
         </>
       )}
@@ -131,24 +217,37 @@ function Section({ spec, query }: { spec: SectionSpec; query: SectionQuery }) {
   )
 }
 
-function Tile({ tile, present }: { tile: DashboardTile; present: ReadonlySet<string> }) {
+/** One figure and the page that resolves it: a row to open when it is waiting, a line otherwise. Always one link. */
+function Figure({ tile, present, large = false }: { tile: DashboardTile; present: ReadonlySet<string>; large?: boolean }) {
   const tx = useText()
   const { number, locale } = useI18n()
   const spec = TILES[tile.key]!
   const alert = spec.backlog && tile.count > 0
+  const shape = large ? 'dash-tile dash-tile--large' : 'dash-tile dash-tile--line'
+  // A late figure above zero is red: the one colour a manager reads first.
+  const tone = (alert ? ' dash-tile--alert' : tile.count === 0 ? ' dash-tile--zero' : '') + (isLate(tile) ? ' dash-tile--late' : '')
+  // How long the oldest has waited, on a waiting row only; a late row with no age still says it is late.
+  const age = !large
+    ? null
+    : tile.oldestAt && tile.count > 0
+      ? <span className="dash-tile__note">{fill(tx(D.oldest), { age: relativeTime(tile.oldestAt, locale) })}</span>
+      : isLate(tile)
+        ? <span className="dash-tile__note">{tx(D.late)}</span>
+        : null
   return (
     <li>
-      <Link to={spec.href(present)} className={alert ? 'kpi-card dash-tile dash-tile--alert' : 'kpi-card dash-tile'}>
-        <span className="kpi-card__top">
-          <span className="kpi-card__icon" aria-hidden="true">
-            <Icon name={spec.icon} size={18} />
-          </span>
-          <span className="kpi-card__label">{tx(spec.label)}</span>
-          <Icon name="chevronForward" size={16} />
+      <Link to={spec.href(present)} className={shape + tone}>
+        <span className="dash-tile__value">{tile.capped ? `${number(tile.count)}+` : number(tile.count)}</span>
+        <span className="dash-tile__text">
+          <span className="dash-tile__label">{tx(spec.label)}</span>
+          {!large && age}
         </span>
-        <span className="kpi-card__value">{tile.capped ? `${number(tile.count)}+` : number(tile.count)}</span>
-        {tile.oldestAt && tile.count > 0 && (
-          <span className="kpi-card__sub">{fill(tx(D.oldest), { age: relativeTime(tile.oldestAt, locale) })}</span>
+        {/* On a waiting row the age is its own column at the end, so the ranking can be read down it. */}
+        {large && <span className="dash-tile__age">{age}</span>}
+        {large && (
+          <span className="dash-tile__go" aria-hidden="true">
+            <Icon name="chevronForward" size={18} />
+          </span>
         )}
       </Link>
     </li>

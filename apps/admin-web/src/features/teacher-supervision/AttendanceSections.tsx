@@ -1,4 +1,4 @@
-import { useId, useState, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Badge } from '@/shared/components/Badge'
 import { FilterChips } from '@/shared/components/FilterChips'
@@ -16,7 +16,11 @@ import { AwayBadge } from '@/features/teacher-files/Complaint'
 import { H, useCopy } from './copy'
 import { useLeaveOverview } from './hooks'
 import { SectionIntro } from './SectionIntro'
+import { Avatar } from '@/shared/components/Avatar'
+import { MonthPicker } from '@/features/teachers/MonthPicker'
 import './teacher-supervision.css'
+import '@/features/teachers/stack-table.css'
+import { DAYS, countLabel } from '@/core/i18n/counts'
 
 /**
  * The attendance sections of PD-52's Attendance & Complaints page (page A):
@@ -42,26 +46,39 @@ function thisMonth(): string {
 // 1. Leave
 // ---------------------------------------------------------------------------
 
-export function LeaveSection({ basePath }: { basePath: string }) {
+export function LeaveSection({ basePath, teacherId }: { basePath: string; teacherId?: string }) {
   const tx = useCopy()
   const { number, locale } = useI18n()
   const overview = useLeaveOverview()
-  const rows = overview.data?.teachers ?? []
+  // With a teacher chosen at the head of the page, the sheet is about them alone.
+  // Round 3: who needs a decision first, then who is away; everyone else keeps the server's order.
+  const rank = (t: { pendingRequests: number; away: unknown }) => (t.pendingRequests > 0 ? 0 : t.away ? 1 : 2)
+  const rows = (overview.data?.teachers ?? [])
+    .filter((t) => !teacherId || t.id === teacherId)
+    .map((t, i) => ({ t, i }))
+    .sort((a, b) => rank(a.t) - rank(b.t) || a.i - b.i)
+    .map((x) => x.t)
   // The balance is the Teachers department's: absent for an Operations-only teacher, and
   // the column with it when no row has one (PD-26 amendment).
   const balances = rows.some((t) => t.used !== undefined)
   return (
     <>
-      <SectionIntro hint={tx(H.leaveHint)} />
+      {/* The requests waiting for a decision come first: they are this section's work. */}
+      <section className="sheet" aria-label={tx(H.leaveRequests)}>
+        <SectionIntro title={tx(H.leaveRequests)} />
+        <LeaveRequestsList basePath={basePath} />
+      </section>
+      <section className="sheet" aria-label={tx(H.leave)}>
+      <SectionIntro title={tx(H.leaveOverview)} hint={tx(H.leaveHint)} />
       {overview.error ? (
         <EmptyState icon="lock" title={describeError(overview.error, locale)} />
       ) : (
         <QueryBoundary isLoading={overview.isLoading} error={null} onRetry={() => void overview.refetch()}>
           {rows.length === 0 ? (
-            <EmptyState title={tx(H.empty)} />
+            <EmptyState title={tx(H.emptyLeave)} hint={tx(H.emptyLeaveHint)} />
           ) : (
             <div className="table-wrap">
-              <table className="table">
+              <table className="rowlist">
                 <thead>
                   <tr>
                     <th scope="col">{tx(H.teacher)}</th>
@@ -73,29 +90,37 @@ export function LeaveSection({ basePath }: { basePath: string }) {
                 <tbody>
                   {rows.map((t) => (
                     <tr key={t.id}>
-                      <td dir="auto">
-                        <TeacherName basePath={basePath} teacher={t} />
+                      <td className="rw-who">
+                        <Avatar name={t.name ?? ''} seed={t.id} />
+                        <span className="rw-who__text">
+                          <span className="rw-name">
+                            <TeacherName basePath={basePath} teacher={t} />
+                          </span>
+                        </span>
                       </td>
                       {balances && (
-                        <td>
+                        <td className="rw-meta" data-label={tx(H.balance)}>
                           {t.used === undefined ? (
                             <span className="th-muted">—</span>
                           ) : t.allowance === null || t.allowance === undefined ? (
-                            <span className="th-muted">{tx(H.notTracked, { used: number(t.used) })}</span>
+                            <span className="th-muted">
+                              {t.used === 0 ? tx(H.notTrackedNone) : tx(H.notTracked, { days: countLabel(t.used, number(t.used), DAYS, locale) })}
+                            </span>
                           ) : (
-                            tx(H.balanceOf, { left: number(t.balance ?? 0), allowance: number(t.allowance) })
+                            tx(H.balanceOf, { left: number(t.balance ?? 0), days: countLabel(t.allowance, number(t.allowance), DAYS, locale) })
                           )}
                         </td>
                       )}
-                      <td>{t.away ? <AwayBadge away={t.away} /> : <span className="th-muted">{tx(H.available)}</span>}</td>
-                      <td>
+                      <td className="rw-tags" data-label={tx(H.status)}>
+                        {/* Only the exception is marked: a teacher who is available carries no tag. */}
+                        {t.away ? <AwayBadge away={t.away} /> : null}
+                      </td>
+                      <td className="rw-tags" data-label={tx(H.requests)}>
                         {t.pendingRequests > 0 ? (
                           <Badge tone="warn" dot>
                             {tx(H.pending, { n: number(t.pendingRequests) })}
                           </Badge>
-                        ) : (
-                          <span className="th-muted">—</span>
-                        )}
+                        ) : null}
                       </td>
                     </tr>
                   ))}
@@ -105,8 +130,7 @@ export function LeaveSection({ basePath }: { basePath: string }) {
           )}
         </QueryBoundary>
       )}
-      <h2 className="th-subtitle">{tx(H.leaveRequests)}</h2>
-      <LeaveRequestsList basePath={basePath} />
+      </section>
     </>
   )
 }
@@ -125,9 +149,8 @@ function useWindow() {
 
 function WindowFilter({ w }: { w: ReturnType<typeof useWindow> }) {
   const tx = useCopy()
-  const monthId = useId()
   return (
-    <div className="toolbar dc-toolbar">
+    <div className="sheet-bar dc-toolbar">
       <FilterChips<Window>
         label={tx(H.month)}
         value={w.window}
@@ -137,12 +160,7 @@ function WindowFilter({ w }: { w: ReturnType<typeof useWindow> }) {
           { value: 'month', label: tx(H.thisMonth) },
         ]}
       />
-      {w.window === 'month' && (
-        <label className="dc-month" htmlFor={monthId}>
-          <span className="field__label">{tx(H.month)}</span>
-          <input id={monthId} className="input" type="month" value={w.month} onChange={(e) => e.target.value && w.setMonth(e.target.value)} />
-        </label>
-      )}
+      {w.window === 'month' && <MonthPicker value={w.month} onChange={w.setMonth} label={tx(H.month)} showLabel={false} />}
     </div>
   )
 }
@@ -153,9 +171,12 @@ function ViolationTable({
   filter,
   extraHead,
   extraCell,
+  empty,
 }: {
   query: ViolationQuery
   canDecide: boolean
+  /** What the empty list says: nothing waiting, or nothing in the month. */
+  empty: { title: string; hint: string }
   filter?: (v: Violation) => boolean
   extraHead?: ReactNode
   extraCell?: (v: Violation) => ReactNode
@@ -169,10 +190,10 @@ function ViolationTable({
   return (
     <QueryBoundary isLoading={list.isLoading} error={null} onRetry={() => void list.refetch()}>
       {rows.length === 0 ? (
-        <EmptyState title={tx(H.empty)} />
+        <EmptyState title={empty.title} hint={empty.hint} />
       ) : (
         <div className="table-wrap dc-table-wrap">
-          <table className="table">
+          <table className="table stack-table">
             <thead>
               <tr>
                 <th scope="col">{tx(H.teacher)}</th>
@@ -203,7 +224,9 @@ export function ExcusesSection({ canRecord, canDecide }: AttendanceRights) {
   const query: ViolationQuery = w.window === 'open' ? { state: 'open', kind: 'absences' } : { state: 'all', month: w.month, kind: 'absences' }
   return (
     <>
+      <section className="sheet" aria-label={tx(H.absences)}>
       <SectionIntro
+        title={tx(H.absences)}
         hint={tx(H.absencesHint)}
         actions={
           canRecord && (
@@ -217,12 +240,14 @@ export function ExcusesSection({ canRecord, canDecide }: AttendanceRights) {
       <ViolationTable
         query={query}
         canDecide={canDecide}
+        empty={w.window === 'open' ? { title: tx(H.emptyOpen), hint: tx(H.emptyOpenHint) } : { title: tx(H.emptyMonth), hint: tx(H.emptyMonthHint) }}
         extraHead={<th scope="col">{tx(H.excuseCategory)}</th>}
         extraCell={(v) => {
           const label = excuseCategoryLabel(v.lesson?.excuseCategory)
-          return <td>{label ? tx(label) : <span className="th-muted">—</span>}</td>
+          return <td data-label={tx(H.excuseCategory)}>{label ? tx(label) : <span className="th-muted">—</span>}</td>
         }}
       />
+      </section>
       {recording && <AbsenceDialog onClose={() => setRecording(false)} />}
     </>
   )
@@ -238,7 +263,9 @@ export function LatenessSection({ canRecord, canDecide, trialsOnly = false }: At
   const query: ViolationQuery = w.window === 'open' ? { state: 'open', kind: 'late' } : { state: 'all', month: w.month, kind: 'late' }
   return (
     <>
+      <section className="sheet" aria-label={tx(H.lateness)}>
       <SectionIntro
+        title={tx(H.lateness)}
         hint={tx(H.latenessHint)}
         actions={
           canRecord && (
@@ -251,7 +278,7 @@ export function LatenessSection({ canRecord, canDecide, trialsOnly = false }: At
       {/* The two subsections: trial lessons and regular lessons (PD-26). */}
       {!trialsOnly && (
         <FilterChips<'regular' | 'trial'>
-          variant="tabs"
+          variant="chips"
           label={tx(H.lessonType)}
           value={type}
           onChange={setType}
@@ -265,6 +292,7 @@ export function LatenessSection({ canRecord, canDecide, trialsOnly = false }: At
       <ViolationTable
         query={query}
         canDecide={canDecide}
+        empty={w.window === 'open' ? { title: tx(H.emptyOpen), hint: tx(H.emptyOpenHint) } : { title: tx(H.emptyMonth), hint: tx(H.emptyMonthHint) }}
         // An older server sends no lesson kind: everything reads as regular.
         filter={(v) => (v.lesson?.kind ?? 'regular') === type}
         extraHead={
@@ -275,11 +303,12 @@ export function LatenessSection({ canRecord, canDecide, trialsOnly = false }: At
         }
         extraCell={(v) => (
           <>
-            <td>{tx(v.lesson?.kind === 'trial' ? H.trial : H.regular)}</td>
-            <td>{tx(H.minutes, { n: v.lateMinutes ?? 0 })}</td>
+            <td data-label={tx(H.lessonType)}>{tx(v.lesson?.kind === 'trial' ? H.trial : H.regular)}</td>
+            <td data-label={tx(H.delay)}>{tx(H.minutes, { n: v.lateMinutes ?? 0 })}</td>
           </>
         )}
       />
+      </section>
       {recording && <LatenessDialog lessonType={type} onClose={() => setRecording(false)} />}
     </>
   )
