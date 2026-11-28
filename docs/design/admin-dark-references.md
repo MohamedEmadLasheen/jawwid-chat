@@ -70,3 +70,28 @@ Gold #d8ab5e stays the one warm "now" accent. Counts inside the page are tinted 
   - A transparent toolbar no longer casts a card shadow (the dark band on Stories).
   - An open row menu now sits above the next row's controls. This was a bug in both themes.
 - **Keeping the two dark forms in step.** Every dark rule exists twice: once for the device setting and once for the switch. `core/theme/darkTwins.test.ts` fails if they ever differ.
+
+## Reference palette (owner's instruction, 2026-11-28; replaces the direction above)
+The owner gave a screenshot of the Quran Play dark theme as the colour reference only, not the layout. Its colours were sampled from its pixels, and the admin's dark tokens were rebuilt from them. The admin's own structure stays: the elevation levels, readable secondary text and softened status colours.
+
+| Role | Sampled in reference | Admin dark token |
+|---|---|---|
+| Page | #122f33 | `--canvas` #122f33 |
+| Bars, panels | #153335 | `--sidebar-bg` #0f2a2d (recessed one step) |
+| Card | #1d4043 | `--surface` #1d4043 |
+| Raised (buttons, panels on top) | #245353 | `--surface-raised` #245353 |
+| Borders | #1e3f42 / #23494b | low-alpha mint lines, 6.5%, 10% and 20% |
+| Accent (headings, active) | #a8e7db / #9fe9d8 | `--teal` (links, active tab) #9fe3d6 |
+| Body text | #a9c9cb | `--ink-muted` #a9c9cb (6.4:1 on card) |
+| Bright text | #edffff | `--ink` #eaf5f2 (10.1:1 on card) |
+| Gold | #e9d8aa text, #433d20 pill | `--gold-text` #e9d8aa, `--gold-tint` #433d20, `--gold` #dcc27e |
+
+- **Inset level:** #163539. **Hover:** #23494c.
+- **Status colours** on this base: late #f0a093, waiting #eea56d, done #94d6ad. They are tinted pills, all at least 5.4:1 on cards.
+- **Solid fills:**
+  - Buttons #2a6a67 (white text, 6.3:1).
+  - Rail and bell badges #9c4a44 (6:1).
+  - Month heat steps from a mint tint to #296462 (white text, 6.8:1).
+- **Rail labels** keep the light size, so "Certificates & materials" fits on the opened rail.
+- **Sign-in drawing panel** #163a3e.
+- **Logo.** No cream plate anywhere. Dark uses `jawwid-lockup-on-dark.png`: cream letters and the original gold book and W, made pixel by pixel from the light lockup (see `brand-mark/README.md`).

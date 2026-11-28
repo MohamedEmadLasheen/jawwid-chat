@@ -19,3 +19,11 @@
 **Small sizes.** The book is about 5:1 wide, so at 16 px it is about 3 px tall. Browsers on high-density screens use the 32 px or SVG icon.
 
 **Where it is used.** The opened sidebar, the phone top bar and the sign-in page keep the full JAWWID wordmark.
+
+## Wordmark on dark (`jawwid-lockup-on-dark.png`)
+This is the dark-theme logo: the light lockup (`apps/admin-web/src/assets/brand/jawwid-lockup.png`, 372×148) transformed pixel by pixel. Nothing is redrawn and the shapes are identical.
+- **Letters.** The teal lettering becomes light cream (#f5f0e4). An antialiased edge between teal and gold gets a proportional share, so edges stay as drawn.
+- **Gold.** The book and the gold W keep their original gold; 10,789 pixels are untouched.
+- **White matte.** The source carries a faint white matte left by its background removal. It is invisible on light and showed as a haze on dark. On near-white pixels, only the white share of alpha is removed; teal and gold pixels are untouched.
+
+It is used in dark mode in the opened sidebar, the phone top bar and on sign-in. The light theme keeps the original lockup, and there is no cream plate anywhere. The folded sidebar keeps the gold book mark.

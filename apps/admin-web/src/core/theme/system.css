@@ -214,20 +214,20 @@ html[lang='ar'] {
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
     color-scheme: dark;
-    --canvas: #0e1a1d; --surface: #17282c; --surface-2: #0f1d20; --surface-hover: #1f3439; --surface-raised: #253e44;
-    --line: rgba(190,232,236,0.09); --line-2: rgba(190,232,236,0.06); --line-strong: rgba(190,232,236,0.18); --border-control: #52696d;
-    --sidebar-bg: #0a1416; --sidebar-active: #16262a; --sidebar-line: rgba(190,232,236,0.07); --sidebar-hover: rgba(255, 255, 255, 0.045);
-    --sidebar-fg: #e6eeee; --sidebar-muted: #c7d4d5; --sidebar-subtle: #a6b7b9;
-    --ink: #e6eeee; --ink-2: #c7d4d5; --ink-muted: #a6b7b9; --text-inverse: #0e1a1d;
-    --teal: #86c7cf; --teal-dark: #a6d7dd; --teal-deep: #2f7d88; --teal-tint: #243b40; --teal-tint-2: #2d484d;
-    --teal-solid: #2f7d88; --teal-solid-hover: #378b97;
-    --gold: #d8ab5e; --gold-tint: #363325; --gold-text: #e4c182;
-    --urgent: #e8968b; --urgent-tint: #3a2d2f; --urgent-line: #5e3c3c; --urgent-solid: #a5504a;
-    --waiting: #ea9356; --waiting-tint: #3a2f27;
-    --done: #88c9a4; --done-tint: #1f3a33;
-    --lilac-tint: #2e3a46; --lilac-text: #cbbff0;
-    --avatar-bg: #243b40; --paper-dark: #122226; --chat-bg: #0e1a1d;
-    --overlay: rgba(3, 9, 11, 0.62);
+    --canvas: #122f33; --surface: #1d4043; --surface-2: #163539; --surface-hover: #23494c; --surface-raised: #245353;
+    --line: rgba(159, 227, 214, 0.10); --line-2: rgba(159, 227, 214, 0.065); --line-strong: rgba(159, 227, 214, 0.2); --border-control: #4f7674;
+    --sidebar-bg: #0f2a2d; --sidebar-active: #1a3d40; --sidebar-line: rgba(159, 227, 214, 0.08); --sidebar-hover: rgba(159, 227, 214, 0.06);
+    --sidebar-fg: #eaf5f2; --sidebar-muted: #c6dcda; --sidebar-subtle: #a9c9cb;
+    --ink: #eaf5f2; --ink-2: #c6dcda; --ink-muted: #a9c9cb; --text-inverse: #122f33;
+    --teal: #9fe3d6; --teal-dark: #bdeee4; --teal-deep: #2a6a67; --teal-tint: #2d5455; --teal-tint-2: #376160;
+    --teal-solid: #2a6a67; --teal-solid-hover: #307572;
+    --gold: #dcc27e; --gold-tint: #433d20; --gold-text: #e9d8aa;
+    --urgent: #f0a093; --urgent-tint: #384c4d; --urgent-line: #615f5d; --urgent-solid: #9c4a44;
+    --waiting: #eea56d; --waiting-tint: #384d48;
+    --done: #94d6ad; --done-tint: #2b5250;
+    --lilac-tint: #334f5a; --lilac-text: #cfc3f2;
+    --avatar-bg: #2a5256; --paper-dark: #163539; --chat-bg: #122f33;
+    --overlay: rgba(5, 18, 20, 0.62);
     --shadow-lift: 0 1px 2px rgba(0, 0, 0, 0.28), 0 6px 16px -6px rgba(0, 0, 0, 0.35);
     --shadow-pop: 0 12px 32px -8px rgba(0, 0, 0, 0.6), 0 2px 6px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.06);
     --shadow-palette: 0 28px 72px -12px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.08);
@@ -248,20 +248,20 @@ html[lang='ar'] {
 /* The same, when the person chose Dark (the theme switch; data-theme on <html>). */
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --canvas: #0e1a1d; --surface: #17282c; --surface-2: #0f1d20; --surface-hover: #1f3439; --surface-raised: #253e44;
-  --line: rgba(190,232,236,0.09); --line-2: rgba(190,232,236,0.06); --line-strong: rgba(190,232,236,0.18); --border-control: #52696d;
-  --sidebar-bg: #0a1416; --sidebar-active: #16262a; --sidebar-line: rgba(190,232,236,0.07); --sidebar-hover: rgba(255, 255, 255, 0.045);
-  --sidebar-fg: #e6eeee; --sidebar-muted: #c7d4d5; --sidebar-subtle: #a6b7b9;
-  --ink: #e6eeee; --ink-2: #c7d4d5; --ink-muted: #a6b7b9; --text-inverse: #0e1a1d;
-  --teal: #86c7cf; --teal-dark: #a6d7dd; --teal-deep: #2f7d88; --teal-tint: #243b40; --teal-tint-2: #2d484d;
-  --teal-solid: #2f7d88; --teal-solid-hover: #378b97;
-  --gold: #d8ab5e; --gold-tint: #363325; --gold-text: #e4c182;
-  --urgent: #e8968b; --urgent-tint: #3a2d2f; --urgent-line: #5e3c3c; --urgent-solid: #a5504a;
-  --waiting: #ea9356; --waiting-tint: #3a2f27;
-  --done: #88c9a4; --done-tint: #1f3a33;
-  --lilac-tint: #2e3a46; --lilac-text: #cbbff0;
-  --avatar-bg: #243b40; --paper-dark: #122226; --chat-bg: #0e1a1d;
-  --overlay: rgba(3, 9, 11, 0.62);
+  --canvas: #122f33; --surface: #1d4043; --surface-2: #163539; --surface-hover: #23494c; --surface-raised: #245353;
+  --line: rgba(159, 227, 214, 0.10); --line-2: rgba(159, 227, 214, 0.065); --line-strong: rgba(159, 227, 214, 0.2); --border-control: #4f7674;
+  --sidebar-bg: #0f2a2d; --sidebar-active: #1a3d40; --sidebar-line: rgba(159, 227, 214, 0.08); --sidebar-hover: rgba(159, 227, 214, 0.06);
+  --sidebar-fg: #eaf5f2; --sidebar-muted: #c6dcda; --sidebar-subtle: #a9c9cb;
+  --ink: #eaf5f2; --ink-2: #c6dcda; --ink-muted: #a9c9cb; --text-inverse: #122f33;
+  --teal: #9fe3d6; --teal-dark: #bdeee4; --teal-deep: #2a6a67; --teal-tint: #2d5455; --teal-tint-2: #376160;
+  --teal-solid: #2a6a67; --teal-solid-hover: #307572;
+  --gold: #dcc27e; --gold-tint: #433d20; --gold-text: #e9d8aa;
+  --urgent: #f0a093; --urgent-tint: #384c4d; --urgent-line: #615f5d; --urgent-solid: #9c4a44;
+  --waiting: #eea56d; --waiting-tint: #384d48;
+  --done: #94d6ad; --done-tint: #2b5250;
+  --lilac-tint: #334f5a; --lilac-text: #cfc3f2;
+  --avatar-bg: #2a5256; --paper-dark: #163539; --chat-bg: #122f33;
+  --overlay: rgba(5, 18, 20, 0.62);
   --shadow-lift: 0 1px 2px rgba(0, 0, 0, 0.28), 0 6px 16px -6px rgba(0, 0, 0, 0.35);
   --shadow-pop: 0 12px 32px -8px rgba(0, 0, 0, 0.6), 0 2px 6px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.06);
   --shadow-palette: 0 28px 72px -12px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.08);
@@ -1296,18 +1296,6 @@ button.side__item.is-current::before { content: none; }
 /* The account menus are wide enough for the three words. */
 :is(.side__account, .topbar__account) .menu__popover { min-inline-size: 250px; }
 
-/* The wordmark on a dark surface: the logo's own colours on the light plate they were drawn for
-   (not recoloured, not swapped for a lighter variant). The folded rail's gold book reads on dark as it is. */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) .brand { display: inline-flex; padding: 5px 9px; border-radius: 9px; background: #ece6d8; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06); }
-  :root:not([data-theme='light']) .brand > .brand-logo--light { display: block; }
-  :root:not([data-theme='light']) .brand > .brand-logo--dark { display: none; }
-}
-
-/* The same, when the person chose Dark (the theme switch; data-theme on <html>). */
-:root[data-theme='dark'] .brand { display: inline-flex; padding: 5px 9px; border-radius: 9px; background: #ece6d8; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06); }
-:root[data-theme='dark'] .brand > .brand-logo--light { display: block; }
-:root[data-theme='dark'] .brand > .brand-logo--dark { display: none; }
 
 /* Dark review (fresh critic, 2026-11-28). */
 /* What floats separates from what is under it: a raised surface and a shadow that reads on dark. */
@@ -1345,10 +1333,14 @@ button.side__item.is-current::before { content: none; }
   /* Second dark critic round. */
   :root:not([data-theme='light']) :is(.tx-day > *, .dash-group--needs .dash-group__title) { border-block: 1px solid var(--line); }
   :root:not([data-theme='light']) :is(.dialog, .menu__popover, .palette) :is(.input, input.select, select.select, textarea, .ss__input, .field input, .field select) { background-color: color-mix(in srgb, var(--surface-raised) 55%, var(--canvas)); }
-  :root:not([data-theme='light']) :is(.figure--urgent .figure__n, .metric--alert .metric__value) { color: #ef8b7b; }
+  :root:not([data-theme='light']) :is(.figure--urgent .figure__n, .metric--alert .metric__value) { color: #f3a092; }
   :root:not([data-theme='light']) :is(.sc-cell--off, .sc-dayhead--off, .sc-heat--none, .sc-heat--off) { background: var(--surface-2); }
-  :root:not([data-theme='light']) .sc-heat--1 { background: #27444a; } :root:not([data-theme='light']) .sc-heat--2 { background: #2a5860; } :root:not([data-theme='light']) .sc-heat--3 { background: #2e6c76; } :root:not([data-theme='light']) .sc-heat--4 { background: #2f7f8b; color: #fff; }
+  :root:not([data-theme='light']) .sc-heat--1 { background: #325a5b; } :root:not([data-theme='light']) .sc-heat--2 { background: #285c5a; } :root:not([data-theme='light']) .sc-heat--3 { background: #2b6764; } :root:not([data-theme='light']) .sc-heat--4 { background: #296462; color: #fff; }
   :root:not([data-theme='light']) :is(.sc-row__head-end, .sc-row__sub .badge, .sc-dayhead--month, .sc-dayhead--month .sc-dayhead__n, .sc-dayhead--off .sc-dayhead__n, .sc-heat) { font-size: max(13px, var(--fs-xs)); }
+  /* Reference palette round. */
+  :root:not([data-theme='light']) .sidebar :is(.side__item, .side__sub-link) { font-size: 14px; }
+  :root:not([data-theme='light']) .auth__brand { background: #163a3e; }
+  html[lang='ar']:not([data-theme='light']) .sidebar :is(.side__item, .side__sub-link) { font-size: 14.5px; }
 }
 
 /* The same, when the person chose Dark (the theme switch; data-theme on <html>). */
@@ -1369,10 +1361,17 @@ html[lang='ar'][data-theme='dark'] { --fs-xs: 14.5px; --fs-sm: 15px; }
 /* Second dark critic round (forced Dark). */
 :root[data-theme='dark'] :is(.tx-day > *, .dash-group--needs .dash-group__title) { border-block: 1px solid var(--line); }
 :root[data-theme='dark'] :is(.dialog, .menu__popover, .palette) :is(.input, input.select, select.select, textarea, .ss__input, .field input, .field select) { background-color: color-mix(in srgb, var(--surface-raised) 55%, var(--canvas)); }
-:root[data-theme='dark'] :is(.figure--urgent .figure__n, .metric--alert .metric__value) { color: #ef8b7b; }
+:root[data-theme='dark'] :is(.figure--urgent .figure__n, .metric--alert .metric__value) { color: #f3a092; }
 :root[data-theme='dark'] :is(.sc-cell--off, .sc-dayhead--off, .sc-heat--none, .sc-heat--off) { background: var(--surface-2); }
-:root[data-theme='dark'] .sc-heat--1 { background: #27444a; } :root[data-theme='dark'] .sc-heat--2 { background: #2a5860; } :root[data-theme='dark'] .sc-heat--3 { background: #2e6c76; } :root[data-theme='dark'] .sc-heat--4 { background: #2f7f8b; color: #fff; }
+:root[data-theme='dark'] .sc-heat--1 { background: #325a5b; } :root[data-theme='dark'] .sc-heat--2 { background: #285c5a; } :root[data-theme='dark'] .sc-heat--3 { background: #2b6764; } :root[data-theme='dark'] .sc-heat--4 { background: #296462; color: #fff; }
 :root[data-theme='dark'] :is(.sc-row__head-end, .sc-row__sub .badge, .sc-dayhead--month, .sc-dayhead--month .sc-dayhead__n, .sc-dayhead--off .sc-dayhead__n, .sc-heat) { font-size: max(13px, var(--fs-xs)); }
 
 /* An open menu sits above the next row's controls (each row's controls stack on their own layer). */
 .menu:has(> .menu__popover) { z-index: 40 !important; }
+/* Reference palette round (forced Dark). */
+:root[data-theme='dark'] .sidebar :is(.side__item, .side__sub-link) { font-size: 14px; }
+:root[data-theme='dark'] .auth__brand { background: #163a3e; }
+html[lang='ar'][data-theme='dark'] .sidebar :is(.side__item, .side__sub-link) { font-size: 14.5px; }
+
+/* A long place name on the opened rail ends in an ellipsis rather than being cut. */
+.side__item > .side__label { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
