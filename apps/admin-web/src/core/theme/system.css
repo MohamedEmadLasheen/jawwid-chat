@@ -209,100 +209,74 @@ html[lang='ar'] {
   --lh: 1.7;
 }
 
+/* Dark: its own design (docs/design/admin-dark-references.md, direction A3 'Lagoon'): a teal-tinted
+   base, four levels you can tell apart, three readable text tiers, softened status colours, gold for now. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --ink: #e7eeee;
-    --ink-2: #c9d6d7;
-    --ink-muted: #b2c1c3;
-    --canvas: #0f191b;
-    --surface: #152225;
-    --surface-2: #1a2a2d;
-    --surface-hover: #1d2f33;
-    --line: #26393d;
-    --line-2: #1f3236;
-    --line-strong: #345054;
-    --teal: #7cc0c9;
-    --teal-dark: #9bd0d7;
-    --teal-tint: #173a40;
-    --teal-tint-2: #1d474e;
-    --gold-tint: #3a2e12;
-    --gold-text: #e9c27c;
-    --urgent: #f2867a;
-    --urgent-tint: #3d1e1b;
-    --urgent-line: #6a2d27;
-    --waiting: #f09a52;
-    --waiting-tint: #3a2b10;
-    --done: #74c79a;
-    --done-tint: #163326;
-    --paper-dark: #122023;
-    --chat-bg: #111d20;
-    --sidebar-bg: #132326;
-    --sidebar-active: #1c3236;
-    --sidebar-line: #24393d;
-    --sidebar-hover: rgba(255, 255, 255, 0.05);
-    --border-control: #5d7072;
-    --text-inverse: #0f191b;
-    --accent: #2b8796;
-    --lilac-tint: #2a2638;
-    --lilac-text: #c6bce4;
-    --overlay: rgba(0, 0, 0, 0.55);
-    --teal-solid: #2a7f8c;
-    --teal-solid-hover: #31909e;
-    --urgent-solid: #c4463a;
-    --avatar-bg: #23383c;
-    --surface-raised: #1d2e32;
-    --shadow-pop: 0 8px 28px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.06);
-    --shadow-palette: 0 24px 64px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.07);
-    --shadow-lift: 0 1px 2px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.3);
     color-scheme: dark;
+    --canvas: #0e1a1d; --surface: #17282c; --surface-2: #122226; --surface-hover: #1f3439; --surface-raised: #253e44;
+    --line: rgba(190,232,236,0.09); --line-2: rgba(190,232,236,0.06); --line-strong: rgba(190,232,236,0.18); --border-control: #52696d;
+    --sidebar-bg: #0a1416; --sidebar-active: #16262a; --sidebar-line: rgba(190,232,236,0.07); --sidebar-hover: rgba(255, 255, 255, 0.045);
+    --sidebar-fg: #e6eeee; --sidebar-muted: #c7d4d5; --sidebar-subtle: #a6b7b9;
+    --ink: #e6eeee; --ink-2: #c7d4d5; --ink-muted: #a6b7b9; --text-inverse: #0e1a1d;
+    --teal: #86c7cf; --teal-dark: #a6d7dd; --teal-deep: #2f7d88; --teal-tint: #243b40; --teal-tint-2: #2d484d;
+    --teal-solid: #2f7d88; --teal-solid-hover: #378b97;
+    --gold: #d8ab5e; --gold-tint: #363325; --gold-text: #e4c182;
+    --urgent: #e8968b; --urgent-tint: #3a2d2f; --urgent-line: #5e3c3c; --urgent-solid: #a5504a;
+    --waiting: #e5a56e; --waiting-tint: #3a3329;
+    --done: #88c9a4; --done-tint: #1f3a33;
+    --lilac-tint: #2e3a46; --lilac-text: #cbbff0;
+    --avatar-bg: #243b40; --paper-dark: #122226; --chat-bg: #0e1a1d;
+    --overlay: rgba(3, 9, 11, 0.62);
+    --shadow-lift: 0 1px 2px rgba(0, 0, 0, 0.28), 0 6px 16px -6px rgba(0, 0, 0, 0.35);
+    --shadow-pop: 0 12px 32px -8px rgba(0, 0, 0, 0.6), 0 2px 6px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.06);
+    --shadow-palette: 0 28px 72px -12px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.08);
+    --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.3);
+    /* The older layer's names follow the same palette (they kept tokens.css's own dark values before). */
+    --bg: var(--canvas); --surface-sunken: var(--surface-2); --surface-selected: var(--teal-tint); --border: var(--line); --border-strong: var(--line-strong);
+    --text: var(--ink); --text-muted: var(--ink-muted); --text-subtle: var(--ink-muted); --text-link: var(--teal);
+    --accent: var(--teal-solid); --accent-hover: var(--teal-solid-hover); --accent-soft: var(--teal-tint); --focus: var(--teal);
+    --brand-50: var(--teal-tint); --brand-100: var(--teal-tint-2); --brand-200: var(--teal-tint-2);
+    --gold-50: var(--gold-tint); --gold-100: var(--gold-tint); --gold-700: var(--gold-text);
+    --ok: var(--done); --ok-soft: var(--done-tint); --warn: var(--waiting); --warn-soft: var(--waiting-tint);
+    --danger: var(--urgent); --danger-soft: var(--urgent-tint); --info: var(--teal); --info-soft: var(--teal-tint);
+    --quiet: var(--ink-muted); --quiet-soft: var(--surface-2); --internal: var(--waiting); --internal-soft: var(--waiting-tint);
+    --bubble-in: var(--surface-2); --bubble-out: var(--teal-tint);
+    --paper: var(--canvas); --hairline: var(--line); --hairline-soft: var(--line-2); --terracotta: var(--urgent); --terracotta-tint: var(--urgent-tint); --success: var(--done); --warning: var(--waiting);
   }
 }
 /* The same, when the person chose Dark (the theme switch; data-theme on <html>). */
 :root[data-theme='dark'] {
-  --ink: #e7eeee;
-  --ink-2: #c9d6d7;
-  --ink-muted: #b2c1c3;
-  --canvas: #0f191b;
-  --surface: #152225;
-  --surface-2: #1a2a2d;
-  --surface-hover: #1d2f33;
-  --line: #26393d;
-  --line-2: #1f3236;
-  --line-strong: #345054;
-  --teal: #7cc0c9;
-  --teal-dark: #9bd0d7;
-  --teal-tint: #173a40;
-  --teal-tint-2: #1d474e;
-  --gold-tint: #3a2e12;
-  --gold-text: #e9c27c;
-  --urgent: #f2867a;
-  --urgent-tint: #3d1e1b;
-  --urgent-line: #6a2d27;
-  --waiting: #f09a52;
-  --waiting-tint: #3a2b10;
-  --done: #74c79a;
-  --done-tint: #163326;
-  --paper-dark: #122023;
-  --chat-bg: #111d20;
-  --sidebar-bg: #132326;
-  --sidebar-active: #1c3236;
-  --sidebar-line: #24393d;
-  --sidebar-hover: rgba(255, 255, 255, 0.05);
-  --border-control: #5d7072;
-  --text-inverse: #0f191b;
-  --accent: #2b8796;
-  --lilac-tint: #2a2638;
-  --lilac-text: #c6bce4;
-  --overlay: rgba(0, 0, 0, 0.55);
-  --teal-solid: #2a7f8c;
-  --teal-solid-hover: #31909e;
-  --urgent-solid: #c4463a;
-  --avatar-bg: #23383c;
-  --surface-raised: #1d2e32;
-  --shadow-pop: 0 8px 28px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.06);
-  --shadow-palette: 0 24px 64px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.07);
-  --shadow-lift: 0 1px 2px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.3);
   color-scheme: dark;
+  --canvas: #0e1a1d; --surface: #17282c; --surface-2: #122226; --surface-hover: #1f3439; --surface-raised: #253e44;
+  --line: rgba(190,232,236,0.09); --line-2: rgba(190,232,236,0.06); --line-strong: rgba(190,232,236,0.18); --border-control: #52696d;
+  --sidebar-bg: #0a1416; --sidebar-active: #16262a; --sidebar-line: rgba(190,232,236,0.07); --sidebar-hover: rgba(255, 255, 255, 0.045);
+  --sidebar-fg: #e6eeee; --sidebar-muted: #c7d4d5; --sidebar-subtle: #a6b7b9;
+  --ink: #e6eeee; --ink-2: #c7d4d5; --ink-muted: #a6b7b9; --text-inverse: #0e1a1d;
+  --teal: #86c7cf; --teal-dark: #a6d7dd; --teal-deep: #2f7d88; --teal-tint: #243b40; --teal-tint-2: #2d484d;
+  --teal-solid: #2f7d88; --teal-solid-hover: #378b97;
+  --gold: #d8ab5e; --gold-tint: #363325; --gold-text: #e4c182;
+  --urgent: #e8968b; --urgent-tint: #3a2d2f; --urgent-line: #5e3c3c; --urgent-solid: #a5504a;
+  --waiting: #e5a56e; --waiting-tint: #3a3329;
+  --done: #88c9a4; --done-tint: #1f3a33;
+  --lilac-tint: #2e3a46; --lilac-text: #cbbff0;
+  --avatar-bg: #243b40; --paper-dark: #122226; --chat-bg: #0e1a1d;
+  --overlay: rgba(3, 9, 11, 0.62);
+  --shadow-lift: 0 1px 2px rgba(0, 0, 0, 0.28), 0 6px 16px -6px rgba(0, 0, 0, 0.35);
+  --shadow-pop: 0 12px 32px -8px rgba(0, 0, 0, 0.6), 0 2px 6px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --shadow-palette: 0 28px 72px -12px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.3);
+  /* The older layer's names follow the same palette (they kept tokens.css's own dark values before). */
+  --bg: var(--canvas); --surface-sunken: var(--surface-2); --surface-selected: var(--teal-tint); --border: var(--line); --border-strong: var(--line-strong);
+  --text: var(--ink); --text-muted: var(--ink-muted); --text-subtle: var(--ink-muted); --text-link: var(--teal);
+  --accent: var(--teal-solid); --accent-hover: var(--teal-solid-hover); --accent-soft: var(--teal-tint); --focus: var(--teal);
+  --brand-50: var(--teal-tint); --brand-100: var(--teal-tint-2); --brand-200: var(--teal-tint-2);
+  --gold-50: var(--gold-tint); --gold-100: var(--gold-tint); --gold-700: var(--gold-text);
+  --ok: var(--done); --ok-soft: var(--done-tint); --warn: var(--waiting); --warn-soft: var(--waiting-tint);
+  --danger: var(--urgent); --danger-soft: var(--urgent-tint); --info: var(--teal); --info-soft: var(--teal-tint);
+  --quiet: var(--ink-muted); --quiet-soft: var(--surface-2); --internal: var(--waiting); --internal-soft: var(--waiting-tint);
+  --bubble-in: var(--surface-2); --bubble-out: var(--teal-tint);
+  --paper: var(--canvas); --hairline: var(--line); --hairline-soft: var(--line-2); --terracotta: var(--urgent); --terracotta-tint: var(--urgent-tint); --success: var(--done); --warning: var(--waiting);
 }
 
 
@@ -1350,3 +1324,38 @@ button.side__item.is-current::before { content: none; }
 /* The same, when the person chose Dark (the theme switch; data-theme on <html>). */
 :root[data-theme='dark'] .side__tip { background: var(--surface-raised); color: var(--ink); box-shadow: var(--shadow-pop); border: 1px solid var(--line-strong); }
 :root[data-theme='dark'] .palette-backdrop { background: var(--overlay); }
+
+/* Dark, component by component (direction A3). */
+@media (prefers-color-scheme: dark) {
+  /* Cards separate from the page: a hairline, a soft shadow and a faint top light. */
+  :root:not([data-theme='light']) :is(.sheet, .figures, .dash-group--needs, .sc-sheet, .sc-attn) { box-shadow: var(--shadow-lift), inset 0 1px 0 rgba(255, 255, 255, 0.025); }
+  /* Inputs sit into the card: one step darker, a readable edge. */
+  :root:not([data-theme='light']) :is(.input, .select, textarea.input, .ss__input, .search > input, .field input, .field select) { background-color: color-mix(in srgb, var(--canvas) 55%, var(--surface)); border-color: var(--border-control); }
+  /* Table heads and section strips are the inset level. */
+  :root:not([data-theme='light']) :is(.table thead th, .tx-day > *) { background: var(--surface-2); }
+  /* Secondary text reads larger in dark (light on dark reads thinner). */
+  :root:not([data-theme='light']) { --fs-xs: 14px; --fs-sm: 14.5px; }
+  html[lang='ar']:not([data-theme='light']) { --fs-xs: 14.5px; --fs-sm: 15px; }
+  /* Counts: soft tinted pills, not glaring solid red. */
+  :root:not([data-theme='light']) .count--urgent { background: var(--urgent-tint); color: var(--urgent); box-shadow: inset 0 0 0 1px var(--urgent-line); }
+  /* A badge on the rail or the bell must be seen at a glance: solid, but the softened red. */
+  :root:not([data-theme='light']) :is(.side__count--urgent, .nc-bell__count, .side__badge) { background: var(--urgent-solid); color: #fff; }
+  /* On a raised panel the selected row needs more than the card's tint. */
+  :root:not([data-theme='light']) :is(.palette__row[aria-selected='true'], .menu__item:hover, .ss__option[aria-selected='true']) { background: var(--teal-tint-2); }
+}
+
+/* The same, when the person chose Dark (the theme switch; data-theme on <html>). */
+/* Cards separate from the page: a hairline, a soft shadow and a faint top light. */
+:root[data-theme='dark'] :is(.sheet, .figures, .dash-group--needs, .sc-sheet, .sc-attn) { box-shadow: var(--shadow-lift), inset 0 1px 0 rgba(255, 255, 255, 0.025); }
+/* Inputs sit into the card: one step darker, a readable edge. */
+:root[data-theme='dark'] :is(.input, .select, textarea.input, .ss__input, .search > input, .field input, .field select) { background-color: color-mix(in srgb, var(--canvas) 55%, var(--surface)); border-color: var(--border-control); }
+/* Table heads and section strips are the inset level. */
+:root[data-theme='dark'] :is(.table thead th, .tx-day > *) { background: var(--surface-2); }
+/* Secondary text reads larger in dark (light on dark reads thinner). */
+:root[data-theme='dark'] { --fs-xs: 14px; --fs-sm: 14.5px; }
+html[lang='ar'][data-theme='dark'] { --fs-xs: 14.5px; --fs-sm: 15px; }
+/* Counts: soft tinted pills, not glaring solid red. */
+:root[data-theme='dark'] .count--urgent { background: var(--urgent-tint); color: var(--urgent); box-shadow: inset 0 0 0 1px var(--urgent-line); }
+/* A badge on the rail or the bell must be seen at a glance: solid, but the softened red. */
+:root[data-theme='dark'] :is(.side__count--urgent, .nc-bell__count, .side__badge) { background: var(--urgent-solid); color: #fff; }
+:root[data-theme='dark'] :is(.palette__row[aria-selected='true'], .menu__item:hover, .ss__option[aria-selected='true']) { background: var(--teal-tint-2); }
